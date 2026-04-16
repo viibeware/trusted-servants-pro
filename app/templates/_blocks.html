@@ -1,0 +1,78 @@
+{# Block renderer: takes a list of sections and emits HTML.
+   Schema:
+     sections = [{id, title, blocks: [{id, type, data}]}]
+   Block types:
+     paragraph {md}
+     heading   {level, text}
+     image     {src, alt, caption}
+     video     {src, poster?}
+     code      {lang, code}
+     callout   {variant, title, md}
+     list      {ordered, items: [md]}
+     separator {}
+#}
+
+{% macro slug(text) -%}
+  {{ text|lower|replace(' ', '-')|replace('/', '-')|replace('&', 'and')|replace("'", '')|replace('"', '')|replace(',', '')|replace('.', '')|replace(':', '')|replace('(', '')|replace(')', '') }}
+{%- endmacro %}
+
+{% macro render_sections(sections) %}
+  {% for sec in sections %}
+  <section class="block-section" id="sec-{{ slug(sec.title) }}">
+    {% if sec.title %}<h2 class="block-section-title">{{ sec.title }}</h2>{% endif %}
+    {% for b in sec.blocks %}{{ render_block(b) }}{% endfor %}
+  </section>
+  {% endfor %}
+{% endmacro %}
+
+{% macro render_toc(sections) %}
+  <nav class="wiki-toc" aria-label="On this page">
+    <div class="wiki-toc-label">On this page</div>
+    <ul>
+      {% for sec in sections %}
+        {% if sec.title %}
+        <li><a href="#sec-{{ slug(sec.title) }}">{{ sec.title }}</a></li>
+        {% endif %}
+      {% endfor %}
+    </ul>
+  </nav>
+{% endmacro %}
+
+{% macro render_block(b) %}
+  {% set t = b.type %}{% set d = b.data or {} %}
+  {% if t == 'paragraph' %}
+    <div class="block block-paragraph">{{ d.md|markdown }}</div>
+  {% elif t == 'heading' %}
+    {% set lvl = d.level or 3 %}
+    <h{{ lvl }} class="block block-heading">{{ d.text }}</h{{ lvl }}>
+  {% elif t == 'image' %}
+    <figure class="block block-image">
+      <img src="{{ d.src }}" alt="{{ d.alt or '' }}">
+      {% if d.caption %}<figcaption>{{ d.caption }}</figcaption>{% endif %}
+    </figure>
+  {% elif t == 'video' %}
+    <div class="block block-video">
+      <video controls {% if d.poster %}poster="{{ d.poster }}"{% endif %}>
+        <source src="{{ d.src }}">
+      </video>
+    </div>
+  {% elif t == 'code' %}
+    <pre class="block block-code"><code{% if d.lang %} class="language-{{ d.lang }}"{% endif %}>{{ d.code }}</code></pre>
+  {% elif t == 'callout' %}
+    <div class="block block-callout callout-{{ d.variant or 'info' }}">
+      <div class="callout-icon" aria-hidden="true">
+        {% if d.variant == 'warn' %}⚠{% elif d.variant == 'danger' %}⛔{% elif d.variant == 'success' %}✓{% else %}ℹ{% endif %}
+      </div>
+      <div class="callout-body">
+        {% if d.title %}<div class="callout-title">{{ d.title }}</div>{% endif %}
+        {{ d.md|markdown }}
+      </div>
+    </div>
+  {% elif t == 'list' %}
+    {% if d.ordered %}<ol class="block block-list">{% else %}<ul class="block block-list">{% endif %}
+      {% for item in d.get('items', []) %}<li>{{ item|markdown }}</li>{% endfor %}
+    {% if d.ordered %}</ol>{% else %}</ul>{% endif %}
+  {% elif t == 'separator' %}
+    <hr class="block block-separator">
+  {% endif %}
+{% endmacro %}

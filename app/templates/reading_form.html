@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block heading %}{{ "Edit Item" if reading else "Add to Library" }}{% endblock %}
+{% block content %}
+<form method="post" class="form card" enctype="multipart/form-data">
+  <div class="muted small">Library: {{ library.name }}</div>
+  <label>Title<input name="title" required value="{{ reading.title if reading else '' }}"></label>
+
+  <fieldset class="fieldset">
+    <legend>File <span class="muted small">(PDF, DOC, JPG, PNG, MP4, MOV, or other)</span></legend>
+    {% if reading and reading.stored_filename %}
+    <div class="logo-current">
+      <span class="muted small">{{ reading.original_filename }}</span>
+      <label class="check"><input type="checkbox" name="remove_file" value="1"> Remove</label>
+    </div>
+    {% endif %}
+    <input type="file" name="file"
+           accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.mp4,.mov,application/pdf,image/*,video/*">
+  </fieldset>
+
+  <label>External Link <span class="muted small">(optional)</span>
+    <input name="url" type="url" placeholder="https://…" value="{{ reading.url if reading and reading.url else '' }}">
+  </label>
+
+  <fieldset class="fieldset">
+    <legend>Thumbnail <span class="muted small">(optional)</span></legend>
+    {% if reading and reading.thumbnail_filename %}
+    <div class="logo-current">
+      <img src="{{ url_for('main.reading_thumbnail', rid=reading.id) }}" alt="">
+      <label class="check"><input type="checkbox" name="remove_thumbnail" value="1"> Remove</label>
+    </div>
+    {% endif %}
+    <input type="file" name="thumbnail" accept="image/*">
+  </fieldset>
+
+  <label>Body <span class="muted small">(optional inline text)</span>
+    <textarea name="body" rows="10">{{ reading.body if reading else '' }}</textarea>
+  </label>
+
+  <div class="form-actions">
+    <a href="{{ url_for('main.library_detail', lid=library.id) }}" class="btn">Cancel</a>
+    <button class="btn btn-primary">{{ "Save" if reading else "Add" }}</button>
+  </div>
+</form>
+{% endblock %}

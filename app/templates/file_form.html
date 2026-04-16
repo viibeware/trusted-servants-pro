@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block heading %}{{ "Edit" if file else "Add" }} {{ CATEGORY_LABELS[category] }}{% endblock %}
+{% block content %}
+<form method="post" enctype="multipart/form-data" class="form card">
+  <div class="muted small">Meeting: {{ meeting.name }} · Category: {{ CATEGORY_LABELS[category] }}</div>
+  <label>Title<input name="title" required value="{{ file.title if file else '' }}"></label>
+  <label>Description<textarea name="description" rows="2">{{ file.description if file else '' }}</textarea></label>
+
+  {% if category in ('external_links', 'videos') %}
+    <label>URL<input name="url" type="url" required value="{{ file.url if file else '' }}" placeholder="https://..."></label>
+  {% elif category == 'scripts' %}
+    <label>Body (text)<textarea name="body" rows="12" placeholder="Paste reading text here…">{{ file.body if file else '' }}</textarea></label>
+    <label>External link (optional)<input name="url" type="url" value="{{ file.url if file else '' }}"></label>
+    <label>Or upload a file (optional)<input type="file" name="file"></label>
+    {% if file and file.original_filename %}<div class="muted small">Current: {{ file.original_filename }}</div>{% endif %}
+  {% else %}
+    <label>Upload file{% if not file %} (or provide URL below){% endif %}<input type="file" name="file"></label>
+    {% if file and file.original_filename %}<div class="muted small">Current: {{ file.original_filename }}</div>{% endif %}
+    <label>Or URL<input name="url" type="url" value="{{ file.url if file else '' }}"></label>
+  {% endif %}
+
+  <div class="form-actions">
+    <a href="{{ url_for('main.meeting_detail', mid=meeting.id) }}" class="btn">Cancel</a>
+    <button class="btn btn-primary">{{ "Save" if file else "Add" }}</button>
+  </div>
+</form>
+{% endblock %}

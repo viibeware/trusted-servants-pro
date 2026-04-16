@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% block heading %}{{ meeting.name }}
+  <span class="mtype-chip mtype-{{ meeting.meeting_type }}">{{ {'in_person':'In-Person','online':'Online','hybrid':'Hybrid'}[meeting.meeting_type] }}</span>
+  {% if meeting.archived_at %}<span class="chip chip-archived">Archived</span>{% endif %}
+{% endblock %}
+{% block top_actions %}
+  {% if current_user.can_edit() %}
+  <button type="button" class="btn" data-open-modal="meeting-edit-modal">Edit</button>
+  {% if current_user.is_admin() %}
+    {% if meeting.archived_at %}
+    <form method="post" action="{{ url_for('main.meeting_unarchive', mid=meeting.id) }}" style="display:inline">
+      <button class="btn">Restore</button>
+    </form>
+    {% else %}
+    <form method="post" action="{{ url_for('main.meeting_archive', mid=meeting.id) }}" onsubmit="return confirm('Archive this meeting? It will be hidden from the main list but can be restored later.');" style="display:inline">
+      <button class="btn">Archive</button>
+    </form>
+    {% endif %}
+  {% endif %}
+  <form method="post" action="{{ url_for('main.meeting_delete', mid=meeting.id) }}" onsubmit="return confirm('Delete this meeting permanently?');" style="display:inline">
+    <button class="btn btn-danger">Delete</button>
+  </form>
+  {% endif %}
+{% endblock %}
+{% block content %}
+
+{% if meeting.alert_message %}
+<div class="alert-banner" role="alert">{{ meeting.alert_message }}</div>
+{% endif %}
+
+<section class="card meeting-info">
+  {% if meeting.logo_filename %}
+  <div class="meeting-header">
+    <img class="meeting-logo" src="{{ url_for('main.meeting_logo', mid=meeting.id) }}" alt="">
+  </div>
+  {% endif %}
+
+  <div class="meeting-details-grid">
+    <div class="detail-block">
+      {% if meeting.description %}
+      <div class="detail-label">Description</div>
+      <div class="meeting-description clamp-5" data-clampable>
+        <div class="clamp-body">{{ meeting.description|safe_html }}</div>
+        <button type="button" class="clamp-toggle link" data-clamp-toggle hidden>Show more…</button>
+      </div>
+      {% endif %}
+      {% if meeting.schedules %}
+      <div class="detail-label" {% if meeting.description %}style="margin-top: 12px;"{% endif %}>Schedule</div>
+      {% set show_zoom_cols = meeting.meeting_type != 'in_person' %}
+      <table class="schedule-table">
+        <thead>
+          <tr>
+            <th>Day</th><th>Start</th><th>End</th>
+            {% if show_zoom_cols %}<th>Opens</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in meeting.schedules %}
+          <tr>
+            <td class="sched-day">{{ s.day_name }}</td>
+            <td class="sched-time">{{ s.start_time|fmt12h }}</td>
+            <td class="sched-time">{{ s.end_time|fmt12h }}</td>
+            {% if show_zoom_cols %}
+            <td class="muted">{{ (s.opens_time|fmt12h) if s.opens_time else '—' }}</td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+
+    <div class="detail-block">
+      {% if meeting.location %}
+      <div class="detail-label">Location</div>
+      <div>{{ meeting.location|safe_html }}</div>
+      {% endif %}
+
+      {% if meeting.zoom_meeting_id or meeting.zoom_passcode or meeting.zoom_account or meeting.zoom_link %}
+      <div class="detail-label" style="margin-top: 12px;">Zoom</div>
+      <dl class="zoom-info">
+        {% if meeting.zoom_meeting_id %}
+        <dt>Meeting ID</dt>
+        <dd><button type="button" class="copy-btn mono" data-copy="{{ meeting.zoom_meeting_id }}" data-tip="Click to copy">{{ meeting.zoom_meeting_id }}</button></dd>
+        {% endif %}
+        {% if meeting.zoom_passcode %}
+        <dt>Passcode</dt>
+        <dd><button type="button" class="copy-btn mono" data-copy="{{ meeting.zoom_passcode }}" data-tip="Click to copy">{{ meeting.zoom_passcode }}</button></dd>
+        {% endif %}
+        {% if meeting.zoom_link %}
+        <dt></dt>
+        <dd><a class="btn btn-primary" href="{{ meeting.zoom_link }}" target="_blank" rel="noopener">Start Zoom Meeting</a></dd>
+        {% endif %}
+        {% if meeting.zoom_account %}
+        <dt class="zoom-section-head" style="grid-column: 1 / -1;">Zoom Host Account</dt>
+        <dt>Login</dt>
+        <dd><button type="button" class="copy-btn mono" data-copy="{{ meeting.zoom_account.username }}" data-tip="Click to copy">{{ meeting.zoom_account.username }}</button></dd>
+        <dt>Password</dt>
+        <dd class="pw-row">
+          <button type="button" class="copy-btn mono pw-field" data-copy="{{ zoom_account_password }}" data-tip="Click to copy" data-pw="{{ zoom_account_password }}">••••••••</button>
+          <button type="button" class="btn btn-sm reveal-btn" data-target-scope="prev">Reveal</button>
+        </dd>
+        {% endif %}
+      </dl>
+      {% if meeting.meeting_type != 'in_person' and meeting.show_otp and otp_email and (otp_email.email or otp_email.login_url) %}
+      <div class="detail-label zoom-divider-top">OTP Email</div>
+      <p class="muted small" style="margin: 4px 0 6px;">Retrieve Zoom one-time-password codes by logging into this email.</p>
+      <dl class="zoom-info">
+        {% if otp_email.email %}
+        <dt>Email</dt>
+        <dd><button type="button" class="copy-btn mono" data-copy="{{ otp_email.email }}" data-tip="Click to copy">{{ otp_email.email }}</button></dd>
+        {% endif %}
+        {% if otp_email.password_enc %}
+        <dt>Password</dt>
+        <dd class="pw-row">
+          <button type="button" class="copy-btn mono pw-field" data-copy-url="{{ url_for('main.otp_email_reveal') }}" data-tip="Click to copy">••••••••</button>
+          <button type="button" class="btn btn-sm reveal-btn" data-reveal-url="{{ url_for('main.otp_email_reveal') }}" data-target-scope="prev">Reveal</button>
+        </dd>
+        {% endif %}
+        {% if otp_email.login_url %}
+        <dt></dt>
+        <dd><a class="btn btn-primary otp-login-btn" href="{{ otp_email.login_url }}" target="_blank" rel="noopener">Login for OTP Codes</a></dd>
+        {% endif %}
+      </dl>
+      {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{% if current_user.can_edit() %}
+  {% with modal_id="meeting-edit-modal",
+          form_action=url_for('main.meeting_edit', mid=meeting.id),
+          zoom_accounts=zoom_accounts,
+          locations=locations,
+          all_libraries=all_libraries,
+          submit_label="Save" %}
+    {% include "_meeting_modal.html" %}
+  {% endwith %}
+{% endif %}
+
+<div class="tabs">
+  {% if meeting.libraries %}<a href="#libraries" class="tab">Libraries <span class="count">{{ meeting.libraries|length }}</span></a>{% endif %}
+  {% for cat in FILE_CATEGORIES %}
+    {% set cnt = meeting.files.filter_by(category=cat).count() %}
+    {% if cnt %}<a href="#{{ cat }}" class="tab">{{ CATEGORY_LABELS[cat] }} <span class="count">{{ cnt }}</span></a>{% endif %}
+  {% endfor %}
+</div>
+
+{% if meeting.libraries %}
+<section class="card" id="libraries">
+  <div class="card-head"><h2>Libraries</h2></div>
+  {% set libs_all = meeting.libraries|list %}
+  {% set libs_first = libs_all|selectattr('name','equalto','Readings')|list %}
+  {% set libs_last = libs_all|selectattr('name','equalto','Meditation Videos')|list %}
+  {% set libs_mid = libs_all|rejectattr('name','equalto','Readings')|rejectattr('name','equalto','Meditation Videos')|list %}
+  {% for lib in libs_first + libs_mid + libs_last %}
+  <div class="lib-block">
+    <h3><a href="{{ url_for('main.library_detail', lid=lib.id) }}">{{ lib.name }}</a></h3>
+    {% set rs = meeting.visible_readings(lib) %}
+    {% if rs %}
+    <ul class="file-list">
+      {% for r in rs %}
+      <li>
+        {% if r.thumbnail_filename %}
+        <img class="reading-thumb" src="{{ url_for('main.reading_thumbnail', rid=r.id) }}" alt="">
+        {% else %}
+        {% set ft = r|file_type %}
+        <span class="ftype ftype-{{ ft }}" aria-label="{{ ft }}">{{ ft|upper }}</span>
+        {% endif %}
+        <div class="file-main">
+          <a href="{% if r.stored_filename %}{{ url_for('main.public_file', filename=r.original_filename) }}{% elif r.url %}{{ r.url }}{% else %}{{ url_for('main.reading_view', rid=r.id) }}{% endif %}" target="_blank">{{ r.title }}</a>
+          {% if r.original_filename %}<div class="muted smaller">{{ r.original_filename }}</div>{% endif %}
+          {% if r.url %}<div class="muted smaller trunc">{{ r.url }}</div>{% endif %}
+        </div>
+        <div class="row-actions">
+          {% if r.stored_filename %}
+          <button type="button" class="btn btn-sm btn-copy" data-copy-url="{{ url_for('main.public_file', filename=r.original_filename) }}">Copy Link</button>
+          {% elif r.url %}
+          <button type="button" class="btn btn-sm btn-copy" data-copy-url="{{ r.url }}">Copy Link</button>
+          {% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted small">No files.</p>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% for cat in FILE_CATEGORIES %}
+{% set items = meeting.files_by_category(cat) %}
+{% if items %}
+<section class="card" id="{{ cat }}">
+  <div class="card-head">
+    <h2>{{ CATEGORY_LABELS[cat] }}</h2>
+  </div>
+  <ul class="file-list">
+    {% for f in items %}
+    <li>
+      {% set ft = f|file_type %}
+      <span class="ftype ftype-{{ ft }}" aria-label="{{ ft }}">{{ ft|upper }}</span>
+      <div class="file-main">
+        <a href="{% if f.stored_filename %}{{ url_for('main.public_file', filename=f.original_filename) }}{% elif f.url %}{{ f.url }}{% else %}{{ url_for('main.file_view', fid=f.id) }}{% endif %}" target="_blank">{{ f.title }}</a>
+        {% if f.description %}<div class="muted small">{{ f.description }}</div>{% endif %}
+        {% if f.original_filename %}<div class="muted smaller">{{ f.original_filename }}</div>{% endif %}
+        {% if f.url %}<div class="muted smaller trunc">{{ f.url }}</div>{% endif %}
+      </div>
+      <div class="row-actions">
+        {% if f.stored_filename %}
+        <button type="button" class="btn btn-sm btn-copy" data-copy-url="{{ url_for('main.public_file', filename=f.original_filename) }}">Copy Link</button>
+        {% elif f.url %}
+        <button type="button" class="btn btn-sm btn-copy" data-copy-url="{{ f.url }}">Copy Link</button>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endfor %}
+
+{% endblock %}

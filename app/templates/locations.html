@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block heading %}Locations{% endblock %}
+{% block top_actions %}
+<button type="button" class="btn btn-primary" data-open-modal="location-new-modal">+ New Location</button>
+{% endblock %}
+{% block content %}
+
+{% if embed %}
+<div class="embed-actions">
+  <button type="button" class="btn btn-primary" data-open-modal="location-new-modal">+ New Location</button>
+</div>
+{% endif %}
+
+<section class="card">
+  <div class="card-head"><h2>Locations</h2></div>
+  {% if locations %}
+  <table class="tbl locations-tbl">
+    <thead><tr><th>Name</th><th>Type</th><th>Address</th><th></th></tr></thead>
+    <tbody>
+      {% for l in locations %}
+      <tr>
+        <td data-label="Name">{{ l.name }}</td>
+        <td data-label="Type">{{ 'Online' if l.location_type == 'online' else 'In-Person' }}</td>
+        <td data-label="Address">
+          {% if l.location_type == 'in_person' %}
+            {% if l.address %}<div>{{ l.address }}</div>{% endif %}
+            {% if l.maps_url %}<a href="{{ l.maps_url }}" target="_blank" rel="noopener" class="smaller">Open in Maps</a>{% endif %}
+          {% else %}
+            <span class="muted smaller">—</span>
+          {% endif %}
+        </td>
+        <td class="locations-actions">
+          <div class="row-actions">
+            <button type="button" class="btn btn-sm" data-open-modal="location-edit-{{ l.id }}">Edit</button>
+            <form method="post" action="{{ url_for('main.location_delete', lid=l.id) }}"
+                  onsubmit="return confirm('Delete this location?');">
+              {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+              <button class="btn btn-sm btn-danger">×</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No locations yet.</p>
+  {% endif %}
+</section>
+
+{# New location modal #}
+<div class="modal" id="location-new-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form method="post" action="{{ url_for('main.location_new') }}" class="form" data-location-form>
+      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+      <div class="modal-head">
+        <h2>New Location</h2>
+        <button type="button" class="icon-btn" data-close>×</button>
+      </div>
+      <div class="modal-body">
+        <label>Name<input name="name" required></label>
+        <fieldset class="fieldset">
+          <legend>Type</legend>
+          <div class="radio-row">
+            <label class="radio"><input type="radio" name="location_type" value="in_person" checked class="loc-type-radio"><span>In-Person</span></label>
+            <label class="radio"><input type="radio" name="location_type" value="online" class="loc-type-radio"><span>Online</span></label>
+          </div>
+        </fieldset>
+        <div class="loc-in-person-fields">
+          <label>Address<input name="address" placeholder="Street, City, State"></label>
+          <label>Google Maps Link<input name="maps_url" type="url" placeholder="https://maps.google.com/..."></label>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# Edit modals #}
+{% for l in locations %}
+<div class="modal" id="location-edit-{{ l.id }}" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form method="post" action="{{ url_for('main.location_edit', lid=l.id) }}" class="form" data-location-form>
+      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+      <div class="modal-head">
+        <h2>Edit Location</h2>
+        <button type="button" class="icon-btn" data-close>×</button>
+      </div>
+      <div class="modal-body">
+        <label>Name<input name="name" required value="{{ l.name }}"></label>
+        <fieldset class="fieldset">
+          <legend>Type</legend>
+          <div class="radio-row">
+            <label class="radio"><input type="radio" name="location_type" value="in_person" {% if l.location_type != 'online' %}checked{% endif %} class="loc-type-radio"><span>In-Person</span></label>
+            <label class="radio"><input type="radio" name="location_type" value="online" {% if l.location_type == 'online' %}checked{% endif %} class="loc-type-radio"><span>Online</span></label>
+          </div>
+        </fieldset>
+        <div class="loc-in-person-fields" {% if l.location_type == 'online' %}style="display:none"{% endif %}>
+          <label>Address<input name="address" value="{{ l.address or '' }}" placeholder="Street, City, State"></label>
+          <label>Google Maps Link<input name="maps_url" type="url" value="{{ l.maps_url or '' }}" placeholder="https://maps.google.com/..."></label>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+{% endblock %}

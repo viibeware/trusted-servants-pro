@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block heading %}Dashboard{% endblock %}
+{% block heading_help %}Your home view — see upcoming meetings, recent activity, and quick links to the areas of the portal you use most.{% endblock %}
+{% block top_actions %}
+{% if current_user.is_admin() %}
+<button type="button" class="btn" data-open-modal="dashboard-customize-modal">Customize</button>
+{% endif %}
+{% endblock %}
+{% block content %}
+{% if site.dash_show_stats %}
+<div class="stats">
+  <div class="stat"><div class="stat-v">{{ meetings|length }}</div><div class="stat-l">Meetings</div></div>
+  <div class="stat"><div class="stat-v">{{ libraries|length }}</div><div class="stat-l">Libraries</div></div>
+  <div class="stat"><div class="stat-v">{{ current_user.role|capitalize }}</div><div class="stat-l">Your role</div></div>
+</div>
+{% endif %}
+
+{% if site and site.intergroup_enabled and site.dash_show_intergroup %}
+<section class="card">
+  <div class="card-head">
+    <h2>{{ site.ig_page_title or 'Intergroup' }}</h2>
+    <a href="{{ url_for('main.intergroup') }}" class="link">Open →</a>
+  </div>
+  <p class="muted small">Intergroup email accounts, webmail access, and mail-client setup instructions.</p>
+</section>
+{% endif %}
+
+<div class="grid-2">
+  {% if site.dash_show_meetings %}
+  <section class="card">
+    <div class="card-head">
+      <h2>Recent Meetings</h2>
+      <a href="{{ url_for('main.meetings') }}" class="link">View all →</a>
+    </div>
+    {% if meetings %}
+    <ul class="list">
+      {% for m in meetings[:6] %}
+      <li><a href="{{ url_for('main.meeting_detail', mid=m.id) }}"><span>{{ m.name }}</span><span class="muted">{% if m.schedules %}{{ m.schedules[0].day_name[:3] }} {{ m.schedules[0].start_time }}{% endif %}</span></a></li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">No meetings yet.</p>{% endif %}
+  </section>
+  {% endif %}
+
+  {% if site.dash_show_libraries %}
+  <section class="card">
+    <div class="card-head">
+      <h2>Libraries</h2>
+      <a href="{{ url_for('main.libraries') }}" class="link">View all →</a>
+    </div>
+    {% if libraries %}
+    <ul class="list">
+      {% for l in libraries[:6] %}
+      <li><a href="{{ url_for('main.library_detail', lid=l.id) }}"><span>{{ l.name }}</span><span class="muted">{{ l.readings.count() }} files</span></a></li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">No libraries yet.</p>{% endif %}
+  </section>
+  {% endif %}
+
+  {% if site.dash_show_files %}
+  <section class="card">
+    <div class="card-head">
+      <h2>Recent Files</h2>
+      <a href="{{ url_for('main.media_list') }}" class="link">View all →</a>
+    </div>
+    {% if recent_files %}
+    <ul class="list">
+      {% for f in recent_files %}
+      <li><a href="{{ url_for('main.public_file', filename=f.original_filename) }}" target="_blank"><span>{{ f.original_filename }}</span><span class="muted">{{ f.created_at.strftime('%b %d') }}</span></a></li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">No files uploaded yet.</p>{% endif %}
+  </section>
+  {% endif %}
+
+  {% if current_user.is_admin() %}
+  <section class="card">
+    <div class="card-head">
+      <h2>Access Requests
+        {% if pending_access_count %}<span class="nav-badge">{{ pending_access_count }}</span>{% endif %}
+      </h2>
+      <a href="{{ url_for('main.access_requests') }}" class="link">View all →</a>
+    </div>
+    {% if access_requests %}
+    <ul class="list">
+      {% for r in access_requests %}
+      <li><a href="{{ url_for('main.access_requests') }}"><span>{{ r.name }}</span><span class="muted">{{ r.created_at.strftime('%b %d') }}</span></a></li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">No pending requests.</p>{% endif %}
+  </section>
+  {% endif %}
+</div>
+
+{% if current_user.is_admin() %}
+<div class="modal" id="dashboard-customize-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form method="post" action="{{ url_for('main.dashboard_customize') }}" class="form">
+      <div class="modal-head">
+        <h2>Customize Dashboard</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <ul class="special-pages-list">
+          {% for key, label, desc in [
+            ('dash_show_stats', 'Stats', 'Summary counts for meetings, libraries, and your role.'),
+            ('dash_show_intergroup', 'Intergroup card', 'Quick link to the Intergroup page (only shown when enabled).'),
+            ('dash_show_meetings', 'Recent Meetings', 'List of the most recent meetings.'),
+            ('dash_show_libraries', 'Libraries', 'List of libraries with file counts.'),
+            ('dash_show_files', 'Recent Files', 'Most recently uploaded files from the file browser.'),
+          ] %}
+          <li class="special-page-row">
+            <div class="special-page-info">
+              <div class="u-name">{{ label }}</div>
+              <p class="muted small">{{ desc }}</p>
+            </div>
+            <label class="mode-toggle" title="Show {{ label }}">
+              <input type="checkbox" name="{{ key }}" value="1" {% if site[key] %}checked{% endif %}>
+              <span class="mode-track"><span class="mode-thumb"></span></span>
+            </label>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

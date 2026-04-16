@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block heading %}Navigation Links{% endblock %}
+{% block top_actions %}
+<button type="button" class="btn btn-primary" data-open-modal="navlink-new-modal">+ New Link</button>
+{% endblock %}
+{% block content %}
+
+{% if embed %}
+<div class="embed-actions">
+  <button type="button" class="btn btn-primary" data-open-modal="navlink-new-modal">+ New Link</button>
+</div>
+{% endif %}
+
+<section class="card">
+  <div class="card-head"><h2>Custom Sidebar Links</h2></div>
+  <p class="muted small">Links shown in the sidebar below the built-in navigation. Open in a new tab.</p>
+  {% if nav_links %}
+  <ul class="file-list file-list-sortable"
+      data-reorder-url="{{ url_for('main.nav_link_reorder') }}">
+    {% for n in nav_links %}
+    <li data-item-id="{{ n.id }}" draggable="true">
+      <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+      <div class="file-main">
+        {{ n.title }}
+        <div class="muted smaller trunc"><a href="{{ n.url }}" target="_blank" rel="noopener">{{ n.url }}</a></div>
+      </div>
+      <div class="row-actions">
+        <button type="button" class="btn btn-sm" data-open-modal="navlink-edit-{{ n.id }}">Edit</button>
+        <form method="post" action="{{ url_for('main.nav_link_delete', nid=n.id) }}"
+              onsubmit="return confirm('Delete this link?');">
+          {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+          <button class="btn btn-sm btn-danger">×</button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">No custom links yet.</p>
+  {% endif %}
+</section>
+
+<div class="modal" id="navlink-new-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form method="post" action="{{ url_for('main.nav_link_new') }}" class="form">
+      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+      <div class="modal-head">
+        <h2>New Navigation Link</h2>
+        <button type="button" class="icon-btn" data-close>×</button>
+      </div>
+      <div class="modal-body">
+        <label>Title<input name="title" required maxlength="100"></label>
+        <label>URL<input name="url" type="url" required placeholder="https://example.com"></label>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% for n in nav_links %}
+<div class="modal" id="navlink-edit-{{ n.id }}" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form method="post" action="{{ url_for('main.nav_link_edit', nid=n.id) }}" class="form">
+      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+      <div class="modal-head">
+        <h2>Edit Navigation Link</h2>
+        <button type="button" class="icon-btn" data-close>×</button>
+      </div>
+      <div class="modal-body">
+        <label>Title<input name="title" required maxlength="100" value="{{ n.title }}"></label>
+        <label>URL<input name="url" type="url" required value="{{ n.url }}"></label>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+{% if embed %}
+<script>
+  (function () {
+    if (window.parent === window || !window.parent.postMessage) return;
+    const links = [
+      {% for n in nav_links %}
+        { title: {{ n.title|tojson }}, url: {{ n.url|tojson }} }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ];
+    const send = (arr) => window.parent.postMessage({ type: "nav-links-updated", links: arr }, "*");
+    send(links);
+    // Re-send after drag-reorder (list JS posts to server but doesn't reload)
+    const list = document.querySelector(".file-list-sortable");
+    if (list) {
+      list.addEventListener("drop", () => {
+        setTimeout(() => {
+          const ordered = Array.from(list.querySelectorAll("li[data-item-id]")).map(li => ({
+            title: li.querySelector(".file-main strong")?.textContent?.trim() || "",
+            url: li.querySelector(".file-main a")?.getAttribute("href") || "",
+          }));
+          send(ordered);
+        }, 0);
+      });
+    }
+  })();
+</script>
+{% endif %}
+{% endblock %}

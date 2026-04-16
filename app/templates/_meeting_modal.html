@@ -1,0 +1,281 @@
+{# Reusable meeting create/edit modal. #}
+{% set form_id = modal_id ~ '-form' %}
+<div class="modal modal-lg" id="{{ modal_id }}" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2>{{ "Edit Meeting" if meeting else "New Meeting" }}</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <form id="{{ form_id }}" method="post" action="{{ form_action }}" class="form"
+            enctype="multipart/form-data" data-meeting-form>
+        <label>Name
+          <input name="name" required value="{{ meeting.name if meeting else '' }}">
+        </label>
+
+        {% set mtype = meeting.meeting_type if meeting else 'in_person' %}
+        <fieldset class="fieldset">
+          <legend>Meeting Type</legend>
+          <div class="radio-row">
+            {% for val, lbl in [('in_person','In-Person'),('online','Online'),('hybrid','Hybrid')] %}
+            <label class="radio">
+              <input type="radio" name="meeting_type" value="{{ val }}"
+                     {% if mtype == val %}checked{% endif %}
+                     class="meeting-type-radio">
+              <span>{{ lbl }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+
+        <label>Location
+          {% set chosen = meeting.location if meeting else '' %}
+          {% set is_preset = chosen and locations|selectattr('name','equalto',chosen)|list %}
+          <select name="location_choice" class="location-select">
+            <option value="">— None —</option>
+            {% for l in locations %}
+            <option value="{{ l.name }}" {% if chosen == l.name %}selected{% endif %}>{{ l.name }}</option>
+            {% endfor %}
+            <option value="__custom__" {% if chosen and not is_preset %}selected{% endif %}>Custom…</option>
+          </select>
+        </label>
+        <label class="location-custom-wrap" {% if not (chosen and not is_preset) %}style="display:none"{% endif %}>
+          Custom Location
+          <input name="location_custom" class="location-custom"
+                 value="{% if chosen and not is_preset %}{{ chosen }}{% endif %}">
+        </label>
+
+        <label>Description
+          <textarea name="description" rows="3">{{ (meeting.description if meeting else '') or '' }}</textarea>
+        </label>
+
+        <label>Alert Message <span class="muted smaller">(leave blank to hide)</span>
+          <textarea name="alert_message" rows="2" placeholder="Displayed prominently at the top of the meeting page.">{{ (meeting.alert_message if meeting else '') or '' }}</textarea>
+        </label>
+
+        <label>Logo
+          {% if meeting and meeting.logo_filename %}
+          <div class="logo-current">
+            <img src="{{ url_for('main.meeting_logo', mid=meeting.id) }}" alt="">
+            <label class="check"><input type="checkbox" name="remove_logo" value="1"> Remove</label>
+          </div>
+          {% endif %}
+          <input type="file" name="logo" accept="image/*">
+        </label>
+
+        <fieldset class="fieldset">
+          <legend>Days &amp; Times</legend>
+          <div class="day-list">
+            <div class="day-row day-row-head">
+              <span class="day-col-label">Day</span>
+              <span class="day-col-label">Start</span>
+              <span class="day-col-label">End</span>
+              <span class="day-col-label zoom-only-field">Opens</span>
+            </div>
+            {% for d in DAYS_OF_WEEK %}
+              {% set idx = loop.index0 %}
+              {% set ns = namespace(sched=None) %}
+              {% if meeting %}
+                {% for s in meeting.schedules %}{% if s.day_of_week == idx %}{% set ns.sched = s %}{% endif %}{% endfor %}
+              {% endif %}
+              {% set sched = ns.sched %}
+              <div class="day-row {% if sched %}on{% endif %}">
+                <label class="mode-toggle day-check">
+                  <input type="checkbox" class="day-toggle"
+                         {% if sched %}checked{% endif %}
+                         data-day="{{ idx }}">
+                  <span class="mode-track"><span class="mode-thumb"></span></span>
+                  <span class="day-label">{{ d }}</span>
+                </label>
+                <input type="hidden" class="day-hidden" name="schedule_day"
+                       value="{{ idx }}" {% if not sched %}disabled{% endif %}>
+                <input type="time" class="day-field" name="schedule_time"
+                       value="{{ sched.start_time if sched else '' }}"
+                       title="Start time"
+                       {% if not sched %}disabled{% endif %}>
+                <input type="time" class="day-field" name="schedule_end"
+                       value="{{ sched.end_time if sched else '' }}"
+                       title="End time"
+                       {% if not sched %}disabled{% endif %}>
+                <input type="time" class="day-field zoom-only-field" name="schedule_opens"
+                       value="{{ sched.opens_time if sched and sched.opens_time else '' }}"
+                       title="Zoom opens at"
+                       placeholder="Opens"
+                       {% if not sched %}disabled{% endif %}>
+              </div>
+            {% endfor %}
+          </div>
+        </fieldset>
+
+        <fieldset class="fieldset zoom-only">
+          <legend>Zoom</legend>
+          <label>Zoom Account
+            <select name="zoom_account_id">
+              <option value="">— None —</option>
+              {% for a in zoom_accounts %}
+              <option value="{{ a.id }}"
+                      {% if meeting and meeting.zoom_account_id == a.id %}selected{% endif %}>
+                {{ a.name }}
+              </option>
+              {% endfor %}
+            </select>
+          </label>
+          <div class="row">
+            <label>Meeting ID
+              <input name="zoom_meeting_id"
+                     value="{{ meeting.zoom_meeting_id if meeting else '' }}">
+            </label>
+            <label>Passcode
+              <input name="zoom_passcode"
+                     value="{{ meeting.zoom_passcode if meeting else '' }}">
+            </label>
+          </div>
+          <label>Meeting Link URL
+            <input name="zoom_link" type="url" placeholder="https://zoom.us/j/..."
+                   value="{{ meeting.zoom_link if meeting and meeting.zoom_link else '' }}">
+          </label>
+          {% set _show_otp = meeting.show_otp if meeting else True %}
+          <label class="mode-toggle otp-toggle">
+            <input type="checkbox" name="show_otp" value="1" {% if _show_otp %}checked{% endif %}>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+            <span>Show OTP Codes section on meeting page</span>
+          </label>
+        </fieldset>
+
+        {% if all_libraries is defined %}
+        <fieldset class="fieldset">
+          <legend>Libraries</legend>
+          {% if all_libraries %}
+          <div class="library-picker">
+            {% for lib in all_libraries %}
+              {% set included = meeting and lib in meeting.libraries %}
+              {% set mode = meeting.library_mode(lib) if included else 'all' %}
+              {% set sel_ids = meeting.selected_ids_for_library(lib) if (included and meeting) else [] %}
+              <div class="library-row" data-lib="{{ lib.id }}">
+                <label class="library-head">
+                  <input type="checkbox" name="library_ids" value="{{ lib.id }}"
+                         class="library-include" {% if included %}checked{% endif %}>
+                  <span class="library-name">{{ lib.name }}</span>
+                  <span class="muted smaller">{{ lib.readings.count() }} files</span>
+                </label>
+                <div class="library-detail" {% if not included %}style="display:none"{% endif %}>
+                  <label class="mode-toggle">
+                    <span class="mode-label-all">All files</span>
+                    <input type="checkbox" name="library_mode_{{ lib.id }}" value="granular"
+                           class="library-mode-switch" {% if mode == 'granular' %}checked{% endif %}>
+                    <span class="mode-track"><span class="mode-thumb"></span></span>
+                    <span class="mode-label-granular">Granular</span>
+                  </label>
+                  <div class="library-readings" {% if mode != 'granular' %}style="display:none"{% endif %}>
+                    {% for r in lib.readings %}
+                    <label class="reading-check">
+                      <input type="checkbox" name="library_readings_{{ lib.id }}" value="{{ r.id }}"
+                             {% if r.id in sel_ids %}checked{% endif %}>
+                      <span>{{ r.title }}</span>
+                    </label>
+                    {% else %}
+                    <p class="muted small">No files in this library yet.</p>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="muted small">No libraries available yet.</p>
+          {% endif %}
+        </fieldset>
+        {% endif %}
+      </form>
+
+      {% if meeting %}
+      <fieldset class="fieldset">
+        <legend>Files</legend>
+        {% for cat in FILE_CATEGORIES %}
+        <div class="file-cat">
+          <div class="card-head"><h3 class="file-cat-title">{{ CATEGORY_LABELS[cat] }}</h3>
+            <button type="button" class="btn btn-sm" data-file-add-toggle="add-{{ cat }}">+ Add</button>
+          </div>
+          {% set items = meeting.files_by_category(cat) %}
+          {% if items %}
+          <ul class="file-list file-list-sortable"
+              data-reorder-url="{{ url_for('main.meeting_files_reorder', mid=meeting.id) }}"
+              data-reorder-category="{{ cat }}">
+            {% for f in items %}
+            {% set f_edit_id = 'edit-file-' ~ f.id %}
+            <li data-item-id="{{ f.id }}" draggable="true">
+              <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+              <div class="file-main">
+                <a href="{{ url_for('main.file_view', fid=f.id) }}" target="_blank" rel="noopener">{{ f.title }}</a>
+                {% if f.original_filename %}<div class="muted smaller">{{ f.original_filename }}</div>{% endif %}
+              </div>
+              <div class="row-actions">
+                <button type="button" class="btn btn-sm" data-file-add-toggle="{{ f_edit_id }}">Edit</button>
+                <form method="post" action="{{ url_for('main.file_delete', fid=f.id) }}" onsubmit="return confirm('Delete this file?');">
+                  <button class="btn btn-sm btn-danger">×</button>
+                </form>
+              </div>
+              <form id="{{ f_edit_id }}" method="post" class="file-add-form collapsed" enctype="multipart/form-data"
+                    action="{{ url_for('main.file_edit', fid=f.id) }}"
+                    data-inline-save>
+                <label>Title<input name="title" required value="{{ f.title }}"></label>
+                <label>Description<textarea name="description" rows="2">{{ f.description or '' }}</textarea></label>
+                {% if cat in ('external_links', 'videos') %}
+                <label>URL<input name="url" type="url" required placeholder="https://..."
+                       value="{{ f.url or '' }}"></label>
+                {% else %}
+                {% if f.original_filename %}
+                <div class="logo-current">
+                  <span class="muted small">{{ f.original_filename }}</span>
+                </div>
+                {% endif %}
+                <label>Replace File</label>
+                <div class="file-input-row">
+                  <input type="file" name="file">
+                  <button type="button" class="btn btn-sm" data-media-picker="{{ f_edit_id }}">Browse Library</button>
+                </div>
+                <label>Or URL<input name="url" type="url" placeholder="https://..."
+                       value="{{ f.url or '' }}"></label>
+                {% endif %}
+                <div class="form-actions">
+                  <button type="button" class="btn btn-sm" data-file-add-cancel="{{ f_edit_id }}">Cancel</button>
+                  <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                </div>
+              </form>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="muted small">No {{ CATEGORY_LABELS[cat]|lower }} yet.</p>
+          {% endif %}
+          <form id="add-{{ cat }}" method="post" class="file-add-form collapsed" enctype="multipart/form-data"
+                action="{{ url_for('main.file_new', mid=meeting.id, category=cat) }}">
+            <label>Title<input name="title" required></label>
+            <label>Description<textarea name="description" rows="2"></textarea></label>
+            {% if cat in ('external_links', 'videos') %}
+            <label>URL<input name="url" type="url" required placeholder="https://..."></label>
+            {% else %}
+            <label>File</label>
+            <div class="file-input-row">
+              <input type="file" name="file">
+              <button type="button" class="btn btn-sm" data-media-picker="add-{{ cat }}">Browse Library</button>
+            </div>
+            <label>Or URL<input name="url" type="url" placeholder="https://..."></label>
+            {% endif %}
+            <div class="form-actions">
+              <button type="button" class="btn btn-sm" data-file-add-cancel="add-{{ cat }}">Cancel</button>
+              <button type="submit" class="btn btn-sm btn-primary">Upload</button>
+            </div>
+          </form>
+        </div>
+        {% endfor %}
+      </fieldset>
+      {% endif %}
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" data-close>Cancel</button>
+      <button type="submit" form="{{ form_id }}" class="btn btn-primary">{{ submit_label }}</button>
+    </div>
+  </div>
+</div>

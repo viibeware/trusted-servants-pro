@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% from "_blocks.html" import render_sections, render_toc %}
+{% block heading %}{{ site.zoom_tech_title or 'Zoom Tech Training' }}{% endblock %}
+{% block top_actions %}
+{% if current_user.is_admin() %}
+<button type="button" class="btn" data-open-modal="zoom-tech-edit-modal">Edit</button>
+{% endif %}
+{% endblock %}
+{% block content %}
+
+{% if site.zoom_tech_template == 'wiki' and sections %}
+<div class="wiki-layout">
+  <div class="rich-content wiki-main">
+    {{ render_sections(sections) }}
+  </div>
+  {{ render_toc(sections) }}
+</div>
+{% else %}
+<div class="rich-content">
+  {% if sections %}
+    {{ render_sections(sections) }}
+  {% elif site.zoom_tech_content %}
+    {# Legacy HTML fallback #}
+    {{ site.zoom_tech_content|safe }}
+  {% else %}
+    <p class="muted">No content yet.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if current_user.is_admin() %}
+<div class="modal modal-lg" id="zoom-tech-edit-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form method="post" action="{{ url_for('main.zoom_tech_save') }}" class="form" id="zoom-tech-edit-form">
+      <div class="modal-head">
+        <h2>Edit {{ site.zoom_tech_title or 'Zoom Tech Training' }}</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <label>Page title
+          <input type="text" name="zoom_tech_title" value="{{ site.zoom_tech_title or '' }}" placeholder="Zoom Tech Training">
+        </label>
+        <div class="template-toggle-row">
+          <div class="template-toggle-label">
+            Layout
+            <span class="heading-help">
+              <button type="button" class="help-btn" aria-label="About layouts" tabindex="-1">?</button>
+              <span class="help-tooltip" role="tooltip">
+                Standard: full-width content.<br>
+                Wiki: content with an auto-generated table of contents on the right, built from section headings.
+              </span>
+            </span>
+          </div>
+          <div class="view-toggle" id="zt-tmpl-toggle">
+            <input type="hidden" name="zoom_tech_template" id="zt-tmpl-value" value="{{ site.zoom_tech_template or 'standard' }}">
+            <button type="button" class="btn btn-sm {% if (site.zoom_tech_template or 'standard') != 'wiki' %}active{% endif %}" data-tmpl="standard">Standard</button>
+            <button type="button" class="btn btn-sm {% if site.zoom_tech_template == 'wiki' %}active{% endif %}" data-tmpl="wiki">Wiki</button>
+          </div>
+        </div>
+        <input type="hidden" name="blocks_json" id="zoom-tech-blocks-json">
+        <div id="zoom-tech-editor-root" data-initial='{{ blocks_json|e }}'></div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='js/vendor/Sortable.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/block_editor.js') }}"></script>
+<script>
+(function () {
+  const root = document.getElementById('zoom-tech-editor-root');
+  const hidden = document.getElementById('zoom-tech-blocks-json');
+  const form = document.getElementById('zoom-tech-edit-form');
+  let initial = [];
+  try { initial = JSON.parse(root.dataset.initial || '[]'); } catch (e) {}
+  const editor = BlockEditor.mount(root, { initial });
+  form.addEventListener('submit', () => { hidden.value = editor.serialize(); });
+
+  const tmplToggle = document.getElementById('zt-tmpl-toggle');
+  const tmplValue = document.getElementById('zt-tmpl-value');
+  tmplToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-tmpl]');
+    if (!btn) return;
+    tmplValue.value = btn.dataset.tmpl;
+    tmplToggle.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+  });
+})();
+</script>
+{% endif %}
+
+{% endblock %}

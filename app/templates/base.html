@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}Trusted Servants Portal{% endblock %}</title>
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<script>
+  (function(){
+    var t = null;
+    try { t = localStorage.getItem('tsp-theme'); } catch(e){}
+    if (t) document.documentElement.setAttribute('data-theme', t);
+    try {
+      if (sessionStorage.getItem('tsp-login-fade') === '1') {
+        sessionStorage.removeItem('tsp-login-fade');
+        document.documentElement.classList.add('login-fade-in');
+      }
+    } catch(e){}
+  })();
+</script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+{% set embed = request.args.get('embed') == '1' %}
+<body class="{% if embed %}embed{% endif %}">
+{% if current_user.is_authenticated %}
+{% if not embed %}
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <img class="brand-logo" src="{{ url_for('static', filename='img/logo.svg') }}" alt="">
+      <div>
+        <div class="brand-title">Trusted Servants</div>
+        <div class="brand-sub">Portal</div>
+      </div>
+    </div>
+    <nav>
+      <a href="{{ url_for('main.index') }}" class="{% if request.endpoint=='main.index' %}active{% endif %}">Dashboard</a>
+      <a href="{{ url_for('main.meetings') }}" class="{% if 'meeting' in request.endpoint %}active{% endif %}">Meetings</a>
+      <a href="{{ url_for('main.libraries') }}" class="{% if 'librar' in request.endpoint or 'reading' in request.endpoint %}active{% endif %}">Libraries</a>
+      <a href="{{ url_for('main.media_list') }}" class="{% if 'media' in request.endpoint %}active{% endif %}">File Browser</a>
+      {% if site and site.intergroup_enabled %}
+      <a href="{{ url_for('main.intergroup') }}" class="{% if request.endpoint=='main.intergroup' %}active{% endif %}">{{ site.ig_page_title or 'Intergroup' }}</a>
+      {% endif %}
+      {% if site and site.zoom_tech_enabled %}
+      <a href="{{ url_for('main.zoom_tech') }}" class="{% if request.endpoint=='main.zoom_tech' %}active{% endif %}">{{ site.zoom_tech_title or 'Zoom Tech Training' }}</a>
+      {% endif %}
+      <div class="sidebar-nav-divider" id="sidebar-custom-nav-divider"
+           {% if not nav_links %}hidden{% endif %}>
+        <span class="sidebar-nav-label">External</span>
+      </div>
+      <span id="sidebar-custom-nav">
+      {% for n in (nav_links or []) %}
+        <a href="{{ n.url }}" target="_blank" rel="noopener" data-nav-custom>{{ n.title }} ↗</a>
+      {% endfor %}
+      </span>
+      {% if current_user.is_admin() %}
+      <div class="sidebar-nav-divider">
+        <span class="sidebar-nav-label">Admin</span>
+      </div>
+      <a href="{{ url_for('main.access_requests') }}" class="{% if 'access_request' in request.endpoint %}active{% endif %}">
+        Access Requests{% if pending_access_count %}<span class="nav-badge">{{ pending_access_count }}</span>{% endif %}
+      </a>
+      {% endif %}
+    </nav>
+    <div class="sidebar-footer">
+      {% set _flogo = (site.footer_logo_filename if site else None) %}
+      {% set _furl = (site.footer_logo_url if site else None) or 'https://viibeware.com' %}
+      {% set _fw = (site.footer_logo_width if site else None) or 32 %}
+      <a class="dccma-link" href="{{ _furl }}" target="_blank" rel="noopener">
+        {% if _flogo %}
+          <img src="{{ url_for('main.site_footer_logo') }}" alt=""{% if _fw %} style="width: {{ _fw }}px"{% endif %}>
+        {% else %}
+          <img src="{{ url_for('static', filename='img/viibeware.svg') }}" alt=""{% if _fw %} style="width: {{ _fw }}px"{% endif %}>
+        {% endif %}
+      </a>
+      <div class="brand-version">v1.0</div>
+      <div class="user-chip">
+        <div class="avatar">{{ current_user.username[:1].upper() }}</div>
+        <div class="user-chip-name">
+          <div class="u-name">{{ current_user.username }}</div>
+          <div class="u-role">{{ current_user.role }}</div>
+        </div>
+        <button type="button" class="icon-btn icon-btn-inline" data-open-modal="settings-modal" title="Settings">⚙</button>
+      </div>
+      <div class="footer-actions">
+        {% if site and (site.pic_name or site.pic_email or site.pic_phone) %}
+        <button type="button" class="icon-btn" data-open-modal="pic-help-modal" title="Need help?" aria-label="Need help?">?</button>
+        {% endif %}
+        <button type="button" class="icon-btn" id="theme-toggle" title="Toggle theme">
+          <span class="theme-icon-light">☀</span><span class="theme-icon-dark">☾</span>
+        </button>
+        <a class="icon-btn" href="{{ url_for('auth.logout') }}" title="Sign out">⇥</a>
+      </div>
+    </div>
+  </aside>
+  <main class="content">
+    <header class="topbar">
+      <button type="button" class="menu-btn" id="menu-toggle" aria-label="Toggle menu">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+          <line x1="4" y1="9" x2="20" y2="9"/>
+          <line x1="4" y1="15" x2="20" y2="15"/>
+        </svg>
+      </button>
+      <h1>{% block heading %}{% endblock %}
+        {%- set _help = self.heading_help()|trim -%}
+        {% if _help %}<span class="heading-help">
+          <button type="button" class="help-btn" aria-label="About this section">?</button>
+          <span class="help-tooltip" role="tooltip">{{ _help }}</span>
+        </span>{% endif %}
+      </h1>
+      {# heading_help block is consumed by self.heading_help() above; keep declaration hidden so children can override #}
+      {% if false %}{% block heading_help %}{% endblock %}{% endif %}
+      <div class="top-actions">{% block top_actions %}{% endblock %}</div>
+    </header>
+    {% block flashes %}
+    <div class="flashes">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+          <div class="flash flash-{{ cat }}">{{ msg }}</div>
+        {% endfor %}
+      {% endwith %}
+    </div>
+    {% endblock %}
+    <section class="page">{% block content %}{% endblock %}</section>
+  </main>
+</div>
+
+{# Settings modal #}
+<div class="modal modal-lg" id="settings-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2>Settings</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+    </div>
+    <div class="settings-tabs" role="tablist">
+      <button type="button" class="settings-tab active" data-tab="appearance">Appearance</button>
+      <button type="button" class="settings-tab" data-tab="zoom">Zoom Accounts</button>
+      {% if current_user.is_admin() %}
+      <button type="button" class="settings-tab" data-tab="users">Users</button>
+      <button type="button" class="settings-tab" data-tab="locations">Meeting Locations</button>
+      <button type="button" class="settings-tab" data-tab="navigation">External Links</button>
+      <button type="button" class="settings-tab" data-tab="special-pages">Special Sections</button>
+      <button type="button" class="settings-tab" data-tab="email">Email</button>
+      <button type="button" class="settings-tab" data-tab="data">Data</button>
+      {% endif %}
+      <button type="button" class="settings-tab" data-tab="about">About</button>
+    </div>
+    <div class="settings-body">
+      <div class="settings-pane active" data-pane="appearance">
+        <div class="appearance-pane appearance-theme">
+          <div class="u-name">Theme</div>
+          <div class="theme-picker" role="radiogroup" aria-label="Theme">
+            {% for t in [
+              ('light', 'Light', '#f6f7fb', '#ffffff', '#5b6ef4'),
+              ('dark', 'Dark', '#0f1117', '#171923', '#7d8dff'),
+              ('neobrutal-light', 'Neobrutal Light', '#fef9c3', '#ffffff', '#ec4899'),
+              ('neobrutal-dark', 'Neobrutal Dark', '#18181b', '#27272a', '#f472b6'),
+              ('cyberpunk', 'Cyberpunk', '#05050a', '#0f0a1f', '#ff2bd6'),
+              ('solarpunk', 'Solarpunk', '#f5f7e8', '#ffffff', '#1e9e6a'),
+            ] %}
+            <button type="button" class="theme-swatch" data-theme-value="{{ t[0] }}" role="radio" aria-checked="false">
+              <span class="swatch-preview" style="background: {{ t[2] }};">
+                <span class="sw-panel" style="background: {{ t[3] }};"></span>
+                <span class="sw-accent" style="background: {{ t[4] }};"></span>
+              </span>
+              <span class="swatch-label">{{ t[1] }}</span>
+            </button>
+            {% endfor %}
+          </div>
+        </div>
+        {% if current_user.is_admin() %}
+        <hr class="settings-sep">
+        <div class="appearance-grid">
+        <form class="form appearance-branding-form" method="post" action="{{ url_for('main.site_branding_save') }}" enctype="multipart/form-data">
+          <div class="u-name">Sidebar Footer Logo</div>
+          <p class="muted small">Replaces the logo shown at the bottom of the sidebar and the link it opens.</p>
+          {% set _current_logo_src = url_for('main.site_footer_logo') if (site and site.footer_logo_filename) else url_for('static', filename='img/viibeware.svg') %}
+          {% set _current_width = site.footer_logo_width if (site and site.footer_logo_width) else 32 %}
+          <div class="branding-row">
+            <div class="branding-preview-wrap">
+              <div class="muted smaller">Preview</div>
+              <div class="sidebar-footer-mock">
+                <a class="dccma-link" tabindex="-1">
+                  <img id="branding-preview-img" src="{{ _current_logo_src }}" alt="" style="width: {{ _current_width }}px">
+                </a>
+              </div>
+              <label class="width-slider-label">
+                <div class="width-slider-head">
+                  <span>Logo width</span>
+                  <output id="branding-width-value" for="branding-width-slider">{{ _current_width }}px</output>
+                </div>
+                <input type="range" name="footer_logo_width" id="branding-width-slider" min="16" max="150" value="{{ _current_width }}">
+              </label>
+            </div>
+            <div class="branding-fields">
+              <label>Replace image<input type="file" name="footer_logo" accept="image/*" id="branding-file-input"></label>
+              <label>Link URL<input type="url" name="footer_logo_url" value="{{ (site.footer_logo_url if site else '') or '' }}" placeholder="https://example.com"></label>
+              {% if site and site.footer_logo_filename %}
+              <label class="check"><input type="checkbox" name="clear_logo" value="1"><span>Remove custom logo (restore default)</span></label>
+              {% endif %}
+            </div>
+          </div>
+          <div class="branding-save-row">
+            <button class="btn btn-primary">Save Branding</button>
+          </div>
+        </form>
+        <form class="form login-appearance-form" method="post" action="{{ url_for('main.login_appearance_save') }}">
+          <div class="u-name">Login Screen</div>
+          <p class="muted small">Choose the animated background effect, speed, and accent color shown on the login page.</p>
+
+          <div class="login-fx-preview-wrap">
+            <div class="login-fx-preview" id="login-fx-preview">
+              <canvas id="login-fx-preview-canvas"></canvas>
+              <div class="login-fx-preview-label">Preview</div>
+            </div>
+          </div>
+
+          <div class="login-fx-controls">
+          <div class="row">
+            <label>Particle effect
+              <select name="login_particle_effect" id="login-fx-effect">
+                {% set _eff = site.login_particle_effect or 'network' %}
+                {% for v, label in [
+                  ('off', 'Off (solid background)'),
+                  ('network', 'Network — dots & lines'),
+                  ('stars', 'Starfield — drifting stars'),
+                  ('fireflies', 'Fireflies — soft glow pulses'),
+                  ('bubbles', 'Bubbles — rising spheres'),
+                  ('snow', 'Snow — gentle fall'),
+                  ('waves', 'Waves — flowing sinusoids'),
+                  ('orbits', 'Orbits — spiraling paths'),
+                  ('rain', 'Rain — streaking drops'),
+                ] %}
+                <option value="{{ v }}" {% if _eff == v %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>Background
+              {% set _parsed = [] %}
+              {% if site.login_bg_colors %}
+                {% set _parsed = site.login_bg_colors|from_json %}
+              {% endif %}
+              {% set _mode = 'default' %}
+              {% if _parsed and _parsed|length >= 2 %}{% set _mode = 'gradient-' ~ (_parsed|length) %}
+              {% elif site.login_bg_color %}{% set _mode = 'solid' %}
+              {% endif %}
+              <select name="login_bg_mode" id="login-fx-bgmode">
+                {% for v, label in [('default','Default gradient'),('solid','Solid color'),('gradient-2','Gradient (2 colors)'),('gradient-3','Gradient (3 colors)'),('gradient-4','Gradient (4 colors)')] %}
+                <option value="{{ v }}" {% if _mode == v %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
+
+          <div class="login-fx-colors" id="login-fx-colors">
+            {% set _defaults = ['#0a3eb5', '#1153e7', '#2e6bff', '#7bb8ff'] %}
+            {% for i in range(1, 5) %}
+              {% set _v = _parsed[i-1] if _parsed and _parsed|length >= i else (site.login_bg_color if i == 1 and site.login_bg_color else _defaults[i-1]) %}
+              <label class="login-fx-color-slot" data-slot="{{ i }}">
+                <span>Color {{ i }}</span>
+                <input type="color" name="login_bg_c{{ i }}" value="{{ _v }}">
+              </label>
+            {% endfor %}
+            <button type="button" class="btn btn-sm" id="login-fx-random">🎲 Random</button>
+          </div>
+
+          <label>Speed
+            <div class="login-fx-speed-row">
+              <input type="range" name="login_particle_speed" id="login-fx-speed"
+                     min="10" max="300" step="5" value="{{ site.login_particle_speed or 100 }}">
+              <output id="login-fx-speed-val" for="login-fx-speed">{{ site.login_particle_speed or 100 }}%</output>
+            </div>
+          </label>
+          <label>Particle size
+            <div class="login-fx-speed-row">
+              <input type="range" name="login_particle_size" id="login-fx-size"
+                     min="25" max="400" step="5" value="{{ site.login_particle_size or 100 }}">
+              <output id="login-fx-size-val" for="login-fx-size">{{ site.login_particle_size or 100 }}%</output>
+            </div>
+          </label>
+
+          <li class="special-page-row login-fx-toggle-row">
+            <div class="special-page-info">
+              <div class="u-name">Login transition</div>
+              <p class="muted small">Play a 3D door-opening animation with rainbow warp after a successful login.</p>
+            </div>
+            <label class="mode-toggle" title="Enable login transition animation">
+              <input type="checkbox" name="login_transition_enabled" value="1" {% if site.login_transition_enabled %}checked{% endif %}>
+              <span class="mode-track"><span class="mode-thumb"></span></span>
+            </label>
+          </li>
+
+          <div class="form-actions"><button class="btn btn-primary">Save Login Appearance</button></div>
+          </div>
+        </form>
+        </div>
+        <script src="{{ url_for('static', filename='js/login_fx.js') }}"></script>
+        <script>
+        (function(){
+          const effectSel = document.getElementById('login-fx-effect');
+          const speedInp = document.getElementById('login-fx-speed');
+          const speedOut = document.getElementById('login-fx-speed-val');
+          const sizeInp = document.getElementById('login-fx-size');
+          const sizeOut = document.getElementById('login-fx-size-val');
+          const preview = document.getElementById('login-fx-preview');
+          const canvas = document.getElementById('login-fx-preview-canvas');
+          const bgMode = document.getElementById('login-fx-bgmode');
+          const colorsWrap = document.getElementById('login-fx-colors');
+          const colorInps = Array.from(colorsWrap.querySelectorAll('input[type=color]'));
+          const slots = Array.from(colorsWrap.querySelectorAll('.login-fx-color-slot'));
+          const randBtn = document.getElementById('login-fx-random');
+          if (!effectSel || !canvas || !window.initLoginFX) return;
+          let fx = null;
+
+          function activeColors(){
+            const m = bgMode.value;
+            if (m === 'default') return null;
+            if (m === 'solid') return [colorInps[0].value];
+            const n = parseInt(m.split('-')[1], 10) || 2;
+            return colorInps.slice(0, n).map(i => i.value);
+          }
+          function syncSlots(){
+            const m = bgMode.value;
+            let shown = 0;
+            if (m === 'solid') shown = 1;
+            else if (m.startsWith('gradient-')) shown = parseInt(m.split('-')[1], 10) || 0;
+            slots.forEach((s, i) => { s.style.display = i < shown ? '' : 'none'; });
+            randBtn.style.display = shown >= 2 ? '' : 'none';
+          }
+          const DEFAULT_COLORS = ["#16c2ba", "#1883d5", "#5a1ce5"];
+          function applyPreview(){
+            const colors = activeColors();
+            window.loginFxUtils.applyBackground(preview, colors || DEFAULT_COLORS);
+          }
+
+          function rebuild(){
+            if (fx) fx.destroy();
+            canvas.width = canvas.height = 0;
+            if (effectSel.value === 'off') { fx = null; return; }
+            fx = window.initLoginFX(canvas, {
+              effect: effectSel.value,
+              speed: parseInt(speedInp.value, 10),
+              size: parseInt(sizeInp.value, 10)
+            });
+          }
+          effectSel.addEventListener('change', rebuild);
+          speedInp.addEventListener('input', () => {
+            speedOut.textContent = speedInp.value + '%';
+            if (fx) fx.setSpeed(parseInt(speedInp.value, 10));
+          });
+          sizeInp.addEventListener('input', () => {
+            sizeOut.textContent = sizeInp.value + '%';
+            if (fx) fx.setSize(parseInt(sizeInp.value, 10));
+          });
+          bgMode.addEventListener('change', () => { syncSlots(); applyPreview(); });
+          colorInps.forEach(inp => inp.addEventListener('input', applyPreview));
+          randBtn.addEventListener('click', () => {
+            const m = bgMode.value;
+            const n = m.startsWith('gradient-') ? (parseInt(m.split('-')[1], 10) || 2) : 2;
+            const pal = window.loginFxUtils.randomPalette(n);
+            for (let i = 0; i < n; i++) colorInps[i].value = pal[i];
+            applyPreview();
+          });
+          syncSlots(); applyPreview();
+          // Start paused until the settings modal opens (avoid wasted work if user never visits).
+          const modal = document.getElementById('settings-modal');
+          const tabBtn = modal && modal.querySelector('[data-tab="appearance"]');
+          function maybeStart(){
+            if (preview.offsetParent !== null && !fx && effectSel.value !== 'off') rebuild();
+          }
+          if (modal){
+            const obs = new MutationObserver(maybeStart);
+            obs.observe(modal, { attributes: true, attributeFilter: ['class'] });
+          }
+          if (tabBtn) tabBtn.addEventListener('click', maybeStart);
+          document.querySelectorAll('[data-open-modal="settings-modal"]').forEach(b =>
+            b.addEventListener('click', () => setTimeout(maybeStart, 50)));
+        })();
+        </script>
+        {% endif %}
+      </div>
+      <div class="settings-pane" data-pane="zoom">
+        <iframe class="settings-frame" data-src="{{ url_for('main.zoom_accounts') }}?embed=1"></iframe>
+      </div>
+      {% if current_user.is_admin() %}
+      <div class="settings-pane" data-pane="users">
+        <iframe class="settings-frame" data-src="{{ url_for('auth.users') }}?embed=1"></iframe>
+      </div>
+      <div class="settings-pane" data-pane="locations">
+        <iframe class="settings-frame" data-src="{{ url_for('main.locations') }}?embed=1"></iframe>
+      </div>
+      <div class="settings-pane" data-pane="navigation">
+        <iframe class="settings-frame" data-src="{{ url_for('main.nav_links') }}?embed=1"></iframe>
+      </div>
+      <div class="settings-pane" data-pane="special-pages">
+        <ul class="special-pages-list">
+          <li class="special-page-row">
+            <div class="special-page-info">
+              <div class="u-name">{{ site.ig_page_title or 'Intergroup' }}</div>
+              <p class="muted small">Show or hide the {{ site.ig_page_title or 'Intergroup' }} page from the dashboard and sidebar.</p>
+            </div>
+            <form method="post" action="{{ url_for('main.intergroup_toggle') }}" class="special-page-toggle-form">
+              <label class="mode-toggle" title="Enable {{ site.ig_page_title or 'Intergroup' }} page">
+                <input type="checkbox" name="intergroup_enabled" value="1"
+                       onchange="this.form.submit()"
+                       {% if site and site.intergroup_enabled %}checked{% endif %}>
+                <span class="mode-track"><span class="mode-thumb"></span></span>
+              </label>
+              <noscript><button class="btn btn-sm btn-primary">Save</button></noscript>
+            </form>
+          </li>
+          <li class="special-page-row">
+            <div class="special-page-info">
+              <div class="u-name">{{ site.zoom_tech_title or 'Zoom Tech Training' }}</div>
+              <p class="muted small">Show or hide the Zoom Tech Training page from the sidebar.</p>
+            </div>
+            <form method="post" action="{{ url_for('main.zoom_tech_toggle') }}" class="special-page-toggle-form">
+              <label class="mode-toggle" title="Enable Zoom Tech Training page">
+                <input type="checkbox" name="zoom_tech_enabled" value="1"
+                       onchange="this.form.submit()"
+                       {% if site and site.zoom_tech_enabled %}checked{% endif %}>
+                <span class="mode-track"><span class="mode-thumb"></span></span>
+              </label>
+              <noscript><button class="btn btn-sm btn-primary">Save</button></noscript>
+            </form>
+          </li>
+        </ul>
+
+        <form class="form special-pic-form" method="post" action="{{ url_for('main.pic_save') }}">
+          <div class="u-name">Public Information Chair</div>
+          <p class="muted small">Contact information shown on the dashboard for members who need help.</p>
+          <label>Name<input type="text" name="pic_name" value="{{ site.pic_name or '' }}"></label>
+          <label>Email<input type="email" name="pic_email" value="{{ site.pic_email or '' }}"></label>
+          <label>Phone<input type="tel" name="pic_phone" value="{{ site.pic_phone or '' }}"></label>
+          <div class="form-actions"><button class="btn btn-primary">Save</button></div>
+        </form>
+      </div>
+      <div class="settings-pane" data-pane="email">
+        <div class="u-name">SMTP Server</div>
+        <p class="muted small">Used for sending notification emails, including access requests from the login screen.</p>
+        <form class="form" method="post" action="{{ url_for('main.email_save') }}">
+          <div class="row">
+            <label>SMTP host<input name="smtp_host" type="text" value="{{ site.smtp_host or '' }}" placeholder="smtp.example.com"></label>
+            <label>Port<input name="smtp_port" type="number" min="1" max="65535" value="{{ site.smtp_port or '' }}" placeholder="587"></label>
+          </div>
+          <div class="row">
+            <label>Username<input name="smtp_username" type="text" value="{{ site.smtp_username or '' }}" autocomplete="off"></label>
+            <label>Security
+              <select name="smtp_security">
+                <option value="starttls" {% if site.smtp_security == 'starttls' %}selected{% endif %}>STARTTLS (port 587)</option>
+                <option value="ssl" {% if site.smtp_security == 'ssl' %}selected{% endif %}>SSL/TLS (port 465)</option>
+                <option value="none" {% if site.smtp_security == 'none' %}selected{% endif %}>None (plain)</option>
+              </select>
+            </label>
+          </div>
+          <label>Password
+            <input name="smtp_password" type="password" autocomplete="new-password"
+                   placeholder="{% if site.smtp_password_enc %}(leave blank to keep existing){% else %}Enter password{% endif %}">
+          </label>
+          {% if site.smtp_password_enc %}
+          <label class="check"><input type="checkbox" name="smtp_password_clear" value="1"><span>Remove stored password</span></label>
+          {% endif %}
+          <div class="row">
+            <label>From email<input name="smtp_from_email" type="email" value="{{ site.smtp_from_email or '' }}" placeholder="noreply@example.com"></label>
+            <label>From name<input name="smtp_from_name" type="text" value="{{ site.smtp_from_name or '' }}" placeholder="Trusted Servants Portal"></label>
+          </div>
+
+          <hr class="settings-sep">
+
+          <div class="u-name">Access Request Notifications</div>
+          <p class="muted small">Access-request submissions from the login page are emailed here. Separate multiple recipients with commas.</p>
+          <label>Send access requests to<input name="access_request_to" type="text" value="{{ site.access_request_to or '' }}" placeholder="admin@example.com"></label>
+
+          <div class="form-actions"><button class="btn btn-primary">Save Email Settings</button></div>
+        </form>
+
+        <hr class="settings-sep">
+
+        <div class="u-name">Send test email</div>
+        <p class="muted small">Verifies the SMTP credentials above by sending a test message.</p>
+        <form class="form" method="post" action="{{ url_for('main.email_test') }}">
+          <label>Recipient<input name="to" type="email" placeholder="{{ site.access_request_to or site.smtp_from_email or 'you@example.com' }}"></label>
+          <div class="form-actions"><button class="btn">Send Test</button></div>
+        </form>
+      </div>
+      <div class="settings-pane" data-pane="data">
+        <div class="data-grid">
+          <div class="data-col">
+            <div class="u-name">Import</div>
+            <p class="muted small">
+              Replace this portal's database and uploads with the contents of an export archive.
+              The current database and uploads are moved to a timestamped <code>backup-YYYYMMDD-HHMMSS/</code>
+              folder inside the data directory before the import is applied. You will be signed out
+              when the import completes.
+            </p>
+            <p class="muted small">
+              This overwrites all existing data. Type <code>REPLACE</code> in the
+              confirmation field to proceed.
+            </p>
+            <form class="form" method="post" action="{{ url_for('main.data_import') }}" enctype="multipart/form-data" data-no-ajax="1">
+              <label>Export archive (.zip)<input type="file" name="archive" accept=".zip,application/zip" required></label>
+              <label>Type <code>REPLACE</code> to confirm<input type="text" name="confirm" placeholder="REPLACE" autocomplete="off" required></label>
+              <div class="form-actions"><button class="btn btn-danger">Import &amp; Replace All Data</button></div>
+            </form>
+          </div>
+          <div class="data-col">
+            <div class="u-name">Export</div>
+            <p class="muted small">
+              Download a complete archive of this portal: the SQLite database, every uploaded file,
+              and the Fernet key (<code>zoom.key</code>) used to decrypt stored Zoom credentials.
+              Use the Import section on a fresh instance to restore.
+            </p>
+            <div class="form-actions">
+              <a class="btn btn-primary" href="{{ url_for('main.data_export') }}">Export full archive (.zip)</a>
+            </div>
+          </div>
+        </div>
+      </div>
+{% endif %}
+      <div class="settings-pane" data-pane="about">
+        <div class="about-pane">
+          <div class="about-head about-head-branded">
+            <img class="about-logo" src="{{ url_for('static', filename='img/logo.svg') }}" alt="Trusted Servants Portal">
+            <div>
+              <div class="u-name">Trusted Servants Portal</div>
+              <div class="muted small">Version 1.0</div>
+            </div>
+          </div>
+          <h3 class="about-sub">Changelog</h3>
+          <ul class="changelog">
+            <li>
+              <div class="u-name">1.0 — First public release</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Meetings</b> — full CRUD with logos, alert banners, per-day schedules (including opens time), in-person / online / hybrid types, archive &amp; restore, table and card views, sort by name / day / type, and attached Zoom account + location selection.</li>
+                <li><b>Libraries &amp; Readings</b> — grouped file collections with drag-and-drop reorder, inline edit, granular reading selection per meeting, thumbnails, inline body text, and external link support.</li>
+                <li><b>File Browser</b> — central media library with search, sort, grid &amp; table views, rename, upload progress, and public direct-link URLs served under <code>/pub/&lt;filename&gt;</code> so files are shareable without authentication.</li>
+                <li><b>Copy Link buttons</b> — every file exposes an inline clipboard button (Meetings, Libraries, File Browser) with clean human-readable URLs.</li>
+                <li><b>Roles &amp; Access</b> — admin / editor / viewer. Server-side decorators enforce permissions; UI hides disallowed controls.</li>
+                <li><b>Login screen</b> — redesigned split layout with branded hero pane and credential pane. Configurable particle effects (Network, Starfield, Fireflies, Bubbles, Snow, Waves, Orbits, Rain) with adjustable speed and size, mouse-reactive physics, and a hand-tuned sine-wave gradient background (default teal→blue→purple) with multi-color picker, random palette generator, and live preview in Settings.</li>
+                <li><b>3D login transition</b> — optional door-opening animation with moving rainbow sine-wave warp and centered branding logo, fading to the active theme background before navigating to the next page.</li>
+                <li><b>Request Access</b> — public form on the login screen capturing name, contact, role(s), and meeting; submissions recorded and emailed to a configurable recipient list.</li>
+                <li><b>Access Requests admin page</b> — sidebar entry with pending-count badge and a dashboard widget for quick triage (Mark Handled / Reopen / Delete).</li>
+                <li><b>Zoom accounts</b> — encrypted credential storage (Fernet), weekly assignment calendar starting Sunday, automatic conflict detection with red highlighting across overlapping slots, password reveal, and separate OTP email credentials displayed on online/hybrid meeting pages.</li>
+                <li><b>Intergroup page</b> — configurable email address list with webmail link and mail-client setup instructions.</li>
+                <li><b>Zoom Tech Training</b> — rich-block page with Standard and Wiki layouts, import scripts for WordPress content.</li>
+                <li><b>Dashboard</b> — customizable widgets: stats, recent meetings, libraries, recent files, intergroup, access requests, and public information chair contact, each toggleable per site.</li>
+                <li><b>Themes</b> — six full palettes (Light, Dark, Neobrutal Light/Dark, Cyberpunk, Solarpunk) with live swatches and remembered preference. Theme carries through to the login screen and persists via localStorage.</li>
+                <li><b>Appearance tab</b> — custom sidebar footer logo + link (with width slider &amp; preview) and the login screen particle/color configurator, all admin-only.</li>
+                <li><b>Email / SMTP</b> — global SMTP server configuration with STARTTLS / SSL / plain, encrypted password storage, From name + address, "send to" recipient list for access requests, and a Send-Test utility.</li>
+                <li><b>Data export / import</b> — full-portal zip (SQLite DB + uploads + <code>zoom.key</code>) with a safe in-place import that backs up the previous data to a timestamped folder before swapping.</li>
+                <li><b>Session length</b> — 6-month remember-me cookie so users aren't repeatedly prompted for credentials.</li>
+                <li><b>Responsive design</b> — dedicated mobile layouts for every view (Meetings, Libraries, File Browser, Users, Zoom Accounts, Locations) with stacked card rows replacing horizontal tables, a collapsible sidebar with outside-click-to-close, a two-bar menu icon, full-viewport settings modal with horizontally-scrollable tabs and fade hint, and full-width primary actions on mobile.</li>
+                <li><b>Settings UX</b> — AJAX form submits that never close the modal, an in-modal toast notification system with success / warning / error variants, and live validation feedback.</li>
+                <li><b>Typography &amp; color system</b> — Inter font across the app (weights 100–900), unified accent color (#0b5cff) with matching hover and soft tints, consistent card padding at 2rem on desktop.</li>
+              </ul>
+            </li>
+          </ul>
+          <div class="about-credit">
+            <a href="https://viibeware.com" target="_blank" rel="noopener" class="viibeware-credit">
+              <img src="{{ url_for('static', filename='img/viibeware.svg') }}" alt="">
+              <span class="viibeware-name">VIIBEWARE CORP</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{# Public Info Chair help popup #}
+{% if site and (site.pic_name or site.pic_email or site.pic_phone) %}
+<div class="modal" id="pic-help-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2>Need Help?</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted small">Reach out to our Public Information Chair for questions, concerns, or guidance.</p>
+      <div class="pic-contact">
+        {% if site.pic_name %}
+        <div class="pic-row"><span class="pic-icon">👤</span>{{ site.pic_name }}</div>
+        {% endif %}
+        {% if site.pic_email %}
+        <div class="pic-row"><span class="pic-icon">✉</span><a href="mailto:{{ site.pic_email }}">{{ site.pic_email }}</a></div>
+        {% endif %}
+        {% if site.pic_phone %}
+        <div class="pic-row"><span class="pic-icon">☎</span><a href="tel:{{ site.pic_phone }}">{{ site.pic_phone }}</a></div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" data-close>Close</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# Media picker modal (shared) #}
+<div class="modal modal-lg" id="media-picker-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2>File Browser</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+    </div>
+    <iframe class="settings-frame" id="media-picker-frame" src="about:blank"></iframe>
+  </div>
+</div>
+
+{% else %}
+{# embed mode: render only the page content, no chrome #}
+<main class="embed-content">
+  <div class="flashes">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="flash flash-{{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+  </div>
+  {% block embed_content %}{{ self.content() }}{% endblock %}
+</main>
+{% endif %}
+{% else %}
+  {% block auth_content %}{% endblock %}
+{% endif %}
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block heading %}Meetings{% endblock %}
+{% block heading_help %}Browse and manage meetings — schedules, service positions, locations, and Zoom account assignments.{% endblock %}
+{% block top_actions %}
+  <div class="view-controls">
+    <div class="view-toggle">
+      <a class="btn btn-sm {% if view != 'table' %}active{% endif %}" href="{{ url_for('main.meetings', view='cards', sort=sort, dir=direction, show=show) }}">Cards</a>
+      <a class="btn btn-sm {% if view == 'table' %}active{% endif %}" href="{{ url_for('main.meetings', view='table', sort=sort, dir=direction, show=show) }}">Table</a>
+    </div>
+    <div class="view-toggle">
+      <a class="btn btn-sm {% if show != 'archived' %}active{% endif %}" href="{{ url_for('main.meetings', view=view, sort=sort, dir=direction, show='active') }}">Active</a>
+      <a class="btn btn-sm {% if show == 'archived' %}active{% endif %}" href="{{ url_for('main.meetings', view=view, sort=sort, dir=direction, show='archived') }}">Archived</a>
+    </div>
+    <label class="sort-select">
+      <span class="muted smaller">Sort</span>
+      <select onchange="window.location=this.value">
+        <option value="{{ url_for('main.meetings', view=view, sort='name', dir=direction) }}" {% if sort == 'name' %}selected{% endif %}>Name</option>
+        <option value="{{ url_for('main.meetings', view=view, sort='day', dir=direction) }}" {% if sort == 'day' %}selected{% endif %}>Day of week</option>
+        <option value="{{ url_for('main.meetings', view=view, sort='type', dir=direction) }}" {% if sort == 'type' %}selected{% endif %}>Type</option>
+      </select>
+    </label>
+    <a class="btn btn-sm sort-dir" title="Toggle sort direction"
+       href="{{ url_for('main.meetings', view=view, sort=sort, dir=('desc' if direction=='asc' else 'asc')) }}">
+      {{ '↓' if direction == 'desc' else '↑' }}
+    </a>
+  </div>
+  {% if current_user.can_edit() %}
+  <button type="button" class="btn btn-primary" data-open-modal="meeting-new-modal">+ New Meeting</button>
+  {% endif %}
+{% endblock %}
+{% block content %}
+{% if meetings %}
+  {% if view == 'table' %}
+  <section class="card">
+    <table class="tbl">
+      <thead>
+        <tr><th>Name</th><th>Type</th><th>Schedule</th><th class="hide-sm">Libraries</th></tr>
+      </thead>
+      <tbody>
+        {% for m in meetings %}
+        <tr>
+          <td><a href="{{ url_for('main.meeting_detail', mid=m.id) }}">{{ m.name }}</a></td>
+          <td><span class="mtype-chip mtype-{{ m.meeting_type }}">{{ {'in_person':'In-Person','online':'Online','hybrid':'Hybrid'}[m.meeting_type] }}</span></td>
+          <td>
+            {% for s in m.schedules %}
+              <div class="muted small">{{ s.day_name[:3] }} {{ s.start_time|fmt12h }}</div>
+            {% else %}<span class="muted smaller">—</span>{% endfor %}
+          </td>
+          <td class="hide-sm">{{ m.libraries|length }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% else %}
+  <div class="cards">
+    {% for m in meetings %}
+    <a class="card card-hover meeting-card" href="{{ url_for('main.meeting_detail', mid=m.id) }}">
+      <span class="mtype-chip mtype-{{ m.meeting_type }} card-type-chip">{{ {'in_person':'In-Person','online':'Online','hybrid':'Hybrid'}[m.meeting_type] }}</span>
+      <h3>
+        {% if m.logo_filename %}<img class="meeting-logo" src="{{ url_for('main.meeting_logo', mid=m.id) }}" alt="">{% endif %}
+        {{ m.name }}
+      </h3>
+      {% if m.schedules %}
+      <div class="muted small schedule-chips">
+        {% for s in m.schedules %}
+          <span class="chip chip-sm">{{ s.day_name[:3] }} {{ s.start_time|fmt12h }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <div class="tags">
+        <span class="tag">{{ m.files.count() }} files</span>
+        <span class="tag">{{ m.libraries|length }} libraries</span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+{% else %}
+<div class="empty">
+  {% if show == 'archived' %}
+  <h3>No archived meetings</h3>
+  <p class="muted">Meetings you archive will appear here. They stay hidden from the active list but can be restored any time.</p>
+  {% else %}
+  <h3>No meetings yet</h3>
+  <p class="muted">Create your first meeting to get started.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if current_user.can_edit() %}
+  {% with modal_id="meeting-new-modal",
+          form_action=url_for('main.meeting_new'),
+          meeting=None,
+          zoom_accounts=zoom_accounts,
+          locations=locations,
+          submit_label="Create" %}
+    {% include "_meeting_modal.html" %}
+  {% endwith %}
+{% endif %}
+{% endblock %}

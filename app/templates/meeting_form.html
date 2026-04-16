@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block heading %}{{ "Edit Meeting" if meeting else "New Meeting" }}{% endblock %}
+{% block content %}
+<form method="post" class="form card">
+  <label>Name<input name="name" required value="{{ meeting.name if meeting else '' }}"></label>
+  <div class="row">
+    <label>Day<input name="day_of_week" placeholder="e.g. Tuesday" value="{{ meeting.day_of_week if meeting else '' }}"></label>
+    <label>Time<input name="time" placeholder="e.g. 7:00 PM" value="{{ meeting.time if meeting else '' }}"></label>
+  </div>
+  <label>Location<input name="location" value="{{ meeting.location if meeting else '' }}"></label>
+  <label>Description<textarea name="description" rows="5">{{ meeting.description if meeting else '' }}</textarea></label>
+  <div class="form-actions">
+    <a href="{{ url_for('main.meetings') }}" class="btn">Cancel</a>
+    <button class="btn btn-primary">{{ "Save" if meeting else "Create" }}</button>
+  </div>
+</form>
+{% endblock %}

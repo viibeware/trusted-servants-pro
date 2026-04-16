@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block heading %}{{ reading.title if reading else title }}{% endblock %}
+{% block top_actions %}<a href="{{ back_url }}" class="btn">← Back</a>{% endblock %}
+{% block content %}
+<article class="card reading">
+  {% if reading %}
+    {% if reading.thumbnail_filename %}
+    <img class="reading-hero" src="{{ url_for('main.reading_thumbnail', rid=reading.id) }}" alt="">
+    {% endif %}
+    {% if reading.url or reading.stored_filename %}
+    <div class="meta-row">
+      {% if reading.url %}<a class="btn" href="{{ reading.url }}" target="_blank">Open Link</a>{% endif %}
+      {% if reading.stored_filename %}<a class="btn" href="{{ url_for('main.reading_download', rid=reading.id) }}" target="_blank">Open File ({{ reading.original_filename }})</a>{% endif %}
+    </div>
+    {% endif %}
+    {% if reading.body %}<pre class="reading-body">{{ reading.body }}</pre>{% endif %}
+  {% else %}
+    <pre class="reading-body">{{ body or '' }}</pre>
+  {% endif %}
+</article>
+{% endblock %}

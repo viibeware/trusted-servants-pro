@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block heading %}Zoom Accounts{% endblock %}
+{% block top_actions %}
+{% if current_user.is_admin() %}
+<button type="button" class="btn btn-primary" data-open-modal="zoom-new-modal">+ New Account</button>
+{% endif %}
+{% endblock %}
+{% block content %}
+
+{% if embed and current_user.is_admin() %}
+<div class="embed-actions">
+  <button type="button" class="btn btn-primary" data-open-modal="zoom-new-modal">+ New Account</button>
+</div>
+{% endif %}
+
+<section class="card">
+  <div class="card-head"><h2>Accounts</h2></div>
+  {% if accounts %}
+  <table class="tbl zoom-accounts-tbl">
+    <thead><tr><th>Name</th><th>Username</th><th>Password</th><th>Notes</th><th>Assignments</th>{% if current_user.is_admin() %}<th></th>{% endif %}</tr></thead>
+    <tbody>
+    {% for a in accounts %}
+      <tr>
+        <td data-label="Name">{{ a.name }}</td>
+        <td data-label="Username">{{ a.username }}</td>
+        <td data-label="Password">
+          <button type="button" class="btn btn-sm" data-reveal="{{ a.id }}">Show</button>
+          <span class="mono pw-reveal" id="pw-{{ a.id }}"></span>
+        </td>
+        <td data-label="Notes">{{ a.notes or '' }}</td>
+        <td data-label="Assignments">{{ a.schedules|length }}</td>
+        {% if current_user.is_admin() %}
+        <td class="zoom-accounts-actions">
+          <div class="row-actions">
+            <button type="button" class="btn btn-sm" data-open-modal="zoom-edit-{{ a.id }}">Edit</button>
+            <form method="post" action="{{ url_for('main.zoom_account_delete', aid=a.id) }}"
+                  onsubmit="return confirm('Delete this Zoom account? Assignments will be cleared.');">
+              {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+              <button class="btn btn-sm btn-danger">×</button>
+            </form>
+          </div>
+        </td>
+        {% endif %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No Zoom accounts yet.</p>
+  {% endif %}
+</section>
+
+{% if accounts %}
+<section class="card">
+  <div class="card-head"><h2>Weekly Assignment Calendar</h2></div>
+  <div class="zoom-cal-wrap">
+    <table class="zoom-cal">
+      <thead>
+        <tr>
+          <th class="cal-acct">Account</th>
+          {% for d in day_order %}<th>{{ DAYS_OF_WEEK[d][:3] }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in accounts %}
+        <tr>
+          <th class="cal-acct">{{ a.name }}</th>
+          {% for d in day_order %}
+          <td>
+            {% for s in calendar[a.id][d]|sort(attribute='start_time') %}
+              <div class="cal-slot{% if s.id in conflict_ids %} cal-slot-conflict{% endif %}">
+                <div class="cal-time">{{ s.start_time }} · {{ s.duration_minutes }}m</div>
+                <a class="cal-link" href="{{ url_for('main.meeting_detail', mid=s.meeting_id) }}">{{ s.meeting.name }}</a>
+              </div>
+            {% endfor %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if current_user.is_admin() %}
+<section class="card zoom-otp-card">
+  <div class="card-head"><h2>Zoom OTP Email</h2></div>
+  <p class="muted small">Shared inbox where Zoom sends one-time-password codes. These credentials are shown to users on Online/Hybrid meeting pages so they can retrieve OTP codes when logging into Zoom.</p>
+  <form method="post" action="{{ url_for('main.otp_email_save') }}" class="form">
+    {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+    <label>Email Address<input name="email" type="email" value="{{ otp.email or '' }}"></label>
+    <label>Login URL<input name="login_url" type="url" value="{{ otp.login_url or '' }}" placeholder="https://mail.example.com"></label>
+    <label>Password <span class="muted smaller">(leave blank to keep current)</span>
+      <input name="password" type="password" placeholder="{% if otp.password_enc %}••••••••{% endif %}">
+    </label>
+    {% if otp.password_enc %}
+    <label class="check"><input type="checkbox" name="clear_password" value="1"><span>Clear stored password</span></label>
+    {% endif %}
+    <div class="form-actions">
+      <button class="btn btn-primary">Save</button>
+    </div>
+  </form>
+</section>
+
+{# New account modal #}
+<div class="modal" id="zoom-new-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form method="post" action="{{ url_for('main.zoom_account_new') }}" class="form">
+      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+      <div class="modal-head">
+        <h2>New Zoom Account</h2>
+        <button type="button" class="icon-btn" data-close>×</button>
+      </div>
+      <div class="modal-body">
+        <label>Name<input name="name" required></label>
+        <label>Username / Email<input name="username" required></label>
+        <label>Password<input name="password" type="password" required></label>
+        <label>Notes<textarea name="notes" rows="2"></textarea></label>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# Edit modals #}
+{% for a in accounts %}
+<div class="modal" id="zoom-edit-{{ a.id }}" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form method="post" action="{{ url_for('main.zoom_account_edit', aid=a.id) }}" class="form">
+      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+      <div class="modal-head">
+        <h2>Edit Zoom Account</h2>
+        <button type="button" class="icon-btn" data-close>×</button>
+      </div>
+      <div class="modal-body">
+        <label>Name<input name="name" required value="{{ a.name }}"></label>
+        <label>Username / Email<input name="username" required value="{{ a.username }}"></label>
+        <label>Password <span class="muted smaller">(leave blank to keep)</span>
+          <input name="password" type="password" placeholder="••••••••">
+        </label>
+        <label>Notes<textarea name="notes" rows="2">{{ a.notes or '' }}</textarea></label>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% endblock %}

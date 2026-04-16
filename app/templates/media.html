@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block heading %}File Browser{% endblock %}
+{% block heading_help %}Upload, browse, and manage images, documents, and other files used throughout the portal.{% endblock %}
+{% block top_actions %}
+  {% if not picker %}
+  <div class="view-controls">
+    <label class="sort-select">
+      <span class="muted smaller">Sort</span>
+      <select onchange="window.location=this.value">
+        <option value="{{ url_for('main.media_list', view=view, sort='name', dir=direction, q=q) }}" {% if sort=='name' %}selected{% endif %}>Name</option>
+        <option value="{{ url_for('main.media_list', view=view, sort='type', dir=direction, q=q) }}" {% if sort=='type' %}selected{% endif %}>Type</option>
+        <option value="{{ url_for('main.media_list', view=view, sort='size', dir=direction, q=q) }}" {% if sort=='size' %}selected{% endif %}>Size</option>
+        <option value="{{ url_for('main.media_list', view=view, sort='uploaded', dir=direction, q=q) }}" {% if sort=='uploaded' %}selected{% endif %}>Uploaded</option>
+      </select>
+    </label>
+    <a class="btn btn-sm sort-dir" title="Toggle sort direction"
+       href="{{ url_for('main.media_list', view=view, sort=sort, dir=('desc' if direction=='asc' else 'asc'), q=q) }}">
+      {{ '↓' if direction == 'desc' else '↑' }}
+    </a>
+  </div>
+  {% endif %}
+  {% if current_user.can_edit() and not picker %}
+  <label class="btn btn-primary" for="media-upload-input">+ Upload</label>
+  <input type="file" id="media-upload-input" style="display:none" multiple>
+  {% endif %}
+{% endblock %}
+{% block content %}
+<section class="card">
+  <form method="get" action="{{ url_for('main.media_list') }}" class="media-search">
+    {% if picker %}<input type="hidden" name="picker" value="1">{% endif %}
+    <input type="hidden" name="view" value="{{ view }}">
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="dir" value="{{ direction }}">
+    <input name="q" value="{{ q }}" placeholder="Search filename…" autofocus>
+    <button class="btn btn-sm">Search</button>
+  </form>
+
+  {% if picker and current_user.can_edit() %}
+  <div class="picker-upload">
+    <label class="btn btn-sm btn-primary" for="media-upload-input">+ Upload new</label>
+    <input type="file" id="media-upload-input" style="display:none">
+    <span class="muted small">Uploads appear at the top.</span>
+  </div>
+  {% endif %}
+
+  {% if not items %}
+  <p class="muted">No media {% if q %}matching "{{ q }}"{% endif %}.</p>
+  {% elif not picker %}
+  <table class="tbl media-tbl">
+    <thead>
+      <tr><th>Name</th><th>Type</th><th>Size</th><th class="hide-sm">Uploaded by</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for m in items %}
+      {% set t = media_type(m.original_filename) %}
+      <tr data-media-id="{{ m.id }}" data-stored="{{ m.stored_filename }}" data-original="{{ m.original_filename }}">
+        <td class="media-name-cell"><a href="{{ url_for('main.public_file', filename=m.original_filename) }}" target="_blank">{{ m.original_filename }}</a></td>
+        <td><span class="ftype ftype-{{ t }} ftype-sm">{{ t|upper }}</span></td>
+        <td class="muted">{{ (m.size_bytes or 0) // 1024 }} KB</td>
+        <td class="muted hide-sm">{{ m.uploader.username if m.uploader else '—' }}</td>
+        <td class="row-actions">
+          <button type="button" class="btn btn-sm btn-copy" data-copy-url="{{ url_for('main.public_file', filename=m.original_filename) }}">Copy Link</button>
+          <a class="btn btn-sm" href="{{ url_for('main.media_download', mid=m.id) }}">Download</a>
+          {% if current_user.can_edit() %}
+          <button type="button" class="btn btn-sm media-rename">Rename</button>
+          {% endif %}
+          {% if current_user.is_admin() %}
+          <form method="post" action="{{ url_for('main.media_delete', mid=m.id) }}"
+                onsubmit="return confirm('Delete this file from the library?');">
+            <button class="btn btn-sm btn-danger">×</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="media-grid" id="media-grid">
+    {% for m in items %}
+    {% set t = media_type(m.original_filename) %}
+    <div class="media-card" data-media-id="{{ m.id }}"
+         data-stored="{{ m.stored_filename }}"
+         data-original="{{ m.original_filename }}">
+      <div class="media-thumb ftype ftype-{{ t }}">{{ t|upper }}</div>
+      <div class="media-meta">
+        <div class="media-name" title="{{ m.original_filename }}">
+          {% if picker %}{{ m.original_filename }}
+          {% else %}<a href="{{ url_for('main.public_file', filename=m.original_filename) }}" target="_blank">{{ m.original_filename }}</a>
+          {% endif %}
+        </div>
+        <div class="muted smaller">
+          {{ (m.size_bytes or 0) // 1024 }} KB
+          {% if m.uploader %} · {{ m.uploader.username }}{% endif %}
+        </div>
+      </div>
+      <div class="media-actions">
+        {% if picker %}
+        <button type="button" class="btn btn-sm btn-primary media-select">Select</button>
+        {% else %}
+        <button type="button" class="btn btn-sm btn-copy" data-copy-url="{{ url_for('main.public_file', filename=m.original_filename) }}">Copy Link</button>
+        <a class="btn btn-sm" href="{{ url_for('main.media_download', mid=m.id) }}">Download</a>
+        {% if current_user.can_edit() %}
+        <button type="button" class="btn btn-sm media-rename">Rename</button>
+        {% endif %}
+        {% if current_user.is_admin() %}
+        <form method="post" action="{{ url_for('main.media_delete', mid=m.id) }}"
+              onsubmit="return confirm('Delete this file from the library?');">
+          <button class="btn btn-sm btn-danger">×</button>
+        </form>
+        {% endif %}
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}Sign in · Trusted Servants Portal{% endblock %}
+{% block auth_content %}
+<div class="login-split" data-transition="{{ '1' if (site.login_transition_enabled if site else True) else '0' }}">
+  {% set _default_colors = '["#16c2ba", "#1883d5", "#5a1ce5"]' %}
+  {% set _bg = site.login_bg_color if site else None %}
+  {% set _bg_colors = (site.login_bg_colors if site else None) or (None if _bg else _default_colors) %}
+  {% set _effect = (site.login_particle_effect if site else None) or 'stars' %}
+  {% set _speed = (site.login_particle_speed if site else None) or 85 %}
+  {% set _size = (site.login_particle_size if site else None) or 185 %}
+  <aside class="login-hero"{% if _bg and not _bg_colors %} style="background: {{ _bg }};"{% endif %} data-effect="{{ _effect }}" data-speed="{{ _speed }}" data-size="{{ _size }}"{% if _bg_colors %} data-bg-colors='{{ _bg_colors }}'{% endif %}>
+    <canvas class="login-hero-bg" aria-hidden="true"></canvas>
+    <div class="login-hero-inner">
+      <img class="login-hero-logo" src="{{ url_for('static', filename='img/logo_ts_white.svg') }}" alt="Trusted Servants Portal">
+      <div class="login-hero-title">Trusted Servants Portal</div>
+      <button type="button" class="login-request-btn" data-open-modal="request-access-modal">Request Access</button>
+    </div>
+    <div class="login-hero-footer">
+      <img src="{{ url_for('static', filename='img/logo_dccma_white.svg') }}" alt="DCCMA" class="login-hero-brand">
+    </div>
+  </aside>
+
+  <section class="login-form-pane">
+    <form method="post" class="login-form" id="login-form">
+      <div class="flashes">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}<div class="flash flash-{{ cat }}">{{ msg }}</div>{% endfor %}
+      {% endwith %}
+      </div>
+      <label>
+        <span>Username <span class="req">*</span></span>
+        <input name="username" type="text" autofocus required>
+      </label>
+      <label>
+        <span>Password <span class="req">*</span></span>
+        <input name="password" type="password" required>
+      </label>
+      <label class="check login-remember">
+        <input type="checkbox" name="remember" value="1">
+        <span>Remember me</span>
+      </label>
+      <button class="btn btn-primary login-submit" type="submit">Log In</button>
+    </form>
+    <div class="login-form-footer">
+      <a href="https://viibeware.com" target="_blank" rel="noopener" aria-label="Viibeware">
+        <span class="login-form-brand" role="img" aria-label="Viibeware"></span>
+      </a>
+      <div class="login-version">Ver. 1.0</div>
+    </div>
+  </section>
+
+  <div class="login-warp" aria-hidden="true">
+    <canvas class="login-warp-canvas"></canvas>
+    <div class="login-warp-logo-wrap">
+      {% if site and site.footer_logo_filename %}
+      <img class="login-warp-logo" src="{{ url_for('main.site_footer_logo') }}" alt="">
+      {% else %}
+      <img class="login-warp-logo" src="{{ url_for('static', filename='img/logo_ts_white.svg') }}" alt="">
+      {% endif %}
+    </div>
+    <div class="login-warp-white"></div>
+  </div>
+</div>
+
+<div class="modal" id="request-access-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel request-access-panel" role="dialog" aria-modal="true">
+    <button type="button" class="request-access-close icon-btn" data-close aria-label="Close">×</button>
+    <h2 class="request-access-title">Trusted Servants Portal<br>Access Request</h2>
+    <form method="post" action="{{ url_for('main.request_access_submit') }}" class="form request-access-form">
+      <label>
+        <span>Name <span class="req">*</span></span>
+        <input name="name" type="text" required>
+      </label>
+      <label>
+        <span>Phone <span class="req">*</span></span>
+        <input name="phone" type="tel" required>
+      </label>
+      <label>
+        <span>Email <span class="req">*</span></span>
+        <input name="email" type="email" required>
+      </label>
+
+      <fieldset class="request-access-roles">
+        <legend>I am a (check all that apply) <span class="req">*</span></legend>
+        {% for role in ['Intergroup Member', 'Zoom Tech', 'Meeting GSR', 'Meeting Secretary', 'Meeting Chair', 'Other'] %}
+        <label class="check">
+          <input type="checkbox" name="roles" value="{{ role }}">
+          <span>{{ role }}</span>
+        </label>
+        {% endfor %}
+      </fieldset>
+
+      <label class="request-access-meeting">
+        <span class="muted center-label">If you need access for a specific meeting,<br>please provide the meeting name</span>
+        <input name="meeting_name" type="text">
+      </label>
+
+      <div class="request-access-actions">
+        <button class="btn btn-primary request-access-submit" type="submit">Request Access</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='js/login_fx.js') }}"></script>
+<script>
+(function(){
+  const hero = document.querySelector('.login-hero');
+  const canvas = document.querySelector('.login-hero-bg');
+  if (!hero || !canvas) return;
+  const effect = hero.dataset.effect || "network";
+  if (effect === "off") { canvas.remove(); return; }
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const speed = parseInt(hero.dataset.speed, 10) || 100;
+  const size = parseInt(hero.dataset.size, 10) || 100;
+  if (hero.dataset.bgColors && window.loginFxUtils){
+    try { window.loginFxUtils.applyBackground(hero, JSON.parse(hero.dataset.bgColors)); } catch(e){}
+  }
+  window.initLoginFX(canvas, { effect: effect, speed: speed, size: size });
+})();
+
+(function(){
+  const form = document.getElementById('login-form');
+  const split = document.querySelector('.login-split');
+  if (!form || !split) return;
+  const submitBtn = form.querySelector('.login-submit');
+
+  function animateSineWarp(canvas, durationMs){
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const W = Math.max(1, Math.round(rect.width * 0.5));
+    const H = Math.max(1, Math.round(rect.height * 0.5));
+    canvas.width = W; canvas.height = H;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    // Full-saturation rainbow palette, skewed away from red endpoints
+    const hues = [45, 60, 90, 130, 175, 210, 250, 290, 325];
+    const hslToRgb = (h, s, l) => {
+      h /= 360;
+      const a = s * Math.min(l, 1 - l);
+      const f = n => {
+        const k = (n + h * 12) % 12;
+        const v = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+        return Math.round(v * 255);
+      };
+      return [f(0), f(8), f(4)];
+    };
+    const rgb = hues.map(h => hslToRgb(h, 1, 0.5));
+    const n = rgb.length;
+    const rotRad = Math.random() * Math.PI * 2;
+    const cosR = Math.cos(rotRad), sinR = Math.sin(rotRad);
+    const img = ctx.createImageData(W, H);
+    const d = img.data;
+    const freq1 = (Math.random() * 6 + 3) / 2;
+    const freq2 = (Math.random() * 10 + 5) / 2;
+    const amp1 = 0.25 + Math.random() * 0.15;
+    const amp2 = 0.10 + Math.random() * 0.10;
+    const phaseSpeed1 = (0.8 + Math.random() * 0.8) / 2;
+    const phaseSpeed2 = -(1.2 + Math.random() * 0.7) / 2;
+    const start = performance.now();
+    let running = true;
+    function frame(now){
+      if (!running) return;
+      const t = (now - start) / 1000;
+      const p1 = t * phaseSpeed1;
+      const p2 = t * phaseSpeed2;
+      for (let y = 0; y < H; y++){
+        for (let x = 0; x < W; x++){
+          // Rotate coordinates around center for random gradient orientation
+          const cx = x - W/2, cy = y - H/2;
+          const rx = cx * cosR - cy * sinR;
+          const ry = cx * sinR + cy * cosR;
+          const maxDim = Math.max(W, H);
+          const nx = (rx + maxDim/2) / maxDim;
+          // 2x zoom: only render the central half of the gradient band
+          const ny = (ry + maxDim/2) / maxDim * 0.5 + 0.25;
+          const wave = Math.sin(nx * freq1 + p1) * amp1
+                     + Math.sin(nx * freq2 + p2 + 1.3) * amp2;
+          let tt = ny + wave;
+          if (tt < 0) tt = 0; else if (tt > 1) tt = 1;
+          const p = tt * (n - 1);
+          const i = Math.floor(p);
+          const f = p - i;
+          const uu = f * f * (3 - 2 * f);
+          const a = rgb[i], b = rgb[Math.min(n - 1, i + 1)];
+          const idx = (y * W + x) * 4;
+          d[idx]   = a[0] + (b[0] - a[0]) * uu;
+          d[idx+1] = a[1] + (b[1] - a[1]) * uu;
+          d[idx+2] = a[2] + (b[2] - a[2]) * uu;
+          d[idx+3] = 255;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+      if ((now - start) < durationMs) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    return { stop(){ running = false; } };
+  }
+
+  form.addEventListener('submit', e => {
+    if (submitBtn) submitBtn.classList.add('is-loading');
+    if (split.dataset.transition !== '1') return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    e.preventDefault();
+
+    // Validate credentials first via fetch; only animate on success.
+    const formData = new FormData(form);
+    const loginUrl = new URL(form.action || window.location.href, window.location.origin).href;
+    fetch(loginUrl, {
+      method: 'POST',
+      body: formData,
+      credentials: 'same-origin',
+      redirect: 'follow',
+    }).then(resp => {
+      const finalUrl = new URL(resp.url, window.location.origin).href;
+      // After a successful login, Flask redirects to main.index (or ?next=...).
+      // If we end up back on the login URL, credentials failed.
+      const succeeded = resp.ok && finalUrl !== loginUrl;
+      if (succeeded) {
+        const PAUSE = 500;
+        setTimeout(() => {
+          document.body.classList.add('logging-in');
+          split.classList.add('logging-in');
+          const canvas = split.querySelector('.login-warp-canvas');
+          const anim = animateSineWarp(canvas, 2000);
+          setTimeout(() => split.classList.add('fading-white'), 1500);
+          setTimeout(() => {
+            anim.stop();
+            try { sessionStorage.setItem('tsp-login-fade', '1'); } catch(e){}
+            window.location.assign(finalUrl);
+          }, 1950);
+        }, PAUSE);
+      } else {
+        // Failure: resubmit normally so the server renders the flash.
+        form.submit();
+      }
+    }).catch(() => { form.submit(); });
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block heading %}Users{% endblock %}
+{% block content %}
+<section class="card users-new-card">
+  <div class="card-head"><h2>Create User</h2></div>
+  <form method="post" action="{{ url_for('auth.users_create') }}" class="form">
+    {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+    <div class="users-new-row">
+      <label>Username<input name="username" required></label>
+      <label>Email<input name="email" type="email" required></label>
+      <label>Password<input name="password" type="password" required></label>
+      <label>Role
+        <select name="role">
+          {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="form-actions"><button class="btn btn-primary">Create</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>All Users</h2></div>
+  <table class="tbl users-tbl">
+    <thead><tr><th>Username</th><th>Email</th><th>Role</th><th>Reset password</th><th></th></tr></thead>
+    <tbody>
+    {% for u in users %}
+    <tr>
+      <form method="post" action="{{ url_for('auth.users_update', uid=u.id) }}">
+      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+      <td data-label="Username">{{ u.username }}</td>
+      <td class="muted" data-label="Email">{{ u.email }}</td>
+      <td data-label="Role">
+        <select name="role">
+          {% for r in roles %}<option value="{{ r }}" {% if u.role==r %}selected{% endif %}>{{ r }}</option>{% endfor %}
+        </select>
+      </td>
+      <td data-label="Reset password"><input name="password" type="password" placeholder="(unchanged)"></td>
+      <td class="users-actions">
+        <button class="btn btn-sm btn-primary">Save</button>
+      </form>
+        {% if u.id != current_user.id %}
+        <form method="post" action="{{ url_for('auth.users_delete', uid=u.id) }}" onsubmit="return confirm('Delete user {{ u.username }}?');" style="display:inline">
+          {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+          <button class="btn btn-sm btn-danger">Delete</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

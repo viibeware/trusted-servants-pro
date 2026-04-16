@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Access Requests · Trusted Servants Portal{% endblock %}
+{% block heading %}Access Requests{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="card-head"><h2>Requests</h2></div>
+  {% if not items %}
+  <p class="muted">No access requests yet.</p>
+  {% else %}
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Name</th>
+        <th>Contact</th>
+        <th>Roles</th>
+        <th>Meeting</th>
+        <th>Submitted</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in items %}
+      <tr>
+        <td>
+          <span class="badge {% if r.status == 'pending' %}badge-warning{% else %}badge-muted{% endif %}">
+            {{ r.status }}
+          </span>
+        </td>
+        <td>{{ r.name }}</td>
+        <td class="muted small">
+          <div><a href="mailto:{{ r.email }}">{{ r.email }}</a></div>
+          <div>{{ r.phone }}</div>
+        </td>
+        <td>
+          {% for role in r.roles %}<span class="chip">{{ role }}</span>{% endfor %}
+        </td>
+        <td class="muted">{{ r.meeting_name or '—' }}</td>
+        <td class="muted small">{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="nowrap">
+          <form method="post" action="{{ url_for('main.access_request_handled', rid=r.id) }}" style="display:inline">
+            <button class="btn btn-sm">{% if r.status == 'pending' %}Mark Handled{% else %}Reopen{% endif %}</button>
+          </form>
+          <form method="post" action="{{ url_for('main.access_request_delete', rid=r.id) }}" onsubmit="return confirm('Delete this request?');" style="display:inline">
+            <button class="btn btn-sm btn-danger">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}

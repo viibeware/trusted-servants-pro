@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block heading %}{{ library.name }}{% endblock %}
+{% block top_actions %}
+  {% if current_user.can_edit() %}
+  <button type="button" class="btn btn-primary" data-file-add-toggle="add-library-file">+ Add File</button>
+  <button type="button" class="btn btn-primary" data-open-modal="library-edit-modal">Edit</button>
+  {% endif %}
+  {% if current_user.is_admin() %}
+  <form method="post" action="{{ url_for('main.library_delete', lid=library.id) }}" onsubmit="return confirm('Delete this library?');" style="display:inline">
+    <button class="btn btn-danger">Delete</button>
+  </form>
+  {% endif %}
+{% endblock %}
+{% block flashes %}{% endblock %}
+{% block content %}
+{% if library.description %}<p class="lib-desc muted">{{ library.description }}</p>{% endif %}
+{% if library.alert_message %}
+<div class="alert-banner" role="alert">{{ library.alert_message }}</div>
+{% endif %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="flashes">
+    {% for cat, msg in messages %}<div class="flash flash-{{ cat }}">{{ msg }}</div>{% endfor %}
+  </div>
+  {% endif %}
+{% endwith %}
+
+{% set rs = library.readings.all() %}
+{% set can_edit = current_user.can_edit() %}
+<section class="card">
+  <div class="card-head"><h2>Files</h2></div>
+  {% if rs %}
+  <ul class="file-list{% if can_edit %} file-list-sortable{% endif %}"
+      {% if can_edit %}data-reorder-url="{{ url_for('main.library_readings_reorder', lid=library.id) }}"{% endif %}>
+    {% for r in rs %}
+    {% set edit_id = 'edit-library-file-' ~ r.id %}
+    <li data-item-id="{{ r.id }}" {% if can_edit %}draggable="true"{% endif %}>
+      {% if can_edit %}<span class="drag-handle" aria-hidden="true">⋮⋮</span>{% endif %}
+      {% if r.thumbnail_filename %}
+      <img class="reading-thumb" src="{{ url_for('main.reading_thumbnail', rid=r.id) }}" alt="">
+      {% else %}
+      {% set ft = r|file_type %}
+      <span class="ftype ftype-{{ ft }}" aria-label="{{ ft }}">{{ ft|upper }}</span>
+      {% endif %}
+      <div class="file-main">
+        <a href="{% if r.stored_filename %}{{ url_for('main.public_file', filename=r.original_filename) }}{% elif r.url %}{{ r.url }}{% else %}{{ url_for('main.reading_view', rid=r.id) }}{% endif %}" target="_blank" rel="noopener">{{ r.title }}</a>
+        {% if r.original_filename %}<div class="muted smaller">{{ r.original_filename }}</div>{% endif %}
+        {% if r.url %}<div class="muted smaller trunc">{{ r.url }}</div>{% endif %}
+      </div>
+      <div class="row-actions">
+        {% if r.stored_filename %}
+        <button type="button" class="btn btn-sm btn-copy" data-copy-url="{{ url_for('main.public_file', filename=r.original_filename) }}">Copy Link</button>
+        {% elif r.url %}
+        <button type="button" class="btn btn-sm btn-copy" data-copy-url="{{ r.url }}">Copy Link</button>
+        {% endif %}
+      {% if can_edit %}
+        <button type="button" class="btn btn-sm" data-file-add-toggle="{{ edit_id }}">Edit</button>
+        {% if current_user.is_admin() %}
+        <form method="post" action="{{ url_for('main.reading_delete', rid=r.id) }}" onsubmit="return confirm('Delete this file?');">
+          <button class="btn btn-sm btn-danger">×</button>
+        </form>
+        {% endif %}
+      {% endif %}
+      </div>
+      <form id="{{ edit_id }}" method="post" class="file-add-form collapsed" enctype="multipart/form-data"
+            action="{{ url_for('main.reading_edit', rid=r.id) }}"
+            data-inline-save data-row-id="{{ r.id }}">
+        <label>Title<input name="title" required value="{{ r.title }}"></label>
+        <fieldset class="fieldset">
+          <legend>File <span class="muted small">(PDF, DOC, JPG, PNG, MP4, MOV)</span></legend>
+          {% if r.stored_filename %}
+          <div class="logo-current">
+            <span class="muted small">{{ r.original_filename }}</span>
+            <label class="check"><input type="checkbox" name="remove_file" value="1"> Remove</label>
+          </div>
+          {% endif %}
+          <div class="file-input-row">
+            <input type="file" name="file"
+                   accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.mp4,.mov,application/pdf,image/*,video/*">
+            <button type="button" class="btn btn-sm" data-media-picker="{{ edit_id }}">Browse Library</button>
+          </div>
+        </fieldset>
+        <label>External Link <span class="muted small">(optional)</span>
+          <input name="url" type="url" placeholder="https://..." value="{{ r.url or '' }}"></label>
+        <fieldset class="fieldset">
+          <legend>Thumbnail <span class="muted small">(optional)</span></legend>
+          {% if r.thumbnail_filename %}
+          <div class="logo-current">
+            <img src="{{ url_for('main.reading_thumbnail', rid=r.id) }}" alt="">
+            <label class="check"><input type="checkbox" name="remove_thumbnail" value="1"> Remove</label>
+          </div>
+          {% endif %}
+          <input type="file" name="thumbnail" accept="image/*">
+        </fieldset>
+        <label>Body <span class="muted small">(optional inline text)</span>
+          <textarea name="body" rows="6">{{ r.body or '' }}</textarea></label>
+        <div class="form-actions">
+          <button type="button" class="btn btn-sm" data-file-add-cancel="{{ edit_id }}">Cancel</button>
+          <button type="submit" class="btn btn-sm btn-primary">Save</button>
+        </div>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted">No files yet.</p>{% endif %}
+
+  {% if can_edit %}
+  <div class="card-foot">
+    <button type="button" class="btn btn-sm" data-file-add-toggle="add-library-file">+ Add File</button>
+    <form id="add-library-file" method="post" class="file-add-form collapsed" enctype="multipart/form-data"
+          action="{{ url_for('main.reading_new', lid=library.id) }}">
+      <label>Title<input name="title" required></label>
+      <label>File</label>
+      <div class="file-input-row">
+        <input type="file" name="file"
+               accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.mp4,.mov,application/pdf,image/*,video/*">
+        <button type="button" class="btn btn-sm" data-media-picker="add-library-file">Browse Library</button>
+      </div>
+      <label>External Link <span class="muted small">(optional)</span>
+        <input name="url" type="url" placeholder="https://..."></label>
+      <label>Thumbnail <span class="muted small">(optional)</span>
+        <input type="file" name="thumbnail" accept="image/*"></label>
+      <label>Body <span class="muted small">(optional inline text)</span>
+        <textarea name="body" rows="6"></textarea></label>
+      <div class="form-actions">
+        <button type="button" class="btn btn-sm" data-file-add-cancel="add-library-file">Cancel</button>
+        <button type="submit" class="btn btn-sm btn-primary">Upload</button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+</section>
+
+{% if can_edit %}
+{% set form_id = 'library-edit-form' %}
+<div class="modal" id="library-edit-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form id="{{ form_id }}" method="post" action="{{ url_for('main.library_edit', lid=library.id) }}" class="form">
+      <div class="modal-head">
+        <h2>Edit Library</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <label>Name<input name="name" required value="{{ library.name }}"></label>
+        <label>Description<textarea name="description" rows="4">{{ library.description or '' }}</textarea></label>
+        <label>Alert Message <span class="muted smaller">(leave blank to hide)</span>
+          <textarea name="alert_message" rows="2" placeholder="Displayed prominently at the top of the library page.">{{ library.alert_message or '' }}</textarea>
+        </label>
+        {% if library.meetings %}
+        <fieldset class="fieldset">
+          <legend>Used by Meetings</legend>
+          <ul class="list">
+            {% for m in library.meetings %}
+            <li><a href="{{ url_for('main.meeting_detail', mid=m.id) }}">{{ m.name }}</a></li>
+            {% endfor %}
+          </ul>
+        </fieldset>
+        {% endif %}
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

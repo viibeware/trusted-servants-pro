@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block heading %}Libraries{% endblock %}
+{% block heading_help %}Curated collections of readings and reference materials organized by topic for trusted servants and members.{% endblock %}
+{% block top_actions %}
+  <div class="view-controls">
+    <div class="view-toggle">
+      <a class="btn btn-sm {% if view != 'table' %}active{% endif %}" href="{{ url_for('main.libraries', view='cards', sort=sort, dir=direction) }}">Cards</a>
+      <a class="btn btn-sm {% if view == 'table' %}active{% endif %}" href="{{ url_for('main.libraries', view='table', sort=sort, dir=direction) }}">Table</a>
+    </div>
+    <label class="sort-select">
+      <span class="muted smaller">Sort</span>
+      <select onchange="window.location=this.value">
+        <option value="{{ url_for('main.libraries', view=view, sort='name', dir=direction) }}" {% if sort=='name' %}selected{% endif %}>Name</option>
+        <option value="{{ url_for('main.libraries', view=view, sort='files', dir=direction) }}" {% if sort=='files' %}selected{% endif %}>Files</option>
+      </select>
+    </label>
+    <a class="btn btn-sm sort-dir" title="Toggle sort direction"
+       href="{{ url_for('main.libraries', view=view, sort=sort, dir=('desc' if direction=='asc' else 'asc')) }}">
+      {{ '↓' if direction == 'desc' else '↑' }}
+    </a>
+  </div>
+  {% if current_user.can_edit() %}
+  <button type="button" class="btn btn-primary" data-open-modal="library-new-modal">+ New Library</button>
+  {% endif %}
+{% endblock %}
+{% block content %}
+{% if libraries %}
+  {% if view == 'table' %}
+  <section class="card">
+    <table class="tbl">
+      <thead>
+        <tr><th>Name</th><th class="hide-sm">Description</th><th>Files</th></tr>
+      </thead>
+      <tbody>
+        {% for l in libraries %}
+        <tr>
+          <td><a href="{{ url_for('main.library_detail', lid=l.id) }}">{{ l.name }}</a></td>
+          <td class="muted hide-sm">{{ l.description or '—' }}</td>
+          <td>{{ l.readings.count() }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% else %}
+  <div class="cards">
+    {% for l in libraries %}
+    <a class="card card-hover" href="{{ url_for('main.library_detail', lid=l.id) }}">
+      <h3>{{ l.name }}</h3>
+      {% if l.description %}<p class="clip">{{ l.description }}</p>{% endif %}
+      <div class="tags"><span class="tag">{{ l.readings.count() }} files</span></div>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+{% else %}
+<div class="empty"><h3>No libraries yet</h3><p class="muted">Create one to start collecting files.</p></div>
+{% endif %}
+
+{% if current_user.can_edit() %}
+<div class="modal" id="library-new-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form method="post" action="{{ url_for('main.library_new') }}" class="form">
+      <div class="modal-head">
+        <h2>New Library</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <label>Name<input name="name" required></label>
+        <label>Description<textarea name="description" rows="4"></textarea></label>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

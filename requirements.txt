@@ -1,0 +1,12 @@
+Flask==3.0.3
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+Flask-WTF==1.2.1
+Werkzeug==3.0.4
+email-validator==2.2.0
+gunicorn==23.0.0
+cryptography==43.0.1
+bleach==6.1.0
+markdown==3.7
+beautifulsoup4==4.12.3
+requests==2.32.3
