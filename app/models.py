@@ -184,6 +184,9 @@ class SiteSetting(db.Model):
     login_particle_speed = db.Column(db.Integer, nullable=False, default=85)   # 10..300 percent
     login_particle_size = db.Column(db.Integer, nullable=False, default=185)  # 25..400 percent
     login_transition_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    turnstile_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    turnstile_site_key = db.Column(db.String(128))
+    turnstile_secret_key_enc = db.Column(db.LargeBinary)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 

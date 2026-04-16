@@ -1,16 +1,49 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash, session
+from flask import Blueprint, render_template, redirect, url_for, request, flash, session, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
-from .models import db, User, ROLES
+from .models import db, User, SiteSetting, ROLES
+from .crypto import decrypt
 
 bp = Blueprint("auth", __name__, url_prefix="/auth")
+
+TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+
+
+def _verify_turnstile(site, token, remote_ip):
+    """Returns (ok, error_message). Fails closed on any failure."""
+    import requests
+    secret = decrypt(site.turnstile_secret_key_enc) if site.turnstile_secret_key_enc else ""
+    if not secret:
+        return False, "Turnstile is enabled but no secret key is configured"
+    if not token:
+        return False, "Please complete the security check"
+    try:
+        resp = requests.post(
+            TURNSTILE_VERIFY_URL,
+            data={"secret": secret, "response": token, "remoteip": remote_ip or ""},
+            timeout=5,
+        )
+        data = resp.json()
+    except Exception as exc:
+        current_app.logger.warning("Turnstile verify failed: %s", exc)
+        return False, "Security check failed — please try again"
+    if data.get("success"):
+        return True, None
+    return False, "Security check failed — please try again"
 
 
 @bp.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for("main.index"))
+    site = SiteSetting.query.first()
     if request.method == "POST":
+        if site and site.turnstile_enabled:
+            token = request.form.get("cf-turnstile-response", "")
+            ok, err = _verify_turnstile(site, token, request.remote_addr)
+            if not ok:
+                flash(err, "danger")
+                return render_template("login.html")
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         user = User.query.filter_by(username=username).first()

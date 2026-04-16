@@ -1,6 +1,6 @@
 services:
   tsp:
-    image: viibeware/trusted-servants-portal:1.0
+    image: viibeware/trusted-servants-portal:1.2
     container_name: trusted-servants-portal
     ports:
       - "8090:8000"

@@ -16,7 +16,15 @@
       <button type="button" class="login-request-btn" data-open-modal="request-access-modal">Request Access</button>
     </div>
     <div class="login-hero-footer">
-      <img src="{{ url_for('static', filename='img/logo_dccma_white.svg') }}" alt="DCCMA" class="login-hero-brand">
+      {% set _flogo = (site.footer_logo_filename if site else None) %}
+      {% if _flogo %}
+        {% set _flogo_src = url_for('main.site_footer_logo') %}
+        {% set _flogo_is_svg = _flogo.lower().endswith('.svg') %}
+      {% else %}
+        {% set _flogo_src = url_for('static', filename='img/viibeware.svg') %}
+        {% set _flogo_is_svg = true %}
+      {% endif %}
+      <img src="{{ _flogo_src }}" alt="" class="login-hero-brand{% if _flogo_is_svg %} login-hero-brand-white{% endif %}">
     </div>
   </aside>
 
@@ -39,13 +47,22 @@
         <input type="checkbox" name="remember" value="1">
         <span>Remember me</span>
       </label>
+      {% if site and site.turnstile_enabled and site.turnstile_site_key %}
+      <div class="cf-turnstile login-turnstile"
+           data-sitekey="{{ site.turnstile_site_key }}"
+           data-theme="auto"
+           data-size="flexible"></div>
+      {% endif %}
       <button class="btn btn-primary login-submit" type="submit">Log In</button>
     </form>
+    {% if site and site.turnstile_enabled and site.turnstile_site_key %}
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    {% endif %}
     <div class="login-form-footer">
       <a href="https://viibeware.com" target="_blank" rel="noopener" aria-label="Viibeware">
         <span class="login-form-brand" role="img" aria-label="Viibeware"></span>
       </a>
-      <div class="login-version">Ver. 1.0</div>
+      <div class="login-version">Ver. 1.2</div>
     </div>
   </section>
 
@@ -123,6 +140,11 @@
   const form = document.getElementById('login-form');
   const split = document.querySelector('.login-split');
   if (!form || !split) return;
+  // Turnstile tokens are single-use, so we can't do a fetch+replay to pre-flight
+  // credentials — the replay would trigger "timeout-or-duplicate". When Turnstile
+  // is active we play the animation in parallel with a native submit; a failed
+  // login will still return to this page with a flashed error.
+  const hasTurnstile = !!form.querySelector('.cf-turnstile');
   const submitBtn = form.querySelector('.login-submit');
 
   function animateSineWarp(canvas, durationMs){
@@ -198,11 +220,30 @@
     return { stop(){ running = false; } };
   }
 
+  function playWarpAndNavigate(thenFn){
+    document.body.classList.add('logging-in');
+    split.classList.add('logging-in');
+    const canvas = split.querySelector('.login-warp-canvas');
+    const anim = animateSineWarp(canvas, 2000);
+    setTimeout(() => split.classList.add('fading-white'), 1500);
+    setTimeout(() => {
+      anim.stop();
+      try { sessionStorage.setItem('tsp-login-fade', '1'); } catch(e){}
+      thenFn();
+    }, 1950);
+  }
+
   form.addEventListener('submit', e => {
     if (submitBtn) submitBtn.classList.add('is-loading');
     if (split.dataset.transition !== '1') return;
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     e.preventDefault();
+
+    if (hasTurnstile) {
+      // Play animation, then native-submit so the single-use token is only sent once.
+      playWarpAndNavigate(() => form.submit());
+      return;
+    }
 
     // Validate credentials first via fetch; only animate on success.
     const formData = new FormData(form);
@@ -218,19 +259,7 @@
       // If we end up back on the login URL, credentials failed.
       const succeeded = resp.ok && finalUrl !== loginUrl;
       if (succeeded) {
-        const PAUSE = 500;
-        setTimeout(() => {
-          document.body.classList.add('logging-in');
-          split.classList.add('logging-in');
-          const canvas = split.querySelector('.login-warp-canvas');
-          const anim = animateSineWarp(canvas, 2000);
-          setTimeout(() => split.classList.add('fading-white'), 1500);
-          setTimeout(() => {
-            anim.stop();
-            try { sessionStorage.setItem('tsp-login-fade', '1'); } catch(e){}
-            window.location.assign(finalUrl);
-          }, 1950);
-        }, PAUSE);
+        setTimeout(() => playWarpAndNavigate(() => window.location.assign(finalUrl)), 500);
       } else {
         // Failure: resubmit normally so the server renders the flash.
         form.submit();

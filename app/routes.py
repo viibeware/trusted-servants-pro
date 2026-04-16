@@ -1571,6 +1571,30 @@ def login_appearance_save():
     return redirect(request.referrer or url_for("main.index"))
 
 
+# --- Turnstile (login bot protection) ---
+
+@bp.route("/settings/turnstile-save", methods=["POST"])
+@admin_required
+def turnstile_save():
+    s = _get_site_setting()
+    s.turnstile_site_key = (request.form.get("turnstile_site_key") or "").strip() or None
+    new_secret = request.form.get("turnstile_secret_key") or ""
+    if request.form.get("turnstile_secret_clear") == "1":
+        s.turnstile_secret_key_enc = None
+    elif new_secret.strip():
+        s.turnstile_secret_key_enc = encrypt(new_secret.strip())
+    wants_enabled = request.form.get("turnstile_enabled") == "1"
+    if wants_enabled and (not s.turnstile_site_key or not s.turnstile_secret_key_enc):
+        s.turnstile_enabled = False
+        db.session.commit()
+        flash("Turnstile not enabled: site key and secret key are both required", "danger")
+        return redirect(request.referrer or url_for("main.index"))
+    s.turnstile_enabled = wants_enabled
+    db.session.commit()
+    flash("Login bot protection saved", "success")
+    return redirect(request.referrer or url_for("main.index"))
+
+
 # --- Email / SMTP settings ---
 
 @bp.route("/settings/email-save", methods=["POST"])

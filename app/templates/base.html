@@ -75,7 +75,7 @@
           <img src="{{ url_for('static', filename='img/viibeware.svg') }}" alt=""{% if _fw %} style="width: {{ _fw }}px"{% endif %}>
         {% endif %}
       </a>
-      <div class="brand-version">v1.0</div>
+      <div class="brand-version">v1.2</div>
       <div class="user-chip">
         <div class="avatar">{{ current_user.username[:1].upper() }}</div>
         <div class="user-chip-name">
@@ -207,6 +207,7 @@
             <button class="btn btn-primary">Save Branding</button>
           </div>
         </form>
+        <div class="login-appearance-group">
         <form class="form login-appearance-form" method="post" action="{{ url_for('main.login_appearance_save') }}">
           <div class="u-name">Login Screen</div>
           <p class="muted small">Choose the animated background effect, speed, and accent color shown on the login page.</p>
@@ -296,6 +297,40 @@
           <div class="form-actions"><button class="btn btn-primary">Save Login Appearance</button></div>
           </div>
         </form>
+        <form class="form turnstile-form" method="post" action="{{ url_for('main.turnstile_save') }}">
+          <div class="u-name">Login Bot Protection</div>
+          <p class="muted small">
+            Require a Cloudflare Turnstile challenge on the login screen.
+            Create a site at <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" rel="noopener">Cloudflare → Turnstile</a>
+            (widget mode: Managed), add your portal hostname to its domain list, then paste the keys below.
+          </p>
+          <div class="row">
+            <label>Site key
+              <input name="turnstile_site_key" type="text" autocomplete="off"
+                     value="{{ site.turnstile_site_key or '' }}"
+                     placeholder="0x4AAAAAAA...">
+            </label>
+            <label>Secret key
+              <input name="turnstile_secret_key" type="password" autocomplete="new-password"
+                     placeholder="{% if site.turnstile_secret_key_enc %}•••••••• (saved — leave blank to keep){% else %}0x4AAAAAAA...{% endif %}">
+            </label>
+          </div>
+          {% if site.turnstile_secret_key_enc %}
+          <label class="check"><input type="checkbox" name="turnstile_secret_clear" value="1"><span>Clear the saved secret key</span></label>
+          {% endif %}
+          <li class="special-page-row login-fx-toggle-row">
+            <div class="special-page-info">
+              <div class="u-name">Enable on login screen</div>
+              <p class="muted small">When on, successful Turnstile verification is required before credentials are checked.</p>
+            </div>
+            <label class="mode-toggle" title="Enable Turnstile on login">
+              <input type="checkbox" name="turnstile_enabled" value="1" {% if site.turnstile_enabled %}checked{% endif %}>
+              <span class="mode-track"><span class="mode-thumb"></span></span>
+            </label>
+          </li>
+          <div class="form-actions"><button class="btn btn-primary">Save Bot Protection</button></div>
+        </form>
+        </div>
         </div>
         <script src="{{ url_for('static', filename='js/login_fx.js') }}"></script>
         <script>
@@ -526,11 +561,28 @@
             <img class="about-logo" src="{{ url_for('static', filename='img/logo.svg') }}" alt="Trusted Servants Portal">
             <div>
               <div class="u-name">Trusted Servants Portal</div>
-              <div class="muted small">Version 1.0</div>
+              <div class="muted small">Version 1.2</div>
             </div>
           </div>
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
+            <li>
+              <div class="u-name">1.2</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Unbundled third-party branding</b> — removed the DCCMA logo assets from the shipping image. Only the Trusted Servants and Viibeware marks are bundled now.</li>
+                <li><b>Sidebar logo on login</b> — the admin-configured sidebar footer logo (or the Viibeware default) now appears at the bottom of the login hero at 100&nbsp;px wide. SVGs are auto-whitened with a CSS filter so they read cleanly over the gradient.</li>
+              </ul>
+            </li>
+            <li>
+              <div class="u-name">1.1</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Login bot protection</b> — optional Cloudflare Turnstile challenge on the login screen. Admin-configurable site key + Fernet-encrypted secret key, with a guard that refuses to enable the widget unless both are set.</li>
+                <li><b>Cache hardening</b> — dynamic responses now send <code>Cache-Control: no-store</code> so authenticated pages aren&rsquo;t retained by browsers or intermediaries after logout.</li>
+                <li><b>Unattended installer</b> — <code>install.sh</code> for Ubuntu 24.04 sets up Docker, pulls the published image, and brings the portal up end-to-end without interactive prompts.</li>
+              </ul>
+            </li>
             <li>
               <div class="u-name">1.0 — First public release</div>
               <div class="muted smaller">April 2026</div>

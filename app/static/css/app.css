@@ -483,16 +483,16 @@ html.login-fade-in body { animation: login-page-fade-in 650ms ease-out both; }
 .login-hero { position: relative; background: linear-gradient(135deg, #0a3eb5 0%, #1153e7 55%, #2e6bff 100%);
   color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 32px; overflow: hidden; }
 .login-hero-bg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
-.login-hero-inner, .login-hero-footer { position: relative; z-index: 1; }
-.login-hero-inner { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+.login-hero-inner { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
 .login-hero-logo { width: 100px; max-width: 60vw; height: auto; display: block; }
 .login-hero-title { color: #fff; font-weight: 700; font-size: 1.125rem; margin-bottom: 8px; }
 .login-request-btn { background: #fff; color: #0b1220; border: 0; border-radius: 999px;
   padding: 10px 22px; font-size: 0.9375rem; font-weight: 600; cursor: pointer;
   box-shadow: 0 4px 14px rgba(0,0,0,0.18); transition: transform 120ms ease, background 120ms ease; }
 .login-request-btn:hover { background: #f1f5ff; transform: translateY(-1px); }
-.login-hero-footer { position: absolute; bottom: 32px; left: 0; right: 0; display: flex; justify-content: center; }
-.login-hero-brand { width: 120px; height: auto; display: block; opacity: 0.95; }
+.login-hero-footer { position: absolute; bottom: 32px; left: 0; right: 0; display: flex; justify-content: center; z-index: 1; }
+.login-hero-brand { width: 100px; height: auto; display: block; }
+.login-hero-brand-white { filter: brightness(0) invert(1); }
 
 .login-form-pane { position: relative; display: flex; align-items: center; justify-content: center; padding: 48px 32px; background: var(--panel); }
 .login-form { width: 100%; max-width: 300px; display: flex; flex-direction: column; gap: 18px; }
@@ -691,6 +691,9 @@ form.hide-zoom .zoom-only, form.hide-zoom .zoom-only-field { display: none; }
   .settings-pane[data-pane="appearance"] .appearance-grid { grid-template-columns: 1fr; }
 }
 .settings-pane[data-pane="appearance"] .appearance-grid > .form { padding: 0; margin: 0; width: 100%; gap: 10px; }
+.settings-pane[data-pane="appearance"] .appearance-grid > .login-appearance-group { display: flex; flex-direction: column; gap: 20px; }
+.settings-pane[data-pane="appearance"] .appearance-grid > .login-appearance-group > .form { padding: 0; margin: 0; width: 100%; gap: 10px; }
+.settings-pane[data-pane="appearance"] .appearance-grid > .login-appearance-group > .turnstile-form { padding-top: 18px; border-top: 1px solid var(--border); }
 .appearance-branding-form .u-name + p { margin: 0 0 8px; }
 .appearance-branding-form label { gap: 6px; font-size: 0.875rem; }
 .appearance-branding-form label.check { flex-direction: row; align-items: center; gap: 8px;

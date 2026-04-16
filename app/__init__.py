@@ -241,7 +241,10 @@ def _migrate_sqlite(app):
                          ("login_bg_colors", "TEXT"),
                          ("login_particle_speed", "INTEGER NOT NULL DEFAULT 85"),
                          ("login_particle_size", "INTEGER NOT NULL DEFAULT 185"),
-                         ("login_transition_enabled", "BOOLEAN NOT NULL DEFAULT 1")):
+                         ("login_transition_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("turnstile_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("turnstile_site_key", "VARCHAR(128)"),
+                         ("turnstile_secret_key_enc", "BLOB")):
             add("site_setting", col, ddl)
         for col, ddl in (("url", "VARCHAR(1000)"),
                          ("stored_filename", "VARCHAR(500)"),

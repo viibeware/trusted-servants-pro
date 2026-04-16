@@ -12,7 +12,7 @@
 #
 # Optional environment variables:
 #   TSP_INSTALL_DIR   Install directory             (default: /opt/trusted-servants-portal)
-#   TSP_IMAGE         Docker image to deploy        (default: viibeware/trusted-servants-portal:1.0)
+#   TSP_IMAGE         Docker image to deploy        (default: viibeware/trusted-servants-portal:latest)
 #   TSP_DOMAIN        Public hostname for HTTPS     (default: unset — uses self-signed cert)
 #   TSP_ACME_EMAIL    Email for Let's Encrypt cert  (default: admin@<TSP_DOMAIN>)
 #   TSP_ADMIN_USERNAME / TSP_ADMIN_PASSWORD / TSP_ADMIN_EMAIL
@@ -23,7 +23,7 @@ set -euo pipefail
 
 # ---------- config ----------
 INSTALL_DIR="${TSP_INSTALL_DIR:-/opt/trusted-servants-portal}"
-IMAGE="${TSP_IMAGE:-viibeware/trusted-servants-portal:1.0}"
+IMAGE="${TSP_IMAGE:-viibeware/trusted-servants-portal:latest}"
 DOMAIN="${TSP_DOMAIN:-}"
 ACME_EMAIL="${TSP_ACME_EMAIL:-}"
 ADMIN_USERNAME="${TSP_ADMIN_USERNAME:-admin}"
@@ -221,6 +221,18 @@ services:
       - caddy_config:/config
     restart: unless-stopped
 
+  watchtower:
+    image: nickfedor/watchtower:latest
+    container_name: trusted-servants-portal-watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - WATCHTOWER_POLL_INTERVAL=86400
+      - WATCHTOWER_LABEL_ENABLE=false
+    restart: unless-stopped
+
 volumes:
   caddy_data:
   caddy_config:
@@ -281,11 +293,15 @@ cat <<EOF
 
   CHANGE THE ADMIN PASSWORD IMMEDIATELY from Settings -> Users.
 
+  Auto-updates:
+    Watchtower is installed and checks Docker Hub every 24 hours.
+    New portal releases will be pulled and restarted automatically.
+
   Useful commands:
     cd ${INSTALL_DIR}
     docker compose ps          # status
     docker compose logs -f     # tail logs
-    docker compose pull && docker compose up -d   # upgrade to a newer image
+    docker compose pull && docker compose up -d   # force an upgrade now
     docker compose down        # stop
 
 ============================================================
