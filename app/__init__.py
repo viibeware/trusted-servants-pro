@@ -4,7 +4,7 @@ from datetime import timedelta
 import bleach
 import markdown as md_lib
 from markupsafe import Markup
-from flask import Flask
+from flask import Flask, request
 from flask_login import LoginManager
 from .models import db, User, MediaItem, MeetingFile, Reading
 
@@ -113,6 +113,18 @@ def create_app():
     from .routes import bp as main_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
+
+    @app.after_request
+    def _no_store_dynamic(response):
+        # Stops Cloudflare/browsers from caching per-user pages and stale
+        # form responses. /static/ and /pub/ are deterministic and safe to cache.
+        path = request.path or ""
+        if path.startswith("/static/") or path.startswith("/pub/"):
+            return response
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers.setdefault("Pragma", "no-cache")
+        response.headers.setdefault("Expires", "0")
+        return response
 
     with app.app_context():
         db.create_all()
