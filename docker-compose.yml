@@ -1,7 +1,7 @@
 services:
   tsp:
     build: .
-    container_name: trusted-servants-portal
+    container_name: trusted-servants-pro
     ports:
       - "8090:8000"
     volumes:

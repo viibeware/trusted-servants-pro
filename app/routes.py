@@ -865,7 +865,7 @@ def data_export():
     tmp_zip = tempfile.NamedTemporaryFile(prefix="tsp-export-", suffix=".zip", delete=False)
     tmp_zip.close()
     manifest = {
-        "app": "trusted-servants-portal",
+        "app": "trusted-servants-pro",
         "format_version": 1,
         "exported_at": datetime.utcnow().isoformat() + "Z",
         "db_filename": "tsp.db",
@@ -931,8 +931,8 @@ def data_import():
                         return redirect(request.referrer or url_for("main.index"))
                 try:
                     manifest = json.loads(z.read("manifest.json").decode("utf-8"))
-                    if manifest.get("app") != "trusted-servants-portal":
-                        flash("Archive manifest does not identify a Trusted Servants Portal export", "danger")
+                    if manifest.get("app") not in ("trusted-servants-pro", "trusted-servants-portal"):
+                        flash("Archive manifest does not identify a Trusted Servants Pro export", "danger")
                         return redirect(request.referrer or url_for("main.index"))
                 except (ValueError, UnicodeDecodeError):
                     flash("Archive manifest.json is invalid", "danger")
@@ -1635,8 +1635,8 @@ def email_test():
         flash("Provide a test recipient", "danger")
         return redirect(request.referrer or url_for("main.index"))
     ok, err = send_mail(s, recipients,
-                        "Trusted Servants Portal test email",
-                        "This is a test message from the Trusted Servants Portal. SMTP is configured correctly.")
+                        "Trusted Servants Pro test email",
+                        "This is a test message from Trusted Servants Pro. SMTP is configured correctly.")
     if ok:
         flash(f"Test email sent to {', '.join(recipients)}", "success")
     else:
@@ -1683,7 +1683,7 @@ def request_access_submit():
     mail_error = None
     if s.smtp_host and s.access_request_to:
         lines = [
-            "A new access request has been submitted to the Trusted Servants Portal.",
+            "A new access request has been submitted to Trusted Servants Pro.",
             "",
             f"Name:    {name}",
             f"Phone:   {phone}",

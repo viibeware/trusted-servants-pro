@@ -1,4 +1,4 @@
-# Trusted Servants Portal
+# Trusted Servants Pro
 
 A self-hosted portal for recovery-fellowship trusted servants and members: organize meetings, share readings and files, manage Zoom host accounts, collect access requests, and brand it to your group — all from a single admin UI, no command line required.
 

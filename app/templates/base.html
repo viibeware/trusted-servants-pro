@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{% block title %}Trusted Servants Portal{% endblock %}</title>
+<title>{% block title %}Trusted Servants Pro{% endblock %}</title>
 <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -500,7 +500,7 @@
           {% endif %}
           <div class="row">
             <label>From email<input name="smtp_from_email" type="email" value="{{ site.smtp_from_email or '' }}" placeholder="noreply@example.com"></label>
-            <label>From name<input name="smtp_from_name" type="text" value="{{ site.smtp_from_name or '' }}" placeholder="Trusted Servants Portal"></label>
+            <label>From name<input name="smtp_from_name" type="text" value="{{ site.smtp_from_name or '' }}" placeholder="Trusted Servants Pro"></label>
           </div>
 
           <hr class="settings-sep">
@@ -558,9 +558,9 @@
       <div class="settings-pane" data-pane="about">
         <div class="about-pane">
           <div class="about-head about-head-branded">
-            <img class="about-logo" src="{{ url_for('static', filename='img/logo.svg') }}" alt="Trusted Servants Portal">
+            <img class="about-logo" src="{{ url_for('static', filename='img/logo.svg') }}" alt="Trusted Servants Pro">
             <div>
-              <div class="u-name">Trusted Servants Portal</div>
+              <div class="u-name">Trusted Servants Pro</div>
               <div class="muted small">Version 1.2</div>
             </div>
           </div>

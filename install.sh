@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 #
-# Trusted Servants Portal — unattended installer for Ubuntu 24.04.
+# Trusted Servants Pro — unattended installer for Ubuntu 24.04.
 #
 # Run as root (or with sudo) on a fresh Ubuntu 24.04 server:
 #
-#   curl -fsSL https://raw.githubusercontent.com/<org>/trusted-servants-portal/main/install.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/<org>/trusted-servants-pro/main/install.sh | sudo bash
 #
 # Or:
 #
 #   sudo bash install.sh
 #
 # Optional environment variables:
-#   TSP_INSTALL_DIR   Install directory             (default: /opt/trusted-servants-portal)
-#   TSP_IMAGE         Docker image to deploy        (default: viibeware/trusted-servants-portal:latest)
+#   TSP_INSTALL_DIR   Install directory             (default: /opt/trusted-servants-pro)
+#   TSP_IMAGE         Docker image to deploy        (default: viibeware/trusted-servants-pro:latest)
 #   TSP_DOMAIN        Public hostname for HTTPS     (default: unset — uses self-signed cert)
 #   TSP_ACME_EMAIL    Email for Let's Encrypt cert  (default: admin@<TSP_DOMAIN>)
 #   TSP_ADMIN_USERNAME / TSP_ADMIN_PASSWORD / TSP_ADMIN_EMAIL
@@ -22,8 +22,8 @@
 set -euo pipefail
 
 # ---------- config ----------
-INSTALL_DIR="${TSP_INSTALL_DIR:-/opt/trusted-servants-portal}"
-IMAGE="${TSP_IMAGE:-viibeware/trusted-servants-portal:latest}"
+INSTALL_DIR="${TSP_INSTALL_DIR:-/opt/trusted-servants-pro}"
+IMAGE="${TSP_IMAGE:-viibeware/trusted-servants-pro:latest}"
 DOMAIN="${TSP_DOMAIN:-}"
 ACME_EMAIL="${TSP_ACME_EMAIL:-}"
 ADMIN_USERNAME="${TSP_ADMIN_USERNAME:-admin}"
@@ -195,7 +195,7 @@ cat >"${COMPOSE_FILE}" <<EOF
 services:
   tsp:
     image: ${IMAGE}
-    container_name: trusted-servants-portal
+    container_name: trusted-servants-pro
     expose:
       - "8000"
     volumes:
@@ -209,7 +209,7 @@ services:
 
   caddy:
     image: caddy:2-alpine
-    container_name: trusted-servants-portal-caddy
+    container_name: trusted-servants-pro-caddy
     depends_on:
       - tsp
     ports:
@@ -223,7 +223,7 @@ services:
 
   watchtower:
     image: nickfedor/watchtower:latest
-    container_name: trusted-servants-portal-watchtower
+    container_name: trusted-servants-pro-watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
@@ -261,7 +261,7 @@ LOCAL_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 cat <<EOF
 
 ============================================================
-  Trusted Servants Portal — install complete
+  Trusted Servants Pro — install complete
 ============================================================
 
   Install dir   : ${INSTALL_DIR}

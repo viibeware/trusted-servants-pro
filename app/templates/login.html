@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Sign in · Trusted Servants Portal{% endblock %}
+{% block title %}Sign in · Trusted Servants Pro{% endblock %}
 {% block auth_content %}
 <div class="login-split" data-transition="{{ '1' if (site.login_transition_enabled if site else True) else '0' }}">
   {% set _default_colors = '["#16c2ba", "#1883d5", "#5a1ce5"]' %}
@@ -11,8 +11,8 @@
   <aside class="login-hero"{% if _bg and not _bg_colors %} style="background: {{ _bg }};"{% endif %} data-effect="{{ _effect }}" data-speed="{{ _speed }}" data-size="{{ _size }}"{% if _bg_colors %} data-bg-colors='{{ _bg_colors }}'{% endif %}>
     <canvas class="login-hero-bg" aria-hidden="true"></canvas>
     <div class="login-hero-inner">
-      <img class="login-hero-logo" src="{{ url_for('static', filename='img/logo_ts_white.svg') }}" alt="Trusted Servants Portal">
-      <div class="login-hero-title">Trusted Servants Portal</div>
+      <img class="login-hero-logo" src="{{ url_for('static', filename='img/logo_ts_white.svg') }}" alt="Trusted Servants Pro">
+      <div class="login-hero-title">Trusted Servants Pro</div>
       <button type="button" class="login-request-btn" data-open-modal="request-access-modal">Request Access</button>
     </div>
     <div class="login-hero-footer">
@@ -83,7 +83,7 @@
   <div class="modal-backdrop" data-close></div>
   <div class="modal-panel request-access-panel" role="dialog" aria-modal="true">
     <button type="button" class="request-access-close icon-btn" data-close aria-label="Close">×</button>
-    <h2 class="request-access-title">Trusted Servants Portal<br>Access Request</h2>
+    <h2 class="request-access-title">Trusted Servants Pro<br>Access Request</h2>
     <form method="post" action="{{ url_for('main.request_access_submit') }}" class="form request-access-form">
       <label>
         <span>Name <span class="req">*</span></span>
