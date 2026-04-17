@@ -106,6 +106,84 @@ services:
     restart: unless-stopped
 ```
 
+## One-command install (Ubuntu 24.04)
+
+`install.sh` in this repo is a turnkey installer that provisions Docker, writes a hardened `docker-compose.yml`, generates a `TSP_SECRET_KEY`, configures Caddy for TLS (Let's Encrypt or self-signed), and installs Watchtower so the portal picks up new releases automatically. Follow these steps on a fresh Ubuntu 24.04 server:
+
+### 1. Provision a server
+
+Spin up an Ubuntu 24.04 LTS instance on whatever provider you like (DigitalOcean, Hetzner, AWS Lightsail, bare metal, etc.). You'll need root or sudo access. The portal is happy on 1 vCPU / 1 GB RAM for small groups.
+
+### 2. (Optional) Point DNS at the server
+
+If you want a real TLS certificate, create an **A record** for the hostname you want (e.g. `portal.example.org`) pointing at the server's public IP **before running the installer** — Let's Encrypt verifies the hostname during issuance. If you skip this step the installer still works, it just serves a self-signed certificate and your browser will warn the first time.
+
+### 3. Run the installer
+
+SSH in and run one of these from the server:
+
+```bash
+# Pipe directly from GitHub (recommended):
+curl -fsSL https://raw.githubusercontent.com/viibeware/trusted-servants-pro/main/install.sh | sudo bash
+
+# Or clone and run locally if you'd rather read it first:
+git clone https://github.com/viibeware/trusted-servants-pro.git
+cd trusted-servants-pro
+sudo bash install.sh
+```
+
+The installer will:
+
+1. Apt-update, install Docker Engine + the Compose plugin, and open UFW for 22/80/443.
+2. Prompt for a **domain** — enter the hostname you set up in step 2, or leave blank for a self-signed cert.
+3. Prompt for a **contact email** if you entered a domain (used for Let's Encrypt renewal notices).
+4. Generate a random `TSP_SECRET_KEY` and write it to `/opt/tspro/.env` (mode `600`).
+5. Pull `viibeware/trusted-servants-pro:latest`, start the container, and wait for it to respond.
+
+Typical runtime is 2–5 minutes on a fresh VM.
+
+### 4. Sign in
+
+The installer prints the portal URL when it's done (either `https://<your-domain>` or `https://<server-ip>`). Sign in with:
+
+- Username: `admin`
+- Password: `admin`
+
+**Change the admin password immediately** from Settings → Users.
+
+### 5. Optional: non-interactive installs
+
+You can skip all prompts by passing env vars on the same line:
+
+```bash
+sudo TSP_DOMAIN=portal.example.org \
+     TSP_ACME_EMAIL=you@example.org \
+     TSP_ADMIN_PASSWORD='a-strong-password' \
+     bash install.sh
+```
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `TSP_INSTALL_DIR` | `/opt/tspro` | Where compose/data/backups live. |
+| `TSP_IMAGE` | `viibeware/trusted-servants-pro:latest` | Image tag to deploy. |
+| `TSP_DOMAIN` | _unset_ | Public hostname — if set, Caddy requests a Let's Encrypt cert. |
+| `TSP_ACME_EMAIL` | `admin@$TSP_DOMAIN` | Contact address for cert renewal notices. |
+| `TSP_ADMIN_USERNAME` / `TSP_ADMIN_PASSWORD` / `TSP_ADMIN_EMAIL` | `admin` / `admin` / `admin@example.com` | Seeded on first boot only. |
+
+### 6. Upgrading and day-to-day commands
+
+Watchtower polls Docker Hub every 24 hours and restarts the `tspro` container when a new image is published — no action needed. If you'd like to force an upgrade or inspect state:
+
+```bash
+cd /opt/tspro
+docker compose ps                             # running containers
+docker compose logs -f tsp                    # tail portal logs
+docker compose pull && docker compose up -d   # upgrade now
+docker compose down                           # stop everything
+```
+
+Back up `/opt/tspro/data/` (or use **Settings → Data → Export** from the UI) to preserve the SQLite database, uploads, and Fernet key.
+
 ## Configuration
 
 A `.env` file sits alongside `docker-compose.yml`. At minimum it must define `TSP_SECRET_KEY` — a long, random value used to sign Flask session cookies.
