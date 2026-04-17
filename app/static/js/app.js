@@ -7,8 +7,6 @@
   };
   const stored = localStorage.getItem("tsp-theme");
   if (stored && THEME_MODE[stored]) root.setAttribute("data-theme", stored);
-  else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches)
-    root.setAttribute("data-theme", "dark");
 
   function syncThemePicker() {
     const cur = root.getAttribute("data-theme") || "light";
