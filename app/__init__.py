@@ -149,6 +149,9 @@ def create_app():
     from .icons import icon as _icon
     app.jinja_env.globals["icon"] = _icon
 
+    from .version import __version__ as _app_version
+    app.jinja_env.globals["app_version"] = _app_version
+
     return app
 
 
@@ -188,13 +191,24 @@ def _backfill_media(app):
 
 
 def _migrate_sqlite(app):
-    """Add new columns to existing tables if missing (SQLite)."""
+    """Add new columns to existing tables if missing (SQLite).
+
+    Worker-safe: two gunicorn workers starting in parallel can both see the
+    column missing via PRAGMA and race on ALTER TABLE. The loser catches the
+    duplicate-column error instead of crashing the boot.
+    """
     from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
     with db.engine.begin() as conn:
         def add(table, col, ddl):
             cols = {r[1] for r in conn.execute(text(f"PRAGMA table_info({table})"))}
-            if col not in cols:
+            if col in cols:
+                return
+            try:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
+            except OperationalError as e:
+                if "duplicate column" not in str(e).lower():
+                    raise
         for col, ddl in (("zoom_meeting_id", "VARCHAR(64)"),
                          ("zoom_passcode", "VARCHAR(128)"),
                          ("zoom_opens_time", "VARCHAR(16)"),
@@ -271,6 +285,14 @@ def _migrate_sqlite(app):
                          ("thumbnail_filename", "VARCHAR(500)"),
                          ("position", "INTEGER NOT NULL DEFAULT 0")):
             add("reading", col, ddl)
+        for col, ddl in (("dash_show_stats", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("dash_show_intergroup", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("dash_show_meetings", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("dash_show_libraries", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("dash_show_files", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("dash_show_server_metrics", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("dash_order_json", "TEXT")):
+            add("user", col, ddl)
 
 
 def _seed_admin(app):

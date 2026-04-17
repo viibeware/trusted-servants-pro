@@ -71,7 +71,7 @@
       <a class="dccma-link" id="sidebar-footer-link" href="{{ _furl or '#' }}" target="_blank" rel="noopener"{% if not _flogo %} hidden{% endif %}>
         <img id="sidebar-footer-logo" src="{{ url_for('main.site_footer_logo') if _flogo else '' }}" alt=""{% if _fw %} style="width: {{ _fw }}px"{% endif %}>
       </a>
-      <div class="brand-version">v1.3.1</div>
+      <div class="brand-version">v{{ app_version }}</div>
       <div class="user-chip">
         <div class="avatar">{{ current_user.username[:1].upper() }}</div>
         <div class="user-chip-name">
@@ -562,7 +562,7 @@
             <div class="about-hero-brand">
               <img class="about-logo" src="{{ url_for('static', filename='img/logo_tspro_about.svg') }}" alt="Trusted Servants Pro">
               <div class="about-hero-name">Trusted Servants Pro</div>
-              <div class="about-hero-version">Version 1.3.1</div>
+              <div class="about-hero-version">Version {{ app_version }}</div>
               <div class="about-tagline">An open-source web app designed to help addiction recovery fellowships maintain shared documents and accounts</div>
               <div class="about-built-by">
                 Built by
@@ -587,6 +587,17 @@
 
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
+            <li>
+              <div class="u-name">1.3.2</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Per-user dashboard customization</b> — each account now stores its own widget visibility and drag-and-drop order. Previously dashboard preferences were stored on <code>SiteSetting</code> and affected every user. The Customize button and the reorder handles are now available to <i>all</i> roles (admin, editor, viewer), and every user can tailor their home view independently.</li>
+                <li><b>Server Metrics widget opened up</b> — the CPU / memory / load / uptime card on the dashboard is no longer admin-only. Viewers and editors can now enable it from Customize, and <code>/api/server-metrics</code> accepts any authenticated user.</li>
+                <li><b>Centralized version string</b> — the app version now lives in a single <code>app/version.py</code> file and is injected into templates as <code>{{ app_version }}</code>. Sidebar, login footer, and About pane all read from that one source, so future version bumps require editing one line.</li>
+                <li><b>Worker-safe schema migrations</b> — <code>_migrate_sqlite()</code> now catches the &ldquo;duplicate column&rdquo; error that can arise when two gunicorn workers race on the same <code>ALTER TABLE</code> during first boot after a schema bump. The loser of the race no longer crashes the worker.</li>
+                <li><b>Access logs</b> — gunicorn now writes access logs to stdout so <code>docker logs tspro</code> shows incoming requests, which makes diagnosing client/server issues much faster.</li>
+              </ul>
+            </li>
             <li>
               <div class="u-name">1.3.1</div>
               <div class="muted smaller">April 2026</div>

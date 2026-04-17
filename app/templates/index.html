@@ -2,17 +2,15 @@
 {% block heading %}Dashboard{% endblock %}
 {% block heading_help %}Your home view — see upcoming meetings, recent activity, and quick links to the areas of the portal you use most.{% endblock %}
 {% block top_actions %}
-{% if current_user.is_admin() %}
 <button type="button" class="btn" data-open-modal="dashboard-customize-modal">Customize</button>
-{% endif %}
 {% endblock %}
 {% block content %}
-{% set can_reorder = current_user.is_admin() %}
+{% set can_reorder = true %}
 <div class="dash-grid"
      {% if can_reorder %}data-dashboard-reorder data-order-url="{{ url_for('main.dashboard_order_save') }}"{% endif %}>
 {% for widget_key in dashboard_order %}
 
-  {% if widget_key == 'stats' and site.dash_show_stats %}
+  {% if widget_key == 'stats' and current_user.dash_show_stats %}
   <div class="dash-widget dash-widget-wide" data-widget-key="stats" {% if can_reorder %}draggable="true"{% endif %}>
     {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
     <div class="stats">
@@ -23,7 +21,7 @@
   </div>
   {% endif %}
 
-  {% if widget_key == 'intergroup' and site and site.intergroup_enabled and site.dash_show_intergroup %}
+  {% if widget_key == 'intergroup' and site and site.intergroup_enabled and current_user.dash_show_intergroup %}
   <div class="dash-widget dash-widget-wide" data-widget-key="intergroup" {% if can_reorder %}draggable="true"{% endif %}>
     {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
     <section class="card">
@@ -36,7 +34,7 @@
   </div>
   {% endif %}
 
-  {% if widget_key == 'server-metrics' and current_user.is_admin() and site.dash_show_server_metrics %}
+  {% if widget_key == 'server-metrics' and current_user.dash_show_server_metrics %}
   <div class="dash-widget dash-widget-wide" data-widget-key="server-metrics" {% if can_reorder %}draggable="true"{% endif %}>
     {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
     <section class="card server-metrics" id="server-metrics-widget" data-endpoint="{{ url_for('main.api_server_metrics') }}">
@@ -71,7 +69,7 @@
   </div>
   {% endif %}
 
-  {% if widget_key == 'meetings' and site.dash_show_meetings %}
+  {% if widget_key == 'meetings' and current_user.dash_show_meetings %}
   <div class="dash-widget" data-widget-key="meetings" {% if can_reorder %}draggable="true"{% endif %}>
     {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
     <section class="card">
@@ -90,7 +88,7 @@
   </div>
   {% endif %}
 
-  {% if widget_key == 'libraries' and site.dash_show_libraries %}
+  {% if widget_key == 'libraries' and current_user.dash_show_libraries %}
   <div class="dash-widget" data-widget-key="libraries" {% if can_reorder %}draggable="true"{% endif %}>
     {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
     <section class="card">
@@ -109,7 +107,7 @@
   </div>
   {% endif %}
 
-  {% if widget_key == 'files' and site.dash_show_files %}
+  {% if widget_key == 'files' and current_user.dash_show_files %}
   <div class="dash-widget" data-widget-key="files" {% if can_reorder %}draggable="true"{% endif %}>
     {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
     <section class="card">
@@ -152,7 +150,6 @@
 {% endfor %}
 </div>
 
-{% if current_user.is_admin() %}
 <div class="modal" id="dashboard-customize-modal" aria-hidden="true">
   <div class="modal-backdrop" data-close></div>
   <div class="modal-panel" role="dialog" aria-modal="true">
@@ -162,7 +159,7 @@
         <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
       </div>
       <div class="modal-body">
-        <p class="muted small">Toggle widgets here, or drag any widget on the dashboard to reorder it — changes are saved automatically.</p>
+        <p class="muted small">Toggle widgets here, or drag any widget on the dashboard to reorder it — changes are saved automatically. These preferences are saved to your account.</p>
         <ul class="special-pages-list">
           {% for key, label, desc in [
             ('dash_show_stats', 'Stats', 'Summary counts for meetings, libraries, and your role.'),
@@ -170,7 +167,7 @@
             ('dash_show_meetings', 'Recent Meetings', 'List of the most recent meetings.'),
             ('dash_show_libraries', 'Libraries', 'List of libraries with file counts.'),
             ('dash_show_files', 'Recent Files', 'Most recently uploaded files from the file browser.'),
-            ('dash_show_server_metrics', 'Server Metrics', 'Admin-only: CPU, memory, load average, uptime, and host OS.'),
+            ('dash_show_server_metrics', 'Server Metrics', 'CPU, memory, load average, uptime, and host OS.'),
           ] %}
           <li class="special-page-row">
             <div class="special-page-info">
@@ -178,7 +175,7 @@
               <p class="muted small">{{ desc }}</p>
             </div>
             <label class="mode-toggle" title="Show {{ label }}">
-              <input type="checkbox" name="{{ key }}" value="1" {% if site[key] %}checked{% endif %}>
+              <input type="checkbox" name="{{ key }}" value="1" {% if current_user[key] %}checked{% endif %}>
               <span class="mode-track"><span class="mode-thumb"></span></span>
             </label>
           </li>
@@ -192,5 +189,4 @@
     </form>
   </div>
 </div>
-{% endif %}
 {% endblock %}

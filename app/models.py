@@ -34,6 +34,13 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(16), nullable=False, default="viewer")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    dash_show_stats = db.Column(db.Boolean, nullable=False, default=True)
+    dash_show_intergroup = db.Column(db.Boolean, nullable=False, default=True)
+    dash_show_meetings = db.Column(db.Boolean, nullable=False, default=True)
+    dash_show_libraries = db.Column(db.Boolean, nullable=False, default=True)
+    dash_show_files = db.Column(db.Boolean, nullable=False, default=True)
+    dash_show_server_metrics = db.Column(db.Boolean, nullable=False, default=True)
+    dash_order_json = db.Column(db.Text)
 
     def can_edit(self):
         return self.role in ("admin", "editor")
