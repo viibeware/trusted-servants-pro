@@ -316,7 +316,7 @@
         const fd = new FormData();
         fd.append("file", file);
         try {
-          const res = await fetch("/media/upload", {
+          const res = await fetch("/files/upload", {
             method: "POST", body: fd, credentials: "same-origin",
             headers: { "X-Requested-With": "XMLHttpRequest" },
           });
@@ -343,7 +343,7 @@
       if (!next || next === current) return;
       const fd = new FormData();
       fd.append("name", next);
-      const res = await fetch(`/media/${id}/rename`, {
+      const res = await fetch(`/files/${id}/rename`, {
         method: "POST", body: fd, credentials: "same-origin",
       });
       if (res.ok) {
@@ -405,7 +405,7 @@
     btn.addEventListener("click", () => {
       currentMediaTarget = btn.dataset.mediaPicker;
       const frame = document.getElementById("media-picker-frame");
-      if (frame && frame.src === "about:blank") frame.src = "/media?picker=1&embed=1";
+      if (frame && frame.src === "about:blank") frame.src = "/files?picker=1&embed=1";
       openModal("media-picker-modal");
     });
   });

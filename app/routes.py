@@ -1475,7 +1475,7 @@ def _delete_upload(stored):
 
 # --- Media browser ---
 
-@bp.route("/media")
+@bp.route("/files")
 @login_required
 def media_list():
     q = (request.args.get("q") or "").strip().lower()
@@ -1506,7 +1506,7 @@ def media_list():
     return resp
 
 
-@bp.route("/media/upload", methods=["POST"])
+@bp.route("/files/upload", methods=["POST"])
 @editor_required
 def media_upload():
     uploaded = request.files.get("file")
@@ -1530,7 +1530,7 @@ def media_upload():
     return jsonify({"item": _media_json(m), "deduped": False})
 
 
-@bp.route("/media/<int:mid>/rename", methods=["POST"])
+@bp.route("/files/<int:mid>/rename", methods=["POST"])
 @editor_required
 def media_rename(mid):
     m = db.session.get(MediaItem, mid) or abort(404)
@@ -1541,7 +1541,7 @@ def media_rename(mid):
     return jsonify({"ok": True, "original_filename": m.original_filename})
 
 
-@bp.route("/media/<int:mid>/delete", methods=["POST"])
+@bp.route("/files/<int:mid>/delete", methods=["POST"])
 @admin_required
 def media_delete(mid):
     m = db.session.get(MediaItem, mid) or abort(404)
@@ -1557,7 +1557,7 @@ def media_delete(mid):
     return redirect(url_for("main.media_list"))
 
 
-@bp.route("/media/<int:mid>/download")
+@bp.route("/files/<int:mid>/download")
 @login_required
 def media_download(mid):
     m = db.session.get(MediaItem, mid) or abort(404)
@@ -1566,7 +1566,7 @@ def media_download(mid):
                                download_name=m.original_filename)
 
 
-@bp.route("/media/<int:mid>.json")
+@bp.route("/files/<int:mid>.json")
 @login_required
 def media_info(mid):
     m = db.session.get(MediaItem, mid) or abort(404)
