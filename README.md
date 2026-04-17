@@ -87,6 +87,25 @@ docker compose up -d --build
 
 Open http://localhost:8090 and sign in with the seeded admin (defaults: `admin` / `admin`). Change these in `.env` before first run, or rotate later from the Users tab.
 
+### docker-compose.yml
+
+```yaml
+services:
+  tsp:
+    image: viibeware/trusted-servants-pro:latest
+    container_name: tspro
+    ports:
+      - "8090:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      - TSP_SECRET_KEY=${TSP_SECRET_KEY:?TSP_SECRET_KEY must be set in .env}
+      - TSP_ADMIN_USERNAME=admin
+      - TSP_ADMIN_PASSWORD=admin
+      - TSP_ADMIN_EMAIL=admin@example.com
+    restart: unless-stopped
+```
+
 ## Configuration
 
 A `.env` file sits alongside `docker-compose.yml`:
