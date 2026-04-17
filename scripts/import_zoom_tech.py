@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Import the 'Zoom Tech Training' post from the WP CSV export:
    - Download every <img>/<video> source from the post using WP credentials,
    - Store locally under UPLOAD_FOLDER with UUID names (deduped by sha256),

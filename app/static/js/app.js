@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 (function () {
   const root = document.documentElement;
   const THEME_MODE = {

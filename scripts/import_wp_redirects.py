@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Populate the UrlRedirect table with 301s from every WordPress media URL
 on the old site to /pub/<filename> on the Pro site. Run once per migration.
 

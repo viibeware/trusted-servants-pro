@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Importer for WP All Export CSV of `library` custom post type.
 
 One WP library post -> one Library row. Its ACF repeaters

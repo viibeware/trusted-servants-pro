@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import os
 from cryptography.fernet import Fernet
 from flask import current_app

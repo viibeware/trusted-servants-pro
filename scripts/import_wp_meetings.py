@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """One-time importer for WP All Export CSV of meeting posts.
 
 Usage:

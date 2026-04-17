@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Parse the existing SiteSetting.zoom_tech_content HTML into structured
 sections+blocks JSON and save to SiteSetting.zoom_tech_blocks_json.
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 from markupsafe import Markup
 
 # Paths are Lucide icons (MIT license, https://lucide.dev) — the stroke/fill

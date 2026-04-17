@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /* Reusable block editor.
    Usage:
      const editor = BlockEditor.mount(rootEl, {
