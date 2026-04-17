@@ -66,14 +66,10 @@
     </nav>
     <div class="sidebar-footer">
       {% set _flogo = (site.footer_logo_filename if site else None) %}
-      {% set _furl = (site.footer_logo_url if site else None) or 'https://viibeware.com' %}
+      {% set _furl = (site.footer_logo_url if site else None) or '' %}
       {% set _fw = (site.footer_logo_width if site else None) or 32 %}
-      <a class="dccma-link" href="{{ _furl }}" target="_blank" rel="noopener">
-        {% if _flogo %}
-          <img src="{{ url_for('main.site_footer_logo') }}" alt=""{% if _fw %} style="width: {{ _fw }}px"{% endif %}>
-        {% else %}
-          <img src="{{ url_for('static', filename='img/viibeware.svg') }}" alt=""{% if _fw %} style="width: {{ _fw }}px"{% endif %}>
-        {% endif %}
+      <a class="dccma-link" id="sidebar-footer-link" href="{{ _furl or '#' }}" target="_blank" rel="noopener"{% if not _flogo %} hidden{% endif %}>
+        <img id="sidebar-footer-logo" src="{{ url_for('main.site_footer_logo') if _flogo else '' }}" alt=""{% if _fw %} style="width: {{ _fw }}px"{% endif %}>
       </a>
       <div class="brand-version">v1.2</div>
       <div class="user-chip">
@@ -177,15 +173,17 @@
         <form class="form appearance-branding-form" method="post" action="{{ url_for('main.site_branding_save') }}" enctype="multipart/form-data">
           <div class="u-name">Sidebar Footer Logo</div>
           <p class="muted small">Replaces the logo shown at the bottom of the sidebar and the link it opens.</p>
-          {% set _current_logo_src = url_for('main.site_footer_logo') if (site and site.footer_logo_filename) else url_for('static', filename='img/viibeware.svg') %}
+          {% set _has_logo = site and site.footer_logo_filename %}
+          {% set _current_logo_src = url_for('main.site_footer_logo') if _has_logo else '' %}
           {% set _current_width = site.footer_logo_width if (site and site.footer_logo_width) else 32 %}
           <div class="branding-row">
             <div class="branding-preview-wrap">
               <div class="muted smaller">Preview</div>
               <div class="sidebar-footer-mock">
                 <a class="dccma-link" tabindex="-1">
-                  <img id="branding-preview-img" src="{{ _current_logo_src }}" alt="" style="width: {{ _current_width }}px">
+                  <img id="branding-preview-img" src="{{ _current_logo_src }}" alt="" style="width: {{ _current_width }}px"{% if not _has_logo %} hidden{% endif %}>
                 </a>
+                <div class="branding-preview-empty muted smaller"{% if _has_logo %} hidden{% endif %}>No logo set</div>
               </div>
               <label class="width-slider-label">
                 <div class="width-slider-head">
@@ -198,9 +196,7 @@
             <div class="branding-fields">
               <label>Replace image<input type="file" name="footer_logo" accept="image/*" id="branding-file-input"></label>
               <label>Link URL<input type="url" name="footer_logo_url" value="{{ (site.footer_logo_url if site else '') or '' }}" placeholder="https://example.com"></label>
-              {% if site and site.footer_logo_filename %}
-              <label class="check"><input type="checkbox" name="clear_logo" value="1"><span>Remove custom logo (restore default)</span></label>
-              {% endif %}
+              <label class="check branding-clear-label"{% if not (site and site.footer_logo_filename) %} hidden{% endif %}><input type="checkbox" name="clear_logo" value="1"><span>Remove custom logo (restore default)</span></label>
             </div>
           </div>
           <div class="branding-save-row">

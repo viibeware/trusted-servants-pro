@@ -94,6 +94,40 @@
       if (!f) return;
       const url = URL.createObjectURL(f);
       bImg.src = url;
+      bImg.hidden = false;
+      const emptyLabel = document.querySelector(".appearance-branding-form .branding-preview-empty");
+      if (emptyLabel) emptyLabel.hidden = true;
+    });
+  }
+
+  const bForm = document.querySelector("form.appearance-branding-form");
+  if (bForm) {
+    bForm.addEventListener("settings:saved", (e) => {
+      const d = e.detail;
+      if (!d) return;
+      const sidebarImg = document.getElementById("sidebar-footer-logo");
+      const sidebarLink = document.getElementById("sidebar-footer-link");
+      if (sidebarImg) {
+        sidebarImg.src = d.footer_logo_src || "";
+        if (d.footer_logo_width) sidebarImg.style.width = d.footer_logo_width + "px";
+      }
+      if (sidebarLink) {
+        sidebarLink.href = d.footer_logo_link || "#";
+        sidebarLink.hidden = !d.has_custom_logo;
+      }
+      if (bImg) {
+        bImg.src = d.footer_logo_src || "";
+        bImg.hidden = !d.has_custom_logo;
+      }
+      const emptyLabel = bForm.querySelector(".branding-preview-empty");
+      if (emptyLabel) emptyLabel.hidden = !!d.has_custom_logo;
+      if (bFile) bFile.value = "";
+      const clearLabel = bForm.querySelector(".branding-clear-label");
+      if (clearLabel) {
+        const cb = clearLabel.querySelector('input[name="clear_logo"]');
+        if (cb) cb.checked = false;
+        clearLabel.hidden = !d.has_custom_logo;
+      }
     });
   }
 
@@ -205,10 +239,15 @@
           headers: { "X-Requested-With": "fetch" },
           credentials: "same-origin",
           redirect: "follow",
-        }).then(r => {
+        }).then(async r => {
           if (!r.ok) throw new Error("HTTP " + r.status);
+          let data = null;
+          const ct = r.headers.get("content-type") || "";
+          if (ct.includes("application/json")) {
+            try { data = await r.json(); } catch (_) {}
+          }
           showSettingsToast("Saved");
-          f.dispatchEvent(new CustomEvent("settings:saved", { bubbles: true }));
+          f.dispatchEvent(new CustomEvent("settings:saved", { bubbles: true, detail: data }));
         }).catch(err => {
           showSettingsToast("Save failed: " + err.message, "danger");
         }).finally(() => {

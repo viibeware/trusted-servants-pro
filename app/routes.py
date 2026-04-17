@@ -1,5 +1,6 @@
 import hashlib
 import os
+import time
 import uuid
 from functools import wraps
 from flask import (Blueprint, render_template, redirect, url_for, request,
@@ -738,6 +739,15 @@ def site_branding_save():
         if old and old != stored:
             _delete_upload(old)
     db.session.commit()
+    if request.headers.get("X-Requested-With") == "fetch":
+        logo_src = (url_for("main.site_footer_logo") + f"?v={int(time.time())}") if s.footer_logo_filename else ""
+        return jsonify(
+            ok=True,
+            has_custom_logo=bool(s.footer_logo_filename),
+            footer_logo_src=logo_src,
+            footer_logo_link=s.footer_logo_url or "",
+            footer_logo_width=s.footer_logo_width or 32,
+        )
     flash("Branding updated", "success")
     return redirect(request.referrer or url_for("main.index"))
 
