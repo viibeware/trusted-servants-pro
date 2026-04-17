@@ -20,4 +20,4 @@ RUN mkdir -p /data/uploads
 
 EXPOSE 8000
 
-CMD ["gunicorn", "-b", "0.0.0.0:8000", "-w", "2", "--preload", "--timeout", "120", "run:app"]
+CMD ["gunicorn", "-b", "0.0.0.0:8000", "-w", "2", "--timeout", "120", "run:app"]

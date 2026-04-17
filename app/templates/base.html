@@ -71,7 +71,7 @@
       <a class="dccma-link" id="sidebar-footer-link" href="{{ _furl or '#' }}" target="_blank" rel="noopener"{% if not _flogo %} hidden{% endif %}>
         <img id="sidebar-footer-logo" src="{{ url_for('main.site_footer_logo') if _flogo else '' }}" alt=""{% if _fw %} style="width: {{ _fw }}px"{% endif %}>
       </a>
-      <div class="brand-version">v1.3</div>
+      <div class="brand-version">v1.3.1</div>
       <div class="user-chip">
         <div class="avatar">{{ current_user.username[:1].upper() }}</div>
         <div class="user-chip-name">
@@ -562,7 +562,7 @@
             <div class="about-hero-brand">
               <img class="about-logo" src="{{ url_for('static', filename='img/logo_tspro_about.svg') }}" alt="Trusted Servants Pro">
               <div class="about-hero-name">Trusted Servants Pro</div>
-              <div class="about-hero-version">Version 1.3</div>
+              <div class="about-hero-version">Version 1.3.1</div>
               <div class="about-tagline">An open-source web app designed to help addiction recovery fellowships maintain shared documents and accounts</div>
               <div class="about-built-by">
                 Built by
@@ -587,6 +587,14 @@
 
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
+            <li>
+              <div class="u-name">1.3.1</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Multi-worker SQLite fix</b> — removed <code>--preload</code> from the gunicorn launch line so each worker opens its own SQLAlchemy engine after fork. Under Docker with two workers, the previous setup shared SQLite file descriptors across processes, which caused intermittent empty list views and erratic sidebar link rendering on production deployments. Single-process dev runs were unaffected.</li>
+                <li><b>Deploy compose pinned to <code>:latest</code></b> — <code>docker-compose.deploy.yml</code> now tracks the <code>latest</code> tag so upgrades pick up automatically without a manual version bump.</li>
+              </ul>
+            </li>
             <li>
               <div class="u-name">1.3</div>
               <div class="muted smaller">April 2026</div>
