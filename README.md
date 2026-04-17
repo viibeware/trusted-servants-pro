@@ -184,6 +184,35 @@ docker compose down                           # stop everything
 
 Back up `/opt/tspro/data/` (or use **Settings → Data → Export** from the UI) to preserve the SQLite database, uploads, and Fernet key.
 
+### 7. Uninstalling
+
+`uninstall.sh` ships next to the installer and reverses what it did. Safe defaults: it stops and removes only the TSP containers, named volumes, and the install directory — Docker itself, the firewall, and base packages are left alone unless you ask.
+
+```bash
+# From a clone of the repo:
+sudo bash uninstall.sh
+
+# Or pipe directly from GitHub:
+curl -fsSL https://raw.githubusercontent.com/viibeware/trusted-servants-pro/main/uninstall.sh | sudo bash
+```
+
+You'll be asked to type `yes` before anything is removed. Add flags to go further:
+
+| Flag | Effect |
+| --- | --- |
+| `-y`, `--yes` | Skip the confirmation prompt (required when piping from curl non-interactively). |
+| `--keep-data` | Preserve `/opt/tspro/data/` (database, uploads, `zoom.key`). |
+| `--purge-images` | Also `docker image rm` the pulled TSP, Caddy, and Watchtower images. |
+| `--remove-ufw-rules` | Revert the 80/tcp and 443/tcp UFW rules. OpenSSH is left intact so you don't lock yourself out. |
+| `--remove-docker` | Purge `docker-ce` + the Compose plugin, remove the apt source and keyring the installer added, and delete `/var/lib/docker`. |
+| `--nuke` | Shorthand for `--purge-images --remove-ufw-rules --remove-docker`. |
+
+Full teardown of everything the installer put on the server:
+
+```bash
+sudo bash uninstall.sh --nuke --yes
+```
+
 ## Configuration
 
 A `.env` file sits alongside `docker-compose.yml`. At minimum it must define `TSP_SECRET_KEY` — a long, random value used to sign Flask session cookies.
