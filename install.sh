@@ -195,7 +195,7 @@ cat >"${COMPOSE_FILE}" <<EOF
 services:
   tsp:
     image: ${IMAGE}
-    container_name: trusted-servants-pro
+    container_name: tspro
     expose:
       - "8000"
     volumes:
@@ -209,7 +209,7 @@ services:
 
   caddy:
     image: caddy:2-alpine
-    container_name: trusted-servants-pro-caddy
+    container_name: tspro-caddy
     depends_on:
       - tsp
     ports:
@@ -223,7 +223,7 @@ services:
 
   watchtower:
     image: nickfedor/watchtower:latest
-    container_name: trusted-servants-pro-watchtower
+    container_name: tspro-watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
