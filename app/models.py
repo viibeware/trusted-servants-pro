@@ -197,6 +197,7 @@ class SiteSetting(db.Model):
     turnstile_enabled = db.Column(db.Boolean, nullable=False, default=False)
     turnstile_site_key = db.Column(db.String(128))
     turnstile_secret_key_enc = db.Column(db.LargeBinary)
+    setup_complete = db.Column(db.Boolean, nullable=False, default=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 

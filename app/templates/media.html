@@ -116,4 +116,86 @@
   </div>
   {% endif %}
 </section>
+
+{% if not picker %}
+<div class="modal file-lightbox" id="file-lightbox" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="lightbox-panel" role="dialog" aria-modal="true">
+    <div class="lightbox-head">
+      <div class="lightbox-title" id="lightbox-title">—</div>
+      <div class="lightbox-head-actions">
+        <a class="btn btn-sm" id="lightbox-open-tab" target="_blank" rel="noopener">Open in new tab</a>
+        <a class="btn btn-sm" id="lightbox-download">Download</a>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+      </div>
+    </div>
+    <div class="lightbox-body" id="lightbox-body"></div>
+  </div>
+</div>
+
+<script>
+  (function(){
+    const IMG_RE = /\.(jpe?g|png|gif|webp|svg|bmp|avif)$/i;
+    const PDF_RE = /\.pdf$/i;
+    const modal = document.getElementById('file-lightbox');
+    if (!modal) return;
+    const bodyEl = document.getElementById('lightbox-body');
+    const titleEl = document.getElementById('lightbox-title');
+    const openTabEl = document.getElementById('lightbox-open-tab');
+    const downloadEl = document.getElementById('lightbox-download');
+
+    function open(url, filename, downloadUrl){
+      bodyEl.innerHTML = '';
+      if (IMG_RE.test(url)) {
+        const img = document.createElement('img');
+        img.className = 'lightbox-image';
+        img.alt = filename;
+        img.src = url;
+        bodyEl.appendChild(img);
+      } else if (PDF_RE.test(url)) {
+        const frame = document.createElement('iframe');
+        frame.className = 'lightbox-pdf';
+        frame.src = url + '#toolbar=1&navpanes=0';
+        frame.title = filename;
+        bodyEl.appendChild(frame);
+      }
+      titleEl.textContent = filename;
+      openTabEl.href = url;
+      downloadEl.href = downloadUrl || url;
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+    }
+    function close(){
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      bodyEl.innerHTML = '';
+    }
+
+    // Intercept clicks on filename links that point to previewable files.
+    const rows = document.querySelectorAll('.media-tbl tr[data-media-id], .media-grid .media-card[data-media-id]');
+    rows.forEach(row => {
+      const link = row.querySelector('a[href^="/pub/"]');
+      if (!link) return;
+      const url = link.getAttribute('href');
+      if (!IMG_RE.test(url) && !PDF_RE.test(url)) return;
+      const filename = row.dataset.original || link.textContent.trim();
+      const mid = row.dataset.mediaId;
+      const downloadUrl = mid ? ('/files/' + mid + '/download') : url;
+      link.addEventListener('click', e => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // let modifier clicks open new tab
+        e.preventDefault();
+        open(url, filename, downloadUrl);
+      });
+    });
+
+    modal.querySelectorAll('[data-close]').forEach(el =>
+      el.addEventListener('click', close));
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && modal.classList.contains('open')) close();
+    });
+  })();
+</script>
+{% endif %}
 {% endblock %}

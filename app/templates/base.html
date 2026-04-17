@@ -82,9 +82,7 @@
         <button type="button" class="icon-btn icon-btn-inline" data-open-modal="settings-modal" title="Settings" aria-label="Settings">{{ icon('settings') }}</button>
       </div>
       <div class="footer-actions">
-        {% if site and (site.pic_name or site.pic_email or site.pic_phone) %}
         <button type="button" class="icon-btn" data-open-modal="pic-help-modal" title="Need help?" aria-label="Need help?">{{ icon('help-circle') }}</button>
-        {% endif %}
         <button type="button" class="icon-btn" id="theme-toggle" title="Toggle theme" aria-label="Toggle theme">
           <span class="theme-icon-light">{{ icon('sun') }}</span><span class="theme-icon-dark">{{ icon('moon') }}</span>
         </button>
@@ -609,6 +607,17 @@
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
             <li>
+              <div class="u-name">1.3.4</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>First-run setup wizard</b> — the first time an admin logs in with <code>setup_complete = False</code>, they are routed through a six-step focused wizard: set a strong admin password (required, 12+ chars with a live strength meter), Public Information Chair, SMTP, theme, sidebar branding, and Cloudflare Turnstile. Steps 2&ndash;6 are skippable; step 1 is gated and validates that the new password differs from the seeded default and isn&rsquo;t a common term. Finishing flips <code>SiteSetting.setup_complete</code> so the wizard never re-fires.</li>
+                <li><b>Guided tour for viewers and editors</b> — on first authenticated visit to the dashboard, non-admins get a nine-step spotlight-style walkthrough of the sidebar, dashboard, meetings, libraries, File Browser, Zoom Accounts, Settings, and the Help button. Completion is tracked in a <code>tsp-tour-seen</code> cookie (5-year expiry). The Help (?) button in the sidebar footer now opens a modal with a <i>Take the tour</i> button so anyone can replay it at any time.</li>
+                <li><b>File Browser lightbox</b> — images (<code>.jpg/.jpeg/.png/.gif/.webp/.svg/.bmp/.avif</code>) and PDFs now open in a full-viewport modal with the filename, an &ldquo;Open in new tab&rdquo; link, and a Download button. Other formats keep their existing <code>target="_blank"</code> behavior. Cmd/Ctrl/Shift/middle-click still opens in a new tab. Scoped to the File Browser page only.</li>
+                <li><b>File Browser moved to <code>/files</code></b> — the central media URL is now <code>/files</code> with matching sub-routes (<code>/files/upload</code>, <code>/files/&lt;id&gt;/rename</code>, <code>/files/&lt;id&gt;/delete</code>, <code>/files/&lt;id&gt;/download</code>). Public file URLs at <code>/pub/&lt;filename&gt;</code> are unchanged.</li>
+                <li><b>Uninstaller is aggressive by default</b> — <code>uninstall.sh</code> now purges Docker images and reverts the 80/443 UFW rules out of the box, and sweeps every Caddy-named volume so all Let&rsquo;s Encrypt certificates, ACME account data, and Caddy config are wiped. A subsequent <code>install.sh</code> run starts from a clean slate and re-issues a fresh certificate. New opt-outs: <code>--keep-images</code>, <code>--keep-ufw</code>; <code>--remove-docker</code> remains opt-in.</li>
+              </ul>
+            </li>
+            <li>
               <div class="u-name">1.3.3</div>
               <div class="muted smaller">April 2026</div>
               <ul>
@@ -715,8 +724,7 @@
     </div>
   </div>
 </div>
-{# Public Info Chair help popup #}
-{% if site and (site.pic_name or site.pic_email or site.pic_phone) %}
+{# Help popup: tour replay + Public Info Chair contact #}
 <div class="modal" id="pic-help-modal" aria-hidden="true">
   <div class="modal-backdrop" data-close></div>
   <div class="modal-panel" role="dialog" aria-modal="true">
@@ -725,6 +733,15 @@
       <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
     </div>
     <div class="modal-body">
+      <div class="help-tour-row">
+        <div class="help-tour-copy">
+          <div class="u-name">Guided tour</div>
+          <p class="muted small">Replay the portal walkthrough — the sidebar, dashboard, files, and Zoom calendar.</p>
+        </div>
+        <button type="button" class="btn btn-primary" id="help-tour-btn" data-close>Take the tour</button>
+      </div>
+      {% if site and (site.pic_name or site.pic_email or site.pic_phone) %}
+      <hr class="settings-sep">
       <p class="muted small">Reach out to our Public Information Chair for questions, concerns, or guidance.</p>
       <div class="pic-contact">
         {% if site.pic_name %}
@@ -737,13 +754,23 @@
         <div class="pic-row"><span class="pic-icon">{{ icon('phone') }}</span><a href="tel:{{ site.pic_phone }}">{{ site.pic_phone }}</a></div>
         {% endif %}
       </div>
+      {% endif %}
     </div>
     <div class="modal-foot">
       <button type="button" class="btn" data-close>Close</button>
     </div>
   </div>
 </div>
-{% endif %}
+<script>
+  (function(){
+    var btn = document.getElementById('help-tour-btn');
+    if (btn) btn.addEventListener('click', function(){
+      // data-close will close the modal first; kick off the tour after a tick
+      // so the modal fade-out doesn't fight the tour's opening position pass.
+      setTimeout(function(){ if (window.tspTour) window.tspTour.start(); }, 150);
+    });
+  })();
+</script>
 
 {# Media picker modal (shared) #}
 <div class="modal modal-lg" id="media-picker-modal" aria-hidden="true">
@@ -773,6 +800,10 @@
 {% else %}
   {% block auth_content %}{% endblock %}
 {% endif %}
+<script>
+  window.tspUser = { role: "{{ current_user.role if current_user.is_authenticated else '' }}" };
+</script>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/tour.js') }}"></script>
 </body>
 </html>

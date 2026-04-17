@@ -1,0 +1,267 @@
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Setup — Trusted Servants Pro</title>
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<script>
+  (function(){
+    var t = null;
+    try { t = localStorage.getItem('tsp-theme'); } catch(e){}
+    if (t) document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body class="setup-body">
+<div class="setup-shell">
+  <div class="setup-card">
+    <div class="setup-head">
+      <div class="setup-brand">
+        <img class="setup-logo" src="{{ url_for('static', filename='img/logo_tspro_about.svg') }}" alt="Trusted Servants Pro">
+        <span class="setup-brand-tag">First-run setup</span>
+      </div>
+      <div class="setup-progress" aria-label="Setup progress">
+        {% for s in steps %}
+        <div class="setup-dot {% if s.n == step %}active{% elif s.n < step %}done{% endif %}" title="Step {{ s.n }}: {{ s.title }}"></div>
+        {% endfor %}
+      </div>
+      <div class="setup-step-count">Step {{ step }} of {{ total }}</div>
+      <h1 class="setup-title">{{ step_title }}</h1>
+      <p class="setup-desc">{{ step_desc }}</p>
+    </div>
+
+    {% if error %}
+    <div class="setup-error">{{ error }}</div>
+    {% endif %}
+
+    <form id="setup-form" method="post" action="{{ url_for('main.setup_step', step=step) }}" class="setup-form"
+          {% if step_key == 'branding' %}enctype="multipart/form-data"{% endif %}>
+
+      {# ========== Step 1: Password (REQUIRED) ========== #}
+      {% if step_key == 'password' %}
+      <label>New password
+        <input type="password" name="password" id="setup-pw" required autocomplete="new-password"
+               minlength="12" autofocus>
+      </label>
+      <div class="setup-pw-meter" id="setup-pw-meter" aria-hidden="true">
+        <div class="setup-pw-bar"><span class="setup-pw-fill"></span></div>
+        <div class="setup-pw-label muted small">Strength: <span id="setup-pw-strength">—</span></div>
+      </div>
+      <label>Confirm password
+        <input type="password" name="password_confirm" id="setup-pw2" required autocomplete="new-password" minlength="12">
+      </label>
+      <ul class="setup-pw-rules muted small">
+        <li id="rule-length">At least 12 characters</li>
+        <li id="rule-categories">Include 3 of: lowercase, uppercase, number, symbol</li>
+        <li id="rule-match">Both fields match</li>
+      </ul>
+      {% endif %}
+
+      {# ========== Step 2: Public Info Chair ========== #}
+      {% if step_key == 'pic' %}
+      <label>Name
+        <input type="text" name="pic_name" value="{{ site.pic_name or '' }}" autocomplete="name" autofocus>
+      </label>
+      <label>Email
+        <input type="email" name="pic_email" value="{{ site.pic_email or '' }}" autocomplete="email">
+      </label>
+      <label>Phone
+        <input type="tel" name="pic_phone" value="{{ site.pic_phone or '' }}" autocomplete="tel">
+      </label>
+      {% endif %}
+
+      {# ========== Step 3: SMTP ========== #}
+      {% if step_key == 'smtp' %}
+      <div class="row">
+        <label>SMTP host
+          <input type="text" name="smtp_host" value="{{ site.smtp_host or '' }}"
+                 placeholder="smtp.example.com" autofocus>
+        </label>
+        <label>Port
+          <input type="number" name="smtp_port" value="{{ site.smtp_port or '' }}"
+                 placeholder="587" min="1" max="65535">
+        </label>
+      </div>
+      <label>Security
+        <select name="smtp_security">
+          <option value="starttls" {% if (site.smtp_security or 'starttls')=='starttls' %}selected{% endif %}>STARTTLS (587)</option>
+          <option value="ssl" {% if site.smtp_security=='ssl' %}selected{% endif %}>SSL / TLS (465)</option>
+          <option value="none" {% if site.smtp_security=='none' %}selected{% endif %}>None (25)</option>
+        </select>
+      </label>
+      <div class="row">
+        <label>Username
+          <input type="text" name="smtp_username" value="{{ site.smtp_username or '' }}" autocomplete="off">
+        </label>
+        <label>Password
+          <input type="password" name="smtp_password" autocomplete="new-password"
+                 placeholder="{% if site.smtp_password_enc %}•••••••• (saved){% endif %}">
+        </label>
+      </div>
+      <div class="row">
+        <label>From name
+          <input type="text" name="smtp_from_name" value="{{ site.smtp_from_name or '' }}"
+                 placeholder="Trusted Servants Pro">
+        </label>
+        <label>From email
+          <input type="email" name="smtp_from_email" value="{{ site.smtp_from_email or '' }}"
+                 placeholder="notifications@example.com">
+        </label>
+      </div>
+      {% endif %}
+
+      {# ========== Step 4: Theme ========== #}
+      {% if step_key == 'theme' %}
+      <div class="theme-picker" role="radiogroup" aria-label="Theme">
+        {% for t in [
+          ('light', 'Light', '#f6f7fb', '#ffffff', '#5b6ef4'),
+          ('dark', 'Dark', '#0f1117', '#171923', '#7d8dff'),
+          ('neobrutal-light', 'Neobrutal Light', '#fef9c3', '#ffffff', '#ec4899'),
+          ('neobrutal-dark', 'Neobrutal Dark', '#18181b', '#27272a', '#f472b6'),
+          ('cyberpunk', 'Cyberpunk', '#05050a', '#0f0a1f', '#ff2bd6'),
+          ('solarpunk', 'Solarpunk', '#f5f7e8', '#ffffff', '#1e9e6a'),
+        ] %}
+        <button type="button" class="theme-swatch" data-theme-value="{{ t[0] }}" role="radio" aria-checked="false">
+          <span class="swatch-preview" style="background: {{ t[2] }};">
+            <span class="sw-panel" style="background: {{ t[3] }};"></span>
+            <span class="sw-accent" style="background: {{ t[4] }};"></span>
+          </span>
+          <span class="swatch-label">{{ t[1] }}</span>
+        </button>
+        {% endfor %}
+      </div>
+      <p class="muted small">Your choice saves automatically — you can change it later in Settings → Appearance.</p>
+      {% endif %}
+
+      {# ========== Step 5: Branding ========== #}
+      {% if step_key == 'branding' %}
+      {% if site.footer_logo_filename %}
+      <div class="setup-logo-preview">
+        <img src="{{ url_for('main.site_footer_logo') }}" alt="Current logo"
+             style="width: {{ site.footer_logo_width or 80 }}px">
+        <span class="muted smaller">Current logo</span>
+      </div>
+      {% endif %}
+      <label>Sidebar footer logo
+        <input type="file" name="footer_logo" accept="image/*">
+      </label>
+      <div class="row">
+        <label>Display width
+          <input type="number" name="footer_logo_width" value="{{ site.footer_logo_width or 80 }}"
+                 min="16" max="150">
+          <span class="muted smaller">pixels (16–150)</span>
+        </label>
+        <label>Link URL
+          <input type="url" name="footer_logo_url" value="{{ site.footer_logo_url or '' }}"
+                 placeholder="https://example.com">
+        </label>
+      </div>
+      {% endif %}
+
+      {# ========== Step 6: Turnstile ========== #}
+      {% if step_key == 'turnstile' %}
+      <p class="muted small">
+        Optional. Create a site at
+        <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" rel="noopener">Cloudflare → Turnstile</a>
+        (widget mode: Managed), add your portal hostname to its domain list, then paste the keys below.
+      </p>
+      <label>Site key
+        <input type="text" name="turnstile_site_key" value="{{ site.turnstile_site_key or '' }}"
+               placeholder="0x4AAAAAAA..." autocomplete="off" autofocus>
+      </label>
+      <label>Secret key
+        <input type="password" name="turnstile_secret_key" autocomplete="new-password"
+               placeholder="{% if site.turnstile_secret_key_enc %}•••••••• (saved){% else %}0x4AAAAAAA...{% endif %}">
+      </label>
+      <label class="check">
+        <input type="checkbox" name="turnstile_enabled" value="1" {% if site.turnstile_enabled %}checked{% endif %}>
+        <span>Enable on the login screen (requires both keys)</span>
+      </label>
+      {% endif %}
+    </form>
+
+    <div class="setup-actions">
+      {% if step > 1 %}
+      <button type="submit" form="setup-form" name="skip" value="1" class="btn setup-skip">Skip this step</button>
+      {% endif %}
+      <button type="submit" form="setup-form" class="btn btn-primary setup-next">
+        {% if step == total %}Finish setup{% else %}Save & continue{% endif %}
+      </button>
+    </div>
+
+    <div class="setup-footer muted smaller">
+      Trusted Servants Pro · v{{ app_version }}
+    </div>
+  </div>
+</div>
+
+<script>
+  // Theme picker (reused from base.html's pattern, simplified for the wizard).
+  (function(){
+    var root = document.documentElement;
+    function sync(){
+      var cur = root.getAttribute('data-theme') || 'light';
+      document.querySelectorAll('.theme-swatch').forEach(function(el){
+        el.setAttribute('aria-checked', el.dataset.themeValue === cur ? 'true' : 'false');
+      });
+    }
+    document.querySelectorAll('.theme-swatch').forEach(function(el){
+      el.addEventListener('click', function(){
+        var v = el.dataset.themeValue;
+        root.setAttribute('data-theme', v);
+        try { localStorage.setItem('tsp-theme', v); } catch(e){}
+        sync();
+      });
+    });
+    sync();
+  })();
+
+  // Password strength meter (step 1).
+  (function(){
+    var pw = document.getElementById('setup-pw');
+    var pw2 = document.getElementById('setup-pw2');
+    if (!pw) return;
+    var fill = document.querySelector('.setup-pw-fill');
+    var label = document.getElementById('setup-pw-strength');
+    var rules = {
+      length: document.getElementById('rule-length'),
+      categories: document.getElementById('rule-categories'),
+      match: document.getElementById('rule-match'),
+    };
+    function score(v){
+      var cats = 0;
+      if (/[a-z]/.test(v)) cats++;
+      if (/[A-Z]/.test(v)) cats++;
+      if (/[0-9]/.test(v)) cats++;
+      if (/[^A-Za-z0-9\s]/.test(v)) cats++;
+      var s = 0;
+      if (v.length >= 12) s++;
+      if (v.length >= 16) s++;
+      if (cats >= 3) s++;
+      if (cats >= 4) s++;
+      return { score: s, cats: cats };
+    }
+    function update(){
+      var v = pw.value;
+      var r = score(v);
+      var levels = ['', 'Weak', 'Fair', 'Good', 'Strong'];
+      var pct = [0, 25, 50, 75, 100][r.score] || 0;
+      fill.style.width = pct + '%';
+      fill.setAttribute('data-level', String(r.score));
+      label.textContent = levels[r.score] || '—';
+      rules.length.classList.toggle('ok', v.length >= 12);
+      rules.categories.classList.toggle('ok', r.cats >= 3);
+      rules.match.classList.toggle('ok', v.length >= 12 && v === pw2.value);
+    }
+    pw.addEventListener('input', update);
+    pw2.addEventListener('input', update);
+    update();
+  })();
+</script>
+</body>
+</html>

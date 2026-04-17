@@ -131,8 +131,7 @@ def inject_globals():
             "pending_access_count": pending_access_count, "otp": otp}
 
 
-DASHBOARD_WIDGET_KEYS = ("stats", "server-metrics", "meetings",
-                          "libraries", "files", "access-requests")
+DASHBOARD_WIDGET_KEYS = ("server-metrics", "meetings", "libraries", "files", "access-requests")
 
 
 def _dashboard_order(user):
@@ -152,6 +151,10 @@ def _dashboard_order(user):
 @bp.route("/")
 @login_required
 def index():
+    if current_user.is_admin():
+        site = _get_site_setting()
+        if not site.setup_complete:
+            return redirect(url_for("main.setup_step", step=1))
     meetings = Meeting.query.filter(Meeting.archived_at.is_(None)).order_by(Meeting.name).all()
     libraries = Library.query.order_by(Library.name).all()
     recent_files = MediaItem.query.order_by(MediaItem.created_at.desc()).limit(6).all()
@@ -1795,3 +1798,167 @@ def access_request_delete(rid):
     db.session.commit()
     flash("Request deleted", "success")
     return redirect(url_for("main.access_requests"))
+
+
+# --- First-run setup wizard ---
+
+WIZARD_STEPS = [
+    {"n": 1, "key": "password", "title": "Set a strong admin password",
+     "desc": "Before anything else, replace the seeded admin password. This is the only required step."},
+    {"n": 2, "key": "pic", "title": "Public Information Chair",
+     "desc": "Shown to members in the Need Help popup. Leave blank if your group doesn't have one yet."},
+    {"n": 3, "key": "smtp", "title": "Email (SMTP)",
+     "desc": "Used for sending access-request notifications and test emails."},
+    {"n": 4, "key": "theme", "title": "Pick a theme",
+     "desc": "Choose the look you want. Themes are saved per-user in your browser."},
+    {"n": 5, "key": "branding", "title": "Branding",
+     "desc": "Optional sidebar footer logo shown throughout the portal."},
+    {"n": 6, "key": "turnstile", "title": "Login bot protection",
+     "desc": "Optional Cloudflare Turnstile challenge on the login screen."},
+]
+WIZARD_TOTAL = len(WIZARD_STEPS)
+
+
+def _validate_password_strength(pw, user):
+    from werkzeug.security import check_password_hash
+    if len(pw) < 12:
+        return "Password must be at least 12 characters long."
+    categories = sum([
+        any(c.islower() for c in pw),
+        any(c.isupper() for c in pw),
+        any(c.isdigit() for c in pw),
+        any((not c.isalnum()) and (not c.isspace()) for c in pw),
+    ])
+    if categories < 3:
+        return "Include at least 3 of: lowercase letters, uppercase letters, numbers, symbols."
+    if pw.lower() in {"admin", "password", "administrator", "changeme", "welcome", "trustedservants"}:
+        return "That password is too common — please choose something harder to guess."
+    if user and user.password_hash and check_password_hash(user.password_hash, pw):
+        return "Please choose a password different from your current one."
+    return None
+
+
+def _wizard_guard():
+    """Return a redirect response if the caller cannot enter the wizard, else None."""
+    if not current_user.is_authenticated:
+        return redirect(url_for("auth.login"))
+    if not current_user.is_admin():
+        return redirect(url_for("main.index"))
+    return None
+
+
+def _wizard_advance(step):
+    if step >= WIZARD_TOTAL:
+        site = _get_site_setting()
+        site.setup_complete = True
+        db.session.commit()
+        flash("Setup complete — welcome to Trusted Servants Pro!", "success")
+        return redirect(url_for("main.index"))
+    return redirect(url_for("main.setup_step", step=step + 1))
+
+
+@bp.route("/setup")
+@login_required
+def setup():
+    guard = _wizard_guard()
+    if guard:
+        return guard
+    site = _get_site_setting()
+    if site.setup_complete:
+        return redirect(url_for("main.index"))
+    return redirect(url_for("main.setup_step", step=1))
+
+
+@bp.route("/setup/<int:step>", methods=["GET", "POST"])
+@login_required
+def setup_step(step):
+    guard = _wizard_guard()
+    if guard:
+        return guard
+    site = _get_site_setting()
+    if site.setup_complete:
+        return redirect(url_for("main.index"))
+    if step < 1 or step > WIZARD_TOTAL:
+        return redirect(url_for("main.setup_step", step=1))
+
+    error = None
+    if request.method == "POST":
+        skipped = request.form.get("skip") == "1"
+        if step == 1:
+            # Password is required; skip is not allowed.
+            pw = request.form.get("password", "")
+            confirm = request.form.get("password_confirm", "")
+            err = _validate_password_strength(pw, current_user)
+            if not err and pw != confirm:
+                err = "Passwords do not match."
+            if err:
+                error = err
+            else:
+                from werkzeug.security import generate_password_hash
+                current_user.password_hash = generate_password_hash(pw)
+                db.session.commit()
+                return _wizard_advance(step)
+        elif skipped:
+            return _wizard_advance(step)
+        elif step == 2:
+            site.pic_name = (request.form.get("pic_name") or "").strip() or None
+            site.pic_email = (request.form.get("pic_email") or "").strip() or None
+            site.pic_phone = (request.form.get("pic_phone") or "").strip() or None
+            db.session.commit()
+            return _wizard_advance(step)
+        elif step == 3:
+            site.smtp_host = (request.form.get("smtp_host") or "").strip() or None
+            raw_port = (request.form.get("smtp_port") or "").strip()
+            try:
+                site.smtp_port = int(raw_port) if raw_port else None
+            except ValueError:
+                error = "SMTP port must be a number."
+            if not error:
+                site.smtp_username = (request.form.get("smtp_username") or "").strip() or None
+                new_pw = (request.form.get("smtp_password") or "").strip()
+                if new_pw:
+                    site.smtp_password_enc = encrypt(new_pw)
+                site.smtp_from_email = (request.form.get("smtp_from_email") or "").strip() or None
+                site.smtp_from_name = (request.form.get("smtp_from_name") or "").strip() or None
+                sec = (request.form.get("smtp_security") or "starttls").strip()
+                site.smtp_security = sec if sec in ("none", "starttls", "ssl") else "starttls"
+                db.session.commit()
+                return _wizard_advance(step)
+        elif step == 4:
+            # Theme lives in per-user localStorage; the step 4 client-side JS
+            # has already written it. Nothing to persist server-side.
+            return _wizard_advance(step)
+        elif step == 5:
+            uploaded = request.files.get("footer_logo")
+            if uploaded and uploaded.filename:
+                old = site.footer_logo_filename
+                stored, _ = _save_upload(uploaded)
+                site.footer_logo_filename = stored
+                if old and old != stored:
+                    _delete_upload(old)
+            w = (request.form.get("footer_logo_width") or "").strip()
+            if w.isdigit() and 16 <= int(w) <= 150:
+                site.footer_logo_width = int(w)
+            link = (request.form.get("footer_logo_url") or "").strip()
+            site.footer_logo_url = link or None
+            db.session.commit()
+            return _wizard_advance(step)
+        elif step == 6:
+            site.turnstile_site_key = (request.form.get("turnstile_site_key") or "").strip() or None
+            new_secret = (request.form.get("turnstile_secret_key") or "").strip()
+            if new_secret:
+                site.turnstile_secret_key_enc = encrypt(new_secret)
+            wants_enabled = request.form.get("turnstile_enabled") == "1"
+            site.turnstile_enabled = bool(
+                wants_enabled and site.turnstile_site_key and site.turnstile_secret_key_enc
+            )
+            db.session.commit()
+            return _wizard_advance(step)
+
+    meta = WIZARD_STEPS[step - 1]
+    return render_template(
+        "setup.html",
+        step=step, total=WIZARD_TOTAL, steps=WIZARD_STEPS,
+        step_title=meta["title"], step_desc=meta["desc"], step_key=meta["key"],
+        error=error,
+    )

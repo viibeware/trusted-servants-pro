@@ -2,9 +2,11 @@
 #
 # Trusted Servants Pro — uninstaller.
 #
-# Reverses what install.sh did. Safe defaults: stops and removes the
-# TSP containers, named volumes, and install directory. Leaves Docker,
-# firewall rules, and other system packages alone unless asked.
+# Leaves the system as blank as possible: stops and removes the TSP
+# containers, wipes every Caddy/Let's Encrypt volume, deletes the
+# installer-pulled Docker images, reverts the 80/443 UFW rules, and
+# removes the install directory (including ./data unless --keep-data).
+# Docker itself is only removed if --remove-docker is passed.
 #
 # Usage:
 #
@@ -13,13 +15,13 @@
 # Flags:
 #   -y, --yes              Skip the confirmation prompt.
 #   --keep-data            Preserve ${INSTALL_DIR}/data (DB, uploads, zoom.key).
-#   --purge-images         Also remove the pulled Docker images.
-#   --remove-ufw-rules     Revert the UFW rules the installer added (80, 443).
-#                          SSH (OpenSSH) is left alone to avoid lockout.
-#   --remove-docker        Uninstall Docker Engine + Compose plugin and the
-#                          apt source/keyring the installer added.
-#   --nuke                 Shorthand for: --purge-images --remove-ufw-rules
-#                          --remove-docker (does NOT imply --yes).
+#   --keep-images          Keep the pulled Docker images (default: remove them).
+#   --keep-ufw             Keep the UFW allow-rules for 80/tcp & 443/tcp
+#                          (default: revert them; OpenSSH is never touched).
+#   --remove-docker        Also uninstall Docker Engine + Compose plugin and
+#                          the apt source/keyring the installer added.
+#   --nuke                 Shorthand that additionally passes --remove-docker.
+#                          (Does NOT imply --yes.)
 #
 # Environment:
 #   TSP_INSTALL_DIR   Install directory (default: /opt/tspro — must match installer)
@@ -32,18 +34,22 @@ INSTALL_DIR="${TSP_INSTALL_DIR:-/opt/tspro}"
 
 ASSUME_YES=0
 KEEP_DATA=0
-PURGE_IMAGES=0
-REMOVE_UFW=0
+# Aggressive-by-default cleanup so cert/domain setups can be re-run from scratch.
+PURGE_IMAGES=1
+REMOVE_UFW=1
 REMOVE_DOCKER=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -y|--yes)           ASSUME_YES=1 ;;
     --keep-data)        KEEP_DATA=1 ;;
+    --keep-images)      PURGE_IMAGES=0 ;;
+    --keep-ufw)         REMOVE_UFW=0 ;;
+    # Back-compat with earlier flag names (they were opt-in; now default).
     --purge-images)     PURGE_IMAGES=1 ;;
     --remove-ufw-rules) REMOVE_UFW=1 ;;
     --remove-docker)    REMOVE_DOCKER=1 ;;
-    --nuke)             PURGE_IMAGES=1; REMOVE_UFW=1; REMOVE_DOCKER=1 ;;
+    --nuke)             REMOVE_DOCKER=1 ;;
     -h|--help)
       sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
@@ -62,7 +68,9 @@ fail() { printf '\n\033[1;31mXX \033[0m %s\n' "$*" >&2; exit 1; }
 # ---------- confirmation ----------
 printf '\nThis will remove Trusted Servants Pro from this server:\n'
 printf '  - Stop and remove containers: tspro, tspro-caddy, tspro-watchtower\n'
-printf '  - Remove named volumes:       caddy_data, caddy_config\n'
+printf '  - Wipe Caddy volumes:         ALL Let'\''s Encrypt certs, ACME account\n'
+printf '                                data, and Caddy config are deleted so a\n'
+printf '                                fresh install can re-issue from scratch.\n'
 if [[ "${KEEP_DATA}" -eq 1 ]]; then
   printf '  - Remove install dir:         %s  (data/ preserved)\n' "${INSTALL_DIR}"
 else
@@ -103,12 +111,20 @@ if command -v docker >/dev/null 2>&1; then
     fi
   done
 
-  # Named volumes — compose prefixes with the project dir name, so match any suffix.
-  log "Removing named volumes (caddy_data, caddy_config)"
-  mapfile -t VOLS < <(docker volume ls --format '{{.Name}}' | grep -E '(^|_)caddy_(data|config)$' || true)
+  # Wipe every Caddy-related volume so Let's Encrypt certs, the ACME account
+  # JSON, and any cached issuance state are gone. Docker-compose prefixes named
+  # volumes with the project dir name, and stray volumes from prior aborted
+  # installs can have arbitrary prefixes — sweep anything that ends in
+  # caddy_data / caddy_config or contains 'caddy' in the name.
+  log "Removing Caddy volumes (Let's Encrypt certs + ACME account data)"
+  mapfile -t VOLS < <(docker volume ls --format '{{.Name}}' \
+      | grep -E '(^|[/_-])caddy([/_-]|$)' || true)
+  if [[ "${#VOLS[@]}" -eq 0 ]]; then
+    printf '   (no caddy volumes found)\n'
+  fi
   for v in "${VOLS[@]}"; do
     docker volume rm "$v" >/dev/null && printf '   removed volume: %s\n' "$v" || \
-      warn "Failed to remove volume $v"
+      warn "Failed to remove volume $v (may still be in use)"
   done
 
   if [[ "${PURGE_IMAGES}" -eq 1 ]]; then
@@ -189,10 +205,17 @@ cat <<EOF
   Trusted Servants Pro — uninstall complete
 ============================================================
 
-  Removed: TSP containers, volumes, and ${INSTALL_DIR}$( [[ "${KEEP_DATA}" -eq 1 ]] && printf ' (data kept)' )
+  Removed: TSP containers, all Caddy volumes (ACME account +
+           Let's Encrypt certs), and ${INSTALL_DIR}$( [[ "${KEEP_DATA}" -eq 1 ]] && printf ' (data kept)' )
 $( [[ "${PURGE_IMAGES}" -eq 1 ]] && printf '  Removed: Docker images (tsp, caddy, watchtower)\n' )$( [[ "${REMOVE_UFW}"   -eq 1 ]] && printf '  Reverted: UFW 80/tcp and 443/tcp rules\n' )$( [[ "${REMOVE_DOCKER}" -eq 1 ]] && printf '  Removed: Docker Engine + /var/lib/docker\n' )
   Not touched: base packages (curl, jq, openssl, ufw, …),
                OpenSSH firewall rule, and any unrelated containers.
+
+  A subsequent install.sh run will start from a clean slate:
+  Caddy will request a brand-new Let's Encrypt certificate for
+  whatever TSP_DOMAIN you set. Note: Let's Encrypt enforces
+  per-domain rate limits (5 duplicate certs/week) that can't be
+  reset by an uninstall — use a staging issuer if iterating.
 
 ============================================================
 EOF

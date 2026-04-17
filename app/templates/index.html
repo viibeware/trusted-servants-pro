@@ -10,46 +10,58 @@
      {% if can_reorder %}data-dashboard-reorder data-order-url="{{ url_for('main.dashboard_order_save') }}"{% endif %}>
 {% for widget_key in dashboard_order %}
 
-  {% if widget_key == 'stats' and current_user.dash_show_stats %}
-  <div class="dash-widget dash-widget-wide" data-widget-key="stats" {% if can_reorder %}draggable="true"{% endif %}>
-    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
-    <div class="stats">
-      <div class="stat"><div class="stat-v">{{ meetings|length }}</div><div class="stat-l">Meetings</div></div>
-      <div class="stat"><div class="stat-v">{{ libraries|length }}</div><div class="stat-l">Libraries</div></div>
-      <div class="stat"><div class="stat-v">{{ current_user.role|capitalize }}</div><div class="stat-l">Your role</div></div>
-    </div>
-  </div>
-  {% endif %}
-
   {% if widget_key == 'server-metrics' and current_user.dash_show_server_metrics %}
   <div class="dash-widget dash-widget-wide" data-widget-key="server-metrics" {% if can_reorder %}draggable="true"{% endif %}>
     {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
     <section class="card server-metrics" id="server-metrics-widget" data-endpoint="{{ url_for('main.api_server_metrics') }}">
-      <div class="card-head">
-        <h2>Server</h2>
-        <span class="muted smaller server-metrics-os" data-field="os">—</span>
-      </div>
-      <div class="server-metrics-grid">
-        <div class="metric-tile">
-          <div class="metric-label">CPU</div>
-          <div class="metric-value"><span data-field="cpu_percent">—</span><span class="metric-unit">%</span></div>
-          <canvas class="metric-spark" data-series="cpu" width="240" height="40"></canvas>
+      <div class="server-metrics-body">
+        <div class="role-panel">
+          <div class="role-panel-label">Your role</div>
+          <div class="role-panel-name">{{ current_user.role|capitalize }}</div>
+          <ul class="role-caps">
+            {% if current_user.is_admin() %}
+            <li>Manage users &amp; access requests</li>
+            <li>Create, edit &amp; delete all content</li>
+            <li>Configure site settings &amp; security</li>
+            {% elif current_user.can_edit() %}
+            <li>Create &amp; edit meetings and libraries</li>
+            <li>Upload &amp; manage files</li>
+            <li>View Zoom accounts (read-only)</li>
+            {% else %}
+            <li>View meetings, libraries &amp; files</li>
+            <li>View Zoom accounts &amp; calendar</li>
+            <li>Customize your dashboard view</li>
+            {% endif %}
+          </ul>
         </div>
-        <div class="metric-tile">
-          <div class="metric-label">Memory</div>
-          <div class="metric-value"><span data-field="memory_percent">—</span><span class="metric-unit">%</span></div>
-          <div class="metric-sub muted smaller" data-field="memory_detail">—</div>
-          <canvas class="metric-spark" data-series="mem" width="240" height="40"></canvas>
-        </div>
-        <div class="metric-tile metric-tile-text">
-          <div class="metric-label">Load Avg</div>
-          <div class="metric-value metric-value-sm" data-field="load_avg">—</div>
-          <div class="metric-sub muted smaller">1m / 5m / 15m</div>
-        </div>
-        <div class="metric-tile metric-tile-text">
-          <div class="metric-label">Uptime</div>
-          <div class="metric-value metric-value-sm" data-field="uptime">—</div>
-          <div class="metric-sub muted smaller" data-field="cpu_count">—</div>
+        <div class="server-metrics-column">
+          <div class="card-head">
+            <h2>Server</h2>
+            <span class="muted smaller server-metrics-os" data-field="os">—</span>
+          </div>
+          <div class="server-metrics-grid">
+            <div class="metric-tile">
+              <div class="metric-label">CPU</div>
+              <div class="metric-value"><span data-field="cpu_percent">—</span><span class="metric-unit">%</span></div>
+              <canvas class="metric-spark" data-series="cpu" width="240" height="40"></canvas>
+            </div>
+            <div class="metric-tile">
+              <div class="metric-label">Memory</div>
+              <div class="metric-value"><span data-field="memory_percent">—</span><span class="metric-unit">%</span></div>
+              <div class="metric-sub muted smaller" data-field="memory_detail">—</div>
+              <canvas class="metric-spark" data-series="mem" width="240" height="40"></canvas>
+            </div>
+            <div class="metric-tile metric-tile-text">
+              <div class="metric-label">Load Avg</div>
+              <div class="metric-value metric-value-sm" data-field="load_avg">—</div>
+              <div class="metric-sub muted smaller">1m / 5m / 15m</div>
+            </div>
+            <div class="metric-tile metric-tile-text">
+              <div class="metric-label">Uptime</div>
+              <div class="metric-value metric-value-sm" data-field="uptime">—</div>
+              <div class="metric-sub muted smaller" data-field="cpu_count">—</div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -149,11 +161,10 @@
         <p class="muted small">Toggle widgets here, or drag any widget on the dashboard to reorder it — changes are saved automatically. These preferences are saved to your account.</p>
         <ul class="special-pages-list">
           {% for key, label, desc in [
-            ('dash_show_stats', 'Stats', 'Summary counts for meetings, libraries, and your role.'),
             ('dash_show_meetings', 'Recent Meetings', 'List of the most recent meetings.'),
             ('dash_show_libraries', 'Libraries', 'List of libraries with file counts.'),
             ('dash_show_files', 'Recent Files', 'Most recently uploaded files from the file browser.'),
-            ('dash_show_server_metrics', 'Server Metrics', 'CPU, memory, load average, uptime, and host OS.'),
+            ('dash_show_server_metrics', 'Your Role and Server Stats', 'Your account role and capabilities alongside CPU, memory, load average, uptime, and host OS.'),
           ] %}
           <li class="special-page-row">
             <div class="special-page-info">
