@@ -757,6 +757,7 @@ form.hide-zoom .zoom-only, form.hide-zoom .zoom-only-field { display: none; }
 
 .about-tagline { font-size: .875rem; color: var(--muted); margin-top: 8px; max-width: 32ch; line-height: 1.45; }
 .about-built-by { margin-top: 10px; font-size: .8125rem; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.about-license { margin-top: 10px; font-size: .75rem; color: var(--muted); line-height: 1.5; max-width: 32ch; }
 .viibeware-credit-sm { gap: 6px; color: var(--muted); }
 .viibeware-credit-sm img { height: 18px; }
 .viibeware-credit-sm .viibeware-name { font-weight: 700; letter-spacing: .08em; font-size: .8125rem; color: var(--muted); }
@@ -982,6 +983,24 @@ body.embed .card:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom
 .settings-toast.flash-warning { background: #fef3c7; color: #7c2d12; border-color: rgba(217,119,6,0.25); border-left-color: #d97706; }
 .settings-toast.flash-warning::before { background: #d97706; }
 
+.settings-pane[data-pane="security"] { flex-direction: column; padding: 20px 24px; gap: 8px; overflow-y: auto; }
+.settings-pane[data-pane="security"] .u-name { font-size: 1rem; }
+.settings-pane[data-pane="security"] p { margin: 0 0 8px; max-width: 60ch; }
+.settings-pane[data-pane="security"] .security-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0; align-items: stretch; width: 100%;
+}
+.settings-pane[data-pane="security"] .security-col {
+  display: flex; flex-direction: column; min-width: 0; padding: 0 24px;
+}
+.settings-pane[data-pane="security"] .security-col:first-child { padding-left: 0; border-right: 1px solid var(--border); }
+.settings-pane[data-pane="security"] .security-col:last-child { padding-right: 0; }
+@media (max-width: 720px) {
+  .settings-pane[data-pane="security"] .security-grid { grid-template-columns: 1fr; gap: 20px; }
+  .settings-pane[data-pane="security"] .security-col { padding: 0; }
+  .settings-pane[data-pane="security"] .security-col:first-child {
+    border-right: 0; border-bottom: 1px solid var(--border); padding-bottom: 20px;
+  }
+}
 .settings-pane[data-pane="email"] { flex-direction: column; padding: 20px 24px; gap: 8px; overflow-y: auto; }
 .settings-pane[data-pane="email"] .u-name { font-size: 1rem; }
 .settings-pane[data-pane="email"] > p { margin: 0 0 12px; max-width: 60ch; }

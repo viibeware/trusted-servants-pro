@@ -69,7 +69,7 @@
           <td>
             {% for s in calendar[a.id][d]|sort(attribute='start_time') %}
               <div class="cal-slot{% if s.id in conflict_ids %} cal-slot-conflict{% endif %}">
-                <div class="cal-time">{{ s.start_time }} · {{ s.duration_minutes }}m</div>
+                <div class="cal-time">{{ (s.opens_time or s.start_time) }}–{{ s.end_time }}</div>
                 <a class="cal-link" href="{{ url_for('main.meeting_detail', mid=s.meeting_id) }}">{{ s.meeting.name }}</a>
               </div>
             {% endfor %}
@@ -84,25 +84,6 @@
 {% endif %}
 
 {% if current_user.is_admin() %}
-<section class="card zoom-otp-card">
-  <div class="card-head"><h2>Zoom OTP Email</h2></div>
-  <p class="muted small">Shared inbox where Zoom sends one-time-password codes. These credentials are shown to users on Online/Hybrid meeting pages so they can retrieve OTP codes when logging into Zoom.</p>
-  <form method="post" action="{{ url_for('main.otp_email_save') }}" class="form">
-    {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
-    <label>Email Address<input name="email" type="email" value="{{ otp.email or '' }}"></label>
-    <label>Login URL<input name="login_url" type="url" value="{{ otp.login_url or '' }}" placeholder="https://mail.example.com"></label>
-    <label>Password <span class="muted smaller">(leave blank to keep current)</span>
-      <input name="password" type="password" placeholder="{% if otp.password_enc %}••••••••{% endif %}">
-    </label>
-    {% if otp.password_enc %}
-    <label class="check"><input type="checkbox" name="clear_password" value="1"><span>Clear stored password</span></label>
-    {% endif %}
-    <div class="form-actions">
-      <button class="btn btn-primary">Save</button>
-    </div>
-  </form>
-</section>
-
 {# New account modal #}
 <div class="modal" id="zoom-new-modal" aria-hidden="true">
   <div class="modal-backdrop" data-close></div>

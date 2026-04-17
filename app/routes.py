@@ -122,9 +122,13 @@ def inject_globals():
             pending_access_count = AccessRequest.query.filter_by(status="pending").count()
     except Exception:
         pending_access_count = 0
+    try:
+        otp = _get_otp_email()
+    except Exception:
+        otp = None
     return {"CATEGORY_LABELS": CATEGORY_LABELS, "FILE_CATEGORIES": FILE_CATEGORIES,
             "DAYS_OF_WEEK": DAYS_OF_WEEK, "site": site, "nav_links": nav_links,
-            "pending_access_count": pending_access_count}
+            "pending_access_count": pending_access_count, "otp": otp}
 
 
 DASHBOARD_WIDGET_KEYS = ("stats", "server-metrics", "meetings",

@@ -40,6 +40,7 @@
       <a href="{{ url_for('main.meetings') }}" class="{% if 'meeting' in request.endpoint %}active{% endif %}">Meetings</a>
       <a href="{{ url_for('main.libraries') }}" class="{% if 'librar' in request.endpoint or 'reading' in request.endpoint %}active{% endif %}">Libraries</a>
       <a href="{{ url_for('main.media_list') }}" class="{% if 'media' in request.endpoint %}active{% endif %}">File Browser</a>
+      <a href="{{ url_for('main.zoom_accounts') }}" class="{% if 'zoom_account' in request.endpoint %}active{% endif %}">Zoom Accounts</a>
       {% if site and site.intergroup_enabled %}
       <a href="{{ url_for('main.intergroup') }}" class="{% if request.endpoint=='main.intergroup' %}active{% endif %}">{{ site.ig_page_title or 'Intergroup' }}</a>
       {% endif %}
@@ -133,13 +134,13 @@
     </div>
     <div class="settings-tabs" role="tablist">
       <button type="button" class="settings-tab active" data-tab="appearance">Appearance</button>
-      <button type="button" class="settings-tab" data-tab="zoom">Zoom Accounts</button>
       {% if current_user.is_admin() %}
       <button type="button" class="settings-tab" data-tab="users">Users</button>
       <button type="button" class="settings-tab" data-tab="locations">Meeting Locations</button>
       <button type="button" class="settings-tab" data-tab="navigation">External Links</button>
       <button type="button" class="settings-tab" data-tab="special-pages">Special Sections</button>
       <button type="button" class="settings-tab" data-tab="email">Email</button>
+      <button type="button" class="settings-tab" data-tab="security">Security</button>
       <button type="button" class="settings-tab" data-tab="data">Data</button>
       {% endif %}
       <button type="button" class="settings-tab" data-tab="about">About</button>
@@ -293,39 +294,6 @@
           <div class="form-actions"><button class="btn btn-primary">Save Login Appearance</button></div>
           </div>
         </form>
-        <form class="form turnstile-form" method="post" action="{{ url_for('main.turnstile_save') }}">
-          <div class="u-name">Login Bot Protection</div>
-          <p class="muted small">
-            Require a Cloudflare Turnstile challenge on the login screen.
-            Create a site at <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" rel="noopener">Cloudflare → Turnstile</a>
-            (widget mode: Managed), add your portal hostname to its domain list, then paste the keys below.
-          </p>
-          <div class="row">
-            <label>Site key
-              <input name="turnstile_site_key" type="text" autocomplete="off"
-                     value="{{ site.turnstile_site_key or '' }}"
-                     placeholder="0x4AAAAAAA...">
-            </label>
-            <label>Secret key
-              <input name="turnstile_secret_key" type="password" autocomplete="new-password"
-                     placeholder="{% if site.turnstile_secret_key_enc %}•••••••• (saved — leave blank to keep){% else %}0x4AAAAAAA...{% endif %}">
-            </label>
-          </div>
-          {% if site.turnstile_secret_key_enc %}
-          <label class="check"><input type="checkbox" name="turnstile_secret_clear" value="1"><span>Clear the saved secret key</span></label>
-          {% endif %}
-          <li class="special-page-row login-fx-toggle-row">
-            <div class="special-page-info">
-              <div class="u-name">Enable on login screen</div>
-              <p class="muted small">When on, successful Turnstile verification is required before credentials are checked.</p>
-            </div>
-            <label class="mode-toggle" title="Enable Turnstile on login">
-              <input type="checkbox" name="turnstile_enabled" value="1" {% if site.turnstile_enabled %}checked{% endif %}>
-              <span class="mode-track"><span class="mode-thumb"></span></span>
-            </label>
-          </li>
-          <div class="form-actions"><button class="btn btn-primary">Save Bot Protection</button></div>
-        </form>
         </div>
         </div>
         <script src="{{ url_for('static', filename='js/login_fx.js') }}"></script>
@@ -412,9 +380,6 @@
         })();
         </script>
         {% endif %}
-      </div>
-      <div class="settings-pane" data-pane="zoom">
-        <iframe class="settings-frame" data-src="{{ url_for('main.zoom_accounts') }}?embed=1"></iframe>
       </div>
       {% if current_user.is_admin() %}
       <div class="settings-pane" data-pane="users">
@@ -508,6 +473,58 @@
           <div class="form-actions"><button class="btn">Send Test</button></div>
         </form>
       </div>
+      <div class="settings-pane" data-pane="security">
+        <div class="security-grid">
+          <div class="security-col">
+            <form class="form" method="post" action="{{ url_for('main.otp_email_save') }}">
+              <div class="u-name">Zoom OTP Email</div>
+              <p class="muted small">Shared inbox where Zoom sends one-time-password codes. These credentials are shown to users on Online/Hybrid meeting pages so they can retrieve OTP codes when logging into Zoom.</p>
+              <label>Email Address<input name="email" type="email" value="{{ otp.email or '' }}"></label>
+              <label>Login URL<input name="login_url" type="url" value="{{ otp.login_url or '' }}" placeholder="https://mail.example.com"></label>
+              <label>Password <span class="muted smaller">(leave blank to keep current)</span>
+                <input name="password" type="password" placeholder="{% if otp.password_enc %}••••••••{% endif %}">
+              </label>
+              {% if otp.password_enc %}
+              <label class="check"><input type="checkbox" name="clear_password" value="1"><span>Clear stored password</span></label>
+              {% endif %}
+              <div class="form-actions"><button class="btn btn-primary">Save OTP Email</button></div>
+            </form>
+          </div>
+          <div class="security-col">
+            <form class="form turnstile-form" method="post" action="{{ url_for('main.turnstile_save') }}">
+              <div class="u-name">Login Bot Protection</div>
+              <p class="muted small">
+                Require a Cloudflare Turnstile challenge on the login screen.
+                Create a site at <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" rel="noopener">Cloudflare → Turnstile</a>
+                (widget mode: Managed), add your portal hostname to its domain list, then paste the keys below.
+              </p>
+              <label>Site key
+                <input name="turnstile_site_key" type="text" autocomplete="off"
+                       value="{{ site.turnstile_site_key or '' }}"
+                       placeholder="0x4AAAAAAA...">
+              </label>
+              <label>Secret key
+                <input name="turnstile_secret_key" type="password" autocomplete="new-password"
+                       placeholder="{% if site.turnstile_secret_key_enc %}•••••••• (saved — leave blank to keep){% else %}0x4AAAAAAA...{% endif %}">
+              </label>
+              {% if site.turnstile_secret_key_enc %}
+              <label class="check"><input type="checkbox" name="turnstile_secret_clear" value="1"><span>Clear the saved secret key</span></label>
+              {% endif %}
+              <li class="special-page-row login-fx-toggle-row">
+                <div class="special-page-info">
+                  <div class="u-name">Enable on login screen</div>
+                  <p class="muted small">When on, successful Turnstile verification is required before credentials are checked.</p>
+                </div>
+                <label class="mode-toggle" title="Enable Turnstile on login">
+                  <input type="checkbox" name="turnstile_enabled" value="1" {% if site.turnstile_enabled %}checked{% endif %}>
+                  <span class="mode-track"><span class="mode-thumb"></span></span>
+                </label>
+              </li>
+              <div class="form-actions"><button class="btn btn-primary">Save Bot Protection</button></div>
+            </form>
+          </div>
+        </div>
+      </div>
       <div class="settings-pane" data-pane="data">
         <div class="data-grid">
           <div class="data-col">
@@ -571,6 +588,10 @@
                   <span class="viibeware-name">VIIBEWARE</span>
                 </a>
               </div>
+              <div class="about-license">
+                Released under the
+                <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">GNU Affero General Public License v3.0</a>.
+              </div>
             </div>
             <div class="about-hero-stack">
               <div class="about-stack-label">Built With</div>
@@ -587,6 +608,16 @@
 
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
+            <li>
+              <div class="u-name">1.3.3</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Zoom Accounts promoted to a sidebar entry</b> — the page is no longer tucked inside the Settings modal. It now has its own top-level nav link visible to every logged-in user. Admins retain exclusive ability to create/edit/delete accounts; editors and viewers see the accounts table and the weekly calendar read-only.</li>
+                <li><b>New Security tab in Settings</b> — a dedicated admin-only tab (sitting just before Data) houses <b>Zoom OTP Email</b> (moved off the Zoom Accounts page) and <b>Login Bot Protection / Turnstile</b> (moved out of Appearance). The two settings are laid out as a side-by-side grid on desktop with a vertical divider, collapsing to a stacked single column on narrow viewports.</li>
+                <li><b>Calendar slot time range</b> — each cell in the Zoom Accounts weekly calendar now shows the full start–end window (e.g. <code>18:30&ndash;20:00</code>) instead of start + duration. When a schedule has a per-day &ldquo;Zoom opens&rdquo; time set, the block&rsquo;s start reflects that earlier opening time so hosts can see the real occupancy window at a glance.</li>
+                <li><b>AGPLv3 credit on About</b> — the About pane now links to the canonical GNU AGPLv3 text under the Built-by credit.</li>
+              </ul>
+            </li>
             <li>
               <div class="u-name">1.3.2</div>
               <div class="muted smaller">April 2026</div>
