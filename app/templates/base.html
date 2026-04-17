@@ -463,15 +463,6 @@
             </form>
           </li>
         </ul>
-
-        <form class="form special-pic-form" method="post" action="{{ url_for('main.pic_save') }}">
-          <div class="u-name">Public Information Chair</div>
-          <p class="muted small">Contact information shown on the dashboard for members who need help.</p>
-          <label>Name<input type="text" name="pic_name" value="{{ site.pic_name or '' }}"></label>
-          <label>Email<input type="email" name="pic_email" value="{{ site.pic_email or '' }}"></label>
-          <label>Phone<input type="tel" name="pic_phone" value="{{ site.pic_phone or '' }}"></label>
-          <div class="form-actions"><button class="btn btn-primary">Save</button></div>
-        </form>
       </div>
       <div class="settings-pane" data-pane="email">
         <div class="u-name">SMTP Server</div>

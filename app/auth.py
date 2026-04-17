@@ -105,6 +105,13 @@ def users_update(uid):
     new_role = request.form.get("role")
     if new_role in ROLES:
         u.role = new_role
+    new_email = request.form.get("email", "").strip()
+    if new_email and new_email != u.email:
+        clash = User.query.filter(User.email == new_email, User.id != u.id).first()
+        if clash:
+            flash(f"Email {new_email} is already in use", "danger")
+            return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
+        u.email = new_email
     new_pw = request.form.get("password", "").strip()
     if new_pw:
         u.password_hash = generate_password_hash(new_pw)

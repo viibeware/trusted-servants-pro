@@ -1,6 +1,20 @@
 {% extends "base.html" %}
 {% block heading %}Users{% endblock %}
 {% block content %}
+<section class="card">
+  <div class="card-head"><h2>Public Information Chair</h2></div>
+  <p class="muted small">Contact information shown on the dashboard for members who need help.</p>
+  <form class="form" method="post" action="{{ url_for('main.pic_save') }}">
+    {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+    <div class="pic-form-row">
+      <label>Name<input type="text" name="pic_name" value="{{ (site.pic_name if site else '') or '' }}"></label>
+      <label>Email<input type="email" name="pic_email" value="{{ (site.pic_email if site else '') or '' }}"></label>
+      <label>Phone<input type="tel" name="pic_phone" value="{{ (site.pic_phone if site else '') or '' }}"></label>
+    </div>
+    <div class="form-actions"><button class="btn btn-primary">Save</button></div>
+  </form>
+</section>
+
 <section class="card users-new-card">
   <div class="card-head"><h2>Create User</h2></div>
   <form method="post" action="{{ url_for('auth.users_create') }}" class="form">
@@ -29,7 +43,7 @@
       <form method="post" action="{{ url_for('auth.users_update', uid=u.id) }}">
       {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
       <td data-label="Username">{{ u.username }}</td>
-      <td class="muted" data-label="Email">{{ u.email }}</td>
+      <td data-label="Email"><input name="email" type="email" value="{{ u.email or '' }}" required></td>
       <td data-label="Role">
         <select name="role">
           {% for r in roles %}<option value="{{ r }}" {% if u.role==r %}selected{% endif %}>{{ r }}</option>{% endfor %}

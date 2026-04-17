@@ -1023,10 +1023,6 @@ body.embed .card:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom
 .special-page-info p { margin: 0; }
 .special-page-toggle-form { margin: 0; display: flex; align-items: center; gap: 8px;
   flex-shrink: 0; }
-.special-pic-form { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);
-  width: 50%; margin-right: auto; }
-@media (max-width: 720px) { .special-pic-form { width: 100%; } }
-
 /* Block rendering (public view) */
 .block-section { margin: 28px 0; }
 .block-section-title { margin: 0 0 12px; font-size: 1rem; font-weight: 700;
@@ -1131,6 +1127,9 @@ h5.block-heading { font-size: 0.875rem; font-weight: 600; margin: 12px 0 4px; }
 .users-new-card .form { gap: 12px; }
 .users-new-card .users-new-row { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; align-items: end; }
 .users-new-card .users-new-row label { min-width: 0; }
+.pic-form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; align-items: end; }
+.pic-form-row label { min-width: 0; }
+@media (max-width: 720px) { .pic-form-row { grid-template-columns: 1fr; } }
 .users-new-card .form-actions { justify-content: flex-end; margin-top: 4px; }
 @media (max-width: 720px) {
   .users-new-card .users-new-row { grid-template-columns: 1fr 1fr; }
