@@ -284,3 +284,11 @@ class Reading(db.Model):
     thumbnail_filename = db.Column(db.String(500))
     position = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class UrlRedirect(db.Model):
+    __tablename__ = "url_redirect"
+    id = db.Column(db.Integer, primary_key=True)
+    source_path = db.Column(db.String(2000), unique=True, nullable=False, index=True)
+    target_path = db.Column(db.String(2000), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

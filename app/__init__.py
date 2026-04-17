@@ -4,9 +4,9 @@ from datetime import timedelta
 import bleach
 import markdown as md_lib
 from markupsafe import Markup
-from flask import Flask, request
+from flask import Flask, request, redirect
 from flask_login import LoginManager
-from .models import db, User, MediaItem, MeetingFile, Reading
+from .models import db, User, MediaItem, MeetingFile, Reading, UrlRedirect
 
 login_manager = LoginManager()
 login_manager.login_view = "auth.login"
@@ -113,6 +113,16 @@ def create_app():
     from .routes import bp as main_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
+
+    @app.before_request
+    def _legacy_redirect():
+        p = request.path or ""
+        if not p.startswith("/wp-"):
+            return None
+        row = UrlRedirect.query.filter_by(source_path=p).first()
+        if row:
+            return redirect(row.target_path, code=301)
+        return None
 
     @app.after_request
     def _no_store_dynamic(response):
