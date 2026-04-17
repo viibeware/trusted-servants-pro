@@ -83,6 +83,48 @@ else
   log "No domain provided — Caddy will serve a self-signed certificate"
 fi
 
+# ---------- DNS pre-check ----------
+# If a domain is set, make sure it resolves to this server's public IP before
+# letting Caddy attempt Let's Encrypt issuance. The HTTP-01 challenge needs
+# the domain to point at *this* machine on port 80; if DNS is wrong or a
+# Cloudflare proxy is sitting in front, ACME fails and HTTPS is left
+# unreachable. If the check fails we silently downgrade to a self-signed cert
+# so the portal still comes up, and tell the user how to recover.
+ORIGINAL_DOMAIN="${DOMAIN}"
+DOMAIN_FALLBACK_REASON=""
+if [[ -n "${DOMAIN}" ]]; then
+  log "Verifying DNS for ${DOMAIN}"
+  PUBLIC_IP="$(curl -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)"
+  RESOLVED_IP="$(getent ahostsv4 "${DOMAIN}" 2>/dev/null | awk 'NR==1{print $1}')"
+
+  if [[ -z "${PUBLIC_IP}" ]]; then
+    warn "Could not determine this server's public IP (api.ipify.org unreachable)."
+    warn "Skipping DNS pre-check — if Let's Encrypt fails, rerun after confirming DNS."
+  elif [[ -z "${RESOLVED_IP}" ]]; then
+    DOMAIN_FALLBACK_REASON="DNS for ${DOMAIN} does not resolve to any IP yet."
+    warn "${DOMAIN_FALLBACK_REASON}"
+    warn "Let's Encrypt would fail, so falling back to a self-signed certificate."
+    warn "Point an A record for ${DOMAIN} at ${PUBLIC_IP}, then rerun this installer."
+    DOMAIN=""
+  elif [[ "${RESOLVED_IP}" != "${PUBLIC_IP}" ]]; then
+    DOMAIN_FALLBACK_REASON="DNS for ${DOMAIN} resolves to ${RESOLVED_IP} but this server's public IP is ${PUBLIC_IP}."
+    warn "${DOMAIN_FALLBACK_REASON}"
+    warn "If you use Cloudflare, the proxy (orange cloud) hides the origin IP"
+    warn "and breaks Let's Encrypt's HTTP-01 challenge."
+    warn "Falling back to a self-signed certificate so the portal stays reachable."
+    warn ""
+    warn "To switch to Let's Encrypt once DNS is correct:"
+    warn "  1. In Cloudflare, set the record for ${DOMAIN} to 'DNS only' (grey cloud),"
+    warn "     or update the A record at your DNS provider to ${PUBLIC_IP}."
+    warn "  2. Wait for propagation (usually under a minute)."
+    warn "  3. Rerun this installer."
+    warn "  4. After issuance succeeds you can re-enable the Cloudflare proxy."
+    DOMAIN=""
+  else
+    log "DNS OK: ${DOMAIN} -> ${RESOLVED_IP}"
+  fi
+fi
+
 # ---------- system update + base packages ----------
 log "Updating apt package index and installing base packages"
 apt-get update -y
@@ -285,9 +327,18 @@ else
   [[ -n "${LOCAL_IP}"  ]] && printf '    http://%s/    https://%s/\n' "${LOCAL_IP}"  "${LOCAL_IP}"
   [[ -n "${PUBLIC_IP}" && "${PUBLIC_IP}" != "${LOCAL_IP}" ]] && \
       printf '    http://%s/    https://%s/\n' "${PUBLIC_IP}" "${PUBLIC_IP}"
-  printf '\n  No TSP_DOMAIN set, so HTTPS uses a self-signed certificate —\n'
-  printf '  your browser will show a warning the first time. To use a real cert,\n'
-  printf '  rerun this script with TSP_DOMAIN=portal.example.org (DNS must point here first).\n'
+
+  if [[ -n "${ORIGINAL_DOMAIN}" ]]; then
+    printf '\n  Note: requested domain %s was NOT used.\n' "${ORIGINAL_DOMAIN}"
+    printf '  Reason: %s\n' "${DOMAIN_FALLBACK_REASON}"
+    printf '  The portal is still reachable at the URLs above with a self-signed cert.\n'
+    printf '  Fix the DNS (see README — Cloudflare must be DNS-only during issuance)\n'
+    printf '  and rerun this installer to switch to Let'\''s Encrypt.\n'
+  else
+    printf '\n  No TSP_DOMAIN set, so HTTPS uses a self-signed certificate —\n'
+    printf '  your browser will show a warning the first time. To use a real cert,\n'
+    printf '  rerun this script with TSP_DOMAIN=portal.example.org (DNS must point here first).\n'
+  fi
 fi
 
 cat <<EOF

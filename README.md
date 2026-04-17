@@ -114,9 +114,16 @@ services:
 
 Spin up an Ubuntu 24.04 LTS instance on whatever provider you like (DigitalOcean, Hetzner, AWS Lightsail, bare metal, etc.). You'll need root or sudo access. The portal is happy on 1 vCPU / 1 GB RAM for small groups.
 
-### 2. (Optional) Point DNS at the server
+### 2. Point DNS at the server (required for Let's Encrypt)
 
-If you want a real TLS certificate, create an **A record** for the hostname you want (e.g. `portal.example.org`) pointing at the server's public IP **before running the installer** — Let's Encrypt verifies the hostname during issuance. If you skip this step the installer still works, it just serves a self-signed certificate and your browser will warn the first time.
+If you want a real TLS certificate, the domain's DNS **must resolve to this server's public IP before you run the installer**. Let's Encrypt performs an HTTP-01 challenge on port 80 during issuance — if the hostname resolves anywhere else, the challenge fails and the portal is left unreachable over HTTPS.
+
+Two gotchas:
+
+- **Cloudflare users: set the record to "DNS only" (grey cloud), not proxied (orange cloud), during installation.** Cloudflare's proxy terminates TLS at its edge and intercepts port 80, which breaks the HTTP-01 challenge and returns one of Cloudflare's own IPs for the A record — Let's Encrypt will never see the real server. You can flip the record back to proxied *after* the certificate is issued.
+- If you don't have a domain, or don't want TLS, leave the installer's domain prompt blank. The installer then issues a self-signed cert (browser will warn on the first visit).
+
+The installer runs a DNS pre-check: if the hostname you enter doesn't resolve to this machine's public IP, it falls back to a self-signed certificate automatically and prints instructions for re-enabling Let's Encrypt. Fix the DNS and rerun `install.sh` to switch to a real cert.
 
 ### 3. Run the installer
 

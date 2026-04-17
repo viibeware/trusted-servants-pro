@@ -21,19 +21,6 @@
   </div>
   {% endif %}
 
-  {% if widget_key == 'intergroup' and site and site.intergroup_enabled and current_user.dash_show_intergroup %}
-  <div class="dash-widget dash-widget-wide" data-widget-key="intergroup" {% if can_reorder %}draggable="true"{% endif %}>
-    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
-    <section class="card">
-      <div class="card-head">
-        <h2>{{ site.ig_page_title or 'Intergroup' }}</h2>
-        <a href="{{ url_for('main.intergroup') }}" class="link">Open {{ icon('arrow-right') }}</a>
-      </div>
-      <p class="muted small">Intergroup email accounts, webmail access, and mail-client setup instructions.</p>
-    </section>
-  </div>
-  {% endif %}
-
   {% if widget_key == 'server-metrics' and current_user.dash_show_server_metrics %}
   <div class="dash-widget dash-widget-wide" data-widget-key="server-metrics" {% if can_reorder %}draggable="true"{% endif %}>
     {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
@@ -163,7 +150,6 @@
         <ul class="special-pages-list">
           {% for key, label, desc in [
             ('dash_show_stats', 'Stats', 'Summary counts for meetings, libraries, and your role.'),
-            ('dash_show_intergroup', 'Intergroup card', 'Quick link to the Intergroup page (only shown when enabled).'),
             ('dash_show_meetings', 'Recent Meetings', 'List of the most recent meetings.'),
             ('dash_show_libraries', 'Libraries', 'List of libraries with file counts.'),
             ('dash_show_files', 'Recent Files', 'Most recently uploaded files from the file browser.'),

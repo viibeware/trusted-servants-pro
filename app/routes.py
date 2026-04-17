@@ -127,7 +127,7 @@ def inject_globals():
             "pending_access_count": pending_access_count}
 
 
-DASHBOARD_WIDGET_KEYS = ("stats", "intergroup", "server-metrics", "meetings",
+DASHBOARD_WIDGET_KEYS = ("stats", "server-metrics", "meetings",
                           "libraries", "files", "access-requests")
 
 
@@ -167,7 +167,6 @@ def index():
 @login_required
 def dashboard_customize():
     current_user.dash_show_stats = request.form.get("dash_show_stats") == "1"
-    current_user.dash_show_intergroup = request.form.get("dash_show_intergroup") == "1"
     current_user.dash_show_meetings = request.form.get("dash_show_meetings") == "1"
     current_user.dash_show_libraries = request.form.get("dash_show_libraries") == "1"
     current_user.dash_show_files = request.form.get("dash_show_files") == "1"
