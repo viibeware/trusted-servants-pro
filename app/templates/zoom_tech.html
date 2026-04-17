@@ -35,7 +35,7 @@
     <form method="post" action="{{ url_for('main.zoom_tech_save') }}" class="form" id="zoom-tech-edit-form">
       <div class="modal-head">
         <h2>Edit {{ site.zoom_tech_title or 'Zoom Tech Training' }}</h2>
-        <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
       </div>
       <div class="modal-body">
         <label>Page title

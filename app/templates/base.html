@@ -71,23 +71,23 @@
       <a class="dccma-link" id="sidebar-footer-link" href="{{ _furl or '#' }}" target="_blank" rel="noopener"{% if not _flogo %} hidden{% endif %}>
         <img id="sidebar-footer-logo" src="{{ url_for('main.site_footer_logo') if _flogo else '' }}" alt=""{% if _fw %} style="width: {{ _fw }}px"{% endif %}>
       </a>
-      <div class="brand-version">v1.2</div>
+      <div class="brand-version">v1.3</div>
       <div class="user-chip">
         <div class="avatar">{{ current_user.username[:1].upper() }}</div>
         <div class="user-chip-name">
           <div class="u-name">{{ current_user.username }}</div>
           <div class="u-role">{{ current_user.role }}</div>
         </div>
-        <button type="button" class="icon-btn icon-btn-inline" data-open-modal="settings-modal" title="Settings">⚙</button>
+        <button type="button" class="icon-btn icon-btn-inline" data-open-modal="settings-modal" title="Settings" aria-label="Settings">{{ icon('settings') }}</button>
       </div>
       <div class="footer-actions">
         {% if site and (site.pic_name or site.pic_email or site.pic_phone) %}
-        <button type="button" class="icon-btn" data-open-modal="pic-help-modal" title="Need help?" aria-label="Need help?">?</button>
+        <button type="button" class="icon-btn" data-open-modal="pic-help-modal" title="Need help?" aria-label="Need help?">{{ icon('help-circle') }}</button>
         {% endif %}
-        <button type="button" class="icon-btn" id="theme-toggle" title="Toggle theme">
-          <span class="theme-icon-light">☀</span><span class="theme-icon-dark">☾</span>
+        <button type="button" class="icon-btn" id="theme-toggle" title="Toggle theme" aria-label="Toggle theme">
+          <span class="theme-icon-light">{{ icon('sun') }}</span><span class="theme-icon-dark">{{ icon('moon') }}</span>
         </button>
-        <a class="icon-btn" href="{{ url_for('auth.logout') }}" title="Sign out">⇥</a>
+        <a class="icon-btn" href="{{ url_for('auth.logout') }}" title="Sign out" aria-label="Sign out">{{ icon('log-out') }}</a>
       </div>
     </div>
   </aside>
@@ -129,7 +129,7 @@
   <div class="modal-panel" role="dialog" aria-modal="true">
     <div class="modal-head">
       <h2>Settings</h2>
-      <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+      <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
     </div>
     <div class="settings-tabs" role="tablist">
       <button type="button" class="settings-tab active" data-tab="appearance">Appearance</button>
@@ -562,7 +562,7 @@
             <div class="about-hero-brand">
               <img class="about-logo" src="{{ url_for('static', filename='img/logo.svg') }}" alt="Trusted Servants Pro">
               <div class="about-hero-name">Trusted Servants Pro</div>
-              <div class="about-hero-version">Version 1.2</div>
+              <div class="about-hero-version">Version 1.3</div>
               <div class="about-tagline">A web app designed to help addiction recovery fellowships maintain shared documents and accounts</div>
               <div class="about-built-by">
                 Built by
@@ -588,13 +588,28 @@
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
             <li>
+              <div class="u-name">1.3</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Server metrics widget</b> — new admin-only dashboard card with CPU, memory, load average, uptime, host OS, and hostname. CPU and memory get canvas sparklines; the container mounts host <code>/proc</code> and <code>/etc/os-release</code> read-only so readings reflect the physical server, not the container.</li>
+                <li><b>Drag-and-drop dashboard</b> — every widget is now draggable and auto-saves the new order to <code>SiteSetting.dash_order_json</code>. A subtle grip handle fades in on hover and stays visible on mobile.</li>
+                <li><b>Universal SVG icons</b> — replaced every system-font glyph (×, ⋮⋮, →, gear, help, logout, sun, moon, user, mail, phone) with bundled Lucide SVGs so the UI looks identical across browsers, OSes, and fonts.</li>
+                <li><b>Light mode default on fresh installs</b> — no more following the OS <code>prefers-color-scheme</code> when no theme has been saved.</li>
+                <li><b>Legacy WordPress redirects</b> — new <code>UrlRedirect</code> table plus a before-request hook that 301s old <code>/wp-content/uploads/&hellip;</code> links to <code>/pub/&lt;filename&gt;</code>. Rows travel with Settings → Data → Export. A one-off <code>scripts/import_wp_redirects.py</code> seeds the table from the WP REST API.</li>
+                <li><b>Live branding sync</b> — uploading or removing the sidebar footer logo now updates the sidebar, preview, and Remove checkbox in place without reloading the page. Fresh installs no longer show a Viibeware fallback in the sidebar or login hero.</li>
+                <li><b>People tab consolidation</b> — moved the Public Information Chair form to the Users tab (Users is now PIC → Create User → All Users) and made the email column editable on every user row with uniqueness validation.</li>
+                <li><b>Default list views</b> — Meetings and Libraries now default to the table view on first load for denser scanning; card view is still one click away.</li>
+                <li><b>Meeting type chips</b> — pastel translucent backgrounds with tinted text instead of saturated solid fills. Lighter-weight font too.</li>
+                <li><b>Library mobile layout</b> — reading action buttons now wrap to a full-width row beneath the title, matching the File Browser&rsquo;s mobile pattern.</li>
+                <li><b>Appearance polish</b> — Data tab has a vertical divider between Import and Export with left-aligned actions; the Bot Protection save button is left-aligned to match other login-settings forms.</li>
+                <li><b>About pane refresh</b> — new tagline clarifying the portal is built for addiction recovery fellowships, with a &ldquo;Built by VIIBEWARE&rdquo; credit inline under the description.</li>
+              </ul>
+            </li>
+            <li>
               <div class="u-name">1.2</div>
               <div class="muted smaller">April 2026</div>
               <ul>
                 <li><b>Rebrand to Trusted Servants Pro</b> — renamed the app and sidebar brand from &ldquo;Trusted Servants Portal&rdquo; to &ldquo;Trusted Servants Pro.&rdquo; The install directory is now <code>/opt/tspro</code> and the Docker container name is <code>tspro</code>.</li>
-                <li><b>About pane refresh</b> — new tagline clarifying the portal is built for addiction recovery fellowships, with a &ldquo;Built by VIIBEWARE&rdquo; credit moved inline under the description.</li>
-                <li><b>Data tab layout</b> — vertical divider between the Import and Export columns, with action buttons left-aligned to each column.</li>
-                <li><b>Bot Protection alignment</b> — the Save Bot Protection button on the Appearance tab is now left-aligned to match the other login settings forms.</li>
                 <li><b>Unbundled third-party branding</b> — removed the DCCMA logo assets from the shipping image. Only the Trusted Servants and Viibeware marks are bundled now.</li>
                 <li><b>Sidebar logo on login</b> — the admin-configured sidebar footer logo (or the Viibeware default) now appears at the bottom of the login hero at 100&nbsp;px wide. SVGs are auto-whitened with a CSS filter so they read cleanly over the gradient.</li>
               </ul>
@@ -648,19 +663,19 @@
   <div class="modal-panel" role="dialog" aria-modal="true">
     <div class="modal-head">
       <h2>Need Help?</h2>
-      <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+      <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
     </div>
     <div class="modal-body">
       <p class="muted small">Reach out to our Public Information Chair for questions, concerns, or guidance.</p>
       <div class="pic-contact">
         {% if site.pic_name %}
-        <div class="pic-row"><span class="pic-icon">👤</span>{{ site.pic_name }}</div>
+        <div class="pic-row"><span class="pic-icon">{{ icon('user') }}</span>{{ site.pic_name }}</div>
         {% endif %}
         {% if site.pic_email %}
-        <div class="pic-row"><span class="pic-icon">✉</span><a href="mailto:{{ site.pic_email }}">{{ site.pic_email }}</a></div>
+        <div class="pic-row"><span class="pic-icon">{{ icon('mail') }}</span><a href="mailto:{{ site.pic_email }}">{{ site.pic_email }}</a></div>
         {% endif %}
         {% if site.pic_phone %}
-        <div class="pic-row"><span class="pic-icon">☎</span><a href="tel:{{ site.pic_phone }}">{{ site.pic_phone }}</a></div>
+        <div class="pic-row"><span class="pic-icon">{{ icon('phone') }}</span><a href="tel:{{ site.pic_phone }}">{{ site.pic_phone }}</a></div>
         {% endif %}
       </div>
     </div>
@@ -677,7 +692,7 @@
   <div class="modal-panel" role="dialog" aria-modal="true">
     <div class="modal-head">
       <h2>File Browser</h2>
-      <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+      <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
     </div>
     <iframe class="settings-frame" id="media-picker-frame" src="about:blank"></iframe>
   </div>

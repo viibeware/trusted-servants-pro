@@ -126,6 +126,24 @@ def inject_globals():
             "pending_access_count": pending_access_count}
 
 
+DASHBOARD_WIDGET_KEYS = ("stats", "intergroup", "server-metrics", "meetings",
+                          "libraries", "files", "access-requests")
+
+
+def _dashboard_order(site):
+    import json
+    saved = []
+    if site and site.dash_order_json:
+        try:
+            parsed = json.loads(site.dash_order_json)
+            if isinstance(parsed, list):
+                saved = [k for k in parsed if k in DASHBOARD_WIDGET_KEYS]
+        except (ValueError, TypeError):
+            saved = []
+    seen = set(saved)
+    return saved + [k for k in DASHBOARD_WIDGET_KEYS if k not in seen]
+
+
 @bp.route("/")
 @login_required
 def index():
@@ -138,8 +156,10 @@ def index():
                            .filter_by(status="pending")
                            .order_by(AccessRequest.created_at.desc())
                            .limit(6).all())
+    dashboard_order = _dashboard_order(_get_site_setting())
     return render_template("index.html", meetings=meetings, libraries=libraries,
-                           recent_files=recent_files, access_requests=access_requests)
+                           recent_files=recent_files, access_requests=access_requests,
+                           dashboard_order=dashboard_order)
 
 
 @bp.route("/dashboard/customize", methods=["POST"])
@@ -151,9 +171,34 @@ def dashboard_customize():
     s.dash_show_meetings = request.form.get("dash_show_meetings") == "1"
     s.dash_show_libraries = request.form.get("dash_show_libraries") == "1"
     s.dash_show_files = request.form.get("dash_show_files") == "1"
+    s.dash_show_server_metrics = request.form.get("dash_show_server_metrics") == "1"
     db.session.commit()
     flash("Dashboard updated", "success")
     return redirect(url_for("main.index"))
+
+
+@bp.route("/api/server-metrics")
+@admin_required
+def api_server_metrics():
+    from .metrics import snapshot
+    return jsonify(snapshot())
+
+
+@bp.route("/dashboard/order", methods=["POST"])
+@admin_required
+def dashboard_order_save():
+    import json
+    payload = request.get_json(silent=True) or {}
+    order = payload.get("order") or []
+    cleaned = []
+    seen = set()
+    for key in order:
+        if isinstance(key, str) and key in DASHBOARD_WIDGET_KEYS and key not in seen:
+            cleaned.append(key); seen.add(key)
+    s = _get_site_setting()
+    s.dash_order_json = json.dumps(cleaned)
+    db.session.commit()
+    return jsonify(ok=True, order=cleaned)
 
 
 # --- Meetings ---

@@ -142,6 +142,12 @@ def create_app():
         _seed_admin(app)
         _backfill_media(app)
 
+    from .metrics import prime as _prime_metrics
+    _prime_metrics()
+
+    from .icons import icon as _icon
+    app.jinja_env.globals["icon"] = _icon
+
     return app
 
 
@@ -230,6 +236,8 @@ def _migrate_sqlite(app):
                          ("dash_show_libraries", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_files", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_pic", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("dash_show_server_metrics", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("dash_order_json", "TEXT"),
                          ("pic_name", "VARCHAR(200)"),
                          ("pic_email", "VARCHAR(255)"),
                          ("pic_phone", "VARCHAR(64)"),

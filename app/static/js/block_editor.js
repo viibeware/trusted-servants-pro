@@ -50,6 +50,16 @@
     return n;
   }
 
+  const ICON_PATHS = {
+    'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    'grip-vertical': '<circle cx="9" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="9" cy="19" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="19" r="1" fill="currentColor" stroke="none"/>',
+  };
+  function iconEl(name) {
+    const wrap = document.createElement('span');
+    wrap.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICON_PATHS[name] || '') + '</svg>';
+    return wrap.firstChild;
+  }
+
   function mount(root, opts) {
     opts = opts || {};
     const state = { sections: JSON.parse(JSON.stringify(opts.initial || [])) };
@@ -87,7 +97,7 @@
     function renderSection(sec, idx) {
       const wrap = el('div', { class: 'be-section', 'data-id': sec.id });
       const head = el('div', { class: 'be-section-head' }, [
-        el('span', { class: 'be-section-drag', title: 'Drag to reorder' }, ['⋮⋮']),
+        el('span', { class: 'be-section-drag', title: 'Drag to reorder' }, [iconEl('grip-vertical')]),
         el('input', {
           type: 'text', class: 'be-section-title', value: sec.title || '',
           placeholder: 'Section title',
@@ -99,7 +109,7 @@
             if (!confirm('Delete this section and its blocks?')) return;
             state.sections.splice(idx, 1); render();
           }
-        }, ['✕']),
+        }, [iconEl('x')]),
       ]);
       wrap.appendChild(head);
 
@@ -145,12 +155,12 @@
     function renderBlock(sec, b, bi) {
       const wrap = el('div', { class: 'be-block be-block-' + b.type, 'data-id': b.id });
       const head = el('div', { class: 'be-block-head' }, [
-        el('span', { class: 'be-block-drag', title: 'Drag to reorder' }, ['⋮⋮']),
+        el('span', { class: 'be-block-drag', title: 'Drag to reorder' }, [iconEl('grip-vertical')]),
         el('span', { class: 'be-block-type' }, [b.type]),
         el('button', {
           type: 'button', class: 'icon-btn be-remove', title: 'Remove block',
           onclick: () => { sec.blocks.splice(bi, 1); render(); }
-        }, ['✕']),
+        }, [iconEl('x')]),
       ]);
       wrap.appendChild(head);
       wrap.appendChild(renderBlockBody(b));
@@ -246,7 +256,7 @@
               placeholder: 'List item (markdown)'
             }),
             el('button', { type: 'button', class: 'icon-btn', title: 'Remove',
-              onclick: () => { d.items.splice(ii,1); render(); } }, ['✕']),
+              onclick: () => { d.items.splice(ii,1); render(); } }, [iconEl('x')]),
           ]);
           items.appendChild(row);
         });

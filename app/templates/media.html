@@ -67,7 +67,7 @@
           {% if current_user.is_admin() %}
           <form method="post" action="{{ url_for('main.media_delete', mid=m.id) }}"
                 onsubmit="return confirm('Delete this file from the library?');">
-            <button class="btn btn-sm btn-danger">×</button>
+            <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>
           </form>
           {% endif %}
         </td>
@@ -106,7 +106,7 @@
         {% if current_user.is_admin() %}
         <form method="post" action="{{ url_for('main.media_delete', mid=m.id) }}"
               onsubmit="return confirm('Delete this file from the library?');">
-          <button class="btn btn-sm btn-danger">×</button>
+          <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>
         </form>
         {% endif %}
         {% endif %}

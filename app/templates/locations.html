@@ -35,7 +35,7 @@
             <form method="post" action="{{ url_for('main.location_delete', lid=l.id) }}"
                   onsubmit="return confirm('Delete this location?');">
               {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
-              <button class="btn btn-sm btn-danger">×</button>
+              <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>
             </form>
           </div>
         </td>
@@ -56,7 +56,7 @@
       {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
       <div class="modal-head">
         <h2>New Location</h2>
-        <button type="button" class="icon-btn" data-close>×</button>
+        <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button>
       </div>
       <div class="modal-body">
         <label>Name<input name="name" required></label>
@@ -89,7 +89,7 @@
       {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
       <div class="modal-head">
         <h2>Edit Location</h2>
-        <button type="button" class="icon-btn" data-close>×</button>
+        <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button>
       </div>
       <div class="modal-body">
         <label>Name<input name="name" required value="{{ l.name }}"></label>

@@ -162,6 +162,8 @@ class SiteSetting(db.Model):
     dash_show_libraries = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_files = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_pic = db.Column(db.Boolean, nullable=False, default=True)
+    dash_show_server_metrics = db.Column(db.Boolean, nullable=False, default=True)
+    dash_order_json = db.Column(db.Text)  # JSON array of widget keys in display order
     pic_name = db.Column(db.String(200))
     pic_email = db.Column(db.String(255))
     pic_phone = db.Column(db.String(64))

@@ -5,7 +5,7 @@
   <div class="modal-panel" role="dialog" aria-modal="true">
     <div class="modal-head">
       <h2>{{ "Edit Meeting" if meeting else "New Meeting" }}</h2>
-      <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+      <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
     </div>
     <div class="modal-body">
       <form id="{{ form_id }}" method="post" action="{{ form_action }}" class="form"
@@ -205,7 +205,7 @@
             {% for f in items %}
             {% set f_edit_id = 'edit-file-' ~ f.id %}
             <li data-item-id="{{ f.id }}" draggable="true">
-              <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+              <span class="drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>
               <div class="file-main">
                 <a href="{{ url_for('main.file_view', fid=f.id) }}" target="_blank" rel="noopener">{{ f.title }}</a>
                 {% if f.original_filename %}<div class="muted smaller">{{ f.original_filename }}</div>{% endif %}
@@ -213,7 +213,7 @@
               <div class="row-actions">
                 <button type="button" class="btn btn-sm" data-file-add-toggle="{{ f_edit_id }}">Edit</button>
                 <form method="post" action="{{ url_for('main.file_delete', fid=f.id) }}" onsubmit="return confirm('Delete this file?');">
-                  <button class="btn btn-sm btn-danger">×</button>
+                  <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>
                 </form>
               </div>
               <form id="{{ f_edit_id }}" method="post" class="file-add-form collapsed" enctype="multipart/form-data"

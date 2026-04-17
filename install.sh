@@ -200,11 +200,16 @@ services:
       - "8000"
     volumes:
       - ./data:/data
+      - /proc:/host/proc:ro
+      - /etc/os-release:/host/etc/os-release:ro
+      - /etc/hostname:/host/etc/hostname:ro
     environment:
       - TSP_SECRET_KEY=\${TSP_SECRET_KEY:?TSP_SECRET_KEY must be set in .env}
       - TSP_ADMIN_USERNAME=\${TSP_ADMIN_USERNAME:-admin}
       - TSP_ADMIN_PASSWORD=\${TSP_ADMIN_PASSWORD:-admin}
       - TSP_ADMIN_EMAIL=\${TSP_ADMIN_EMAIL:-admin@example.com}
+      - TSP_HOST_PROC=/host/proc
+      - TSP_HOST_ETC=/host/etc
     restart: unless-stopped
 
   caddy:

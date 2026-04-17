@@ -19,7 +19,7 @@
       data-reorder-url="{{ url_for('main.nav_link_reorder') }}">
     {% for n in nav_links %}
     <li data-item-id="{{ n.id }}" draggable="true">
-      <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+      <span class="drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>
       <div class="file-main">
         {{ n.title }}
         <div class="muted smaller trunc"><a href="{{ n.url }}" target="_blank" rel="noopener">{{ n.url }}</a></div>
@@ -29,7 +29,7 @@
         <form method="post" action="{{ url_for('main.nav_link_delete', nid=n.id) }}"
               onsubmit="return confirm('Delete this link?');">
           {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
-          <button class="btn btn-sm btn-danger">×</button>
+          <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>
         </form>
       </div>
     </li>
@@ -47,7 +47,7 @@
       {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
       <div class="modal-head">
         <h2>New Navigation Link</h2>
-        <button type="button" class="icon-btn" data-close>×</button>
+        <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button>
       </div>
       <div class="modal-body">
         <label>Title<input name="title" required maxlength="100"></label>
@@ -69,7 +69,7 @@
       {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
       <div class="modal-head">
         <h2>Edit Navigation Link</h2>
-        <button type="button" class="icon-btn" data-close>×</button>
+        <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button>
       </div>
       <div class="modal-body">
         <label>Title<input name="title" required maxlength="100" value="{{ n.title }}"></label>

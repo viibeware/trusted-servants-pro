@@ -650,4 +650,151 @@
       setTimeout(() => { btn.textContent = orig; }, 1500);
     });
   });
+
+  // Dashboard widget drag-and-drop reorder
+  (function initDashboardReorder(){
+    const grid = document.querySelector("[data-dashboard-reorder]");
+    if (!grid) return;
+    const url = grid.dataset.orderUrl;
+    let dragging = null;
+
+    grid.querySelectorAll('.dash-widget[draggable="true"]').forEach(w => {
+      w.addEventListener("dragstart", (e) => {
+        if (e.target.closest("a, button, input, textarea, label, select, canvas")) {
+          if (!e.target.classList.contains("dash-drag-handle")) {
+            e.preventDefault();
+            return;
+          }
+        }
+        dragging = w;
+        w.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        try { e.dataTransfer.setData("text/plain", w.dataset.widgetKey || ""); } catch(_) {}
+      });
+      w.addEventListener("dragend", () => {
+        w.classList.remove("dragging");
+        grid.querySelectorAll(".dash-widget.drag-over").forEach(x => x.classList.remove("drag-over"));
+        dragging = null;
+      });
+      w.addEventListener("dragover", (e) => {
+        if (!dragging || dragging === w) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const rect = w.getBoundingClientRect();
+        const after = (e.clientY - rect.top) > rect.height / 2;
+        w.classList.add("drag-over");
+        if (after) grid.insertBefore(dragging, w.nextSibling);
+        else grid.insertBefore(dragging, w);
+      });
+      w.addEventListener("dragleave", () => w.classList.remove("drag-over"));
+      w.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        w.classList.remove("drag-over");
+        if (!url) return;
+        const order = Array.from(grid.querySelectorAll(".dash-widget[data-widget-key]"))
+          .map(x => x.dataset.widgetKey);
+        try {
+          await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+            credentials: "same-origin",
+            body: JSON.stringify({ order }),
+          });
+        } catch (_) {}
+      });
+    });
+  })();
+
+  // Server metrics widget
+  (function initServerMetrics(){
+    const widget = document.getElementById("server-metrics-widget");
+    if (!widget) return;
+    const endpoint = widget.dataset.endpoint;
+    const MAX_SAMPLES = 60;
+    const series = { cpu: [], mem: [] };
+    const accent = getComputedStyle(document.documentElement).getPropertyValue("--brand").trim() || "#0b5cff";
+
+    function fmtBytes(n) {
+      if (!n || n < 0) return "0 B";
+      const units = ["B","KB","MB","GB","TB"];
+      let i = 0, v = n;
+      while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+      return v.toFixed(v >= 10 ? 0 : 1) + " " + units[i];
+    }
+    function fmtUptime(sec) {
+      if (sec < 60) return sec + "s";
+      const days = Math.floor(sec / 86400); sec %= 86400;
+      const hours = Math.floor(sec / 3600); sec %= 3600;
+      const mins = Math.floor(sec / 60);
+      if (days) return days + "d " + hours + "h";
+      if (hours) return hours + "h " + mins + "m";
+      return mins + "m";
+    }
+
+    function drawSpark(canvas, values) {
+      const ctx = canvas.getContext("2d");
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || canvas.width;
+      const cssH = canvas.clientHeight || canvas.height;
+      if (canvas.width !== cssW * dpr || canvas.height !== cssH * dpr) {
+        canvas.width = cssW * dpr;
+        canvas.height = cssH * dpr;
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, cssW, cssH);
+      if (!values.length) return;
+      const n = values.length;
+      const step = n > 1 ? cssW / (MAX_SAMPLES - 1) : 0;
+      const startX = cssW - (n - 1) * step;
+      const y = v => cssH - (Math.max(0, Math.min(100, v)) / 100) * cssH;
+      const path = new Path2D();
+      path.moveTo(startX, y(values[0]));
+      for (let i = 1; i < n; i++) path.lineTo(startX + i * step, y(values[i]));
+      const fill = new Path2D();
+      fill.moveTo(startX, cssH);
+      fill.lineTo(startX, y(values[0]));
+      for (let i = 1; i < n; i++) fill.lineTo(startX + i * step, y(values[i]));
+      fill.lineTo(startX + (n - 1) * step, cssH);
+      fill.closePath();
+      const grad = ctx.createLinearGradient(0, 0, 0, cssH);
+      grad.addColorStop(0, accent + "40");
+      grad.addColorStop(1, accent + "00");
+      ctx.fillStyle = grad;
+      ctx.fill(fill);
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 1.5;
+      ctx.lineJoin = "round";
+      ctx.stroke(path);
+    }
+
+    function setField(name, value) {
+      widget.querySelectorAll('[data-field="' + name + '"]').forEach(el => { el.textContent = value; });
+    }
+
+    async function tick() {
+      try {
+        const r = await fetch(endpoint, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" }});
+        if (!r.ok) return;
+        const d = await r.json();
+        series.cpu.push(d.cpu_percent);
+        series.mem.push(d.memory_percent);
+        if (series.cpu.length > MAX_SAMPLES) series.cpu.shift();
+        if (series.mem.length > MAX_SAMPLES) series.mem.shift();
+        setField("os", d.os + (d.host_mode ? "" : " (container)"));
+        setField("cpu_percent", d.cpu_percent.toFixed(0));
+        setField("memory_percent", d.memory_percent.toFixed(0));
+        setField("memory_detail", fmtBytes(d.memory_used) + " / " + fmtBytes(d.memory_total));
+        setField("load_avg", d.load_avg.map(n => n.toFixed(2)).join(" · "));
+        setField("uptime", fmtUptime(d.uptime_seconds));
+        setField("cpu_count", d.cpu_count + " core" + (d.cpu_count === 1 ? "" : "s") + " · " + d.hostname);
+        widget.querySelectorAll(".metric-spark").forEach(c => {
+          drawSpark(c, series[c.dataset.series] || []);
+        });
+      } catch (_) {}
+    }
+
+    tick();
+    const h = setInterval(tick, 5000);
+    window.addEventListener("beforeunload", () => clearInterval(h));
+  })();
 })();

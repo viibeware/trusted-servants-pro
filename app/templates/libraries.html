@@ -64,7 +64,7 @@
     <form method="post" action="{{ url_for('main.library_new') }}" class="form">
       <div class="modal-head">
         <h2>New Library</h2>
-        <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
       </div>
       <div class="modal-body">
         <label>Name<input name="name" required></label>

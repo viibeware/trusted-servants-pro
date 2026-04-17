@@ -7,90 +7,149 @@
 {% endif %}
 {% endblock %}
 {% block content %}
-{% if site.dash_show_stats %}
-<div class="stats">
-  <div class="stat"><div class="stat-v">{{ meetings|length }}</div><div class="stat-l">Meetings</div></div>
-  <div class="stat"><div class="stat-v">{{ libraries|length }}</div><div class="stat-l">Libraries</div></div>
-  <div class="stat"><div class="stat-v">{{ current_user.role|capitalize }}</div><div class="stat-l">Your role</div></div>
-</div>
-{% endif %}
+{% set can_reorder = current_user.is_admin() %}
+<div class="dash-grid"
+     {% if can_reorder %}data-dashboard-reorder data-order-url="{{ url_for('main.dashboard_order_save') }}"{% endif %}>
+{% for widget_key in dashboard_order %}
 
-{% if site and site.intergroup_enabled and site.dash_show_intergroup %}
-<section class="card">
-  <div class="card-head">
-    <h2>{{ site.ig_page_title or 'Intergroup' }}</h2>
-    <a href="{{ url_for('main.intergroup') }}" class="link">Open →</a>
+  {% if widget_key == 'stats' and site.dash_show_stats %}
+  <div class="dash-widget dash-widget-wide" data-widget-key="stats" {% if can_reorder %}draggable="true"{% endif %}>
+    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
+    <div class="stats">
+      <div class="stat"><div class="stat-v">{{ meetings|length }}</div><div class="stat-l">Meetings</div></div>
+      <div class="stat"><div class="stat-v">{{ libraries|length }}</div><div class="stat-l">Libraries</div></div>
+      <div class="stat"><div class="stat-v">{{ current_user.role|capitalize }}</div><div class="stat-l">Your role</div></div>
+    </div>
   </div>
-  <p class="muted small">Intergroup email accounts, webmail access, and mail-client setup instructions.</p>
-</section>
-{% endif %}
-
-<div class="grid-2">
-  {% if site.dash_show_meetings %}
-  <section class="card">
-    <div class="card-head">
-      <h2>Recent Meetings</h2>
-      <a href="{{ url_for('main.meetings') }}" class="link">View all →</a>
-    </div>
-    {% if meetings %}
-    <ul class="list">
-      {% for m in meetings[:6] %}
-      <li><a href="{{ url_for('main.meeting_detail', mid=m.id) }}"><span>{{ m.name }}</span><span class="muted">{% if m.schedules %}{{ m.schedules[0].day_name[:3] }} {{ m.schedules[0].start_time }}{% endif %}</span></a></li>
-      {% endfor %}
-    </ul>
-    {% else %}<p class="muted">No meetings yet.</p>{% endif %}
-  </section>
   {% endif %}
 
-  {% if site.dash_show_libraries %}
-  <section class="card">
-    <div class="card-head">
-      <h2>Libraries</h2>
-      <a href="{{ url_for('main.libraries') }}" class="link">View all →</a>
-    </div>
-    {% if libraries %}
-    <ul class="list">
-      {% for l in libraries[:6] %}
-      <li><a href="{{ url_for('main.library_detail', lid=l.id) }}"><span>{{ l.name }}</span><span class="muted">{{ l.readings.count() }} files</span></a></li>
-      {% endfor %}
-    </ul>
-    {% else %}<p class="muted">No libraries yet.</p>{% endif %}
-  </section>
+  {% if widget_key == 'intergroup' and site and site.intergroup_enabled and site.dash_show_intergroup %}
+  <div class="dash-widget dash-widget-wide" data-widget-key="intergroup" {% if can_reorder %}draggable="true"{% endif %}>
+    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
+    <section class="card">
+      <div class="card-head">
+        <h2>{{ site.ig_page_title or 'Intergroup' }}</h2>
+        <a href="{{ url_for('main.intergroup') }}" class="link">Open {{ icon('arrow-right') }}</a>
+      </div>
+      <p class="muted small">Intergroup email accounts, webmail access, and mail-client setup instructions.</p>
+    </section>
+  </div>
   {% endif %}
 
-  {% if site.dash_show_files %}
-  <section class="card">
-    <div class="card-head">
-      <h2>Recent Files</h2>
-      <a href="{{ url_for('main.media_list') }}" class="link">View all →</a>
-    </div>
-    {% if recent_files %}
-    <ul class="list">
-      {% for f in recent_files %}
-      <li><a href="{{ url_for('main.public_file', filename=f.original_filename) }}" target="_blank"><span>{{ f.original_filename }}</span><span class="muted">{{ f.created_at.strftime('%b %d') }}</span></a></li>
-      {% endfor %}
-    </ul>
-    {% else %}<p class="muted">No files uploaded yet.</p>{% endif %}
-  </section>
+  {% if widget_key == 'server-metrics' and current_user.is_admin() and site.dash_show_server_metrics %}
+  <div class="dash-widget dash-widget-wide" data-widget-key="server-metrics" {% if can_reorder %}draggable="true"{% endif %}>
+    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
+    <section class="card server-metrics" id="server-metrics-widget" data-endpoint="{{ url_for('main.api_server_metrics') }}">
+      <div class="card-head">
+        <h2>Server</h2>
+        <span class="muted smaller server-metrics-os" data-field="os">—</span>
+      </div>
+      <div class="server-metrics-grid">
+        <div class="metric-tile">
+          <div class="metric-label">CPU</div>
+          <div class="metric-value"><span data-field="cpu_percent">—</span><span class="metric-unit">%</span></div>
+          <canvas class="metric-spark" data-series="cpu" width="240" height="40"></canvas>
+        </div>
+        <div class="metric-tile">
+          <div class="metric-label">Memory</div>
+          <div class="metric-value"><span data-field="memory_percent">—</span><span class="metric-unit">%</span></div>
+          <div class="metric-sub muted smaller" data-field="memory_detail">—</div>
+          <canvas class="metric-spark" data-series="mem" width="240" height="40"></canvas>
+        </div>
+        <div class="metric-tile metric-tile-text">
+          <div class="metric-label">Load Avg</div>
+          <div class="metric-value metric-value-sm" data-field="load_avg">—</div>
+          <div class="metric-sub muted smaller">1m / 5m / 15m</div>
+        </div>
+        <div class="metric-tile metric-tile-text">
+          <div class="metric-label">Uptime</div>
+          <div class="metric-value metric-value-sm" data-field="uptime">—</div>
+          <div class="metric-sub muted smaller" data-field="cpu_count">—</div>
+        </div>
+      </div>
+    </section>
+  </div>
   {% endif %}
 
-  {% if current_user.is_admin() %}
-  <section class="card">
-    <div class="card-head">
-      <h2>Access Requests
-        {% if pending_access_count %}<span class="nav-badge">{{ pending_access_count }}</span>{% endif %}
-      </h2>
-      <a href="{{ url_for('main.access_requests') }}" class="link">View all →</a>
-    </div>
-    {% if access_requests %}
-    <ul class="list">
-      {% for r in access_requests %}
-      <li><a href="{{ url_for('main.access_requests') }}"><span>{{ r.name }}</span><span class="muted">{{ r.created_at.strftime('%b %d') }}</span></a></li>
-      {% endfor %}
-    </ul>
-    {% else %}<p class="muted">No pending requests.</p>{% endif %}
-  </section>
+  {% if widget_key == 'meetings' and site.dash_show_meetings %}
+  <div class="dash-widget" data-widget-key="meetings" {% if can_reorder %}draggable="true"{% endif %}>
+    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
+    <section class="card">
+      <div class="card-head">
+        <h2>Recent Meetings</h2>
+        <a href="{{ url_for('main.meetings') }}" class="link">View all {{ icon('arrow-right') }}</a>
+      </div>
+      {% if meetings %}
+      <ul class="list">
+        {% for m in meetings[:6] %}
+        <li><a href="{{ url_for('main.meeting_detail', mid=m.id) }}"><span>{{ m.name }}</span><span class="muted">{% if m.schedules %}{{ m.schedules[0].day_name[:3] }} {{ m.schedules[0].start_time }}{% endif %}</span></a></li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted">No meetings yet.</p>{% endif %}
+    </section>
+  </div>
   {% endif %}
+
+  {% if widget_key == 'libraries' and site.dash_show_libraries %}
+  <div class="dash-widget" data-widget-key="libraries" {% if can_reorder %}draggable="true"{% endif %}>
+    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
+    <section class="card">
+      <div class="card-head">
+        <h2>Libraries</h2>
+        <a href="{{ url_for('main.libraries') }}" class="link">View all {{ icon('arrow-right') }}</a>
+      </div>
+      {% if libraries %}
+      <ul class="list">
+        {% for l in libraries[:6] %}
+        <li><a href="{{ url_for('main.library_detail', lid=l.id) }}"><span>{{ l.name }}</span><span class="muted">{{ l.readings.count() }} files</span></a></li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted">No libraries yet.</p>{% endif %}
+    </section>
+  </div>
+  {% endif %}
+
+  {% if widget_key == 'files' and site.dash_show_files %}
+  <div class="dash-widget" data-widget-key="files" {% if can_reorder %}draggable="true"{% endif %}>
+    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
+    <section class="card">
+      <div class="card-head">
+        <h2>Recent Files</h2>
+        <a href="{{ url_for('main.media_list') }}" class="link">View all {{ icon('arrow-right') }}</a>
+      </div>
+      {% if recent_files %}
+      <ul class="list">
+        {% for f in recent_files %}
+        <li><a href="{{ url_for('main.public_file', filename=f.original_filename) }}" target="_blank"><span>{{ f.original_filename }}</span><span class="muted">{{ f.created_at.strftime('%b %d') }}</span></a></li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted">No files uploaded yet.</p>{% endif %}
+    </section>
+  </div>
+  {% endif %}
+
+  {% if widget_key == 'access-requests' and current_user.is_admin() %}
+  <div class="dash-widget" data-widget-key="access-requests" {% if can_reorder %}draggable="true"{% endif %}>
+    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
+    <section class="card">
+      <div class="card-head">
+        <h2>Access Requests
+          {% if pending_access_count %}<span class="nav-badge">{{ pending_access_count }}</span>{% endif %}
+        </h2>
+        <a href="{{ url_for('main.access_requests') }}" class="link">View all {{ icon('arrow-right') }}</a>
+      </div>
+      {% if access_requests %}
+      <ul class="list">
+        {% for r in access_requests %}
+        <li><a href="{{ url_for('main.access_requests') }}"><span>{{ r.name }}</span><span class="muted">{{ r.created_at.strftime('%b %d') }}</span></a></li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted">No pending requests.</p>{% endif %}
+    </section>
+  </div>
+  {% endif %}
+
+{% endfor %}
 </div>
 
 {% if current_user.is_admin() %}
@@ -100,9 +159,10 @@
     <form method="post" action="{{ url_for('main.dashboard_customize') }}" class="form">
       <div class="modal-head">
         <h2>Customize Dashboard</h2>
-        <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
       </div>
       <div class="modal-body">
+        <p class="muted small">Toggle widgets here, or drag any widget on the dashboard to reorder it — changes are saved automatically.</p>
         <ul class="special-pages-list">
           {% for key, label, desc in [
             ('dash_show_stats', 'Stats', 'Summary counts for meetings, libraries, and your role.'),
@@ -110,6 +170,7 @@
             ('dash_show_meetings', 'Recent Meetings', 'List of the most recent meetings.'),
             ('dash_show_libraries', 'Libraries', 'List of libraries with file counts.'),
             ('dash_show_files', 'Recent Files', 'Most recently uploaded files from the file browser.'),
+            ('dash_show_server_metrics', 'Server Metrics', 'Admin-only: CPU, memory, load average, uptime, and host OS.'),
           ] %}
           <li class="special-page-row">
             <div class="special-page-info">

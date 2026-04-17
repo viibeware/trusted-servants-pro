@@ -35,7 +35,7 @@
     {% for r in rs %}
     {% set edit_id = 'edit-library-file-' ~ r.id %}
     <li data-item-id="{{ r.id }}" {% if can_edit %}draggable="true"{% endif %}>
-      {% if can_edit %}<span class="drag-handle" aria-hidden="true">⋮⋮</span>{% endif %}
+      {% if can_edit %}<span class="drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
       {% if r.thumbnail_filename %}
       <img class="reading-thumb" src="{{ url_for('main.reading_thumbnail', rid=r.id) }}" alt="">
       {% else %}
@@ -57,7 +57,7 @@
         <button type="button" class="btn btn-sm" data-file-add-toggle="{{ edit_id }}">Edit</button>
         {% if current_user.is_admin() %}
         <form method="post" action="{{ url_for('main.reading_delete', rid=r.id) }}" onsubmit="return confirm('Delete this file?');">
-          <button class="btn btn-sm btn-danger">×</button>
+          <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>
         </form>
         {% endif %}
       {% endif %}
@@ -139,7 +139,7 @@
     <form id="{{ form_id }}" method="post" action="{{ url_for('main.library_edit', lid=library.id) }}" class="form">
       <div class="modal-head">
         <h2>Edit Library</h2>
-        <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
       </div>
       <div class="modal-body">
         <label>Name<input name="name" required value="{{ library.name }}"></label>

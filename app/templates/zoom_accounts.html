@@ -36,7 +36,7 @@
             <form method="post" action="{{ url_for('main.zoom_account_delete', aid=a.id) }}"
                   onsubmit="return confirm('Delete this Zoom account? Assignments will be cleared.');">
               {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
-              <button class="btn btn-sm btn-danger">×</button>
+              <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>
             </form>
           </div>
         </td>
@@ -111,7 +111,7 @@
       {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
       <div class="modal-head">
         <h2>New Zoom Account</h2>
-        <button type="button" class="icon-btn" data-close>×</button>
+        <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button>
       </div>
       <div class="modal-body">
         <label>Name<input name="name" required></label>
@@ -136,7 +136,7 @@
       {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
       <div class="modal-head">
         <h2>Edit Zoom Account</h2>
-        <button type="button" class="icon-btn" data-close>×</button>
+        <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button>
       </div>
       <div class="modal-body">
         <label>Name<input name="name" required value="{{ a.name }}"></label>
