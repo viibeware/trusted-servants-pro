@@ -67,6 +67,7 @@
   <div class="modal-backdrop" data-close></div>
   <div class="modal-panel" role="dialog" aria-modal="true">
     <form method="post" action="{{ url_for('main.intergroup_edit') }}" class="form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="modal-head">
         <h2>Edit Intergroup Page</h2>
         <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>

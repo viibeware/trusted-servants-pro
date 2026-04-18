@@ -39,9 +39,11 @@
         <td class="muted small">{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
         <td class="nowrap">
           <form method="post" action="{{ url_for('main.access_request_handled', rid=r.id) }}" style="display:inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm">{% if r.status == 'pending' %}Mark Handled{% else %}Reopen{% endif %}</button>
           </form>
           <form method="post" action="{{ url_for('main.access_request_delete', rid=r.id) }}" onsubmit="return confirm('Delete this request?');" style="display:inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm btn-danger">Delete</button>
           </form>
         </td>

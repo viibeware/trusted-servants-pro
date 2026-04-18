@@ -10,6 +10,7 @@
     <div class="modal-body">
       <form id="{{ form_id }}" method="post" action="{{ form_action }}" class="form"
             enctype="multipart/form-data" data-meeting-form>
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label>Name
           <input name="name" required value="{{ meeting.name if meeting else '' }}">
         </label>
@@ -213,12 +214,14 @@
               <div class="row-actions">
                 <button type="button" class="btn btn-sm" data-file-add-toggle="{{ f_edit_id }}">Edit</button>
                 <form method="post" action="{{ url_for('main.file_delete', fid=f.id) }}" onsubmit="return confirm('Delete this file?');">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>
                 </form>
               </div>
               <form id="{{ f_edit_id }}" method="post" class="file-add-form collapsed" enctype="multipart/form-data"
                     action="{{ url_for('main.file_edit', fid=f.id) }}"
                     data-inline-save>
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <label>Title<input name="title" required value="{{ f.title }}"></label>
                 <label>Description<textarea name="description" rows="2">{{ f.description or '' }}</textarea></label>
                 {% if cat in ('external_links', 'videos') %}
@@ -251,6 +254,7 @@
           {% endif %}
           <form id="add-{{ cat }}" method="post" class="file-add-form collapsed" enctype="multipart/form-data"
                 action="{{ url_for('main.file_new', mid=meeting.id, category=cat) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label>Title<input name="title" required></label>
             <label>Description<textarea name="description" rows="2"></textarea></label>
             {% if cat in ('external_links', 'videos') %}

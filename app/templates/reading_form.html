@@ -2,6 +2,7 @@
 {% block heading %}{{ "Edit Item" if reading else "Add to Library" }}{% endblock %}
 {% block content %}
 <form method="post" class="form card" enctype="multipart/form-data">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="muted small">Library: {{ library.name }}</div>
   <label>Title<input name="title" required value="{{ reading.title if reading else '' }}"></label>
 

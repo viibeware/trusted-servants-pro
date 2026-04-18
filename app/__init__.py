@@ -7,11 +7,13 @@ import markdown as md_lib
 from markupsafe import Markup
 from flask import Flask, request, redirect
 from flask_login import LoginManager
+from flask_wtf.csrf import CSRFProtect
 from .models import db, User, MediaItem, MeetingFile, Reading, UrlRedirect
 
 login_manager = LoginManager()
 login_manager.login_view = "auth.login"
 login_manager.login_message_category = "warning"
+csrf = CSRFProtect()
 
 
 def create_app():
@@ -22,9 +24,24 @@ def create_app():
     os.makedirs(data_dir, exist_ok=True)
     os.makedirs(upload_dir, exist_ok=True)
 
+    # Secret key: fail loudly in production if unset or still the placeholder.
+    secret_key = os.environ.get("TSP_SECRET_KEY", "").strip()
+    is_debug = os.environ.get("TSP_DEBUG", "").lower() in ("1", "true", "yes")
+    if not secret_key or secret_key == "dev-secret-change-me":
+        if is_debug:
+            secret_key = secret_key or "dev-secret-change-me"
+        else:
+            raise RuntimeError(
+                "TSP_SECRET_KEY is required. Set a random 32+ byte value via "
+                "environment variable. The bundled installer generates one automatically."
+            )
+
+    # Secure cookies when not running in debug mode (HTTPS expected in prod).
+    cookie_secure = not is_debug
+
     db_path = os.path.join(data_dir, "tsp.db")
     app.config.update(
-        SECRET_KEY=os.environ.get("TSP_SECRET_KEY", "dev-secret-change-me"),
+        SECRET_KEY=secret_key,
         SQLALCHEMY_DATABASE_URI=f"sqlite:///{db_path}",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         UPLOAD_FOLDER=upload_dir,
@@ -32,11 +49,17 @@ def create_app():
         PERMANENT_SESSION_LIFETIME=timedelta(days=180),
         REMEMBER_COOKIE_DURATION=timedelta(days=180),
         REMEMBER_COOKIE_SAMESITE="Lax",
+        REMEMBER_COOKIE_HTTPONLY=True,
+        REMEMBER_COOKIE_SECURE=cookie_secure,
         SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SECURE=cookie_secure,
+        WTF_CSRF_TIME_LIMIT=None,  # tie to session lifetime, not a 1-hour window
     )
 
     db.init_app(app)
     login_manager.init_app(app)
+    csrf.init_app(app)
 
     @app.template_filter("file_type")
     def file_type(src):
@@ -66,13 +89,41 @@ def create_app():
     SAFE_TAGS = {"a", "b", "strong", "i", "em", "u", "s", "br", "span", "code",
                  "sup", "sub", "mark", "small", "abbr"}
     SAFE_ATTRS = {"a": ["href", "title", "target", "rel"], "abbr": ["title"], "span": ["class"]}
+    SAFE_PROTOCOLS = ["http", "https", "mailto", "tel"]
+
+    # Broader allowlist for admin-authored rich HTML (markdown output, legacy
+    # zoom-tech content). Blocks <script>, event handlers, javascript: URIs, etc.
+    SAFE_RICH_TAGS = SAFE_TAGS | {
+        "p", "div", "hr", "h1", "h2", "h3", "h4", "h5", "h6",
+        "ul", "ol", "li", "blockquote", "pre",
+        "img", "figure", "figcaption",
+        "table", "thead", "tbody", "tr", "th", "td",
+    }
+    SAFE_RICH_ATTRS = {
+        "*": ["class", "id"],
+        "a": ["href", "title", "target", "rel"],
+        "abbr": ["title"],
+        "img": ["src", "alt", "title", "width", "height"],
+        "span": ["class"],
+        "td": ["colspan", "rowspan"],
+        "th": ["colspan", "rowspan", "scope"],
+    }
 
     @app.template_filter("safe_html")
     def safe_html(value):
         if not value:
             return ""
         cleaned = bleach.clean(str(value), tags=SAFE_TAGS, attributes=SAFE_ATTRS,
-                               protocols=["http", "https", "mailto"], strip=True)
+                               protocols=SAFE_PROTOCOLS, strip=True)
+        return Markup(cleaned)
+
+    @app.template_filter("safe_rich_html")
+    def safe_rich_html(value):
+        """For admin-authored rich HTML (zoom_tech_content, markdown output)."""
+        if not value:
+            return ""
+        cleaned = bleach.clean(str(value), tags=SAFE_RICH_TAGS, attributes=SAFE_RICH_ATTRS,
+                               protocols=SAFE_PROTOCOLS, strip=True)
         return Markup(cleaned)
 
     @app.template_filter("markdown")
@@ -80,7 +131,9 @@ def create_app():
         if not value:
             return ""
         html = md_lib.markdown(str(value), extensions=["extra", "nl2br", "sane_lists"])
-        return Markup(html)
+        cleaned = bleach.clean(html, tags=SAFE_RICH_TAGS, attributes=SAFE_RICH_ATTRS,
+                               protocols=SAFE_PROTOCOLS, strip=True)
+        return Markup(cleaned)
 
     @app.template_filter("from_json")
     def from_json_filter(value):
@@ -126,15 +179,42 @@ def create_app():
         return None
 
     @app.after_request
-    def _no_store_dynamic(response):
-        # Stops Cloudflare/browsers from caching per-user pages and stale
-        # form responses. /static/ and /pub/ are deterministic and safe to cache.
+    def _security_headers(response):
+        # Cache-control: stops Cloudflare/browsers from caching per-user pages
+        # and stale form responses. /static/ and /pub/ are deterministic.
         path = request.path or ""
-        if path.startswith("/static/") or path.startswith("/pub/"):
-            return response
-        response.headers["Cache-Control"] = "no-store, max-age=0"
-        response.headers.setdefault("Pragma", "no-cache")
-        response.headers.setdefault("Expires", "0")
+        if not (path.startswith("/static/") or path.startswith("/pub/")):
+            response.headers["Cache-Control"] = "no-store, max-age=0"
+            response.headers.setdefault("Pragma", "no-cache")
+            response.headers.setdefault("Expires", "0")
+
+        # Common security headers, applied to every response.
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy",
+                                    "geolocation=(), microphone=(), camera=(), payment=()")
+        # HSTS only makes sense when served over TLS; Caddy also adds it in prod.
+        if request.is_secure:
+            response.headers.setdefault("Strict-Transport-Security",
+                                        "max-age=31536000; includeSubDomains")
+        # Loose CSP: allow inline scripts/styles (app relies on them) and the Turnstile
+        # origin; block framing from other origins and block object/embed/base hijacks.
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; "
+            "img-src 'self' data: blob:; "
+            "media-src 'self' blob:; "
+            "font-src 'self' https://fonts.gstatic.com data:; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; "
+            "frame-src 'self' https://challenges.cloudflare.com; "
+            "connect-src 'self'; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'; "
+            "frame-ancestors 'self'"
+        )
         return response
 
     with app.app_context():

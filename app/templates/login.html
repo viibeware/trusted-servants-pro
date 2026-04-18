@@ -26,6 +26,7 @@
 
   <section class="login-form-pane">
     <form method="post" class="login-form" id="login-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="flashes">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% for cat, msg in messages %}<div class="flash flash-{{ cat }}">{{ msg }}</div>{% endfor %}
@@ -81,6 +82,7 @@
     <button type="button" class="request-access-close icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
     <h2 class="request-access-title">Trusted Servants Pro<br>Access Request</h2>
     <form method="post" action="{{ url_for('main.request_access_submit') }}" class="form request-access-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label>
         <span>Name <span class="req">*</span></span>
         <input name="name" type="text" required>

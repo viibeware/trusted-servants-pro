@@ -1,4 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import time
+from collections import defaultdict, deque
+from threading import Lock
+from urllib.parse import urlparse, urljoin
 from flask import Blueprint, render_template, redirect, url_for, request, flash, session, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -8,6 +12,51 @@ from .crypto import decrypt
 bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+
+# Simple in-memory login rate limiter. Not distributed across processes;
+# adequate for a single gunicorn instance handling a small fellowship portal.
+_LOGIN_WINDOW_SECONDS = 900   # 15 minutes
+_LOGIN_MAX_FAILURES = 10
+_login_failures = defaultdict(deque)
+_login_lock = Lock()
+
+
+def _login_rate_limit_hit(ip):
+    """Return (blocked, retry_after_seconds). Non-destructive read."""
+    now = time.time()
+    with _login_lock:
+        q = _login_failures.get(ip)
+        if not q:
+            return False, 0
+        while q and q[0] < now - _LOGIN_WINDOW_SECONDS:
+            q.popleft()
+        if len(q) >= _LOGIN_MAX_FAILURES:
+            return True, int(q[0] + _LOGIN_WINDOW_SECONDS - now)
+    return False, 0
+
+
+def _record_login_failure(ip):
+    now = time.time()
+    with _login_lock:
+        q = _login_failures[ip]
+        while q and q[0] < now - _LOGIN_WINDOW_SECONDS:
+            q.popleft()
+        q.append(now)
+
+
+def _clear_login_failures(ip):
+    with _login_lock:
+        _login_failures.pop(ip, None)
+
+
+def _is_safe_url(target):
+    """Allow only same-host relative redirects for ?next=."""
+    if not target:
+        return False
+    ref_url = urlparse(request.host_url)
+    test_url = urlparse(urljoin(request.host_url, target))
+    return (test_url.scheme in ("http", "https")
+            and ref_url.netloc == test_url.netloc)
 
 
 def _verify_turnstile(site, token, remote_ip):
@@ -38,20 +87,32 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for("main.index"))
     site = SiteSetting.query.first()
+    ip = request.remote_addr or "unknown"
     if request.method == "POST":
+        blocked, retry = _login_rate_limit_hit(ip)
+        if blocked:
+            flash(f"Too many failed attempts. Try again in {max(retry, 1) // 60 + 1} minutes.",
+                  "danger")
+            return render_template("login.html"), 429
         if site and site.turnstile_enabled:
             token = request.form.get("cf-turnstile-response", "")
             ok, err = _verify_turnstile(site, token, request.remote_addr)
             if not ok:
+                _record_login_failure(ip)
                 flash(err, "danger")
                 return render_template("login.html")
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password_hash, password):
+            _clear_login_failures(ip)
             session.permanent = True
             login_user(user, remember=True)
-            return redirect(request.args.get("next") or url_for("main.index"))
+            next_url = request.args.get("next") or request.form.get("next")
+            if next_url and _is_safe_url(next_url):
+                return redirect(next_url)
+            return redirect(url_for("main.index"))
+        _record_login_failure(ip)
         flash("Invalid credentials", "danger")
     return render_template("login.html")
 

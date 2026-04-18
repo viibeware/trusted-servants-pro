@@ -1491,10 +1491,27 @@ def reading_delete(rid):
 
 # --- helpers ---
 
+BLOCKED_UPLOAD_EXTENSIONS = {
+    # Executables / scripts that could be served back and run if the
+    # upload dir ever leaks into an executable path.
+    ".exe", ".msi", ".bat", ".cmd", ".com", ".scr",
+    ".sh", ".bash", ".zsh", ".ps1",
+    ".php", ".phtml", ".php3", ".php4", ".php5", ".phps",
+    ".py", ".pyc", ".pyo", ".pl", ".cgi", ".rb",
+    ".jsp", ".asp", ".aspx", ".ashx",
+    ".jar", ".war",
+    # HTML/XML can carry XSS if served inline; bleach output is only applied
+    # at template time. Block raw HTML uploads to be safe.
+    ".html", ".htm", ".xhtml", ".svg", ".xml",
+}
+
+
 def _save_upload(uploaded):
     """Save a Werkzeug FileStorage to uploads; also create/reuse a MediaItem. Returns (stored, original)."""
     original = secure_filename(uploaded.filename) or "upload"
-    ext = os.path.splitext(original)[1]
+    ext = os.path.splitext(original)[1].lower()
+    if ext in BLOCKED_UPLOAD_EXTENSIONS:
+        abort(400, description=f"File type '{ext}' is not allowed.")
     data = uploaded.read()
     h = hashlib.sha256(data).hexdigest()
     existing = MediaItem.query.filter_by(content_hash=h).first()

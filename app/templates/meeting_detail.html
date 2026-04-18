@@ -9,15 +9,18 @@
   {% if current_user.is_admin() %}
     {% if meeting.archived_at %}
     <form method="post" action="{{ url_for('main.meeting_unarchive', mid=meeting.id) }}" style="display:inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn">Restore</button>
     </form>
     {% else %}
     <form method="post" action="{{ url_for('main.meeting_archive', mid=meeting.id) }}" onsubmit="return confirm('Archive this meeting? It will be hidden from the main list but can be restored later.');" style="display:inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn">Archive</button>
     </form>
     {% endif %}
   {% endif %}
   <form method="post" action="{{ url_for('main.meeting_delete', mid=meeting.id) }}" onsubmit="return confirm('Delete this meeting permanently?');" style="display:inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button class="btn btn-danger">Delete</button>
   </form>
   {% endif %}

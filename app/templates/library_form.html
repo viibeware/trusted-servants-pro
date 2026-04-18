@@ -2,6 +2,7 @@
 {% block heading %}{{ "Edit Library" if library else "New Library" }}{% endblock %}
 {% block content %}
 <form method="post" class="form card">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <label>Name<input name="name" required value="{{ library.name if library else '' }}"></label>
   <label>Description<textarea name="description" rows="4">{{ library.description if library else '' }}</textarea></label>
   <div class="form-actions">

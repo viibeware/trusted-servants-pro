@@ -1,4 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+(function installCsrfFetch() {
+  // Auto-attach X-CSRFToken header to all same-origin state-changing fetches.
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  if (!meta) return;
+  const token = meta.content;
+  const safe = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
+  const orig = window.fetch;
+  window.fetch = function (input, init) {
+    init = init || {};
+    const method = String(init.method || (input && input.method) || "GET").toUpperCase();
+    if (!safe.has(method)) {
+      init.headers = new Headers(init.headers || {});
+      if (!init.headers.has("X-CSRFToken")) init.headers.set("X-CSRFToken", token);
+    }
+    return orig.call(this, input, init);
+  };
+})();
+
 (function () {
   const root = document.documentElement;
   const THEME_MODE = {
@@ -324,7 +342,7 @@
           const data = await res.json();
           if (window.parent !== window && window.parent.postMessage) {
             // inside picker: hand the item to parent
-            window.parent.postMessage({ type: "media-uploaded", item: data.item }, "*");
+            window.parent.postMessage({ type: "media-uploaded", item: data.item }, window.location.origin);
           }
         } catch (err) { alert("Upload failed: " + err.message); }
       }
@@ -367,7 +385,7 @@
           original_filename: card.dataset.original,
         },
       };
-      if (window.parent !== window) window.parent.postMessage(payload, "*");
+      if (window.parent !== window) window.parent.postMessage(payload, window.location.origin);
     });
   });
 
@@ -381,6 +399,7 @@
 
   // Live-update sidebar custom nav links when edited in Settings
   window.addEventListener("message", (e) => {
+    if (e.origin !== window.location.origin) return;
     if (!e.data || e.data.type !== "nav-links-updated") return;
     const container = document.getElementById("sidebar-custom-nav");
     const divider = document.getElementById("sidebar-custom-nav-divider");
@@ -410,6 +429,7 @@
     });
   });
   window.addEventListener("message", (e) => {
+    if (e.origin !== window.location.origin) return;
     if (!e.data || e.data.type !== "media-selected") return;
     const item = e.data.item;
     if (!currentMediaTarget) return;

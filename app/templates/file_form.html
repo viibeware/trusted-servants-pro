@@ -2,6 +2,7 @@
 {% block heading %}{{ "Edit" if file else "Add" }} {{ CATEGORY_LABELS[category] }}{% endblock %}
 {% block content %}
 <form method="post" enctype="multipart/form-data" class="form card">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="muted small">Meeting: {{ meeting.name }} · Category: {{ CATEGORY_LABELS[category] }}</div>
   <label>Title<input name="title" required value="{{ file.title if file else '' }}"></label>
   <label>Description<textarea name="description" rows="2">{{ file.description if file else '' }}</textarea></label>

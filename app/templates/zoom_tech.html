@@ -20,8 +20,8 @@
   {% if sections %}
     {{ render_sections(sections) }}
   {% elif site.zoom_tech_content %}
-    {# Legacy HTML fallback #}
-    {{ site.zoom_tech_content|safe }}
+    {# Legacy HTML fallback, sanitized via bleach #}
+    {{ site.zoom_tech_content|safe_rich_html }}
   {% else %}
     <p class="muted">No content yet.</p>
   {% endif %}
@@ -33,6 +33,7 @@
   <div class="modal-backdrop" data-close></div>
   <div class="modal-panel" role="dialog" aria-modal="true">
     <form method="post" action="{{ url_for('main.zoom_tech_save') }}" class="form" id="zoom-tech-edit-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="modal-head">
         <h2>Edit {{ site.zoom_tech_title or 'Zoom Tech Training' }}</h2>
         <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>

@@ -67,6 +67,7 @@
           {% if current_user.is_admin() %}
           <form method="post" action="{{ url_for('main.media_delete', mid=m.id) }}"
                 onsubmit="return confirm('Delete this file from the library?');">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>
           </form>
           {% endif %}
@@ -106,6 +107,7 @@
         {% if current_user.is_admin() %}
         <form method="post" action="{{ url_for('main.media_delete', mid=m.id) }}"
               onsubmit="return confirm('Delete this file from the library?');">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>
         </form>
         {% endif %}
