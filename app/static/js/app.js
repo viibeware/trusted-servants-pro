@@ -167,6 +167,107 @@
     el.addEventListener("click", () => openModal(el.dataset.openModal));
   });
 
+  // About pane: animated pale sine-wave gradient behind the grey hero.
+  // Wave parameters and gradient angle are randomized on each page load, so
+  // every visit gets a different polished look. Runs only while the canvas
+  // is visible via IntersectionObserver so the settings modal being closed
+  // or the About tab being inactive stops the loop.
+  (function initAboutHeroBg(){
+    const canvas = document.querySelector(".about-hero-bg");
+    if (!canvas) return;
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const W = 200, H = 120;
+    canvas.width = W; canvas.height = H;
+    const cctx = canvas.getContext("2d");
+
+    const hslToRgb = (h, s, l) => {
+      h /= 360;
+      const a = s * Math.min(l, 1 - l);
+      const f = n => {
+        const k = (n + h * 12) % 12;
+        const v = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+        return Math.round(v * 255);
+      };
+      return [f(0), f(8), f(4)];
+    };
+
+    // Triadic palette: a random base hue plus the two other vertices of an
+    // equilateral triangle on the color wheel (120° apart). Small per-stop
+    // jitter and a randomized starting vertex keep runs visually distinct.
+    const rand = (a, b) => a + Math.random() * (b - a);
+    const hueBase = Math.random() * 360;
+    const triad = [0, 120, 240].map(d => (hueBase + d + rand(-8, 8) + 360) % 360);
+    // Shuffle so the ordering across the gradient axis varies.
+    for (let i = triad.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [triad[i], triad[j]] = [triad[j], triad[i]];
+    }
+    const rgb = triad.map(h => hslToRgb(h, 1, 0.55));
+    const n = rgb.length;
+
+    // Randomize wave shape + drift speed (both slow).
+    const freq1 = rand(2.2, 4.0);
+    const freq2 = rand(5.0, 8.0);
+    const amp1 = rand(0.16, 0.28);
+    const amp2 = rand(0.06, 0.12);
+    const phaseSpeed1 = rand(0.05, 0.12) * (Math.random() < 0.5 ? 1 : -1);
+    const phaseSpeed2 = rand(0.06, 0.14) * (Math.random() < 0.5 ? 1 : -1);
+    const phaseOffset = Math.random() * Math.PI * 2;
+
+    // Randomize the gradient angle by rotating the sampling coordinates.
+    const rotRad = Math.random() * Math.PI * 2;
+    const cosR = Math.cos(rotRad), sinR = Math.sin(rotRad);
+    const maxDim = Math.max(W, H);
+
+    const img = cctx.createImageData(W, H);
+    const d = img.data;
+    let running = false;
+    let start = 0;
+    function frame(now){
+      if (!running) return;
+      const t = (now - start) / 1000;
+      const p1 = t * phaseSpeed1;
+      const p2 = t * phaseSpeed2 + phaseOffset;
+      for (let y = 0; y < H; y++){
+        for (let x = 0; x < W; x++){
+          // Rotate coordinates around center so the gradient axis is at rotRad.
+          const cx = x - W / 2, cy = y - H / 2;
+          const rx = cx * cosR - cy * sinR;
+          const ry = cx * sinR + cy * cosR;
+          const nx = (rx + maxDim / 2) / maxDim;
+          const ny = (ry + maxDim / 2) / maxDim;
+          const wave = Math.sin(nx * freq1 + p1) * amp1
+                     + Math.sin(nx * freq2 + p2 + 1.3) * amp2;
+          let tt = ny + wave;
+          if (tt < 0) tt = 0; else if (tt > 1) tt = 1;
+          const p = tt * (n - 1);
+          const i = Math.floor(p);
+          const f = p - i;
+          const u = f * f * (3 - 2 * f);
+          const a = rgb[i], b = rgb[Math.min(n - 1, i + 1)];
+          const idx = (y * W + x) * 4;
+          d[idx]   = a[0] + (b[0] - a[0]) * u;
+          d[idx+1] = a[1] + (b[1] - a[1]) * u;
+          d[idx+2] = a[2] + (b[2] - a[2]) * u;
+          d[idx+3] = 255;
+        }
+      }
+      cctx.putImageData(img, 0, 0);
+      requestAnimationFrame(frame);
+    }
+    function startLoop(){
+      if (running) return;
+      running = true; start = performance.now();
+      requestAnimationFrame(frame);
+    }
+    function stopLoop(){ running = false; }
+    const io = new IntersectionObserver(entries => {
+      const visible = entries[0] && entries[0].isIntersecting && entries[0].intersectionRatio > 0;
+      if (visible) startLoop(); else stopLoop();
+    }, { threshold: 0.01 });
+    io.observe(canvas);
+  })();
+
   // Access Requests → Create User: open Settings → Users with the iframe
   // reloaded against a ?prefill=<email> query param so the Create User form
   // arrives pre-populated.
