@@ -254,6 +254,27 @@
           document.open();
           document.write(html);
           document.close();
+          // After document.write, the Turnstile API singleton from the previous
+          // page survives on window, but the freshly written .cf-turnstile divs
+          // are new DOM nodes the API hasn't seen. Explicitly render them so
+          // the user gets a fresh single-use challenge token.
+          const tryRender = () => {
+            if (!window.turnstile || typeof window.turnstile.render !== 'function') return false;
+            document.querySelectorAll('.cf-turnstile').forEach(el => {
+              if (!el.dataset.tspRendered) {
+                try { window.turnstile.render(el); el.dataset.tspRendered = '1'; }
+                catch (_) {}
+              }
+            });
+            return true;
+          };
+          if (!tryRender()) {
+            // API script hadn't loaded yet in the rewritten document — poll briefly.
+            let tries = 0;
+            const h = setInterval(() => {
+              if (tryRender() || ++tries > 40) clearInterval(h);
+            }, 100);
+          }
         });
       }
     }).catch(() => { form.submit(); });

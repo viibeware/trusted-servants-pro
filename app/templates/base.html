@@ -689,6 +689,14 @@
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
             <li>
+              <div class="u-name">1.3.9</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Case-insensitive username login</b> — usernames are now matched case-insensitively at login via <code>func.lower(User.username)</code>. Existing accounts with mixed-case usernames keep their display case but users can sign in with any casing. User creation and email updates also check for case-insensitive collisions so "Admin" and "admin" can no longer be created as two separate accounts.</li>
+                <li><b>Turnstile re-renders after failed login</b> — the fetch-driven login flow does <code>document.write()</code> on the server's re-rendered response, which the Cloudflare Turnstile API's singleton script doesn't automatically pick up. The page now explicitly calls <code>turnstile.render()</code> on every <code>.cf-turnstile</code> widget after the document is rewritten, issuing a fresh single-use challenge token without requiring a manual page reload.</li>
+              </ul>
+            </li>
+            <li>
               <div class="u-name">1.3.8</div>
               <div class="muted smaller">April 2026</div>
               <ul>

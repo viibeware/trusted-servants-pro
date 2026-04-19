@@ -5,6 +5,7 @@ from threading import Lock
 from urllib.parse import urlparse, urljoin
 from flask import Blueprint, render_template, redirect, url_for, request, flash, session, current_app
 from flask_login import login_user, logout_user, login_required, current_user
+from sqlalchemy import func
 from werkzeug.security import check_password_hash, generate_password_hash
 from .models import db, User, SiteSetting, ROLES
 from .crypto import decrypt
@@ -103,7 +104,7 @@ def login():
                 return render_template("login.html")
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        user = User.query.filter_by(username=username).first()
+        user = User.query.filter(func.lower(User.username) == username.lower()).first()
         if user and check_password_hash(user.password_hash, password):
             _clear_login_failures(ip)
             session.permanent = True
@@ -144,7 +145,10 @@ def users_create():
     role = request.form.get("role", "viewer")
     if role not in ROLES:
         role = "viewer"
-    if User.query.filter((User.username == username) | (User.email == email)).first():
+    if User.query.filter(
+        (func.lower(User.username) == username.lower())
+        | (func.lower(User.email) == email.lower())
+    ).first():
         flash("Username or email already exists", "danger")
         return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
     u = User(username=username, email=email,
@@ -168,8 +172,11 @@ def users_update(uid):
     if new_role in ROLES:
         u.role = new_role
     new_email = request.form.get("email", "").strip()
-    if new_email and new_email != u.email:
-        clash = User.query.filter(User.email == new_email, User.id != u.id).first()
+    if new_email and new_email.lower() != (u.email or "").lower():
+        clash = User.query.filter(
+            func.lower(User.email) == new_email.lower(),
+            User.id != u.id,
+        ).first()
         if clash:
             flash(f"Email {new_email} is already in use", "danger")
             return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
