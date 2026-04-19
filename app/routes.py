@@ -841,15 +841,14 @@ def site_branding_save():
     if request.form.get("clear_logo") == "1":
         old = s.footer_logo_filename
         s.footer_logo_filename = None
-        if old:
-            _delete_upload(old)
+        _cleanup_retired_asset(old)
     uploaded = request.files.get("footer_logo")
     if uploaded and uploaded.filename:
         old = s.footer_logo_filename
         stored, _original = _save_upload(uploaded)
         s.footer_logo_filename = stored
         if old and old != stored:
-            _delete_upload(old)
+            _cleanup_retired_asset(old)
     db.session.commit()
     if request.headers.get("X-Requested-With") == "fetch":
         logo_src = (url_for("main.site_footer_logo") + f"?v={int(time.time())}") if s.footer_logo_filename else ""
@@ -1185,15 +1184,14 @@ def og_save():
     if request.form.get("clear_og_image") == "1":
         old = s.og_image_filename
         s.og_image_filename = None
-        if old:
-            _delete_upload(old)
+        _cleanup_retired_asset(old)
     uploaded = request.files.get("og_image")
     if uploaded and uploaded.filename:
         old = s.og_image_filename
         stored, _original = _save_upload(uploaded)
         s.og_image_filename = stored
         if old and old != stored:
-            _delete_upload(old)
+            _cleanup_retired_asset(old)
     db.session.commit()
     flash("Open Graph settings updated", "success")
     return redirect(request.referrer or url_for("main.index"))
@@ -1386,7 +1384,14 @@ def library_delete(lid):
 
 def _apply_reading_form(r, form, files):
     r.title = form["title"].strip()
-    r.body = form.get("body", "").strip()
+    mode = (form.get("content_mode") or "").strip()
+    # Only write body when the paste panel was active (mode=paste), or when
+    # the form doesn't carry a mode flag (legacy submissions).
+    if mode == "paste" or not mode:
+        r.body = form.get("body", "").strip()
+    if mode == "upload":
+        # Switched explicitly to upload mode — clear any prior body.
+        r.body = ""
     r.url = form.get("url", "").strip() or None
     uploaded = files.get("file")
     media_id = (form.get("media_id") or "").strip()
@@ -1397,6 +1402,11 @@ def _apply_reading_form(r, form, files):
         if m:
             r.stored_filename, r.original_filename = m.stored_filename, m.original_filename
     if form.get("remove_file") == "1" and r.stored_filename:
+        r.stored_filename = None
+        r.original_filename = None
+    # Switching to paste mode implicitly clears any existing file so a single
+    # reading doesn't carry both body and file simultaneously.
+    if mode == "paste" and r.stored_filename:
         r.stored_filename = None
         r.original_filename = None
     thumb = files.get("thumbnail")
@@ -1444,6 +1454,83 @@ def reading_download(rid):
     return send_from_directory(current_app.config["UPLOAD_FOLDER"],
                                r.stored_filename, as_attachment=False,
                                download_name=r.original_filename or r.stored_filename)
+
+
+@bp.route("/readings/<int:rid>/content")
+@login_required
+def reading_content(rid):
+    """Return the reading's body rendered to HTML (bleached)."""
+    r = db.session.get(Reading, rid) or abort(404)
+    if not r.body:
+        abort(404)
+    from flask import render_template_string
+    html = render_template_string(
+        "{{ body|markdown }}", body=r.body
+    )
+    return jsonify(title=r.title, html=str(html))
+
+
+@bp.route("/readings/<int:rid>/pdf")
+@login_required
+def reading_pdf(rid):
+    """Generate a PDF from the reading's body on the fly."""
+    r = db.session.get(Reading, rid) or abort(404)
+    if not r.body:
+        abort(404)
+    from weasyprint import HTML
+    from flask import render_template_string
+    from io import BytesIO
+    from werkzeug.wsgi import wrap_file
+    body_html = str(render_template_string("{{ body|markdown }}", body=r.body))
+    page_html = _pdf_page_html(r.title, body_html)
+    pdf_bytes = HTML(string=page_html).write_pdf()
+    safe_title = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_"
+                         for c in r.title).strip() or f"reading-{r.id}"
+    resp = current_app.make_response(pdf_bytes)
+    resp.headers["Content-Type"] = "application/pdf"
+    resp.headers["Content-Disposition"] = (
+        f'attachment; filename="{safe_title}.pdf"')
+    return resp
+
+
+def _pdf_page_html(title, body_html):
+    """Wrap rendered body HTML in a minimal letter-style PDF template."""
+    return f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>{title}</title>
+<style>
+@page {{ size: Letter; margin: 0.9in 0.9in; }}
+body {{ font-family: Georgia, 'Times New Roman', serif; color: #111; line-height: 1.55; font-size: 11pt; }}
+h1.pdf-title {{ font-size: 20pt; font-weight: 700; margin: 0 0 .6em; text-align: center; }}
+h1 {{ font-size: 17pt; margin: 1.4em 0 .4em; }}
+h2 {{ font-size: 14pt; margin: 1.2em 0 .35em; }}
+h3 {{ font-size: 12pt; margin: 1em 0 .25em; }}
+p {{ margin: 0 0 .6em; }}
+ul, ol {{ margin: 0 0 .6em 1.2em; padding: 0; }}
+li {{ margin: .1em 0; }}
+blockquote {{ margin: .5em 1em; padding: .3em .9em; border-left: 3px solid #999; color: #444; font-style: italic; }}
+code {{ font-family: Consolas, monospace; background: #f0f0f0; padding: 0 .25em; border-radius: 3px; font-size: .95em; }}
+pre {{ background: #f6f6f6; padding: .6em .8em; border-radius: 4px; overflow-wrap: break-word; font-size: .95em; }}
+a {{ color: #0b5cff; text-decoration: underline; }}
+hr {{ border: 0; border-top: 1px solid #bbb; margin: 1em 0; }}
+table {{ border-collapse: collapse; margin: .4em 0; }}
+th, td {{ border: 1px solid #bbb; padding: .3em .6em; }}
+</style></head>
+<body>
+<h1 class="pdf-title">{title}</h1>
+{body_html}
+</body></html>"""
+
+
+@bp.route("/markdown-preview", methods=["POST"])
+@editor_required
+def markdown_preview():
+    """Render a markdown snippet to bleached HTML for the editor preview."""
+    from flask import render_template_string
+    body = request.form.get("body") or request.get_json(silent=True, force=False) or {}
+    if isinstance(body, dict):
+        body = body.get("body", "")
+    html = str(render_template_string("{{ body|markdown }}", body=body))
+    return jsonify(html=html)
 
 
 @bp.route("/readings/<int:rid>/thumbnail")
@@ -1587,6 +1674,42 @@ def _delete_upload(stored):
         pass
 
 
+def _interface_stored_filenames():
+    """Stored filenames currently used by site-wide interface assets
+    (branding logo, Open Graph image). These are hidden from the File
+    Browser so administrative uploads don't clutter the content library."""
+    s = SiteSetting.query.first()
+    if not s:
+        return set()
+    names = set()
+    if s.footer_logo_filename:
+        names.add(s.footer_logo_filename)
+    if s.og_image_filename:
+        names.add(s.og_image_filename)
+    return names
+
+
+def _cleanup_retired_asset(stored):
+    """Delete a file from disk and its MediaItem row, but only if nothing
+    else in the system still references it (other SiteSetting columns,
+    meetings, readings, meeting files, thumbnails). Safe to call with
+    None or a filename that's already gone."""
+    if not stored:
+        return
+    s = SiteSetting.query.first()
+    if s and stored in (s.footer_logo_filename, s.og_image_filename):
+        return  # still referenced by another interface asset
+    refs = (MeetingFile.query.filter_by(stored_filename=stored).count()
+            + Reading.query.filter_by(stored_filename=stored).count()
+            + Reading.query.filter_by(thumbnail_filename=stored).count()
+            + Meeting.query.filter_by(logo_filename=stored).count())
+    if refs > 0:
+        return
+    _delete_upload(stored)
+    MediaItem.query.filter_by(stored_filename=stored).delete()
+    db.session.flush()
+
+
 # --- Media browser ---
 
 @bp.route("/files")
@@ -1598,6 +1721,9 @@ def media_list():
     sort = request.args.get("sort") or request.cookies.get("view-media-sort") or "uploaded"
     direction = request.args.get("dir") or request.cookies.get("view-media-dir") or "desc"
     items = MediaItem.query.all()
+    hidden = _interface_stored_filenames()
+    if hidden:
+        items = [m for m in items if m.stored_filename not in hidden]
     if sort == "name":
         items.sort(key=lambda m: (m.original_filename or "").lower())
     elif sort == "type":

@@ -347,6 +347,98 @@ a.card.meeting-card { font-weight: 500; }
   .role-panel { padding-right: 0; padding-bottom: 18px; border-right: 0; border-bottom: 1px solid var(--border); }
 }
 
+/* ===== Content mode toggle (Upload / Paste) on reading forms ===== */
+.content-mode-toggle { display: flex; align-self: flex-start; margin: 2px 0 4px;
+  flex: 0 0 auto; }
+/* Bump specificity above .form label / .file-add-form label so the labels
+   on either side of the switch render in a row, not stacked. */
+.form label.content-mode-switch,
+.file-add-form label.content-mode-switch,
+label.content-mode-switch {
+  display: inline-flex; flex-direction: row; align-items: center;
+  gap: 12px; font-size: 0.875rem; font-weight: 400; color: var(--text);
+  cursor: pointer; user-select: none; margin: 0;
+}
+.content-mode-switch .mode-track { background: var(--brand); }
+.content-mode-switch input:checked ~ .mode-track,
+.content-mode-switch input:not(:checked) ~ .mode-track { background: var(--brand); }
+.content-mode-label { font-weight: 500; color: var(--muted); transition: color 120ms ease; }
+.content-mode-label.active { color: var(--text); font-weight: 600; }
+
+/* ===== Markdown editor (reading body) ===== */
+.md-editor { border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  background: var(--panel); }
+.md-editor-tabs { display: flex; align-items: center; gap: 4px; background: var(--panel-2);
+  border-bottom: 1px solid var(--border); padding: 4px 6px; }
+.md-editor-tab { background: transparent; border: 0; padding: 6px 12px; font-size: 0.8125rem;
+  font-weight: 600; color: var(--muted); cursor: pointer; border-radius: 6px 6px 0 0; }
+.md-editor-tab.active { background: var(--panel); color: var(--text); border: 1px solid var(--border);
+  border-bottom: 1px solid var(--panel); margin-bottom: -5px; padding: 5px 11px; }
+.md-editor-tab:hover:not(.active) { color: var(--text); }
+.md-editor-hint { margin-left: auto; padding-right: 6px; }
+.md-editor-pane { display: none; }
+.md-editor-pane.active { display: block; }
+.md-editor-pane-write textarea { width: 100%; border: 0; background: var(--panel);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.875rem;
+  line-height: 1.5; padding: 10px 12px; resize: vertical; color: var(--text); }
+.md-editor-pane-write textarea:focus { outline: 2px solid var(--brand-soft); outline-offset: -2px; }
+.md-editor-preview { padding: 14px 16px; min-height: 140px; max-height: 420px; overflow-y: auto;
+  font-size: 0.9375rem; line-height: 1.5; }
+.md-editor-preview > :first-child { margin-top: 0; }
+.md-editor-preview > :last-child { margin-bottom: 0; }
+.md-editor-preview h1, .md-editor-preview h2, .md-editor-preview h3 {
+  margin: 1em 0 .35em; line-height: 1.25; }
+.md-editor-preview p { margin: 0 0 .6em; }
+.md-editor-preview ul, .md-editor-preview ol { margin: 0 0 .6em 1.25em; padding: 0; }
+.md-editor-preview blockquote { margin: .4em 0; padding: .2em .8em;
+  border-left: 3px solid var(--border); color: var(--muted); font-style: italic; }
+.md-editor-preview code { font-family: ui-monospace, monospace; background: var(--panel-2);
+  padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
+.md-editor-preview pre { background: var(--panel-2); padding: 10px 12px; border-radius: 6px;
+  overflow-x: auto; }
+
+/* ===== Reading lightbox (paper-style PDF viewer) ===== */
+.reading-lightbox .reading-lightbox-panel {
+  max-width: 900px; width: calc(100vw - 32px); height: auto; max-height: 92vh;
+  margin: 4vh auto; display: flex; flex-direction: column;
+  background: var(--panel); border-radius: 12px; overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.35);
+}
+.reading-lightbox .reading-lightbox-body { background: #eef1f5; padding: 28px 20px;
+  overflow-y: auto; display: block; }
+[data-theme="dark"] .reading-lightbox .reading-lightbox-body,
+[data-theme="neobrutal-dark"] .reading-lightbox .reading-lightbox-body,
+[data-theme="cyberpunk"] .reading-lightbox .reading-lightbox-body { background: #0f0f14; }
+.reading-paper { background: #fff; color: #111; max-width: 740px; margin: 0 auto;
+  padding: 56px 64px 64px; border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.22), 0 1px 3px rgba(0,0,0,0.12);
+  font-family: Georgia, 'Times New Roman', serif; line-height: 1.6; font-size: 15px; }
+.reading-paper-title { font-size: 26px; font-weight: 700; text-align: center;
+  margin: 0 0 1.2em; padding-bottom: .6em; border-bottom: 1px solid #ddd; line-height: 1.2; }
+.reading-paper-content > :first-child { margin-top: 0; }
+.reading-paper-content > :last-child { margin-bottom: 0; }
+.reading-paper-content h1 { font-size: 22px; margin: 1.4em 0 .4em; }
+.reading-paper-content h2 { font-size: 19px; margin: 1.3em 0 .35em; }
+.reading-paper-content h3 { font-size: 17px; margin: 1.1em 0 .3em; }
+.reading-paper-content p { margin: 0 0 .9em; }
+.reading-paper-content ul, .reading-paper-content ol { margin: 0 0 .9em 1.4em; padding: 0; }
+.reading-paper-content li { margin: .15em 0; }
+.reading-paper-content blockquote { margin: .8em 1em; padding: .4em 1em;
+  border-left: 3px solid #999; color: #444; font-style: italic; }
+.reading-paper-content code { font-family: ui-monospace, Consolas, monospace;
+  background: #f0f0f0; padding: 1px 5px; border-radius: 3px; font-size: .93em; }
+.reading-paper-content pre { background: #f6f6f6; padding: .7em .9em; border-radius: 4px;
+  overflow-x: auto; font-size: .92em; }
+.reading-paper-content a { color: #0b5cff; text-decoration: underline; }
+.reading-paper-content hr { border: 0; border-top: 1px solid #bbb; margin: 1.2em 0; }
+.reading-paper-content table { border-collapse: collapse; margin: .5em 0; }
+.reading-paper-content th, .reading-paper-content td { border: 1px solid #bbb;
+  padding: .35em .7em; }
+@media (max-width: 640px) {
+  .reading-paper { padding: 32px 24px; font-size: 14px; }
+  .reading-paper-title { font-size: 20px; }
+}
+
 /* ===== File Browser lightbox ===== */
 .file-lightbox .lightbox-panel {
   position: relative; margin: 3vh auto; width: calc(100% - 32px); max-width: 1200px;
@@ -489,6 +581,7 @@ a.card.meeting-card { font-weight: 500; }
 .ftype-zip { color: #a855f7; }
 .ftype-pages { color: #f97316; }
 .ftype-file { color: #888; }
+.ftype-text { color: #6d7ab0; }
 .media-search { display: flex; gap: 8px; margin-bottom: 12px; }
 .media-search input { flex: 1; padding: 8px 10px; border-radius: 8px;
   border: 1px solid var(--border); background: var(--panel); color: var(--text); }

@@ -167,6 +167,106 @@
     el.addEventListener("click", () => openModal(el.dataset.openModal));
   });
 
+  // Upload / Paste content mode toggle on reading forms.
+  document.querySelectorAll("[data-content-mode-toggle]").forEach(toggle => {
+    const form = toggle.closest("form");
+    if (!form) return;
+    const hidden = toggle.querySelector("[data-content-mode-input]");
+    const check = toggle.querySelector("[data-content-mode-check]");
+    const labels = toggle.querySelectorAll("[data-content-mode-label]");
+    const panels = form.querySelectorAll("[data-content-panel]");
+    function apply(mode) {
+      if (hidden) hidden.value = mode;
+      if (check) check.checked = (mode === "paste");
+      labels.forEach(l => l.classList.toggle("active", l.dataset.contentModeLabel === mode));
+      panels.forEach(p => {
+        const match = p.dataset.contentPanel === mode;
+        p.hidden = !match;
+        p.querySelectorAll("input, textarea, select").forEach(el => {
+          el.disabled = !match;
+        });
+      });
+    }
+    if (check) check.addEventListener("change", () => apply(check.checked ? "paste" : "upload"));
+    apply((hidden && hidden.value) || "upload");
+  });
+
+  // Markdown editor tab switcher + debounced live preview via /markdown-preview.
+  document.querySelectorAll("[data-md-editor]").forEach(editor => {
+    const tabs = editor.querySelectorAll(".md-editor-tab");
+    const writePane = editor.querySelector(".md-editor-pane-write");
+    const previewPane = editor.querySelector(".md-editor-pane-preview");
+    const previewEl = editor.querySelector(".md-editor-preview");
+    const textarea = editor.querySelector("textarea");
+    if (!tabs.length || !writePane || !previewPane || !textarea) return;
+
+    let lastRendered = null;
+    let pending = null;
+    async function renderPreview() {
+      const content = textarea.value || "";
+      if (content === lastRendered) return;
+      if (!content.trim()) {
+        previewEl.innerHTML = '<p class="muted smaller">Nothing to preview yet.</p>';
+        lastRendered = content;
+        return;
+      }
+      const fd = new FormData();
+      fd.append("body", content);
+      try {
+        const r = await fetch("/markdown-preview", {
+          method: "POST", body: fd, credentials: "same-origin",
+          headers: { "X-Requested-With": "fetch" },
+        });
+        if (!r.ok) return;
+        const data = await r.json();
+        previewEl.innerHTML = data.html || '<p class="muted smaller">(empty)</p>';
+        lastRendered = content;
+      } catch (_) {}
+    }
+
+    function activate(tabName) {
+      tabs.forEach(t => t.classList.toggle("active", t.dataset.mdTab === tabName));
+      writePane.classList.toggle("active", tabName === "write");
+      previewPane.classList.toggle("active", tabName === "preview");
+      if (tabName === "preview") renderPreview();
+    }
+    tabs.forEach(t => t.addEventListener("click", () => activate(t.dataset.mdTab)));
+
+    textarea.addEventListener("input", () => {
+      clearTimeout(pending);
+      pending = setTimeout(() => {
+        if (previewPane.classList.contains("active")) renderPreview();
+      }, 250);
+    });
+  });
+
+  // Reading lightbox: click on [data-reading-lightbox] shows the rendered
+  // body content in a paper-styled modal, with a Download PDF button.
+  (function initReadingLightbox(){
+    const modal = document.getElementById("reading-lightbox");
+    if (!modal) return;
+    const titleEl = modal.querySelector("[data-reading-lightbox-title]");
+    const docTitleEl = modal.querySelector("[data-reading-lightbox-doc-title]");
+    const contentEl = modal.querySelector("[data-reading-lightbox-content]");
+    const pdfLink = modal.querySelector("[data-reading-lightbox-pdf]");
+    document.querySelectorAll("[data-reading-lightbox]").forEach(link => {
+      link.addEventListener("click", e => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
+        e.preventDefault();
+        const rid = link.dataset.readingLightbox;
+        const title = link.dataset.readingTitle || "";
+        const tmpl = document.querySelector(`template[data-reading-content="${rid}"]`);
+        titleEl.textContent = title;
+        docTitleEl.textContent = title;
+        contentEl.innerHTML = tmpl ? tmpl.innerHTML : "";
+        pdfLink.href = "/readings/" + rid + "/pdf";
+        openModal("reading-lightbox");
+        const body = modal.querySelector(".reading-lightbox-body");
+        if (body) body.scrollTop = 0;
+      });
+    });
+  })();
+
   // About pane: animated pale sine-wave gradient behind the grey hero.
   // Wave parameters and gradient angle are randomized on each page load, so
   // every visit gets a different polished look. Runs only while the canvas

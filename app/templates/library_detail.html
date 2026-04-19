@@ -37,16 +37,23 @@
     {% set edit_id = 'edit-library-file-' ~ r.id %}
     <li data-item-id="{{ r.id }}" {% if can_edit %}draggable="true"{% endif %}>
       {% if can_edit %}<span class="drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
+      {% set _is_body_only = not r.stored_filename and not r.url and r.body %}
       {% if r.thumbnail_filename %}
       <img class="reading-thumb" src="{{ url_for('main.reading_thumbnail', rid=r.id) }}" alt="">
       {% else %}
-      {% set ft = r|file_type %}
+      {% set ft = 'text' if _is_body_only else (r|file_type) %}
       <span class="ftype ftype-{{ ft }}" aria-label="{{ ft }}">{{ ft|upper }}</span>
       {% endif %}
       <div class="file-main">
+        {% if _is_body_only %}
+        <a href="#" data-reading-lightbox="{{ r.id }}" data-reading-title="{{ r.title }}">{{ r.title }}</a>
+        <template data-reading-content="{{ r.id }}">{{ r.body|markdown }}</template>
+        {% else %}
         <a href="{% if r.stored_filename %}{{ url_for('main.public_file', filename=r.original_filename) }}{% elif r.url %}{{ r.url }}{% else %}{{ url_for('main.reading_view', rid=r.id) }}{% endif %}" target="_blank" rel="noopener">{{ r.title }}</a>
+        {% endif %}
         {% if r.original_filename %}<div class="muted smaller">{{ r.original_filename }}</div>{% endif %}
         {% if r.url %}<div class="muted smaller trunc">{{ r.url }}</div>{% endif %}
+        {% if _is_body_only %}<div class="muted smaller">Text document · {{ r.body|length }} chars</div>{% endif %}
       </div>
       <div class="row-actions">
         {% if r.stored_filename %}
@@ -64,12 +71,22 @@
         {% endif %}
       {% endif %}
       </div>
+      {% set _default_mode = 'paste' if (r.body and not r.stored_filename) else 'upload' %}
       <form id="{{ edit_id }}" method="post" class="file-add-form collapsed" enctype="multipart/form-data"
             action="{{ url_for('main.reading_edit', rid=r.id) }}"
-            data-inline-save data-row-id="{{ r.id }}">
+            data-inline-save data-row-id="{{ r.id }}" data-content-mode-form>
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label>Title<input name="title" required value="{{ r.title }}"></label>
-        <fieldset class="fieldset">
+        <div class="content-mode-toggle" data-content-mode-toggle>
+          <input type="hidden" name="content_mode" value="{{ _default_mode }}" data-content-mode-input>
+          <label class="mode-toggle content-mode-switch">
+            <span class="content-mode-label" data-content-mode-label="upload">Upload file</span>
+            <input type="checkbox" data-content-mode-check {% if _default_mode == 'paste' %}checked{% endif %}>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+            <span class="content-mode-label" data-content-mode-label="paste">Paste / type content</span>
+          </label>
+        </div>
+        <fieldset class="fieldset" data-content-panel="upload"{% if _default_mode != 'upload' %} hidden{% endif %}>
           <legend>File <span class="muted small">(PDF, DOC, JPG, PNG, MP4, MOV)</span></legend>
           {% if r.stored_filename %}
           <div class="logo-current">
@@ -83,6 +100,22 @@
             <button type="button" class="btn btn-sm" data-media-picker="{{ edit_id }}">File Browser</button>
           </div>
         </fieldset>
+        <div data-content-panel="paste"{% if _default_mode != 'paste' %} hidden{% endif %}>
+          <label>Body <span class="muted small">(Markdown supported, opens as a document)</span></label>
+          <div class="md-editor" data-md-editor>
+            <div class="md-editor-tabs" role="tablist">
+              <button type="button" class="md-editor-tab active" data-md-tab="write" role="tab">Write</button>
+              <button type="button" class="md-editor-tab" data-md-tab="preview" role="tab">Preview</button>
+              <span class="muted smaller md-editor-hint">**bold** · *italic* · # heading · - list</span>
+            </div>
+            <div class="md-editor-pane md-editor-pane-write active">
+              <textarea name="body" rows="8" placeholder="Paste or type content here. Markdown is supported.">{{ r.body or '' }}</textarea>
+            </div>
+            <div class="md-editor-pane md-editor-pane-preview">
+              <div class="md-editor-preview"><p class="muted smaller">Nothing to preview yet.</p></div>
+            </div>
+          </div>
+        </div>
         <label>External Link <span class="muted small">(optional)</span>
           <input name="url" type="url" placeholder="https://..." value="{{ r.url or '' }}"></label>
         <fieldset class="fieldset">
@@ -95,8 +128,6 @@
           {% endif %}
           <input type="file" name="thumbnail" accept="image/*">
         </fieldset>
-        <label>Body <span class="muted small">(optional inline text)</span>
-          <textarea name="body" rows="6">{{ r.body or '' }}</textarea></label>
         <div class="form-actions">
           <button type="button" class="btn btn-sm" data-file-add-cancel="{{ edit_id }}">Cancel</button>
           <button type="submit" class="btn btn-sm btn-primary">Save</button>
@@ -119,7 +150,8 @@
   <div class="modal-backdrop" data-close></div>
   <div class="modal-panel" role="dialog" aria-modal="true">
     <form id="add-library-file" method="post" class="form" enctype="multipart/form-data"
-          action="{{ url_for('main.reading_new', lid=library.id) }}">
+          action="{{ url_for('main.reading_new', lid=library.id) }}"
+          data-content-mode-form>
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="modal-head">
         <h2>Add File</h2>
@@ -127,7 +159,16 @@
       </div>
       <div class="modal-body">
         <label>Title<input name="title" required></label>
-        <fieldset class="fieldset">
+        <div class="content-mode-toggle" data-content-mode-toggle>
+          <input type="hidden" name="content_mode" value="upload" data-content-mode-input>
+          <label class="mode-toggle content-mode-switch">
+            <span class="content-mode-label" data-content-mode-label="upload">Upload file</span>
+            <input type="checkbox" data-content-mode-check>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+            <span class="content-mode-label" data-content-mode-label="paste">Paste / type content</span>
+          </label>
+        </div>
+        <fieldset class="fieldset" data-content-panel="upload">
           <legend>File <span class="muted small">(PDF, DOC, JPG, PNG, MP4, MOV)</span></legend>
           <div class="file-input-row">
             <input type="file" name="file"
@@ -135,12 +176,26 @@
             <button type="button" class="btn btn-sm" data-media-picker="add-library-file">File Browser</button>
           </div>
         </fieldset>
+        <div data-content-panel="paste" hidden>
+          <label>Body <span class="muted small">(Markdown supported, opens as a document)</span></label>
+          <div class="md-editor" data-md-editor>
+            <div class="md-editor-tabs" role="tablist">
+              <button type="button" class="md-editor-tab active" data-md-tab="write" role="tab">Write</button>
+              <button type="button" class="md-editor-tab" data-md-tab="preview" role="tab">Preview</button>
+              <span class="muted smaller md-editor-hint">**bold** · *italic* · # heading · - list</span>
+            </div>
+            <div class="md-editor-pane md-editor-pane-write active">
+              <textarea name="body" rows="10" placeholder="Paste or type content here. Markdown is supported."></textarea>
+            </div>
+            <div class="md-editor-pane md-editor-pane-preview">
+              <div class="md-editor-preview"><p class="muted smaller">Nothing to preview yet.</p></div>
+            </div>
+          </div>
+        </div>
         <label>External Link <span class="muted small">(optional)</span>
           <input name="url" type="url" placeholder="https://..."></label>
         <label>Thumbnail <span class="muted small">(optional)</span>
           <input type="file" name="thumbnail" accept="image/*"></label>
-        <label>Body <span class="muted small">(optional inline text)</span>
-          <textarea name="body" rows="6"></textarea></label>
       </div>
       <div class="modal-foot">
         <button type="button" class="btn" data-close>Cancel</button>
@@ -150,6 +205,25 @@
   </div>
 </div>
 {% endif %}
+
+<div class="modal reading-lightbox" id="reading-lightbox" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="lightbox-panel reading-lightbox-panel" role="dialog" aria-modal="true">
+    <div class="lightbox-head">
+      <div class="lightbox-title" data-reading-lightbox-title>—</div>
+      <div class="lightbox-head-actions">
+        <a class="btn btn-sm" data-reading-lightbox-pdf target="_blank" rel="noopener">Download PDF</a>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+      </div>
+    </div>
+    <div class="lightbox-body reading-lightbox-body">
+      <article class="reading-paper">
+        <h1 class="reading-paper-title" data-reading-lightbox-doc-title>—</h1>
+        <div class="reading-paper-content" data-reading-lightbox-content></div>
+      </article>
+    </div>
+  </div>
+</div>
 
 {% if can_edit %}
 {% set form_id = 'library-edit-form' %}

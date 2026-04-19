@@ -690,6 +690,19 @@
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
             <li>
+              <div class="u-name">1.3.13</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Library reading authoring — pasted content alternative to file upload</b> — adding/editing a reading now has a blue toggle switch at the top of the form: <b>Upload file</b> vs. <b>Paste / type content</b>. The two modes are mutually exclusive; the inactive panel's fields are disabled so only one source is submitted. On save, the server clears whichever field doesn't match the selected mode so a reading never carries both a file and body simultaneously.</li>
+                <li><b>Markdown editor with live preview</b> — the pasted-content panel is a tabbed Markdown editor with <b>Write</b> (monospace textarea, Markdown hint) and <b>Preview</b> (server-rendered, bleached HTML via the new <code>/markdown-preview</code> endpoint, debounced 250 ms while typing).</li>
+                <li><b>Paper-styled reading lightbox</b> — clicking a body-only reading on a library page opens a lightbox that looks like a letter-paper document: centered sheet, Georgia serif, shadow, theme-aware backdrop. Bleached HTML is preloaded via a hidden <code>&lt;template&gt;</code> so there's no extra round-trip. Mobile layout tightens the margins gracefully.</li>
+                <li><b>On-the-fly PDF download</b> — the lightbox has a <b>Download PDF</b> button that generates a PDF of the rendered content via WeasyPrint (<code>GET /readings/&lt;id&gt;/pdf</code>), with letter-sized pages, proper typographic defaults, centered title, and a filename derived from the reading title. Added <code>weasyprint==62.3</code> plus <code>libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b</code> to the container.</li>
+                <li><b>File Browser hides interface assets</b> — uploads currently assigned as the sidebar branding logo or the Open Graph image are filtered out of the File Browser (and the media picker) so administrative assets don't clutter the content library. Driven by a new <code>_interface_stored_filenames()</code> helper against <code>SiteSetting</code>.</li>
+                <li><b>Branding / OG replacements fully retire the old file</b> — replacing or clearing either asset now calls a new <code>_cleanup_retired_asset()</code> helper that deletes the file from disk <i>and</i> removes the matching <code>MediaItem</code> row, but only after checking that nothing else references the file (other SiteSetting columns, meeting logos, meeting files, readings, thumbnails). Shared-hash dedup situations are left intact.</li>
+                <li><b>New text filetype badge</b> — body-only readings now show a <code>TEXT</code> label (with a soft slate color) next to the item instead of the generic FILE tile.</li>
+              </ul>
+            </li>
+            <li>
               <div class="u-name">1.3.12</div>
               <div class="muted smaller">April 2026</div>
               <ul>
