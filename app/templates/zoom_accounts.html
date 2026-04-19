@@ -15,41 +15,79 @@
 
 <section class="card">
   <div class="card-head"><h2>Accounts</h2></div>
-  {% if accounts %}
-  <table class="tbl zoom-accounts-tbl">
-    <thead><tr><th>Name</th><th>Username</th><th>Password</th><th>Notes</th><th>Assignments</th>{% if current_user.is_admin() %}<th></th>{% endif %}</tr></thead>
-    <tbody>
-    {% for a in accounts %}
-      <tr>
-        <td data-label="Name">{{ a.name }}</td>
-        <td data-label="Username">{{ a.username }}</td>
-        <td data-label="Password">
-          <button type="button" class="btn btn-sm" data-reveal="{{ a.id }}">Show</button>
-          <span class="mono pw-reveal" id="pw-{{ a.id }}"></span>
-        </td>
-        <td data-label="Notes">{{ a.notes or '' }}</td>
-        <td data-label="Assignments">{{ a.schedules|length }}</td>
-        {% if current_user.is_admin() %}
-        <td class="zoom-accounts-actions">
-          <div class="row-actions">
-            <button type="button" class="btn btn-sm" data-open-modal="zoom-edit-{{ a.id }}">Edit</button>
-            <form method="post" action="{{ url_for('main.zoom_account_delete', aid=a.id) }}"
-                  onsubmit="return confirm('Delete this Zoom account? Assignments will be cleared.');">
+  <div class="zoom-accounts-layout">
+    <div class="zoom-accounts-main">
+      {% if accounts %}
+      <table class="tbl zoom-accounts-tbl">
+        <thead><tr><th>Name</th><th>Username</th><th>Password</th><th>Notes</th><th>Assignments</th>{% if current_user.is_admin() %}<th></th>{% endif %}</tr></thead>
+        <tbody>
+        {% for a in accounts %}
+          <tr>
+            <td data-label="Name">{{ a.name }}</td>
+            <td data-label="Username">{{ a.username }}</td>
+            <td data-label="Password">
+              <button type="button" class="btn btn-sm" data-reveal="{{ a.id }}">Show</button>
+              <span class="mono pw-reveal" id="pw-{{ a.id }}"></span>
+            </td>
+            <td data-label="Notes">
+              {% if a.notes %}
+              <span class="heading-help notes-tip">
+                <button type="button" class="help-btn notes-btn" aria-label="View notes for {{ a.name }}">{{ icon('info') }}</button>
+                <span class="help-tooltip" role="tooltip">{{ a.notes }}</span>
+              </span>
+              {% endif %}
+            </td>
+            <td data-label="Assignments">{{ a.schedules|length }}</td>
+            {% if current_user.is_admin() %}
+            <td class="zoom-accounts-actions">
+              <div class="row-actions">
+                <button type="button" class="btn btn-sm" data-open-modal="zoom-edit-{{ a.id }}">Edit</button>
+                <form method="post" action="{{ url_for('main.zoom_account_delete', aid=a.id) }}"
+                      onsubmit="return confirm('Delete this Zoom account? Assignments will be cleared.');">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
-              <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>
-            </form>
-          </div>
-        </td>
-        {% endif %}
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <p class="muted">No Zoom accounts yet.</p>
-  {% endif %}
+                  {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+                  <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>
+                </form>
+              </div>
+            </td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">No Zoom accounts yet.</p>
+      {% endif %}
+    </div>
+
+    {% if otp and (otp.email or otp.login_url or otp.password_enc) %}
+    <aside class="zoom-accounts-side">
+      <div class="zoom-otp-widget">
+        <h3 class="zoom-otp-title">OTP Email</h3>
+        <p class="muted small">Retrieve Zoom one-time-password codes by logging into this email.</p>
+        <dl class="zoom-info">
+          {% if otp.email %}
+          <dt>Email</dt>
+          <dd><button type="button" class="copy-btn mono" data-copy="{{ otp.email }}" data-tip="Click to copy">{{ otp.email }}</button></dd>
+          {% endif %}
+          {% if otp.password_enc %}
+          <dt>Password</dt>
+          <dd class="pw-row">
+            <button type="button" class="copy-btn mono pw-field" data-copy-url="{{ url_for('main.otp_email_reveal') }}" data-tip="Click to copy">••••••••</button>
+            <button type="button" class="btn btn-sm reveal-btn" data-reveal-url="{{ url_for('main.otp_email_reveal') }}" data-target-scope="prev">Reveal</button>
+          </dd>
+          {% endif %}
+          {% if otp.login_url %}
+          <dt></dt>
+          <dd><a class="btn btn-primary otp-login-btn" href="{{ otp.login_url }}" target="_blank" rel="noopener">Login for OTP Codes</a></dd>
+          {% endif %}
+        </dl>
+      </div>
+    </aside>
+    {% endif %}
+  </div>
 </section>
+
 
 {% if accounts %}
 <section class="card">

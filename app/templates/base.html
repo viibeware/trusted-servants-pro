@@ -689,6 +689,16 @@
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
             <li>
+              <div class="u-name">1.3.11</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Mobile sidebar footer always visible</b> — on screens ≤ 900px the sidebar is now a three-zone flex column: the brand header and the user-chip / help / theme / sign-out footer are pinned, and only the nav scrolls between them. Sidebar height switched to <code>100dvh</code> so it honors the actual visible viewport when the browser address bar collapses in and out.</li>
+                <li><b>Create User from an access request</b> — each row on the Access Requests page gains a <b>Create User</b> action. Clicking it opens Settings → Users with the iframe reloaded against <code>?prefill=&lt;email&gt;</code>, pre-populating both the username and email fields and focusing the password input so the admin can just type a password and submit.</li>
+                <li><b>OTP Email widget on Zoom Accounts</b> — the accounts card now has a two-column layout: the accounts table on the left, a boxed OTP Email widget on the right with the copyable email and password, password reveal, and a "Login for OTP Codes" button — same look and behavior as the meeting detail page. Collapses to a single column at ≤ 900px.</li>
+                <li><b>Notes as a tooltip icon</b> — in the Zoom Accounts table, the Notes column is now an info (ⓘ) icon button that only appears when a note is set. Clicking the icon toggles a tooltip with the note text (multi-line preserved); clicking outside or pressing Escape closes it. Reuses the existing heading-help tooltip infrastructure.</li>
+              </ul>
+            </li>
+            <li>
               <div class="u-name">1.3.10</div>
               <div class="muted smaller">April 2026</div>
               <ul>

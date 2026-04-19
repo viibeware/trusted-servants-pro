@@ -166,6 +166,27 @@
   document.querySelectorAll("[data-open-modal]").forEach(el => {
     el.addEventListener("click", () => openModal(el.dataset.openModal));
   });
+
+  // Access Requests → Create User: open Settings → Users with the iframe
+  // reloaded against a ?prefill=<email> query param so the Create User form
+  // arrives pre-populated.
+  document.querySelectorAll("[data-create-user-from-request]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const email = btn.dataset.email || "";
+      const modal = document.getElementById("settings-modal");
+      if (!modal) return;
+      openModal("settings-modal");
+      const usersTab = modal.querySelector('[data-tab="users"]');
+      if (usersTab) usersTab.click();
+      const pane = modal.querySelector('[data-pane="users"]');
+      const iframe = pane && pane.querySelector("iframe.settings-frame");
+      if (iframe) {
+        const base = iframe.dataset.src || "";
+        const sep = base.includes("?") ? "&" : "?";
+        iframe.src = base + sep + "prefill=" + encodeURIComponent(email) + "&_=" + Date.now();
+      }
+    });
+  });
   document.querySelectorAll(".modal").forEach(m => {
     m.querySelectorAll("[data-close]").forEach(el =>
       el.addEventListener("click", () => closeModal(m)));
