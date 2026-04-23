@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="csrf-token" content="{{ csrf_token() }}">
-<meta name="app-version" content="{{ app_version }}" data-check-url="{{ url_for('main.api_version') }}">
+<meta name="app-version" content="{{ app_version }}" data-build-id="{{ app_build_id }}" data-check-url="{{ url_for('main.api_version') }}">
 <title>{% block title %}Trusted Servants Pro{% endblock %}</title>
 {% if site and site.og_enabled %}
 {% set _og_title = site.og_title or 'Trusted Servants Pro' %}
@@ -747,6 +747,13 @@
 
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
+            <li>
+              <div class="u-name">1.6.2</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Update-available banner now notices same-version redeploys</b> — the client-side poller used to compare only <code>__version__</code> strings, so pushing a new image under the same version went unnoticed. <code>app/version.py</code> now also computes a <code>__build_id__</code> at import time: a truncated blake2b hash of every <code>.py</code>, <code>.html</code>, <code>.css</code>, and <code>.js</code> file under <code>app/</code>. Both values are returned from <code>/api/version</code> and stamped into the page's <code>meta[name="app-version"]</code> tag. The banner triggers when either the version <i>or</i> the build id diverges from what the page loaded with, so any redeploy that ships new code notifies open sessions within ~60s. Plain container restarts with unchanged code keep the same hash and don't flap the banner.</li>
+              </ul>
+            </li>
             <li>
               <div class="u-name">1.6.1</div>
               <div class="muted smaller">April 2026</div>

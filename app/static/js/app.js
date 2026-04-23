@@ -1394,6 +1394,7 @@
 (function () {
   const meta = document.querySelector('meta[name="app-version"]');
   const bootVersion = meta ? (meta.content || "").trim() : "";
+  const bootBuildId = meta ? (meta.getAttribute("data-build-id") || "").trim() : "";
   const checkUrl = meta ? (meta.getAttribute("data-check-url") || "/api/version") : "/api/version";
   if (!bootVersion) return;
 
@@ -1408,7 +1409,10 @@
       if (!r.ok) return;
       const data = await r.json();
       const serverVersion = (data && data.version) || "";
-      if (serverVersion && serverVersion !== bootVersion) showBanner(serverVersion);
+      const serverBuildId = (data && data.build_id) || "";
+      const versionChanged = serverVersion && serverVersion !== bootVersion;
+      const buildChanged = serverBuildId && bootBuildId && serverBuildId !== bootBuildId;
+      if (versionChanged || buildChanged) showBanner(serverVersion);
     } catch (_) { /* silent — try again next tick */ }
   }
 

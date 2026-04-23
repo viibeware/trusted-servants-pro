@@ -283,8 +283,8 @@ def api_server_metrics():
 @bp.route("/api/version")
 @login_required
 def api_version():
-    from .version import __version__
-    return jsonify(version=__version__)
+    from .version import __version__, __build_id__
+    return jsonify(version=__version__, build_id=__build_id__)
 
 
 @bp.route("/api/online-users")

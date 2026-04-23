@@ -240,8 +240,9 @@ def create_app():
     from .icons import icon as _icon
     app.jinja_env.globals["icon"] = _icon
 
-    from .version import __version__ as _app_version
+    from .version import __version__ as _app_version, __build_id__ as _app_build_id
     app.jinja_env.globals["app_version"] = _app_version
+    app.jinja_env.globals["app_build_id"] = _app_build_id
 
     return app
 
