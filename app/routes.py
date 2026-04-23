@@ -899,7 +899,7 @@ def site_branding_save():
             _cleanup_retired_asset(old)
     db.session.commit()
     if request.headers.get("X-Requested-With") == "fetch":
-        logo_src = (url_for("main.site_footer_logo") + f"?v={int(time.time())}") if s.footer_logo_filename else ""
+        logo_src = (url_for("public.site_footer_logo") + f"?v={int(time.time())}") if s.footer_logo_filename else ""
         return jsonify(
             ok=True,
             has_custom_logo=bool(s.footer_logo_filename),
