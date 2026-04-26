@@ -1,21 +1,6 @@
-{# "Classic" homepage — animated-blob hero, 4 quick-link cards, meetings
-   preview, about pillars, dark contact CTA. Our original. #}
-<section class="fe-hero">
-  <div class="fe-hero-bg" aria-hidden="true">
-    <div class="fe-hero-blob fe-hero-blob-a"></div>
-    <div class="fe-hero-blob fe-hero-blob-b"></div>
-    <div class="fe-hero-blob fe-hero-blob-c"></div>
-  </div>
-  <div class="fe-container fe-hero-inner">
-    <p class="fe-hero-eyebrow">{{ frontend_tagline }}</p>
-    <h1 class="fe-hero-heading">{{ frontend_hero_heading }}</h1>
-    <p class="fe-hero-sub">{{ frontend_hero_subheading }}</p>
-    <div class="fe-hero-cta">
-      <a href="#meetings" class="fe-btn fe-btn-primary">Find a Meeting</a>
-      <a href="#contact" class="fe-btn fe-btn-ghost">Need Help Now?</a>
-    </div>
-  </div>
-</section>
+{# "Classic" homepage — shared hero, 4 quick-link cards, meetings preview,
+   about pillars, dark contact CTA. The hero is identical across templates. #}
+{% include "frontend/_hero.html" %}
 
 <section class="fe-quick" aria-label="Quick links">
   <div class="fe-container fe-quick-grid">
@@ -135,4 +120,3 @@
     {% endif %}
   </div>
 </section>
-

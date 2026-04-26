@@ -15,6 +15,26 @@
   src: url("../fonts/inter/InterVariable-Italic.woff2") format("woff2-variations"),
        url("../fonts/inter/InterVariable-Italic.woff2") format("woff2");
 }
+/* Self-hosted Fraunces variable font (SIL OFL). Two unicode-range subsets so
+   the latin file is fetched first and latin-ext only loads when needed. */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url("../fonts/fraunces/Fraunces-Variable-latin.woff2") format("woff2-variations"),
+       url("../fonts/fraunces/Fraunces-Variable-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url("../fonts/fraunces/Fraunces-Variable-latin-ext.woff2") format("woff2-variations"),
+       url("../fonts/fraunces/Fraunces-Variable-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
 
 :root {
   --bg: #f6f7fb;
@@ -176,8 +196,8 @@ p { margin: .25rem 0; }
 .brand-logo-lg { width: 72px; height: 72px; }
 .brand-title { font-weight: 700; font-size: 0.9375rem; line-height: 1.1; }
 .brand-sub { font-size: 0.9375rem; font-weight: 700; line-height: 1.1; }
-.dccma-link { display: flex; justify-content: center; padding: 6px 0 4px; }
-.dccma-link img { max-width: 80px; width: 100%; height: auto; display: block; }
+.sidebar-footer-img-link { display: flex; justify-content: center; padding: 6px 0 4px; }
+.sidebar-footer-img-link img { max-width: 80px; width: 100%; height: auto; display: block; }
 .brand-version { display: block; width: fit-content; margin: 4px auto; padding: 2px 8px; text-align: center;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.6875rem;
   color: var(--muted); background: rgba(127, 127, 127, 0.15); border-radius: 6px; }
@@ -185,6 +205,11 @@ p { margin: .25rem 0; }
 .sidebar nav a {
   color: var(--text); padding: 9px 12px; border-radius: 8px;
   font-weight: 500; display: block;
+  /* Allow long labels (e.g. "Announcements & Events") to wrap to a
+     second line instead of overflowing the sidebar. Hyphenation +
+     overflow-wrap together handle both spaced phrases and any
+     pathologically long single word. */
+  line-height: 1.3; overflow-wrap: anywhere; hyphens: auto;
 }
 .sidebar nav a:hover { background: var(--panel-2); text-decoration: none; }
 .sidebar nav a.active { background: var(--brand-soft); color: var(--access); }
@@ -199,13 +224,781 @@ p { margin: .25rem 0; }
 .template-library-grid { display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px; margin: 8px 0 4px; }
+
+/* Compact template-picker pill (top-actions). Tracks the live template
+   name and opens the modal for choosing a different one. */
+.fe-template-picker {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 4px 4px 12px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--panel-2);
+  font-size: 0.875rem;
+}
+.fe-template-picker-label { font-weight: 500; }
+.fe-template-picker-active { font-weight: 600; color: var(--text); }
+.fe-template-picker .btn { padding: 4px 12px; font-size: 0.8125rem; border-radius: 999px; }
+.fe-template-picker-modal .modal-panel { width: min(820px, 94vw); max-height: 86vh; }
+.fe-template-picker-modal .modal-body { overflow-y: auto; }
+.fe-layout-picker-modal .modal-panel { width: min(960px, 96vw); max-height: 88vh; }
+
+/* Block-stripe preview rendered inside layout cards (one stripe per
+   block in the layout's blocks_json). */
+.template-card-preview-blocks {
+  display: flex; flex-direction: column; gap: 4px; padding: 10px;
+  background: var(--panel-2);
+}
+.tcp-block { display: block; height: 8px; border-radius: 3px; background: var(--border); }
+.tcp-block-hero         { height: 18px; background: var(--brand); }
+.tcp-block-quick_links  { background: color-mix(in srgb, var(--brand) 40%, var(--border)); }
+.tcp-block-meetings     { background: color-mix(in srgb, var(--brand) 30%, var(--border)); }
+.tcp-block-features     { background: color-mix(in srgb, var(--brand) 50%, var(--border)); }
+.tcp-block-stats        { height: 6px; background: color-mix(in srgb, var(--text) 25%, var(--border)); }
+.tcp-block-testimonials { background: color-mix(in srgb, var(--text) 20%, var(--border)); }
+.tcp-block-cta          { height: 14px; background: var(--access); }
+.tcp-block-faq          { background: color-mix(in srgb, var(--text) 18%, var(--border)); }
+.tcp-block-about        { background: color-mix(in srgb, var(--text) 22%, var(--border)); }
+.tcp-block-contact      { height: 12px; background: var(--text); opacity: 0.6; }
+
+.template-card-tag {
+  display: inline-block; margin-left: 6px; padding: 1px 6px;
+  border-radius: 4px; background: var(--panel-2);
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em;
+  vertical-align: middle;
+}
+.template-card-new {
+  border-style: dashed !important; background: transparent !important;
+  text-align: left; cursor: pointer;
+}
+.template-card-preview-new {
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+.template-card-preview-new .tcp-plus {
+  font-size: 2rem; color: var(--muted); font-weight: 300;
+}
+
+/* ============================================================
+   DRAG-AND-DROP LAYOUT BUILDER
+   ============================================================ */
+.fe-layout-builder-modal .modal-panel,
+.fe-layout-builder-panel { width: min(1100px, 96vw); max-height: 92vh; }
+.fe-layout-builder-body { overflow-y: auto; }
+.fe-layout-builder-grid {
+  display: grid; grid-template-columns: 280px minmax(0, 1fr);
+  gap: 18px; margin-top: 12px;
+}
+@media (max-width: 720px) {
+  .fe-layout-builder-grid { grid-template-columns: 1fr; }
+}
+.fe-layout-builder-library {
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: 56vh; overflow-y: auto; padding: 4px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+.fe-builder-block {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px;
+  background: var(--panel); border: 1px solid var(--border);
+  cursor: grab; user-select: none;
+}
+.fe-builder-block:active { cursor: grabbing; }
+.fe-builder-block:hover { border-color: var(--access); }
+.fe-builder-block-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; flex: 0 0 32px;
+  background: var(--panel-2); border-radius: 6px; color: var(--muted);
+}
+.fe-builder-block-icon .icon { width: 16px; height: 16px; }
+.fe-builder-block-meta { flex: 1 1 auto; min-width: 0; }
+.fe-builder-block-name { font-weight: 600; font-size: 0.9rem; color: var(--text); }
+.fe-builder-block-desc { line-height: 1.35; }
+
+.fe-layout-builder-canvas-wrap label {
+  display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;
+  font-size: 0.875rem; font-weight: 600; color: var(--text);
+}
+.fe-layout-builder-canvas-wrap input[type="text"] {
+  padding: 8px 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  font: inherit;
+}
+.fe-layout-builder-canvas {
+  min-height: 260px;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 14px; border-radius: 10px;
+  border: 2px dashed var(--border); background: var(--panel-2);
+}
+.fe-layout-builder-canvas.is-drop-target {
+  border-color: var(--access); background: var(--brand-soft);
+}
+.fe-builder-empty {
+  text-align: center; padding: 32px 0; pointer-events: none;
+}
+.fe-builder-canvas-block {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px;
+  background: var(--panel); border: 1px solid var(--border);
+  cursor: grab;
+}
+.fe-builder-canvas-block.dragging { opacity: 0.4; }
+.fe-builder-canvas-block .fe-builder-block-icon { background: var(--brand-soft); color: var(--brand); }
+.fe-builder-canvas-remove {
+  margin-left: auto; padding: 4px 8px; border: 0; background: transparent;
+  color: var(--muted); cursor: pointer; border-radius: 6px;
+  font-size: 1rem; line-height: 1;
+}
+.fe-builder-canvas-remove:hover { background: var(--danger); color: #fff; }
+
+/* Two-panel split inside the builder canvas. */
+.fe-builder-split { flex-direction: column; padding: 0; gap: 0; cursor: default; }
+.fe-builder-split-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+}
+.fe-builder-split-cols {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  padding: 10px;
+}
+.fe-builder-split-col {
+  min-height: 80px;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px; border-radius: 8px;
+  background: var(--panel-2); border: 1px dashed var(--border);
+}
+.fe-builder-split-col.is-drop-target { border-color: var(--access); background: var(--brand-soft); }
+.fe-builder-split-col .fe-builder-canvas-block { background: var(--panel); }
+
+/* Per-card visibility toggle pill in the head row. */
+.fe-block-vis { margin-left: auto; }
+
+/* Frontend Settings — fonts & icons. */
+.fe-font-row {
+  display: grid; grid-template-columns: 1fr 220px; gap: 16px 24px;
+  align-items: center; padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.fe-font-row:first-of-type { border-top: 0; padding-top: 8px; }
+.fe-font-row-info .u-name { font-weight: 600; color: var(--text); }
+.fe-font-row select { padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  font: inherit; }
+.fe-font-sample {
+  grid-column: 1 / -1; padding: 14px 16px; border-radius: 10px;
+  background: var(--panel-2); color: var(--text); font-size: 1.0625rem;
+  border: 1px solid var(--border);
+}
+@media (max-width: 720px) {
+  .fe-font-row { grid-template-columns: 1fr; }
+}
+
+.fe-icon-library {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  margin-top: 6px;
+}
+.fe-icon-library-tile {
+  position: relative; padding: 22px 12px 12px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  overflow: visible;
+}
+.fe-icon-library-tile img {
+  width: 36px; height: 36px; object-fit: contain;
+}
+.fe-icon-library-name {
+  font-size: 0.8rem; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+}
+/* Delete button — always visible, sits in the top-right corner. Solid
+   red rectangle with rounded corners so it reads as a "close" action
+   without being obtrusive. Slightly translucent until hover. */
+.fe-icon-library-tile .fe-icon-library-del,
+.fe-icon-library-tile form > .fe-icon-library-del {
+  position: absolute; top: 6px; right: 6px; margin: 0;
+  min-width: 26px; height: 22px; padding: 0 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #dc2626; color: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  opacity: 0.9; transition: opacity 140ms ease, background 140ms ease, transform 140ms ease;
+  z-index: 2; cursor: pointer; line-height: 1;
+}
+.fe-icon-library-tile .fe-icon-library-del:hover { opacity: 1; background: #b91c1c; transform: translateY(-1px); }
+.fe-icon-library-tile .fe-icon-library-del:focus-visible { outline: 2px solid var(--access); outline-offset: 2px; }
+.fe-icon-library-tile .fe-icon-library-del .icon {
+  width: 14px; height: 14px; stroke: currentColor; color: #fff;
+}
+
+/* Frontend Settings — custom font library: two-column add panel + tiles. */
+.fe-font-add-grid {
+  display: grid; gap: 14px; margin-top: 4px; margin-bottom: 14px;
+  grid-template-columns: 1fr 1fr;
+}
+@media (max-width: 720px) { .fe-font-add-grid { grid-template-columns: 1fr; } }
+.fe-font-add-form {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px; border-radius: 10px;
+  background: var(--panel-2); border: 1px solid var(--border);
+}
+.fe-font-add-head {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 700; font-size: 0.95rem; color: var(--text);
+}
+.fe-font-add-head .icon { width: 16px; height: 16px; }
+.fe-font-add-field { display: flex; flex-direction: column; gap: 4px; font-weight: 500; }
+.fe-font-add-field input { padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  font: inherit; }
+.fe-font-add-form .btn { align-self: flex-start; }
+.fe-font-add-blurb {
+  background: rgba(11, 92, 255, 0.06);
+  border: 1px solid rgba(11, 92, 255, 0.18);
+  border-radius: 8px; padding: 8px 10px; margin: 0;
+  line-height: 1.45;
+}
+
+.fe-font-library {
+  display: grid; gap: 12px; margin-top: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.fe-font-library-tile {
+  position: relative; padding: 14px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex; align-items: center; gap: 14px;
+}
+.fe-font-library-tile-sample {
+  flex: 0 0 auto; width: 56px; height: 56px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem; line-height: 1; color: var(--text);
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.fe-font-library-tile-info { min-width: 0; flex: 1 1 auto; }
+.fe-font-library-tile-info .u-name { font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fe-font-library-tile-info .smaller {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fe-font-library-tile form {
+  position: absolute; top: 6px; right: 6px; margin: 0;
+}
+.fe-font-library-tile .fe-font-library-del {
+  min-width: 26px; height: 22px; padding: 0 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #dc2626; color: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  opacity: 0.9; transition: opacity 140ms ease, background 140ms ease, transform 140ms ease;
+  cursor: pointer; line-height: 1;
+}
+.fe-font-library-tile .fe-font-library-del:hover { opacity: 1; background: #b91c1c; transform: translateY(-1px); }
+.fe-font-library-tile .fe-font-library-del:focus-visible { outline: 2px solid var(--access); outline-offset: 2px; }
+.fe-font-library-tile .fe-font-library-del .icon {
+  width: 14px; height: 14px; stroke: currentColor; color: #fff;
+}
+
+/* ===== Users tab — top grid + roles/permissions explainer ===== */
+.users-top-grid {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+@media (max-width: 880px) { .users-top-grid { grid-template-columns: 1fr; } }
+.users-top-grid > .card { margin: 0; height: 100%; }
+
+.perm-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.perm-row {
+  display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 14px;
+  align-items: start; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel-2);
+}
+@media (max-width: 720px) { .perm-row { grid-template-columns: 1fr; gap: 6px; } }
+.perm-role { display: flex; align-items: center; }
+.perm-blurb { line-height: 1.45; }
+.perm-badge {
+  display: inline-block;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; line-height: 1.2;
+  border: 1px solid transparent; white-space: nowrap;
+}
+/* Per-role accent — matches the post-chip palette so colours read as
+   "categorical tags" across the app rather than role-specific. */
+.perm-badge-admin  { background: rgba(220, 38, 38, 0.10);  color: #b91c1c; border-color: rgba(220, 38, 38, 0.32); }
+.perm-badge-editor { background: rgba(11, 92, 255, 0.10);  color: #1d4ed8; border-color: rgba(11, 92, 255, 0.32); }
+.perm-badge-fe     { background: rgba(20, 184, 166, 0.10); color: #0f766e; border-color: rgba(20, 184, 166, 0.32); }
+.perm-badge-viewer { background: rgba(100, 116, 139, 0.12); color: #475569; border-color: rgba(100, 116, 139, 0.32); }
+html[data-theme="dark"] .perm-badge-admin  { background: rgba(220, 38, 38, 0.20);  color: #fca5a5; border-color: rgba(220, 38, 38, 0.45); }
+html[data-theme="dark"] .perm-badge-editor { background: rgba(11, 92, 255, 0.22);  color: #93c5fd; border-color: rgba(11, 92, 255, 0.45); }
+html[data-theme="dark"] .perm-badge-fe     { background: rgba(20, 184, 166, 0.20); color: #5eead4; border-color: rgba(20, 184, 166, 0.45); }
+html[data-theme="dark"] .perm-badge-viewer { background: rgba(100, 116, 139, 0.22); color: #cbd5e1; border-color: rgba(100, 116, 139, 0.45); }
+
+
+/* ===== Sidebar order admin (Settings → Sidebar) ===== */
+/* Title row sits at the top of the form with the Save button on the
+   right so the primary action is visible without scrolling past the
+   manual reorder list. */
+.sidebar-order-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+}
+/* Scoped to the pane so this beats the generic .u-name rule that
+   lives later in the file (cascade resolves ties by source order — my
+   shorter selector would lose to .u-name without the pane prefix). */
+.settings-pane[data-pane="sidebar"] .sidebar-order-title {
+  font-size: 1rem; font-weight: 700; color: var(--text);
+}
+
+
+.sidebar-mode-fieldset {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  border: 0; padding: 0; margin: 0 0 12px;
+}
+.sidebar-mode-pill {
+  flex: 1 1 auto; display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px;
+  background: var(--panel); cursor: pointer; min-width: 0;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.sidebar-mode-pill:has(input:checked) {
+  border-color: var(--brand); background: var(--brand-soft, var(--panel-2));
+}
+.sidebar-mode-pill input[type="radio"] { flex: 0 0 auto; }
+.sidebar-mode-pill-label { font-weight: 600; color: var(--text); }
+
+.sidebar-order-manual {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel-2);
+}
+.sidebar-order-sections {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.sidebar-order-section {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+.sidebar-order-section.dragging { opacity: 0.5; }
+.sidebar-order-section-head {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 700; color: var(--text);
+}
+.sidebar-order-handle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 22px; flex: 0 0 auto;
+  color: var(--muted); cursor: grab; user-select: none;
+  font-size: 0.95rem; letter-spacing: -2px;
+}
+.sidebar-order-handle:active { cursor: grabbing; }
+.sidebar-order-section-name { font-size: 0.95rem; }
+.sidebar-order-section-note { margin: 6px 0 0 26px; line-height: 1.4; }
+
+.sidebar-order-items {
+  list-style: none; padding: 6px 0 0 26px; margin: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.sidebar-order-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--panel-2); cursor: grab;
+  transition: opacity 140ms ease, background 140ms ease;
+}
+.sidebar-order-item:hover { background: var(--panel); }
+.sidebar-order-item.dragging { opacity: 0.5; cursor: grabbing; }
+.sidebar-order-item-name { font-size: 0.9rem; color: var(--text); }
+
+/* External-link rows embedded inside the Sidebar tab's manual reorder
+   UI. Same drag-handle + row layout as item rows above, but with title
+   + URL stacked and inline edit/delete buttons on the right. */
+.sidebar-extlink-list {
+  list-style: none; padding: 6px 0 0 26px; margin: 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.sidebar-extlink-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--panel-2);
+}
+.sidebar-extlink-row:hover { background: var(--panel); }
+.sidebar-extlink-row.dragging { opacity: 0.5; }
+.sidebar-extlink-meta { flex: 1 1 auto; min-width: 0; }
+.sidebar-extlink-title {
+  font-size: 0.9rem; color: var(--text); font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sidebar-extlink-url {
+  display: block; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; max-width: 100%;
+}
+.sidebar-extlink-empty { padding: 6px 0 0 26px; margin: 0; }
+.sidebar-extlink-add { margin: 8px 0 0 26px; }
+
+
+/* ===== 404 page (admin) =====
+   The card itself stays a centered ~720px column. The outer .content
+   wrapper is widened to the full viewport width via the :has() rule
+   below so the card auto-centers between the sidebar and the right
+   edge of the screen rather than the narrow normal content column. */
+.admin-404 { text-align: center; padding: 3rem 2rem; max-width: 720px; margin: 2rem auto; }
+.content:has(.admin-404) { max-width: none; }
+.admin-404-art { max-width: 320px; margin: 0 auto 1rem; }
+.admin-404-title {
+  font-family: var(--fe-font-heading, inherit);
+  font-size: 1.75rem; font-weight: 700; margin: 0.5rem 0 0.75rem;
+  letter-spacing: -0.01em; color: var(--text);
+}
+.admin-404-sub { max-width: 540px; margin: 0 auto 1.5rem; line-height: 1.5; }
+.admin-404-actions {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  justify-content: center; margin: 0 auto 1.25rem;
+}
+.admin-404-foot { line-height: 1.5; }
+
+/* ===== Posts (announcements + events) admin ===== */
+.posts-card { padding: 0 !important; overflow: hidden; }
+.posts-tbl { width: 100%; border-collapse: collapse; }
+.posts-tbl th, .posts-tbl td { padding: 14px 16px; vertical-align: top;
+  border-top: 1px solid var(--border); text-align: left; }
+.posts-tbl thead th { border-top: 0; font-size: 0.75rem; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+.posts-tbl tbody tr:hover { background: var(--panel-2); }
+.posts-th-thumb, .posts-td-thumb { width: 64px; }
+.posts-th-actions, .posts-td-actions { width: 1%; white-space: nowrap; text-align: right; }
+.posts-thumb {
+  width: 48px; height: 48px; object-fit: cover;
+  border-radius: 8px; border: 1px solid var(--border);
+  background: var(--panel-2); display: flex; align-items: center;
+  justify-content: center; color: var(--muted);
+}
+.posts-thumb-empty .icon { width: 22px; height: 22px; }
+.posts-title { font-weight: 600; color: var(--text); }
+.posts-summary { margin-top: 2px; line-height: 1.4; }
+
+/* Type chips. Announcement and event have distinct colours so the
+   admin can scan a list quickly. */
+.post-chip {
+  display: inline-block; margin-right: 4px;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.03em;
+  text-transform: uppercase; line-height: 1.4;
+  border: 1px solid transparent;
+}
+.post-chip-announcement { background: rgba(245, 158, 11, 0.15); color: #b45309; border-color: rgba(245, 158, 11, 0.4); }
+.post-chip-event        { background: rgba(11, 92, 255, 0.12);  color: #1d4ed8; border-color: rgba(11, 92, 255, 0.32); }
+.post-chip-online       { background: rgba(20, 184, 166, 0.12); color: #0f766e; border-color: rgba(20, 184, 166, 0.32); }
+html[data-theme="dark"] .post-chip-announcement { background: rgba(245, 158, 11, 0.18); color: #fbbf24; border-color: rgba(245, 158, 11, 0.5); }
+html[data-theme="dark"] .post-chip-event        { background: rgba(11, 92, 255, 0.22);  color: #93c5fd; border-color: rgba(11, 92, 255, 0.45); }
+html[data-theme="dark"] .post-chip-online       { background: rgba(20, 184, 166, 0.20); color: #5eead4; border-color: rgba(20, 184, 166, 0.45); }
+
+/* Type-tag pills inside the edit form — clickable cards with a checkbox. */
+.post-type-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1rem; }
+@media (max-width: 720px) { .post-type-row { grid-template-columns: 1fr; } }
+.post-type-pill {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 14px 16px; border: 2px solid var(--border); border-radius: 12px;
+  background: var(--panel); cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.post-type-pill:has(input:checked) { border-color: var(--brand); background: var(--brand-soft, var(--panel-2)); }
+.post-type-pill input[type="checkbox"] { margin-top: 4px; flex: 0 0 auto; }
+.post-type-pill-body { display: flex; flex-direction: column; gap: 2px; }
+.post-type-pill-title { font-weight: 700; color: var(--text); font-size: 0.95rem; }
+.post-type-pill-sub { line-height: 1.4; }
+
+/* Reusable two-column row for short fields (start/end, phone/email, etc.) */
+.post-form .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 720px) { .post-form .form-row { grid-template-columns: 1fr; } }
+
+.post-form .post-subhead {
+  margin: 1.5rem 0 0.5rem; font-size: 0.85rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted);
+}
+.post-zoom-block {
+  margin-top: 1.25rem; padding: 14px 16px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+}
+.post-zoom-block .post-subhead { margin-top: 0; }
+
+
+/* Two-panel split admin card — visualizes the layout builder's split
+   block. Each panel hosts the FULL editor cards for the blocks placed
+   inside that side of the split, so the admin layout mirrors what the
+   visitor sees. The card's outer margin scales with the chosen Outer
+   margin setting so the admin spacing matches the public site. */
+.fe-split-admin-preview {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  margin: 8px 0 14px;
+}
+@media (max-width: 720px) { .fe-split-admin-preview { grid-template-columns: 1fr; } }
+.fe-split-admin-panel {
+  padding: 14px; border: 1px dashed var(--border);
+  border-radius: 10px; background: var(--panel-2);
+  min-height: 110px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.fe-split-admin-panel-label {
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  font-size: 0.7rem;
+}
+.fe-split-admin-empty {
+  align-self: center; margin: auto; font-style: italic;
+}
+/* Editor cards nested inside a split panel — soften their drop shadow,
+   slim down the padding, and let them inherit the panel's lighter bg
+   so they read as "child of the panel" not "card on the page". */
+.fe-split-admin-panel > .card {
+  margin: 0; padding: 1.25rem; box-shadow: none;
+  background: var(--panel); border-color: var(--border);
+}
+.fe-split-admin-panel > .card .card-head h2 { font-size: 0.95rem; }
+
+/* Top + bottom gap modifiers — mirror the public-site .fe-split--gt-*
+   and .fe-split--gb-* values so the admin shows the chosen spacing in
+   place. The universal flex `.fe-admin-main { gap: 1rem }` adds a
+   little extra to the floor; the relative scale (none < tight < default
+   < loose) is preserved. */
+.fe-split-admin-card--gt-none    { margin-top: 0; }
+.fe-split-admin-card--gt-tight   { margin-top: 1rem; }
+.fe-split-admin-card--gt-default { margin-top: 2.5rem; }
+.fe-split-admin-card--gt-loose   { margin-top: 5rem; }
+.fe-split-admin-card--gb-none    { margin-bottom: 0; }
+.fe-split-admin-card--gb-tight   { margin-bottom: 1rem; }
+.fe-split-admin-card--gb-default { margin-bottom: 2.5rem; }
+.fe-split-admin-card--gb-loose   { margin-bottom: 5rem; }
+
+/* Background-color row in the split settings — checkbox toggles whether
+   the colour is applied; the picker stays mounted so the user's last
+   choice is preserved when the toggle flips back on. */
+.fe-split-admin-bg-row {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--panel);
+}
+.fe-split-admin-bg-row input[type="color"] {
+  width: 36px; height: 28px; padding: 0; border: 1px solid var(--border);
+  border-radius: 6px; background: transparent; cursor: pointer;
+}
+
+/* Settings row under the preview. Three flexible columns that wrap on
+   narrow screens; each label-and-select pair stacks vertically. */
+.fe-split-admin-settings {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-top: 6px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.fe-split-admin-setting {
+  display: flex; flex-direction: column; gap: 4px;
+  font-weight: 500;
+}
+.fe-split-admin-setting select {
+  padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  font: inherit;
+}
+
+/* Frontend Design admin — token override grid. Auto-fit responsive
+   grid; each field is a self-contained label + input + reset button. */
+.fe-design-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px 18px;
+  margin-top: 6px;
+}
+.fe-design-field {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px 14px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.fe-design-field--overridden {
+  border-color: var(--brand);
+  background: var(--brand-soft, var(--panel-2));
+}
+.fe-design-field-label { display: flex; flex-direction: column; gap: 2px; }
+.fe-design-field-label b { font-size: 0.95rem; color: var(--text); }
+.fe-design-field-help { line-height: 1.35; }
+.fe-design-field-default { font-size: 0.7rem; }
+.fe-design-field-default code {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 4px; padding: 1px 5px; font-size: 0.75rem;
+}
+.fe-design-field-control {
+  display: flex; align-items: center; gap: 8px;
+}
+.fe-design-field-control select,
+.fe-design-field-control input[type="text"],
+.fe-design-field-control input[type="number"] {
+  flex: 1 1 auto; min-width: 0;
+  padding: 7px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  font: inherit;
+}
+.fe-design-color-input {
+  width: 36px; height: 28px; padding: 0; border: 1px solid var(--border);
+  border-radius: 6px; background: transparent; cursor: pointer;
+}
+.fe-design-color-toggle { width: 16px; height: 16px; cursor: pointer; }
+.fe-design-reset {
+  width: 26px; height: 26px; padding: 0; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+  transition: color 140ms ease, background 140ms ease;
+}
+.fe-design-reset:hover { background: var(--panel); color: var(--text); }
+.fe-design-reset { font-size: 1rem; line-height: 1; }
+
+/* Built-in pill — marks vendored fonts (Inter / Fraunces) so the admin
+   knows the absence of a delete button is intentional. */
+.fe-font-builtin-badge {
+  display: inline-block; margin-left: 6px;
+  font-size: 0.65rem; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 6px; border-radius: 4px;
+  background: var(--panel); color: var(--muted);
+  border: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+/* Branding & SEO: OG image preview row (image left, file input right). */
+.og-image-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;
+  align-items: start; margin-top: 12px;
+}
+@media (max-width: 720px) {
+  .og-image-row { grid-template-columns: 1fr; }
+}
+.og-image-preview img {
+  display: block; max-width: 100%; max-height: 220px;
+  margin-top: 8px; border-radius: 8px; border: 1px solid var(--border);
+}
+.og-image-empty {
+  margin-top: 8px; padding: 24px; border: 1px dashed var(--border);
+  border-radius: 8px; text-align: center; background: var(--panel-2);
+}
+
+/* Branding & SEO: two-panel grid inside the Site Identity card —
+   Site name + Favicon | Open Graph. Mirrors .fe-header-grid. */
+.fe-branding-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+  margin-top: 6px;
+}
+@media (max-width: 820px) { .fe-branding-grid { grid-template-columns: 1fr; } }
+
+/* Favicon sub-block sits inside the Site name panel — preview tile on
+   the left, file picker + clear toggle on the right. */
+.fe-favicon-block {
+  display: grid; grid-template-columns: auto minmax(0, 1fr);
+  align-items: start; gap: 14px;
+  margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.fe-favicon-block-fields { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.fe-favicon-current {
+  display: block; width: 56px; height: 56px; object-fit: contain;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px;
+}
+.fe-favicon-current--empty {
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; border-style: dashed;
+}
+
+.fe-og-image-stack {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  margin-top: 8px;
+}
+.fe-og-image-current {
+  display: block; max-width: 100%; max-height: 140px;
+  border: 1px solid var(--border); border-radius: 8px;
+}
+
+/* Inline enable-toggle row inside the OG panel — the standalone
+   .special-page-row pattern was too tall for a sub-panel. */
+.fe-og-toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 8px 10px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; margin-bottom: 6px;
+}
+
+/* Header admin: every settings sub-panel sits inside a single card on a
+   3-column grid (Width & padding | Logo | Top alert | Under-header alert).
+   Each panel keeps its own form so the global save bar can submit all
+   dirty ones in one go. */
+.fe-header-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+  margin-top: 6px;
+}
+.fe-header-grid-item {
+  display: flex; flex-direction: column;
+  min-width: 0;  /* allow long inputs/colour rows to shrink, not push */
+  padding: 14px 16px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel-2);
+}
+.fe-header-grid-title {
+  margin: 0 0 4px; font-size: 0.95rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--text);
+}
+.fe-header-grid-blurb { margin: 0 0 12px; }
+.fe-header-grid-foot { margin: 1rem 0 0; }
+@media (max-width: 1180px) {
+  .fe-header-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .fe-header-grid { grid-template-columns: 1fr; }
+}
 .template-card { display: flex; flex-direction: column; gap: 10px;
   padding: 14px; border: 2px solid var(--border); border-radius: 12px;
-  background: var(--panel); cursor: pointer;
+  background: var(--panel); cursor: pointer; position: relative;
   transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease; }
+
+/* Edit + Delete buttons that overlay each non-prebuilt layout card. Hidden
+   by default, slide in on card hover. Bypass the card's radio-select
+   click via stopPropagation in the JS handler. */
+.template-card-actions {
+  position: absolute; top: 8px; right: 8px;
+  display: flex; gap: 4px; z-index: 2;
+  opacity: 0; transition: opacity 140ms ease;
+}
+.template-card:hover .template-card-actions,
+.template-card.active .template-card-actions { opacity: 1; }
+.template-card-action-btn {
+  min-width: 26px; height: 22px; padding: 0 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  cursor: pointer; line-height: 1;
+  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+.template-card-action-btn:hover { background: var(--panel-2); transform: translateY(-1px); }
+.template-card-action-btn:focus-visible { outline: 2px solid var(--access); outline-offset: 2px; }
+.template-card-action-btn .icon { width: 14px; height: 14px; }
+.template-card-action-del {
+  background: #dc2626; color: #fff; border-color: rgba(0, 0, 0, 0.18);
+}
+.template-card-action-del:hover { background: #b91c1c; color: #fff; }
+.template-card-action-del .icon { color: #fff; }
 .template-card:hover { border-color: var(--access); transform: translateY(-1px);
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08); }
 .template-card.active { border-color: var(--brand); background: var(--brand-soft); }
+/* Badge is rendered on every card so JS can flip the .active class without
+   re-rendering; CSS keeps it hidden unless the card is the live selection. */
+.template-card .template-card-badge { display: none; }
+.template-card.active .template-card-badge { display: inline-flex; }
 .template-card input[type="radio"] { position: absolute; width: 0; height: 0;
   opacity: 0; pointer-events: none; }
 .template-card-preview { height: 90px; border-radius: 8px; overflow: hidden;
@@ -261,51 +1054,91 @@ p { margin: .25rem 0; }
 .alert-bar-color-row, .alert-bar-icon-row { display: grid;
   grid-template-columns: 1fr 1fr; gap: 16px; }
 
-/* ===== Mega menu editor (admin) ===== */
-.nav-megamenu-editor { display: grid; gap: 18px;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
-.nav-megacol { padding: 16px; background: var(--panel-2);
-  border: 1px solid var(--border); border-radius: 12px;
-  display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.nav-megacol-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* ===== Mega menu editor (admin) =====
+   Columns stack vertically at full container width so each column gets room
+   to breathe. Inside a column, link blocks sit in a single stream. #Icon and
+   link-option rows keep their 2-up grid on desktop because there's plenty of
+   horizontal room in the full-width layout. */
+.nav-megamenu-editor { display: flex; flex-direction: column; gap: 22px;
+  counter-reset: megacol; }
+.nav-megacol { counter-increment: megacol;
+  padding: 22px 24px; background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: 14px;
+  display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.nav-megacol-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .nav-megacol-head > .drag-handle { flex: 0 0 auto; }
-.nav-megamenu-editor { counter-reset: megacol; }
-.nav-megacol { counter-increment: megacol; }
 .nav-megacol-label { flex: 1 1 auto; min-width: 0;
-  text-transform: uppercase; letter-spacing: .06em; }
+  text-transform: uppercase; letter-spacing: .06em; font-weight: 600;
+  font-size: 0.8125rem; color: var(--muted); }
 .nav-megacol-label::before { content: "Column " counter(megacol); }
 .nav-megacol-del-form { flex: 0 0 auto; margin: 0; }
 .nav-megacol-addlink-form { margin: 0; }
 .nav-megacol-links { list-style: none; padding: 0; margin: 0;
-  display: flex; flex-direction: column; gap: 10px; }
-.nav-megalink { padding: 6px 10px 10px; background: var(--panel);
-  border: 1px solid var(--border); border-radius: 8px;
-  display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.nav-megalink-top { display: flex; align-items: center;
+  display: flex; flex-direction: column; gap: 14px; }
+.nav-megalink { padding: 14px 16px; background: var(--panel);
+  border: 1px solid var(--border); border-radius: 10px;
+  display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.nav-megalink-top { display: flex; align-items: center; gap: 10px;
   justify-content: space-between; }
 .nav-megalink-drag { cursor: grab; color: var(--muted); }
 .nav-megalink-drag:active { cursor: grabbing; }
 .nav-megalink-del-form { margin: 0; }
-.nav-megalink-del-form .btn { padding: 2px 6px; font-size: 0.75rem; }
-.nav-megalink-form { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.nav-megalink-del-form .btn { padding: 4px 8px; font-size: 0.8125rem; }
+.nav-megalink-form { margin: 0; display: flex; flex-direction: column; gap: 12px; }
 .nav-megalink.is-dirty { box-shadow: inset 2px 0 0 var(--warning); }
 .btn.is-dirty { position: relative; }
 .btn.is-dirty::after { content: ""; position: absolute; top: 4px; right: 4px;
   width: 6px; height: 6px; border-radius: 50%; background: var(--warning); }
-.nav-megalink-row { display: grid; gap: 8px; min-width: 0; }
+.nav-megalink-row { display: grid; gap: 14px; min-width: 0; }
 .nav-megalink-row-text { grid-template-columns: 1fr 1fr; align-items: center; }
-.nav-megalink-row-icons { grid-template-columns: 1fr 1fr auto; align-items: end; }
-.nav-megalink-row input[type="text"] { padding: 6px 8px; font-size: 0.8125rem;
-  border: 1px solid var(--border); border-radius: 6px;
-  background: var(--panel); color: var(--text); min-width: 0; }
-.nav-megalink-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.nav-megalink-field-lbl { font-size: 0.6875rem; color: var(--muted);
-  text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
-.nav-megalink-field select { padding: 6px 8px; font-size: 0.8125rem; border-radius: 6px;
+/* Icons row packs icon-before, icon-after, size, override-color, and the
+   new-tab checkbox onto one wrap-friendly flex line instead of the old
+   2-/3-column grid, so link blocks are noticeably more compact. Fields sit
+   at their intrinsic width and pack to the left — no stretching. */
+.nav-megalink-row-icons {
+  display: flex; flex-wrap: wrap; gap: 1.5rem;
+  align-items: flex-start; justify-content: flex-start;
+}
+.nav-megalink-row-icons .nav-megalink-field { flex: 0 0 auto; }
+.nav-megalink-row-icons .nav-megalink-icon-field { flex: 0 0 auto; }
+.nav-megalink-row input[type="text"] {
+  padding: 9px 12px; font-size: 0.9rem;
+  border: 1px solid var(--border); border-radius: 7px;
+  background: var(--panel); color: var(--text); min-width: 0;
+}
+.nav-megalink-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.nav-megalink-field-lbl { font-size: 0.7rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+.nav-megalink-field select { padding: 8px 10px; font-size: 0.875rem; border-radius: 7px;
   border: 1px solid var(--border); background: var(--panel); color: var(--text);
   min-width: 0; width: 100%; }
+.nav-megalink-field-newtab .nav-megalink-newtab { height: 36px; padding: 0 2px; }
 .nav-megalink-save { align-self: stretch; }
 .nav-megalink-row-single { grid-template-columns: 1fr auto; align-items: center; }
+@media (max-width: 720px) {
+  .nav-megalink-row-text { grid-template-columns: 1fr; }
+}
+.nav-megalink-seg {
+  display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  background: var(--panel);
+}
+.nav-megalink-seg-opt {
+  display: inline-flex; align-items: center; gap: 0; padding: 6px 10px;
+  font-size: 0.75rem; color: var(--muted); cursor: pointer; line-height: 1;
+}
+.nav-megalink-seg-opt + .nav-megalink-seg-opt { border-left: 1px solid var(--border); }
+.nav-megalink-seg-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.nav-megalink-seg-opt:has(input:checked) {
+  background: var(--brand-soft); color: var(--brand); font-weight: 600;
+}
+.nav-megalink-color-field .nav-megalink-color-row {
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.nav-megalink-color-input {
+  width: 44px; height: 28px; padding: 0; border: 1px solid var(--border);
+  border-radius: 6px; background: transparent; cursor: pointer;
+}
+.nav-megalink-color-input:disabled { opacity: 0.35; cursor: not-allowed; }
 .nav-megalink-row-footer { grid-template-columns: 1fr auto; align-items: center; }
 .nav-megalink-newtab { display: inline-flex; align-items: center; gap: 6px;
   font-size: 0.75rem; color: var(--muted); font-weight: 500; cursor: pointer; }
@@ -321,8 +1154,6 @@ p { margin: .25rem 0; }
 .nav-megacol-add-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .nav-megacol-add-row form { margin: 0; }
 @media (max-width: 480px) {
-  .nav-megalink-row-text { grid-template-columns: 1fr; }
-  .nav-megalink-row-icons { grid-template-columns: 1fr 1fr; }
   .nav-megalink-save { grid-column: 1 / -1; }
 }
 .alert-bar-color-row input[type="color"] { width: 100%; height: 40px; padding: 2px;
@@ -341,7 +1172,15 @@ p { margin: .25rem 0; }
 /* ===== Web Frontend admin area — secondary sidebar layout ===== */
 .fe-admin-layout { display: grid; grid-template-columns: 248px minmax(0, 1fr);
   gap: 32px; align-items: start; }
-.fe-admin-main { min-width: 0; }
+/* Universal 1rem gap between every direct child of the admin main column
+   (cards, forms, free sections, etc.) so we never have to remember to
+   space stacked panels per-page. .form gets the same gap so cards inside
+   a form sit consistently with adjacent stand-alone cards. */
+.fe-admin-main {
+  min-width: 0;
+  display: flex; flex-direction: column; gap: 1rem;
+}
+.fe-admin-main .form { gap: 1rem; }
 .fe-tbl-scroll { max-width: 100%; overflow-x: auto; }
 .fe-tbl-scroll .tbl { min-width: 720px; }
 .fe-tbl-scroll .tbl .chip { white-space: nowrap; }
@@ -349,6 +1188,56 @@ p { margin: .25rem 0; }
 .fe-tbl-scroll .tbl .row-actions { flex-wrap: nowrap; justify-content: flex-end; }
 .fe-tbl-scroll .tbl .row-actions .btn { white-space: nowrap; }
 .fe-subnav { position: sticky; top: 22px; }
+/* Save bar fixed to the viewport bottom-left, aligned with the frontend
+   admin sidebar column (main app sidebar width + .content padding-left).
+   Stays anchored to the viewport bottom regardless of scroll position. */
+.fe-save-bar {
+  position: fixed;
+  left: calc(var(--sidebar-w, 248px) + 28px);
+  bottom: 22px;
+  width: var(--sidebar-w, 248px);
+  z-index: 50;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 12px 14px; border-radius: 12px;
+  background: #facc15; color: #422006;
+  border: 1px solid #ca8a04;
+  box-shadow: 0 8px 22px rgba(202, 138, 4, 0.28);
+  animation: fe-save-appear 220ms ease-out both;
+}
+@media (max-width: 900px) {
+  /* On mobile the .fe-admin-layout collapses to one column and the main
+     sidebar usually doesn't reserve a column either; show the bar full-
+     width at the screen bottom. */
+  .fe-save-bar { left: 12px; right: 12px; bottom: 12px; width: auto; }
+}
+@keyframes fe-save-appear {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fe-save-bar.is-leaving {
+  animation: fe-save-leave 280ms cubic-bezier(0.55, 0, 0.85, 0.4) forwards;
+}
+@keyframes fe-save-leave {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(28px); }
+}
+.fe-save-bar[hidden] { display: none !important; }
+.fe-save-bar-msg {
+  font-weight: 700; font-size: 0.875rem;
+  /* Single line, ellipsised if it'd wrap — prevents a 1→2 line flash
+     when the message changes ("Unsaved changes" → "Saving…" → "Saved")
+     since "Saving…" makes the button slightly wider. */
+  flex: 1 1 auto; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fe-save-bar-btn.btn { background: #422006; color: #facc15;
+  border-color: #422006; padding: 6px 14px;
+  flex: 0 0 auto; white-space: nowrap; }
+.fe-save-bar-btn.btn:hover { background: #1c0f02; color: #fde047; }
+/* Hide the per-card inline save buttons once the global save bar is on
+   screen — the bar is the canonical way to commit. The inline form-actions
+   are still in the DOM as a no-JS fallback. */
+body.has-fe-save-bar .fe-admin-main .form-actions { display: none; }
 .fe-subnav-head { padding: 2px 4px 16px; border-bottom: 1px solid var(--border);
   margin-bottom: 12px; }
 .fe-subnav-title { font-size: 1.0625rem; font-weight: 700; color: var(--text);
@@ -464,6 +1353,7 @@ p { margin: .25rem 0; }
 [data-theme="cyberpunk"] .theme-icon-light { display: inline; }
 
 .content { padding: 22px 28px 48px; min-width: 0; max-width: 1400px; }
+.content:has(.fe-admin-layout) { max-width: none; }
 .topbar {
   display: flex; align-items: center; gap: 14px; margin-bottom: 14px;
 }
@@ -531,6 +1421,58 @@ p { margin: .25rem 0; }
 }
 .card-head h2 { font-size: 1rem; font-weight: 700; }
 .card-head-actions { display: flex; align-items: center; gap: 8px; }
+
+/* Collapsible cards (Web Frontend admin only). The JS adds a chevron
+   button to each .card-head, makes the head clickable, and toggles
+   .is-collapsed on the parent .card. CSS hides everything below the head
+   and shrinks padding so the collapsed cards stack tightly. */
+.fe-admin-main .card {
+  transition: padding 160ms ease; margin-bottom: 0;
+  /* Pointer cursor on the card itself so the strip of padding above the
+     heading reads as "click to collapse". Everything else inside the card
+     (form fields, buttons, body content) explicitly resets so they keep
+     their normal cursors. Spacing between cards is owned by the .fe-admin-main
+     flex `gap: 1rem` rule above — do not re-introduce per-card margins. */
+  cursor: pointer;
+}
+.fe-admin-main .card > :not(.card-head) { cursor: default; }
+.fe-admin-main .card > :not(.card-head) :is(input, textarea, select) { cursor: text; }
+.fe-admin-main .card > :not(.card-head) :is(button, a, label) { cursor: pointer; }
+.fe-admin-main .card-head {
+  cursor: pointer; user-select: none;
+  margin-bottom: 0;
+}
+/* The card-head is a 3-child flex row in FE admin (h2, optional
+   .card-head-actions, JS-injected .fe-card-toggle). Default
+   `justify-content: space-between` would strand the actions in the
+   middle — push them to the right edge so they sit flush against the
+   chevron. Cards that use a plain muted-description span instead of
+   .card-head-actions are unaffected. */
+.fe-admin-main .card-head > .card-head-actions { margin-left: auto; }
+.fe-admin-main .card-head:hover h2 { color: var(--access); }
+/* Allow the chevron to sit at the far right while the existing actions
+   row stays grouped before it. */
+.fe-card-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0; flex: 0 0 auto;
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  color: var(--muted); cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, transform 220ms ease;
+}
+.fe-card-toggle:hover { background: var(--panel-2); color: var(--text); }
+.fe-card-toggle .icon { width: 16px; height: 16px; }
+/* When the card is open the chevron points up; flips down on collapse. */
+.fe-admin-main .card:not(.is-collapsed) .fe-card-toggle { transform: rotate(180deg); }
+
+/* When collapsed: hide everything below the head + shrink the card box
+   so the stack of titles reads as a tight TOC. The entire card surface
+   becomes the click target — JS bails out of any interactive descendant. */
+.fe-admin-main .card.is-collapsed { padding: 1rem 1.5rem; cursor: pointer; }
+.fe-admin-main .card.is-collapsed:hover { background: var(--panel-2); }
+.fe-admin-main .card.is-collapsed > :not(.card-head) { display: none !important; }
+/* Re-enable spacing under the head when expanded (we cleared the default
+   margin-bottom above so the chevron alignment stays consistent). */
+.fe-admin-main .card:not(.is-collapsed) .card-head { margin-bottom: 12px; }
 [data-save-reorder-for].is-dirty { background: var(--brand); color: #fff; border-color: var(--brand); }
 
 .tsp-toast-host { position: fixed; bottom: 20px; right: 20px; z-index: 10000;
@@ -1185,7 +2127,28 @@ form.hide-zoom .zoom-only, form.hide-zoom .zoom-only-field { display: none; }
 .settings-tab.active { color: var(--brand); border-bottom-color: var(--brand); }
 .settings-body { flex: 1 1 auto; min-height: 0; display: flex; height: 70vh; background: var(--panel); }
 .settings-pane { display: none; flex: 1 1 auto; min-height: 0; width: 100%; }
-.settings-pane.active { display: flex; }
+/* Global Settings pane defaults — single source of truth so new tabs
+   inherit consistent spacing without per-pane CSS:
+     · 2rem padding around the outer container
+     · 1rem gap between top-level children (cards, forms, etc.)
+     · titles (.u-name) sized at 1rem
+     · toggle / row containers (.special-page-row) padded at 1rem
+   Per-pane overrides win on specificity (e.g. the Appearance pane
+   keeps its own internal padding since it scrolls a tall stack of
+   sub-sections). Iframe-hosting panes opt out of padding via the
+   :has() rule below so the iframe fills edge-to-edge. */
+.settings-pane.active {
+  display: flex; flex-direction: column;
+  padding: 2rem; gap: 1rem;
+  overflow-y: auto; overflow-x: hidden; min-width: 0;
+}
+.settings-pane.active > * { max-width: 100%; min-width: 0; }
+.settings-pane.active .u-name { font-size: 1rem; font-weight: 700; line-height: 1.3; }
+.settings-pane.active .special-page-row { padding: 1rem; }
+.settings-pane.active:has(> iframe.settings-frame),
+.settings-pane.active:has(> .settings-frame) {
+  padding: 0; gap: 0;
+}
 .settings-frame { width: 100%; height: 100%; border: 0; background: var(--panel); }
 .appearance-pane { display: flex; align-items: flex-start; justify-content: space-between;
   padding: 24px; gap: 16px; width: 100%; font-size: 1rem; }
@@ -1204,6 +2167,15 @@ form.hide-zoom .zoom-only, form.hide-zoom .zoom-only-field { display: none; }
 .sw-accent { width: 14px; align-self: center; height: 60%; margin-left: auto; margin-right: 8px; border-radius: 3px; }
 .swatch-label { font-size: 0.875rem; font-weight: 600; }
 .settings-pane[data-pane="appearance"] { flex-direction: column; padding: 0; overflow-y: auto; overflow-x: hidden; gap: 0; min-width: 0; }
+/* Sidebar tab — flex column with comfortable padding so the form
+   doesn't get stretched horizontally and the Save button sits
+   naturally at the bottom-right of the form rather than full-height
+   on the right edge of the pane. */
+.settings-pane[data-pane="sidebar"] {
+  flex-direction: column; padding: 2rem;
+  overflow-y: auto; overflow-x: hidden; gap: 16px; min-width: 0;
+}
+.settings-pane[data-pane="sidebar"] > * { max-width: 100%; min-width: 0; }
 .settings-pane[data-pane="appearance"] > * { max-width: 100%; min-width: 0; }
 .settings-pane[data-pane="appearance"] > .appearance-pane { padding: 20px 24px; }
 .settings-pane[data-pane="appearance"] .appearance-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px;
@@ -1233,6 +2205,26 @@ form.hide-zoom .zoom-only, form.hide-zoom .zoom-only-field { display: none; }
 .settings-pane[data-pane="appearance"] .u-name { font-size: 1rem; line-height: 1.3; }
 .settings-pane[data-pane="appearance"] .u-name + p { margin: 2px 0 2rem; }
 .settings-sep { border: 0; border-top: 1px solid var(--border); margin: 0 24px; width: auto; }
+
+/* Daily snapshot list in Settings → Data. Each row shows the file
+   name, the formatted date + size, and a Download button. Compact
+   layout so 14 days of snapshots stack cleanly. */
+.data-snapshots .form-actions { justify-content: flex-start; }
+.data-snapshot-list {
+  list-style: none; padding: 0; margin: 8px 0 12px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.data-snapshot-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 12px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--panel-2);
+}
+.data-snapshot-row:hover { background: var(--panel); }
+.data-snapshot-name { flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.data-snapshot-name code { font-size: 0.85rem; }
+.data-snapshot-row .smaller { flex: 0 0 auto; }
+.data-snapshot-row .btn { flex: 0 0 auto; }
 .branding-row { display: flex; gap: 16px; align-items: stretch; margin-top: 8px; }
 .branding-preview-wrap { flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; width: 248px; }
 .width-slider-label { margin-top: 4px; font-size: 0.875rem; display: flex; flex-direction: column; gap: 4px; }
@@ -1242,8 +2234,8 @@ form.hide-zoom .zoom-only, form.hide-zoom .zoom-only-field { display: none; }
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
 }
-.sidebar-footer-mock .dccma-link { pointer-events: none; }
-.sidebar-footer-mock .dccma-link img { max-width: 100%; height: auto; display: block; }
+.sidebar-footer-mock .sidebar-footer-img-link { pointer-events: none; }
+.sidebar-footer-mock .sidebar-footer-img-link img { max-width: 100%; height: auto; display: block; }
 .branding-fields { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .width-slider-head { display: flex; justify-content: space-between; align-items: baseline; }
 .width-slider-head output { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .9rem; }
@@ -1566,17 +2558,34 @@ body.embed .card:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom
 .settings-pane[data-pane="web-frontend"] { flex-direction: column; padding: 2rem; gap: 1rem;
   overflow-y: auto; }
 
-.settings-pane[data-pane="special-pages"] { flex-direction: column; padding: 20px 24px;
+.settings-pane[data-pane="modules"] { flex-direction: column; padding: 20px 24px;
   overflow-y: auto; }
 
 .special-pages-list { list-style: none; margin: 0; padding: 0; display: flex;
   flex-direction: column; gap: 10px; width: 100%; }
 .special-page-row { display: flex; align-items: center; justify-content: space-between;
   gap: 16px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px;
-  background: var(--panel, var(--bg)); }
+  background: var(--panel, var(--bg)); flex-wrap: wrap; }
 .special-page-info { min-width: 0; flex: 1; }
+
+/* Per-module role-permission picker — sits between the info column
+   and the toggle on each Modules-tab row. */
+.module-role-form { display: flex; align-items: center; flex: 0 0 auto; }
+.module-role-label { display: flex; flex-direction: column; gap: 2px; }
+.module-role-label > .smaller { letter-spacing: 0.04em; text-transform: uppercase;
+  font-weight: 600; font-size: 0.65rem; }
+.module-role-form select {
+  padding: 7px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
+  font: inherit; font-size: 0.85rem; min-width: 200px;
+}
+.module-role-form select:focus { outline: 2px solid var(--access); outline-offset: 1px; }
+@media (max-width: 720px) {
+  .module-role-form select { min-width: 0; width: 100%; }
+  .module-role-label { flex: 1 1 100%; }
+}
 .special-page-info .u-name { margin-bottom: 2px; font-size: 1rem; }
-.settings-pane[data-pane="special-pages"] .u-name { font-size: 1rem; }
+.settings-pane[data-pane="modules"] .u-name { font-size: 1rem; }
 .special-page-info p { margin: 0; }
 .special-page-toggle-form { margin: 0; display: flex; align-items: center; gap: 8px;
   flex-shrink: 0; }
@@ -2015,3 +3024,234 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
 @media (max-width: 640px) {
   .version-update-banner { right: 12px; bottom: 12px; width: calc(100vw - 24px); }
 }
+
+/* ── ICON PICKER (mega-menu link fields) ─────────────────────────────── */
+.nav-megalink-icon-field { min-width: 0; }
+.icon-picker-trigger-wrap {
+  display: inline-flex; align-items: stretch; gap: 4px;
+}
+.icon-picker-trigger {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-width: 72px; height: 36px; padding: 0 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font: inherit; cursor: pointer;
+}
+.icon-picker-trigger:hover { background: var(--brand-soft); }
+.icon-picker-preview {
+  display: none; align-items: center; justify-content: center;
+  --icon-size: 20px;
+}
+.icon-picker-preview .icon { width: var(--icon-size); height: var(--icon-size); }
+.icon-picker-preview .icon-custom { object-fit: contain; }
+.icon-picker-trigger-empty {
+  font-size: .9rem; color: var(--muted);
+}
+.nav-megalink-icon-field.has-icon .icon-picker-preview { display: inline-flex; }
+.nav-megalink-icon-field.has-icon .icon-picker-trigger-empty { display: none; }
+.icon-picker-clear {
+  display: none; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: 32px; height: 36px; border: 1px solid transparent;
+  background: transparent; color: var(--muted);
+  border-radius: 8px; cursor: pointer;
+}
+.nav-megalink-icon-field.has-icon .icon-picker-clear { display: inline-flex; }
+.icon-picker-clear:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  border-color: var(--border); color: var(--text);
+}
+.icon-picker-clear .icon { width: 14px; height: 14px; }
+
+/* ── ICON PICKER MODAL ──────────────────────────────────────────────── */
+.icon-picker-modal .modal-panel {
+  width: min(760px, 94vw); max-height: 86vh; display: flex; flex-direction: column;
+}
+.icon-picker-body {
+  display: flex; flex-direction: column; gap: 12px; min-height: 0;
+  padding: 12px 16px 4px;
+}
+.icon-picker-toolbar {
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+}
+.icon-picker-search {
+  flex: 1 1 260px; min-width: 0; padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel-2); color: var(--text); font: inherit;
+}
+.icon-picker-color-label,
+.icon-picker-size-label {
+  display: inline-flex; align-items: center; gap: 8px;
+  flex: 0 0 auto;
+}
+.icon-picker-color-label input[type="color"] {
+  width: 40px; height: 32px; padding: 0; border: 1px solid var(--border); border-radius: 8px;
+}
+.icon-picker-size-label input[type="range"] {
+  width: 140px; accent-color: var(--access, #4f46e5);
+}
+.mega-animate-speed-row { margin: 10px 0 14px; }
+.mega-animate-speed-label { display: block; }
+.mega-animate-speed-head {
+  display: flex; align-items: baseline; gap: 6px;
+  font-weight: 600; font-size: 0.875rem; margin-bottom: 6px;
+}
+.mega-animate-speed-head output { font-variant-numeric: tabular-nums; color: var(--brand); }
+.mega-animate-speed-row input[type="range"] {
+  width: 100%; max-width: 420px; accent-color: var(--access, var(--brand));
+}
+.hero-heading-opts, .hero-bg-grid {
+  display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: flex-start;
+  justify-content: flex-start; margin-top: 12px;
+}
+
+/* Two-column hero builder: text + font on the left, background + CTA buttons
+   on the right. The form uses display: contents so its inner cols become
+   direct grid items of .hero-section-grid alongside the buttons col. */
+.hero-section-grid {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px 32px; align-items: start; margin-top: 8px;
+}
+.hero-grid-form { display: contents; }
+.hero-text-col    { grid-column: 1; grid-row: 1 / span 2; min-width: 0; }
+.hero-bg-col      { grid-column: 2; grid-row: 1; min-width: 0; }
+.hero-buttons-col { grid-column: 2; grid-row: 2; min-width: 0; }
+/* The shared .fe-tbl-scroll has a 720px min-width to force horizontal
+   scroll on narrow tables. In the hero-builder right column there's no
+   room for that, so we let the table fit the column. */
+.hero-buttons-col .fe-tbl-scroll { overflow: visible; max-width: 100%; }
+.hero-buttons-col .fe-tbl-scroll .tbl { min-width: 0; }
+.hero-buttons-col .fe-tbl-scroll .tbl .row-actions { flex-wrap: wrap; gap: 4px; }
+@media (max-width: 980px) {
+  .hero-section-grid { grid-template-columns: 1fr; gap: 18px; }
+  .hero-text-col, .hero-bg-col, .hero-buttons-col {
+    grid-column: 1; grid-row: auto;
+  }
+}
+
+.hero-unified .hero-sub-heading {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 0.82rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted);
+  margin: 22px 0 8px; padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.hero-unified > form:first-of-type > .hero-sub-heading:first-of-type,
+.hero-unified > .hero-sub-heading:first-of-type {
+  margin-top: 8px; padding-top: 0; border-top: 0;
+}
+.hero-unified .hero-sub-add { margin-left: auto; }
+.hero-unified .hero-sub-help { margin: 0 0 10px; }
+.hero-unified-actions { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.hero-full-preview-clip {
+  position: relative;
+  height: 400px;
+  margin: 6px 0 18px;
+  border: 1px dashed var(--border); border-radius: 12px;
+  background: var(--panel-2);
+  overflow: hidden;
+}
+.hero-full-preview-label {
+  position: absolute; top: 8px; left: 12px; z-index: 2;
+  margin: 0; padding: 2px 8px; border-radius: 4px;
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+  font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+}
+.hero-full-preview {
+  /* The outer wrapper fills the clip 1:1 — that's what lets the hero
+     background (frosty blobs / solid / gradient / image) span the full
+     width of the 320px frame. Only the content inside (.fe-hero-inner)
+     gets dynamically scaled to contain-fit, decoupled from the bg. */
+  position: absolute; inset: 0;
+  pointer-events: none;
+  user-select: none;
+}
+.hero-full-preview.frontend-body {
+  background: transparent;
+}
+/* The inner section fills the wrapper; vertical centering brings the
+   .fe-hero-inner content to the middle of the clip regardless of its
+   scaled height. Padding is zeroed out because the JS-scaled inner box
+   already sets its own visual size relative to the 320px clip. */
+.hero-full-preview .fe-hero {
+  width: 100%; height: 100%;
+  padding: 0 !important;
+  display: flex; align-items: center; justify-content: center;
+}
+.hero-full-preview .fe-hero-inner {
+  transform-origin: center center;
+}
+.hero-slider-field { min-width: 220px; }
+.hero-slider-field input[type="range"] {
+  width: 100%; accent-color: var(--access, var(--brand));
+}
+.hero-bg-panel + .hero-bg-panel { margin-top: 12px; }
+.hero-bg-panel { margin-top: 16px; }
+.hero-bg-image-preview {
+  display: flex; align-items: center; gap: 14px; padding: 12px;
+  border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px;
+  background: var(--panel-2);
+}
+.hero-bg-image-preview img {
+  max-width: 140px; max-height: 80px; border-radius: 6px; object-fit: cover;
+}
+.hero-reset-field { min-width: 200px; }
+/* Horizontal reset-checkbox row used under the gradient color pickers. */
+.hero-reset-row {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 0.85rem; color: var(--muted);
+  cursor: pointer; padding-top: 18px;  /* aligns vertically with color pickers */
+}
+.hero-reset-row input { accent-color: var(--brand); margin: 0; }
+.hero-heading-grad-row { margin-top: 12px; }
+.icon-picker-upload-btn {
+  cursor: pointer; white-space: nowrap;
+}
+.icon-picker-upload-btn .icon { width: 14px; height: 14px; }
+.icon-picker-catalog {
+  overflow-y: auto; flex: 1 1 auto;
+  padding: 4px; border: 1px solid var(--border); border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+  max-height: 52vh;
+}
+.icon-picker-group + .icon-picker-group { margin-top: 12px; }
+.icon-picker-group-title {
+  font-size: .75rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); padding: 10px 10px 6px;
+}
+.icon-picker-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+  gap: 6px; padding: 0 6px 6px;
+}
+.icon-picker-cell {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; padding: 10px 6px;
+  background: var(--panel-2); border: 1px solid transparent;
+  border-radius: 8px; cursor: pointer; min-height: 72px;
+  color: inherit; position: relative;
+}
+.icon-picker-cell:hover {
+  border-color: var(--border); background: var(--brand-soft);
+}
+.icon-picker-cell.is-selected {
+  border-color: var(--brand); background: var(--brand-soft);
+  box-shadow: inset 0 0 0 1px var(--brand);
+}
+.icon-picker-cell .icon { width: var(--icon-size, 22px); height: var(--icon-size, 22px); }
+.icon-picker-cell .icon-custom { object-fit: contain; }
+.icon-picker-cell.is-custom { cursor: pointer; }
+.icon-picker-cell-del {
+  position: absolute; top: 2px; right: 2px;
+  width: 18px; height: 18px; padding: 0; line-height: 16px;
+  border: 0; border-radius: 50%;
+  background: var(--danger, #dc2626); color: white;
+  font-size: 14px; cursor: pointer;
+  opacity: 0; transition: opacity 120ms ease;
+}
+.icon-picker-cell.is-custom:hover .icon-picker-cell-del { opacity: 1; }
+.icon-picker-cell-label {
+  font-size: .7rem; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 100%;
+}
+.icon-picker-attribution { padding: 0 4px 4px; margin: 0; }

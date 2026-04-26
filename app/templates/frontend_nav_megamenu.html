@@ -33,7 +33,6 @@
       <p class="muted">No columns yet. Add one to get started.</p>
       {% else %}
       <p class="muted smaller">Drag the handle to reorder columns, or the handle on each link to reorder links within a column.</p>
-      {% set _icons = ['info','alert-triangle','bell','megaphone','star','heart','calendar','zap','mail','phone','help-circle','arrow-right','file-text','home','panel-top','panel-bottom','layout-grid'] %}
       <div id="megamenu-editor" class="nav-megamenu-editor file-list-sortable"
            data-reorder-url="{{ url_for('main.frontend_nav_columns_reorder', nid=item.id) }}"
            data-reorder-toast="Column order">
@@ -44,6 +43,50 @@
       {% endif %}
     </section>
 
+  </div>
+</div>
+
+{# ---- Icon picker modal (shared by all nav-link icon fields) ---- #}
+<div class="modal icon-picker-modal" id="icon-picker-modal" aria-hidden="true"
+     data-catalog-url="{{ url_for('static', filename='vendor/lucide/icons.json') }}"
+     data-custom-list-url="{{ url_for('main.frontend_custom_icons_list') }}"
+     data-custom-upload-url="{{ url_for('main.frontend_custom_icon_upload') }}"
+     data-custom-delete-url="{{ url_for('main.frontend_custom_icon_delete', cid=0) }}"
+     data-csrf-token="{{ csrf_token() }}">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2>Choose an icon</h2>
+      <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button>
+    </div>
+    <div class="modal-body icon-picker-body">
+      <div class="icon-picker-toolbar">
+        <input type="search" class="icon-picker-search" placeholder="Search icons…" data-icon-search autocomplete="off">
+        <label class="icon-picker-color-label">
+          <span class="muted smaller">Color</span>
+          <input type="color" data-icon-modal-color value="#747474">
+        </label>
+        <label class="icon-picker-size-label">
+          <span class="muted smaller">Size <output data-icon-size-out>20</output>px</span>
+          <input type="range" min="12" max="64" step="1" value="20" data-icon-modal-size>
+        </label>
+        <label class="icon-picker-upload-btn btn btn-sm">
+          {{ icon('upload') }} <span>Upload</span>
+          <input type="file" accept=".svg,.png,image/svg+xml,image/png" data-icon-upload hidden>
+        </label>
+      </div>
+      <div class="icon-picker-catalog" data-icon-catalog>
+        <p class="muted smaller" style="padding: 16px;">Loading icons…</p>
+      </div>
+      <p class="muted smaller icon-picker-attribution">
+        Built-in icons from <a href="https://lucide.dev" target="_blank" rel="noopener">Lucide</a> (ISC). Upload your own SVG or PNG — max 512&nbsp;KB.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" data-close>Cancel</button>
+      <button type="button" class="btn btn-danger" data-icon-picker-remove>Remove icon</button>
+      <button type="button" class="btn btn-primary" data-icon-picker-save disabled>Save</button>
+    </div>
   </div>
 </div>
 {% endblock %}

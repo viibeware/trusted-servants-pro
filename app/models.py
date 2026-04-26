@@ -189,6 +189,24 @@ class SiteSetting(db.Model):
     zoom_tech_content = db.Column(db.Text)
     zoom_tech_blocks_json = db.Column(db.Text)
     zoom_tech_template = db.Column(db.String(16), nullable=False, default="standard")
+    # Announcements & Events module toggle. Default True so existing
+    # installs don't lose data the moment the column is added.
+    posts_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    # Per-module role gates. Each value is one of: viewer (any signed-in
+    # user), editor (admin + editor), frontend_editor (admin + frontend
+    # editor), admin (admin only). Defaults preserve the historical
+    # behavior — Posts admin-only, Intergroup/Zoom-Tech open to all,
+    # Web Frontend reserved for admins + frontend editors.
+    intergroup_required_role = db.Column(db.String(32), nullable=False, default="viewer")
+    zoom_tech_required_role = db.Column(db.String(32), nullable=False, default="viewer")
+    posts_required_role = db.Column(db.String(32), nullable=False, default="admin")
+    frontend_module_required_role = db.Column(db.String(32), nullable=False, default="frontend_editor")
+    # Sidebar ordering. Mode: auto-asc | auto-desc | manual. Auto modes
+    # ignore the JSON and sort items alphabetically inside each section
+    # (Main → External → Admin order is fixed). Manual mode reads
+    # sidebar_order_json: {"sections": [...], "main": [...], "admin": [...]}.
+    sidebar_sort_mode = db.Column(db.String(16), nullable=False, default="auto-asc")
+    sidebar_order_json = db.Column(db.Text)
     smtp_host = db.Column(db.String(255))
     smtp_port = db.Column(db.Integer)
     smtp_username = db.Column(db.String(255))
@@ -206,10 +224,36 @@ class SiteSetting(db.Model):
     turnstile_enabled = db.Column(db.Boolean, nullable=False, default=False)
     turnstile_site_key = db.Column(db.String(128))
     turnstile_secret_key_enc = db.Column(db.LargeBinary)
+    # Backend (admin / /tspro) Open Graph metadata. When the public web
+    # frontend module is enabled, these tags are emitted only on /tspro/*
+    # URLs. Otherwise they apply site-wide.
     og_enabled = db.Column(db.Boolean, nullable=False, default=False)
     og_title = db.Column(db.String(200))
     og_description = db.Column(db.Text)
     og_image_filename = db.Column(db.String(500))
+    # Frontend (public marketing site) Open Graph metadata. Independent of
+    # the backend OG fields above so the link previews shown when /
+    # /meeting/foo, /about, etc. are shared can differ from the previews
+    # admins see when sharing /tspro URLs.
+    frontend_og_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    frontend_og_title = db.Column(db.String(200))
+    frontend_og_description = db.Column(db.Text)
+    frontend_og_image_filename = db.Column(db.String(500))
+    # Frontend-specific favicon. Independent of the admin /tspro favicon.
+    # When None, the bundled static/img/favicon.png fallback is used.
+    frontend_favicon_filename = db.Column(db.String(500))
+    # Site-wide design overrides — JSON map of token_key → override
+    # value. Layered on top of the active theme's defaults (see
+    # app/design.py). Empty / unset means use the theme's value.
+    frontend_design_json = db.Column(db.Text)
+    # Customizable public 404. Headline, subheadline, optional uploaded
+    # illustration, and a CTA button label + URL. All optional —
+    # sensible defaults are emitted by the public template when blank.
+    frontend_404_heading = db.Column(db.String(200))
+    frontend_404_subheading = db.Column(db.Text)
+    frontend_404_cta_label = db.Column(db.String(120))
+    frontend_404_cta_url = db.Column(db.String(500))
+    frontend_404_image_filename = db.Column(db.String(500))
     # Public-facing web frontend
     # Module gate: when False, hides Web Frontend from the sidebar entirely,
     # blocks the admin editor routes, and the public homepage won't serve.
@@ -219,8 +263,42 @@ class SiteSetting(db.Model):
     frontend_enabled = db.Column(db.Boolean, nullable=False, default=False)
     frontend_title = db.Column(db.String(200))
     frontend_tagline = db.Column(db.String(500))
+    frontend_tagline_enabled = db.Column(db.Boolean, nullable=False, default=True)
     frontend_hero_heading = db.Column(db.String(200))
     frontend_hero_subheading = db.Column(db.String(500))
+    # Hero heading typography
+    frontend_hero_heading_font = db.Column(db.String(32), nullable=False, default="fraunces")  # 'fraunces' | 'inter'
+    frontend_hero_heading_size = db.Column(db.Integer, nullable=False, default=100)  # percent of default
+    frontend_hero_heading_grad_start = db.Column(db.String(16))  # hex; None = theme default
+    frontend_hero_heading_grad_end = db.Column(db.String(16))
+    # When on, heading + subheading colors auto-derive from the chosen
+    # background's lightness so text stays readable on dark or light bgs.
+    frontend_hero_text_dynamic = db.Column(db.Boolean, nullable=False, default=False)
+    # Hero background generator
+    frontend_hero_bg_style = db.Column(db.String(16), nullable=False, default="frosty")  # frosty | solid | gradient | image
+    frontend_hero_bg_color = db.Column(db.String(16))            # solid color, or gradient start
+    frontend_hero_bg_color_2 = db.Column(db.String(16))          # gradient end
+    frontend_hero_bg_gradient_angle = db.Column(db.Integer, nullable=False, default=180)
+    frontend_hero_bg_hue = db.Column(db.Integer, nullable=False, default=225)     # frosty primary hue
+    frontend_hero_bg_hue_2 = db.Column(db.Integer, nullable=False, default=170)   # frosty accent hue
+    frontend_hero_bg_blur = db.Column(db.Integer, nullable=False, default=80)     # frosty blob blur px
+    frontend_hero_bg_opacity = db.Column(db.Integer, nullable=False, default=45)  # 0-100 (frosty)
+    frontend_hero_bg_randomize = db.Column(db.Boolean, nullable=False, default=False)
+    frontend_hero_bg_image_filename = db.Column(db.String(500))
+    frontend_hero_bg_image_mode = db.Column(db.String(16), nullable=False, default="cover")  # cover | tile
+    frontend_hero_bg_image_scale = db.Column(db.Integer, nullable=False, default=100)       # percent
+    # Video bg: muted, autoplay, object-fit: cover (no letterboxing).
+    frontend_hero_bg_video_filename = db.Column(db.String(500))
+    frontend_hero_bg_video_mode = db.Column(db.String(16), nullable=False, default="loop")  # loop | bounce
+    frontend_hero_bg_video_speed = db.Column(db.Integer, nullable=False, default=100)       # percent (50/100/150/200/300)
+    # Sinewave: JSON-encoded list of 1–4 hex colors painted as an animated
+    # multi-color gradient (same generator as the login screen background).
+    frontend_hero_sinewave_colors = db.Column(db.Text)
+    # Particle overlay (optional, layers on top of any bg style)
+    frontend_hero_particle_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    frontend_hero_particle_effect = db.Column(db.String(32), nullable=False, default="stars")
+    frontend_hero_particle_speed = db.Column(db.Integer, nullable=False, default=100)
+    frontend_hero_particle_size = db.Column(db.Integer, nullable=False, default=100)
     frontend_about_heading = db.Column(db.String(200))
     frontend_about_body = db.Column(db.Text)
     frontend_contact_heading = db.Column(db.String(200))
@@ -234,12 +312,30 @@ class SiteSetting(db.Model):
     frontend_header_template = db.Column(db.String(64), nullable=False, default="classic")
     frontend_footer_template = db.Column(db.String(64), nullable=False, default="classic")
     frontend_homepage_template = db.Column(db.String(64), nullable=False, default="classic")
-    frontend_megamenu_template = db.Column(db.String(64), nullable=False, default="dccma")
+    frontend_megamenu_template = db.Column(db.String(64), nullable=False, default="recovery-blue")
+    # Global visual theme — applies to every section. The per-section
+    # template_* fields above act as overrides when the user picks a layout
+    # different from the active theme on a specific page.
+    frontend_theme = db.Column(db.String(64), nullable=False, default="classic")
+    # Per-section font overrides. JSON dict like
+    # {"display": "fraunces", "heading": "inter", "body": "inter"}.
+    # Empty / missing keys fall back to the active theme's defaults.
+    frontend_fonts_json = db.Column(db.Text)
+    # Per-block content for the homepage builder. JSON-encoded dict:
+    # { "features": [{icon,title,body}], "cta": {...}, "stats": [...],
+    #   "testimonials": [...], "faq": [...], "quick_links": [...] }
+    # Each block partial reads its own key with sensible defaults if blank.
+    frontend_blocks_json = db.Column(db.Text)
     # Mega menu appearance
     frontend_mega_bg_color = db.Column(db.String(16), nullable=False, default="#0B5CFF")
     frontend_mega_text_color = db.Column(db.String(16), nullable=False, default="#ffffff")
     frontend_mega_radius_bl = db.Column(db.Integer, nullable=False, default=18)
     frontend_mega_radius_br = db.Column(db.Integer, nullable=False, default=18)
+    # Staggered reveal animation when the mega menu opens (titles/links/buttons
+    # fade in one after the other with a small slide + rotate).
+    frontend_megamenu_animate = db.Column(db.Boolean, nullable=False, default=True)
+    # Duration of each block's reveal animation, in milliseconds.
+    frontend_megamenu_animate_ms = db.Column(db.Integer, nullable=False, default=320)
     frontend_logo_filename = db.Column(db.String(500))
     frontend_logo_width = db.Column(db.Integer, nullable=False, default=40)
     # Top alert bar (above header)
@@ -409,10 +505,150 @@ class FrontendNavLink(db.Model):
     kind = db.Column(db.String(16), nullable=False, default="link")  # link | title | button | section
     label = db.Column(db.String(200), nullable=False)
     url = db.Column(db.String(500))
-    icon_before = db.Column(db.String(32))
-    icon_after = db.Column(db.String(32))
+    icon_before = db.Column(db.String(64))
+    icon_after = db.Column(db.String(64))
+    icon_before_color = db.Column(db.String(16))
+    icon_after_color = db.Column(db.String(16))
+    icon_before_size = db.Column(db.Integer)  # px; None = theme default
+    icon_after_size = db.Column(db.Integer)
+    link_size = db.Column(db.String(16))  # 'small' | 'large' | None (template default)
+    override_color = db.Column(db.Boolean, nullable=False, default=False)
+    custom_color = db.Column(db.String(16))
     button_style = db.Column(db.String(16), nullable=False, default="pill")  # pill | rounded
     open_in_new_tab = db.Column(db.Boolean, nullable=False, default=False)
+
+
+class FrontendHeroButton(db.Model):
+    """A call-to-action button rendered under the hero subheading. The primary
+    and ghost styles mirror the originals baked into the classic homepage; the
+    custom style lets the admin override bg/text colors per button."""
+    __tablename__ = "frontend_hero_button"
+    id = db.Column(db.Integer, primary_key=True)
+    position = db.Column(db.Integer, nullable=False, default=0)
+    label = db.Column(db.String(200), nullable=False)
+    url = db.Column(db.String(500))
+    style = db.Column(db.String(16), nullable=False, default="primary")  # primary | ghost | custom
+    custom_bg_color = db.Column(db.String(16))
+    custom_text_color = db.Column(db.String(16))
+    icon_before = db.Column(db.String(64))
+    icon_after = db.Column(db.String(64))
+    icon_before_color = db.Column(db.String(16))
+    icon_after_color = db.Column(db.String(16))
+    icon_before_size = db.Column(db.Integer)
+    icon_after_size = db.Column(db.Integer)
+    open_in_new_tab = db.Column(db.Boolean, nullable=False, default=False)
+
+
+class CustomLayout(db.Model):
+    """A page-layout preset built from a sequence of block types
+    (hero, features, testimonials, etc.). The pre-built set is seeded
+    on first boot; admins can also create new ones via the drag-and-drop
+    builder. ``blocks_json`` is a JSON list of {"type": "<key>"} dicts;
+    rendering iterates them in order through the block-iteration template."""
+    __tablename__ = "custom_layout"
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(64), unique=True, nullable=False)
+    name = db.Column(db.String(120), nullable=False)
+    description = db.Column(db.Text)
+    blocks_json = db.Column(db.Text, nullable=False, default="[]")
+    kind = db.Column(db.String(16), nullable=False, default="homepage")  # homepage | page
+    is_prebuilt = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class CustomIcon(db.Model):
+    """User-uploaded icon (SVG or PNG) usable in mega-menu link icons alongside
+    the built-in Lucide set. Reference form in FrontendNavLink.icon_before /
+    icon_after: ``custom:<id>`` (e.g. ``custom:42``)."""
+    __tablename__ = "custom_icon"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    stored_filename = db.Column(db.String(500), nullable=False)
+    mime_type = db.Column(db.String(100), nullable=False)
+    size_bytes = db.Column(db.Integer, nullable=False, default=0)
+    uploaded_by = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class Post(db.Model):
+    """Admin-authored announcement / event posts.
+
+    A single Post can be tagged as an announcement, an event, or both
+    (the two booleans are independent — neither set is treated as
+    "draft"). Event posts pick up a starts/ends datetime, location
+    fields, contact, optional Zoom credentials, and event-website URL.
+    Posts are archived manually OR automatically the day after the
+    event ends; the public site (when wired in) hides archived posts."""
+    __tablename__ = "post"
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+    summary = db.Column(db.Text)        # short blurb shown in lists / link previews
+    body = db.Column(db.Text)           # full content (markdown supported)
+    featured_image_filename = db.Column(db.String(500))
+
+    # Type tags — independent so a single post can be both.
+    is_announcement = db.Column(db.Boolean, nullable=False, default=False)
+    is_event = db.Column(db.Boolean, nullable=False, default=False)
+
+    # Event timing.
+    event_starts_at = db.Column(db.DateTime)
+    event_ends_at = db.Column(db.DateTime)
+
+    # Event location.
+    is_online = db.Column(db.Boolean, nullable=False, default=False)
+    location_name = db.Column(db.String(255))
+    location_address = db.Column(db.Text)
+    google_maps_url = db.Column(db.String(500))
+
+    # Event website (free URL with a label so the link reads as the
+    # admin wants it to read on the public site).
+    website_url = db.Column(db.String(500))
+    website_label = db.Column(db.String(120))
+
+    # Zoom (announcements never have these; events do, when online).
+    zoom_meeting_id = db.Column(db.String(64))
+    zoom_passcode = db.Column(db.String(128))
+    zoom_url = db.Column(db.String(500))
+
+    # Contact.
+    contact_name = db.Column(db.String(120))
+    contact_phone = db.Column(db.String(64))
+    contact_email = db.Column(db.String(255))
+
+    # Lifecycle.
+    is_archived = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"))
+
+
+class CustomFont(db.Model):
+    """Admin-added font available alongside the vendored Inter/Fraunces in the
+    Web Frontend font pickers. Source is either an uploaded font file
+    (TTF/OTF/WOFF/WOFF2 served from /pub/font/<id>) or a Google Fonts CSS
+    URL — in the Google case we fetch the CSS, download every referenced
+    woff2 file locally, rewrite the URLs, and store the rewritten CSS so
+    nothing is served by Google at runtime. Reference form anywhere a
+    font key is stored: ``custom:<id>``."""
+    __tablename__ = "custom_font"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    family = db.Column(db.String(120), nullable=False)
+    source = db.Column(db.String(16), nullable=False, default="upload")  # upload | google
+    # source=upload: the font binary itself (TTF/OTF/WOFF/WOFF2).
+    # source=google: the rewritten CSS file (text/css) that @font-face's
+    #   the local woff2 binaries listed in asset_files_json.
+    stored_filename = db.Column(db.String(500))
+    # Original Google Fonts URL (stored for the admin's reference only).
+    google_url = db.Column(db.String(500))
+    # JSON list of stored filenames for additional binary assets — used by
+    # source=google to track every woff2 we downloaded so deletion can
+    # clean them up.
+    asset_files_json = db.Column(db.Text)
+    mime_type = db.Column(db.String(100))
+    size_bytes = db.Column(db.Integer, default=0)
+    uploaded_by = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class LoginFailure(db.Model):

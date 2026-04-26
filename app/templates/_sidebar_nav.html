@@ -1,0 +1,25 @@
+{# Sidebar items rendered by both base.html (initial page load) and the
+   /_sidebar/nav endpoint that AJAX-refreshes the live nav after a
+   module-role / module-toggle / sidebar-order save. Source-of-truth
+   for visibility + ordering is app/sidebar.py — this template just
+   loops the result. #}
+{% set _sidebar = sidebar_data(site, nav_links) %}
+{% for _sec_key, _sec_label, _items in _sidebar %}
+  {% if _sec_label %}
+  <div class="sidebar-nav-divider"{% if _sec_key == 'external' %} id="sidebar-custom-nav-divider"{% endif %}>
+    <span class="sidebar-nav-label">{{ _sec_label }}</span>
+  </div>
+  {% endif %}
+  {% if _sec_key == 'external' %}<span id="sidebar-custom-nav">{% endif %}
+  {% for it in _items %}
+    <a href="{{ it.href }}"
+       {% if it.target %}target="{{ it.target }}" rel="noopener"{% endif %}
+       {% if it.is_external %}data-nav-custom{% endif %}
+       class="{% if it.active %}active{% endif %}">
+      {{ it.label }}{% if it.is_external %} ↗{% endif %}
+      {%- if it.key == 'access_requests' and pending_access_count %}<span class="nav-badge">{{ pending_access_count }}</span>{% endif -%}
+      {%- if it.key == 'web_frontend' and site and not site.frontend_enabled %} <span class="nav-badge nav-badge-muted" title="Public access is off — only signed-in admins and frontend editors can preview">Off</span>{% endif -%}
+    </a>
+  {% endfor %}
+  {% if _sec_key == 'external' %}</span>{% endif %}
+{% endfor %}

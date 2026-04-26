@@ -17,30 +17,97 @@
         <input type="text" data-block-field="label" value="{{ link.label }}"
                placeholder="{% if _kind == 'section' %}Group heading{% else %}Title text{% endif %}" required>
       </div>
+    {% elif _kind == 'search' %}
+      <div class="nav-megalink-row nav-megalink-row-single">
+        <input type="text" data-block-field="label" value="{{ link.label }}"
+               placeholder="Placeholder text (shown inside the empty search bar)" required>
+      </div>
+      <p class="muted smaller" style="margin: 4px 2px 0;">Renders as a full-width pill search bar. Search functionality coming soon.</p>
     {% else %}
       <div class="nav-megalink-row nav-megalink-row-text">
         <input type="text" data-block-field="label" value="{{ link.label }}" placeholder="Text" required>
         <input type="text" data-block-field="url" value="{{ link.url or '' }}" placeholder="https://…">
       </div>
       <div class="nav-megalink-row nav-megalink-row-icons">
-        <div class="nav-megalink-field">
+        <div class="nav-megalink-field nav-megalink-icon-field{% if link.icon_before %} has-icon{% endif %}" data-icon-field>
           <span class="nav-megalink-field-lbl">Icon before</span>
-          <select data-block-field="icon_before">
-            <option value="">— none —</option>
-            {% for ic in _icons %}
-            <option value="{{ ic }}" {% if (link.icon_before or '') == ic %}selected{% endif %}>{{ ic }}</option>
-            {% endfor %}
-          </select>
+          <div class="icon-picker-trigger-wrap">
+            <button type="button" class="icon-picker-trigger"
+                    data-open-icon-picker
+                    data-icon-target="#nav-icon-before-{{ link.id }}"
+                    data-color-target="#nav-icon-before-color-{{ link.id }}"
+                    data-size-target="#nav-icon-before-size-{{ link.id }}">
+              <span class="icon-picker-preview" data-icon-preview
+                    style="{% if link.icon_before_color %}color: {{ link.icon_before_color }};{% endif %}{% if link.icon_before_size %} --icon-size: {{ link.icon_before_size }}px;{% endif %}">
+                {% if link.icon_before %}{{ icon(link.icon_before) }}{% endif %}
+              </span>
+              <span class="icon-picker-trigger-empty" data-icon-empty>Icon</span>
+            </button>
+            <button type="button" class="icon-picker-clear" data-icon-clear title="Clear icon">{{ icon('x') }}</button>
+          </div>
+          <input type="hidden" id="nav-icon-before-{{ link.id }}"
+                 data-block-field="icon_before" value="{{ link.icon_before or '' }}">
+          <input type="hidden" id="nav-icon-before-color-{{ link.id }}"
+                 data-block-field="icon_before_color" value="{{ link.icon_before_color or '' }}">
+          <input type="hidden" id="nav-icon-before-size-{{ link.id }}"
+                 data-block-field="icon_before_size" value="{{ link.icon_before_size or '' }}">
         </div>
-        <div class="nav-megalink-field">
+        <div class="nav-megalink-field nav-megalink-icon-field{% if link.icon_after %} has-icon{% endif %}" data-icon-field>
           <span class="nav-megalink-field-lbl">Icon after</span>
-          <select data-block-field="icon_after">
-            <option value="">— none —</option>
-            {% for ic in _icons %}
-            <option value="{{ ic }}" {% if (link.icon_after or '') == ic %}selected{% endif %}>{{ ic }}</option>
-            {% endfor %}
-          </select>
+          <div class="icon-picker-trigger-wrap">
+            <button type="button" class="icon-picker-trigger"
+                    data-open-icon-picker
+                    data-icon-target="#nav-icon-after-{{ link.id }}"
+                    data-color-target="#nav-icon-after-color-{{ link.id }}"
+                    data-size-target="#nav-icon-after-size-{{ link.id }}">
+              <span class="icon-picker-preview" data-icon-preview
+                    style="{% if link.icon_after_color %}color: {{ link.icon_after_color }};{% endif %}{% if link.icon_after_size %} --icon-size: {{ link.icon_after_size }}px;{% endif %}">
+                {% if link.icon_after %}{{ icon(link.icon_after) }}{% endif %}
+              </span>
+              <span class="icon-picker-trigger-empty" data-icon-empty>Icon</span>
+            </button>
+            <button type="button" class="icon-picker-clear" data-icon-clear title="Clear icon">{{ icon('x') }}</button>
+          </div>
+          <input type="hidden" id="nav-icon-after-{{ link.id }}"
+                 data-block-field="icon_after" value="{{ link.icon_after or '' }}">
+          <input type="hidden" id="nav-icon-after-color-{{ link.id }}"
+                 data-block-field="icon_after_color" value="{{ link.icon_after_color or '' }}">
+          <input type="hidden" id="nav-icon-after-size-{{ link.id }}"
+                 data-block-field="icon_after_size" value="{{ link.icon_after_size or '' }}">
         </div>
+        {% if _kind == 'link' %}
+        <div class="nav-megalink-field">
+          <span class="nav-megalink-field-lbl">Font size</span>
+          <div class="nav-megalink-seg">
+            <label class="nav-megalink-seg-opt">
+              <input type="radio" name="link_size_{{ link.id }}" data-block-field="link_size"
+                     value="small" {% if link.link_size == 'small' %}checked{% endif %}>
+              <span>Small</span>
+            </label>
+            <label class="nav-megalink-seg-opt">
+              <input type="radio" name="link_size_{{ link.id }}" data-block-field="link_size"
+                     value="large" {% if (link.link_size or 'large') == 'large' %}checked{% endif %}>
+              <span>Large</span>
+            </label>
+          </div>
+        </div>
+        <div class="nav-megalink-field nav-megalink-color-field{% if link.override_color %} is-on{% endif %}" data-color-override-field
+             title="Applied in light mode; a lighter variant is auto-derived for dark mode.">
+          <span class="nav-megalink-field-lbl">Override color</span>
+          <div class="nav-megalink-color-row">
+            <label class="mode-toggle">
+              <input type="checkbox" data-block-field="override_color" value="1"
+                     data-color-override-toggle
+                     {% if link.override_color %}checked{% endif %}>
+              <span class="mode-track"><span class="mode-thumb"></span></span>
+            </label>
+            <input type="color" class="nav-megalink-color-input"
+                   data-block-field="custom_color"
+                   value="{{ link.custom_color or '#0B5CFF' }}"
+                   {% if not link.override_color %}disabled{% endif %}>
+          </div>
+        </div>
+        {% endif %}
         {% if _kind == 'button' %}
         <div class="nav-megalink-field">
           <span class="nav-megalink-field-lbl">Style</span>
@@ -50,13 +117,14 @@
           </select>
         </div>
         {% endif %}
-      </div>
-      <div class="nav-megalink-row nav-megalink-row-footer">
-        <label class="nav-megalink-newtab">
-          <input type="checkbox" data-block-field="open_in_new_tab" value="1"
-                 {% if link.open_in_new_tab %}checked{% endif %}>
-          <span>Open in new tab</span>
-        </label>
+        <div class="nav-megalink-field nav-megalink-field-newtab">
+          <span class="nav-megalink-field-lbl">New tab</span>
+          <label class="nav-megalink-newtab">
+            <input type="checkbox" data-block-field="open_in_new_tab" value="1"
+                   {% if link.open_in_new_tab %}checked{% endif %}>
+            <span>Open in new tab</span>
+          </label>
+        </div>
       </div>
     {% endif %}
   </div>

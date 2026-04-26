@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% from "_frontend_template_picker.html" import template_picker %}
+{% set _active_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
+{% block heading %}Fonts &amp; Icons{% endblock %}
+{% block heading_help %}Override per-role fonts, upload your own typefaces or paste a Google Fonts link, and manage the custom icon library used by nav links and hero buttons.{% endblock %}
+{% block top_actions %}
+{{ template_picker(frontend_themes, _active_theme,
+                    "frontend_theme",
+                    url_for('main.frontend_theme_save'),
+                    "site-theme-modal", "homepage", "Site theme", label="Theme") }}
+<a class="btn" href="{{ url_for('frontend.index') }}" target="_blank" rel="noopener">View frontend ↗</a>
+{% endblock %}
+{% block content %}
+{% set _ov = (site.frontend_fonts_json or '{}') | from_json %}
+{% set _all_fonts = frontend_fonts() %}
+<div class="fe-admin-layout">
+  {% include "_frontend_subnav.html" %}
+  <div class="fe-admin-main">
+
+<form class="form" method="post" action="{{ url_for('main.frontend_fonts_icons_save') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Fonts</h2>
+      <span class="muted smaller">Each theme ships sensible defaults. Use the dropdowns below to override specific roles. Hero font is set on the Homepage page and is unaffected by these.</span>
+    </div>
+    {% set _active_theme_name = ((frontend_themes | selectattr('key', 'equalto', _active_theme) | list)[0].name if (frontend_themes | selectattr('key', 'equalto', _active_theme) | list) else _active_theme|capitalize) %}
+    <p class="muted small">Available fonts are vendored under <code>app/static/fonts/</code> plus any custom fonts you've added below — nothing else is loaded from a CDN. Active theme defaults: <b>{{ _active_theme_name }}</b> &middot; heading = <code>{% if _active_theme == 'recovery-blue' %}Inter{% else %}Fraunces{% endif %}</code>, body = <code>Inter</code>.</p>
+
+    {% for role, label, blurb in [
+       ('heading', 'Heading font',  'Section h2/h3, marketing block titles, brand text, stat numbers, and testimonial italics.'),
+       ('body',    'Body font',      'Paragraph copy and UI labels.'),
+    ] %}
+    <div class="fe-font-row">
+      <div class="fe-font-row-info">
+        <div class="u-name">{{ label }}</div>
+        <p class="muted small">{{ blurb }}</p>
+      </div>
+      <select name="font_{{ role }}">
+        <option value="">— Use theme default —</option>
+        {% for f in _all_fonts %}
+        <option value="{{ f.key }}" {% if _ov.get(role) == f.key %}selected{% endif %}
+                style="font-family: {{ f.stack }};">{{ f.name }} · {{ f.kind }}</option>
+        {% endfor %}
+      </select>
+      {% set _selected = _ov.get(role) %}
+      {% set _sample_stack = ((_all_fonts | selectattr('key', 'equalto', _selected) | list) or [{'stack': 'inherit'}])[0].stack %}
+      <div class="fe-font-sample" style="font-family: {{ _sample_stack }};">
+        The quick brown fox jumps over the lazy dog · 0123456789
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+
+  <div class="form-actions"><button class="btn btn-primary">Save fonts</button></div>
+</form>
+
+<section class="card">
+  <div class="card-head">
+    <h2>Custom font library</h2>
+    <span class="muted smaller">Upload a font file (TTF, OTF, WOFF, WOFF2 — up to 4&nbsp;MB) or paste a Google Fonts CSS URL. New fonts appear in the dropdowns above.</span>
+  </div>
+
+  <div class="fe-font-add-grid">
+    <form class="fe-font-add-form" method="post"
+          action="{{ url_for('main.frontend_custom_font_upload') }}"
+          enctype="multipart/form-data" data-fe-skip-save-bar>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="fe-font-add-head">{{ icon('upload') }}<span>Upload a font file</span></div>
+      <label class="fe-font-add-field">
+        <span class="muted smaller">Display name <span class="muted">(optional)</span></span>
+        <input type="text" name="name" placeholder="e.g. Söhne Bold">
+      </label>
+      <label class="fe-font-add-field">
+        <span class="muted smaller">CSS family <span class="muted">(optional — defaults to filename)</span></span>
+        <input type="text" name="family" placeholder="Söhne">
+      </label>
+      <label class="fe-font-add-field">
+        <span class="muted smaller">Font file</span>
+        <input type="file" name="font" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2" required>
+      </label>
+      <button type="submit" class="btn btn-primary">Upload font</button>
+    </form>
+
+    <form class="fe-font-add-form" method="post"
+          action="{{ url_for('main.frontend_custom_font_google') }}"
+          data-fe-skip-save-bar>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="fe-font-add-head">{{ icon('download') }}<span>Install a font from Google Fonts</span></div>
+      <p class="muted smaller fe-font-add-blurb">
+        <b>This will download the font and serve it from your own server.</b>
+        We fetch the CSS from Google once at add time, download every referenced
+        <code>woff2</code> file, and rewrite the URLs to point at this server.
+        Your visitors never connect to <code>fonts.google.com</code> or
+        <code>fonts.gstatic.com</code>.
+      </p>
+      <label class="fe-font-add-field">
+        <span class="muted smaller">Display name <span class="muted">(optional — defaults to family from URL)</span></span>
+        <input type="text" name="name" placeholder="e.g. Roboto Slab">
+      </label>
+      <label class="fe-font-add-field">
+        <span class="muted smaller">Google Fonts CSS URL</span>
+        <input type="url" name="google_url" required
+               placeholder="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;700&display=swap">
+      </label>
+      <p class="muted smaller">On <a href="https://fonts.google.com" target="_blank" rel="noopener">fonts.google.com</a>, pick the styles you want, click <b>Get embed code</b>, and copy the <code>href</code> from the <code>&lt;link&gt;</code> tag.</p>
+      <button type="submit" class="btn btn-primary">Download &amp; install font</button>
+    </form>
+  </div>
+
+  <div class="fe-font-library">
+    {# Built-in fonts ship vendored under app/static/fonts/. Listed here so
+       admins see what's already available; the Built-in pill marks them
+       and the delete button is omitted so they can't be removed. #}
+    {% for f in _all_fonts %}
+    <div class="fe-font-library-tile">
+      <div class="fe-font-library-tile-sample" style="font-family: {{ f.stack }};">Aa</div>
+      <div class="fe-font-library-tile-info">
+        <div class="u-name">
+          {{ f.name }}
+          {% if f.kind != 'custom' %}<span class="fe-font-builtin-badge">Built-in</span>{% endif %}
+        </div>
+        <div class="muted smaller">
+          {% if f.kind == 'custom' and f.source == 'google' %}
+            From Google Fonts · {{ (f.size_bytes / 1024) | round(1) }} KB downloaded · <code>{{ f.family }}</code>
+          {% elif f.kind == 'custom' %}
+            Uploaded · {{ (f.size_bytes / 1024) | round(1) }} KB · <code>{{ f.family }}</code>
+          {% else %}
+            Vendored with the app · <code>{{ f.name }}</code> ({{ f.kind }})
+          {% endif %}
+        </div>
+      </div>
+      {% if f.kind == 'custom' %}
+      <form method="post" action="{{ url_for('main.frontend_custom_font_delete', fid=f.id) }}"
+            onsubmit="return confirm('Delete this font? Any role override using it will revert to the theme default.');"
+            data-fe-skip-save-bar>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="fe-font-library-del" title="Delete"
+                aria-label="Delete {{ f.name }}">{{ icon('x') }}</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <h2>Custom icon library</h2>
+    <div class="card-head-actions">
+      <button type="button" class="btn btn-primary btn-sm" data-open-icon-picker
+              data-icon-picker-mode="manage">{{ icon('upload') }} Add icon</button>
+    </div>
+  </div>
+  <p class="muted small">Uploaded SVGs and PNGs available wherever an icon picker shows up (mega-menu links, hero buttons). Click <b>Add icon</b> to upload a new one.</p>
+
+  {% if custom_icons %}
+  <div class="fe-icon-library" id="fe-icon-library">
+    {% for ci in custom_icons %}
+    <div class="fe-icon-library-tile" data-custom-icon-id="{{ ci.id }}">
+      <img src="{{ url_for('public.public_custom_icon', cid=ci.id) }}" alt="{{ ci.name }}">
+      <div class="fe-icon-library-name">{{ ci.name }}</div>
+      <button type="button" class="fe-icon-library-del" title="Delete"
+              aria-label="Delete {{ ci.name }}"
+              data-custom-icon-delete="{{ ci.id }}">{{ icon('x') }}</button>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted" id="fe-icon-library-empty">No custom icons uploaded yet. Click <b>Add icon</b> to add one.</p>
+  {% endif %}
+</section>
+
+  </div>
+</div>
+
+{# ---- Shared icon picker modal — opened by [data-open-icon-picker].
+       Uploaded icons are added to the library; the JS dispatches
+       'frontend-icon:uploaded' which the inline script below uses to
+       reload the page so the tile grid stays in sync. ---- #}
+<div class="modal icon-picker-modal" id="icon-picker-modal" aria-hidden="true"
+     data-catalog-url="{{ url_for('static', filename='vendor/lucide/icons.json') }}"
+     data-custom-list-url="{{ url_for('main.frontend_custom_icons_list') }}"
+     data-custom-upload-url="{{ url_for('main.frontend_custom_icon_upload') }}"
+     data-custom-delete-url="{{ url_for('main.frontend_custom_icon_delete', cid=0) }}"
+     data-csrf-token="{{ csrf_token() }}">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <div class="modal-head"><h2>Manage icons</h2>
+      <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button></div>
+    <div class="modal-body icon-picker-body">
+      <div class="icon-picker-toolbar">
+        <input type="search" class="icon-picker-search" placeholder="Search icons…" data-icon-search autocomplete="off">
+        <label class="icon-picker-color-label">
+          <span class="muted smaller">Color</span>
+          <input type="color" data-icon-modal-color value="#747474">
+        </label>
+        <label class="icon-picker-size-label">
+          <span class="muted smaller">Size <output data-icon-size-out>20</output>px</span>
+          <input type="range" min="12" max="64" step="1" value="20" data-icon-modal-size>
+        </label>
+        <label class="icon-picker-upload-btn btn btn-sm">
+          {{ icon('upload') }} <span>Upload</span>
+          <input type="file" accept=".svg,.png,image/svg+xml,image/png" data-icon-upload hidden>
+        </label>
+      </div>
+      <div class="icon-picker-catalog" data-icon-catalog>
+        <p class="muted smaller" style="padding: 16px;">Loading icons…</p>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" data-close>Close</button>
+      <button type="button" class="btn btn-danger" data-icon-picker-remove hidden>Remove icon</button>
+      <button type="button" class="btn btn-primary" data-icon-picker-save hidden>Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // Tile-grid delete: hit the JSON endpoint, drop the tile on success.
+  document.querySelectorAll('[data-custom-icon-delete]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id = btn.getAttribute('data-custom-icon-delete');
+      if (!confirm('Delete this icon? Any link or button using it will fall back to nothing.')) return;
+      var url = "{{ url_for('main.frontend_custom_icon_delete', cid=0) }}".replace(/\/0\/delete$/, '/' + id + '/delete');
+      var fd = new FormData();
+      fd.append('csrf_token', '{{ csrf_token() }}');
+      fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+        .then(function () {
+          var tile = btn.closest('.fe-icon-library-tile');
+          if (tile) tile.remove();
+          // If grid is now empty, fall back to the empty-state message.
+          var grid = document.getElementById('fe-icon-library');
+          if (grid && !grid.querySelector('.fe-icon-library-tile')) location.reload();
+        })
+        .catch(function () { alert('Could not delete icon.'); });
+    });
+  });
+
+  // After a successful upload from the icon-picker modal, refresh the page
+  // so the new tile shows up in the library grid.
+  document.addEventListener('frontend-icon:uploaded', function () { location.reload(); });
+})();
+</script>
+{% endblock %}

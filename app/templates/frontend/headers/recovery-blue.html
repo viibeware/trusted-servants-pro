@@ -1,4 +1,4 @@
-{# "DCCMA" header — inspired by dccma.com.
+{# "Recovery Blue" header — inspired by dccma.com.
    Two-row layout: a blue utility bar on top (helpline, hyperlist-style link),
    and a white main-nav row below with a wide logotype on the left and nav
    links on the right. Fully white on white with a soft bottom border. #}
@@ -9,17 +9,17 @@
 {% set _fe_logo = site and site.frontend_logo_filename %}
 {% set _fe_logo_w = (site.frontend_logo_width if site else 40) or 40 %}
 
-<header class="fe-header-dccma" id="fe-header"
+<header class="fe-header-recovery" id="fe-header"
         style="--fe-header-h: {{ _header_h }}px;">
   {# ── Utility bar ─────────────────────────────────────────── #}
-  <div class="fe-dccma-util">
-    <div class="fe-dccma-util-inner{% if not _header_full %} fe-container{% endif %}"
+  <div class="fe-recovery-util">
+    <div class="fe-recovery-util-inner{% if not _header_full %} fe-container{% endif %}"
          {% if _header_full %}style="padding-left: {{ _header_pct }}%; padding-right: {{ _header_pct }}%;"{% else %}style="max-width: {{ _header_max }}px;"{% endif %}>
-      <a class="fe-dccma-util-link" href="#">Hyperlist (beta)</a>
-      <div class="fe-dccma-util-right">
-        <a class="fe-dccma-util-phone" href="tel:+18556384373">
+      <a class="fe-recovery-util-link" href="#">Hyperlist (beta)</a>
+      <div class="fe-recovery-util-right">
+        <a class="fe-recovery-util-phone" href="tel:+18556384373">
           <strong>CMA 24-Hour Helpline</strong>
-          <span class="fe-dccma-util-phone-num">855-METH-FREE</span>
+          <span class="fe-recovery-util-phone-num">855-METH-FREE</span>
         </a>
         <button type="button" class="fe-theme-toggle" data-fe-theme-toggle
                 aria-label="Toggle dark mode" title="Toggle dark mode">
@@ -31,56 +31,56 @@
   </div>
 
   {# ── Main nav row ─────────────────────────────────────────── #}
-  <div class="fe-dccma-main">
-    <div class="fe-dccma-main-inner{% if not _header_full %} fe-container{% endif %}"
+  <div class="fe-recovery-main">
+    <div class="fe-recovery-main-inner{% if not _header_full %} fe-container{% endif %}"
          {% if _header_full %}style="padding-left: {{ _header_pct }}%; padding-right: {{ _header_pct }}%; min-height: {{ _header_h }}px;"{% else %}style="max-width: {{ _header_max }}px; min-height: {{ _header_h }}px;"{% endif %}>
-      <a class="fe-dccma-brand" href="{{ url_for('frontend.index') }}">
+      <a class="fe-recovery-brand" href="{{ url_for('frontend.index') }}">
         {% if _fe_logo %}
         <img src="{{ url_for('public.site_frontend_logo') }}" alt="{{ frontend_title }}"
-             class="fe-dccma-logo" style="width: {{ _fe_logo_w }}px; height: auto;">
+             class="fe-recovery-logo" style="width: {{ _fe_logo_w }}px; height: auto;">
         {% else %}
-        <img src="{{ url_for('static', filename='img/dccma/logo.svg') }}"
+        <img src="{{ url_for('static', filename='img/recovery-blue/logo.svg') }}"
              alt="{{ frontend_title }}"
-             class="fe-dccma-logo fe-dccma-logo-default">
+             class="fe-recovery-logo fe-recovery-logo-default">
         {% endif %}
       </a>
-      <nav class="fe-dccma-nav" aria-label="Primary">
+      <nav class="fe-recovery-nav" aria-label="Primary">
         {% if nav_items %}
           {% for ni in nav_items %}
             {% set _has_mm = ni.has_megamenu and ni.columns %}
             {% set _href = ni.url or '#' %}
             {% set _tgt = ' target="_blank" rel="noopener"' if ni.open_in_new_tab else '' %}
             {% if ni.style == 'two-line' %}
-              <a href="{{ _href }}"{{ _tgt|safe }} class="fe-dccma-nav-link fe-dccma-nav-newcomer{% if _has_mm %} fe-megaparent{% endif %}"
+              <a href="{{ _href }}"{{ _tgt|safe }} class="fe-recovery-nav-link fe-recovery-nav-newcomer{% if _has_mm %} fe-megaparent{% endif %}"
                  {% if _has_mm %}data-megamenu="{{ ni.id }}"{% endif %}>
-                <span class="fe-dccma-nav-newcomer-lead">{{ ni.line1 or '' }}</span>
-                <span class="fe-dccma-nav-newcomer-cta">{{ ni.line2 or '' }}{% if _has_mm %}<span class="fe-nav-caret">{{ icon('chevron-down') }}</span>{% endif %}</span>
+                <span class="fe-recovery-nav-newcomer-lead">{{ ni.line1 or '' }}</span>
+                <span class="fe-recovery-nav-newcomer-cta">{{ ni.line2 or '' }}{% if _has_mm %}<span class="fe-nav-caret">{{ icon('chevron-down') }}</span>{% endif %}</span>
               </a>
             {% elif ni.style == 'button' %}
-              <a href="{{ _href }}"{{ _tgt|safe }} class="fe-dccma-nav-link fe-dccma-nav-cta{% if _has_mm %} fe-megaparent{% endif %}"
+              <a href="{{ _href }}"{{ _tgt|safe }} class="fe-recovery-nav-link fe-recovery-nav-cta{% if _has_mm %} fe-megaparent{% endif %}"
                  {% if _has_mm %}data-megamenu="{{ ni.id }}"{% endif %}>{{ ni.label or '' }}{% if _has_mm %}<span class="fe-nav-caret">{{ icon('chevron-down') }}</span>{% endif %}</a>
             {% elif ni.style == 'button-rounded' %}
-              <a href="{{ _href }}"{{ _tgt|safe }} class="fe-dccma-nav-link fe-dccma-nav-btn-rounded{% if _has_mm %} fe-megaparent{% endif %}"
+              <a href="{{ _href }}"{{ _tgt|safe }} class="fe-recovery-nav-link fe-recovery-nav-btn-rounded{% if _has_mm %} fe-megaparent{% endif %}"
                  {% if _has_mm %}data-megamenu="{{ ni.id }}"{% endif %}>{{ ni.label or '' }}{% if _has_mm %}<span class="fe-nav-caret">{{ icon('chevron-down') }}</span>{% endif %}</a>
             {% else %}
-              <a href="{{ _href }}"{{ _tgt|safe }} class="fe-dccma-nav-link{% if _has_mm %} fe-megaparent{% endif %}"
+              <a href="{{ _href }}"{{ _tgt|safe }} class="fe-recovery-nav-link{% if _has_mm %} fe-megaparent{% endif %}"
                  {% if _has_mm %}data-megamenu="{{ ni.id }}"{% endif %}>{{ ni.label or '' }}{% if _has_mm %}<span class="fe-nav-caret">{{ icon('chevron-down') }}</span>{% endif %}</a>
             {% endif %}
           {% endfor %}
         {% else %}
           {# Fallback: preserve the original links if no nav items configured yet #}
-          <a href="#meetings" class="fe-dccma-nav-link">Meetings</a>
-          <a href="#about" class="fe-dccma-nav-link">About</a>
-          <a href="#contact" class="fe-dccma-nav-link">Help</a>
+          <a href="#meetings" class="fe-recovery-nav-link">Meetings</a>
+          <a href="#about" class="fe-recovery-nav-link">About</a>
+          <a href="#contact" class="fe-recovery-nav-link">Help</a>
           {% if current_user.is_authenticated %}
-          <a href="{{ url_for('main.index') }}" class="fe-dccma-nav-link fe-dccma-nav-portal">Portal</a>
+          <a href="{{ url_for('main.index') }}" class="fe-recovery-nav-link fe-recovery-nav-portal">Portal</a>
           {% else %}
-          <a href="{{ url_for('auth.login') }}" class="fe-dccma-nav-link fe-dccma-nav-portal">Portal</a>
+          <a href="{{ url_for('auth.login') }}" class="fe-recovery-nav-link fe-recovery-nav-portal">Portal</a>
           {% endif %}
         {% endif %}
       </nav>
-      <button type="button" class="fe-dccma-menu-btn" id="fe-menu-btn" aria-label="Toggle menu">
-        <span></span><span></span><span></span>
+      <button type="button" class="fe-recovery-menu-btn" id="fe-menu-btn" aria-label="Toggle menu">
+        <span></span><span></span>
       </button>
     </div>
   </div>

@@ -1,6 +1,12 @@
 {# "Classic" mega menu — centered white card with subtle shadow and divider
    lines between columns. No full-width color wash; links use a small
    trailing arrow glyph instead of a slide-in chevron. #}
+{% macro _icon_style(color, size) -%}
+  {%- set _parts = [] -%}
+  {%- if color %}{% set _ = _parts.append('color: ' ~ color) %}{% endif -%}
+  {%- if size %}{% set _ = _parts.append('--icon-size: ' ~ size ~ 'px') %}{% endif -%}
+  {%- if _parts %} style="{{ _parts|join('; ') }};"{% endif -%}
+{%- endmacro %}
 {% set _mega_bg = (site.frontend_mega_bg_color if site else None) or '#ffffff' %}
 {% set _mega_fg = (site.frontend_mega_text_color if site else None) or '#0f172a' %}
 {% set _mega_bl = (site.frontend_mega_radius_bl if site else 18) %}
@@ -27,18 +33,34 @@
                 {% if link.label %}<span class="fe-megamenu-classic-block-section-label">{{ link.label }}</span>{% endif %}
                 <span class="fe-megamenu-classic-block-section-line" aria-hidden="true"></span>
               </div>
+            {% elif _k == 'search' %}
+              <div class="fe-megamenu-classic-search">
+                <span class="fe-megamenu-classic-search-icon" aria-hidden="true">{{ icon('search') }}</span>
+                <input type="search" class="fe-megamenu-classic-search-input"
+                       placeholder="{{ link.label }}" aria-label="{{ link.label }}"
+                       data-megamenu-search autocomplete="off">
+              </div>
             {% elif _k == 'button' %}
               <a href="{{ link.url or '#' }}"{{ _tgt|safe }}
                  class="fe-megamenu-classic-block-btn fe-megamenu-classic-block-btn-{{ link.button_style or 'pill' }}">
-                {% if link.icon_before %}<span class="fe-megamenu-classic-icon">{{ icon(link.icon_before) }}</span>{% endif %}
+                {% if link.icon_before %}<span class="fe-megamenu-classic-icon"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before) }}</span>{% endif %}
                 <span>{{ link.label }}</span>
-                {% if link.icon_after %}<span class="fe-megamenu-classic-icon">{{ icon(link.icon_after) }}</span>{% endif %}
+                {% if link.icon_after %}<span class="fe-megamenu-classic-icon"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>{% endif %}
               </a>
             {% else %}
-              <a href="{{ link.url or '#' }}"{{ _tgt|safe }} class="fe-megamenu-classic-link">
-                {% if link.icon_before %}<span class="fe-megamenu-classic-icon">{{ icon(link.icon_before) }}</span>{% endif %}
+              {% set _link_cls = 'fe-megamenu-classic-link' %}
+              {% if link.link_size == 'small' %}{% set _link_cls = _link_cls ~ ' fe-megamenu-classic-link-small' %}
+              {% elif link.link_size == 'large' %}{% set _link_cls = _link_cls ~ ' fe-megamenu-classic-link-large' %}
+              {% endif %}
+              {% set _link_style = '' %}
+              {% if link.override_color and link.custom_color %}
+                {% set _link_cls = _link_cls ~ ' fe-megamenu-classic-link-colored' %}
+                {% set _link_style = '--link-color-light: ' ~ link.custom_color ~ '; --link-color-dark: ' ~ (link.custom_color | dark_variant) ~ ';' %}
+              {% endif %}
+              <a href="{{ link.url or '#' }}"{{ _tgt|safe }} class="{{ _link_cls }}"{% if _link_style %} style="{{ _link_style }}"{% endif %}>
+                {% if link.icon_before %}<span class="fe-megamenu-classic-icon"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before) }}</span>{% endif %}
                 <span class="fe-megamenu-classic-label">{{ link.label }}</span>
-                {% if link.icon_after %}<span class="fe-megamenu-classic-icon">{{ icon(link.icon_after) }}</span>
+                {% if link.icon_after %}<span class="fe-megamenu-classic-icon"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>
                 {% else %}<span class="fe-megamenu-classic-arrow" aria-hidden="true">→</span>
                 {% endif %}
               </a>

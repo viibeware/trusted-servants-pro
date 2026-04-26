@@ -19,6 +19,22 @@
     </a>
 
     <div class="fe-subnav-group">
+      <div class="fe-subnav-group-label">Setup</div>
+      <a href="{{ url_for('main.frontend_branding') }}"
+         class="fe-subnav-link {% if request.endpoint == 'main.frontend_branding' %}active{% endif %}">
+        {{ icon('star') }}<span>Branding &amp; SEO</span>
+      </a>
+      <a href="{{ url_for('main.frontend_fonts_icons') }}"
+         class="fe-subnav-link {% if request.endpoint == 'main.frontend_fonts_icons' %}active{% endif %}">
+        {{ icon('settings') }}<span>Fonts &amp; Icons</span>
+      </a>
+      <a href="{{ url_for('main.frontend_design') }}"
+         class="fe-subnav-link {% if request.endpoint == 'main.frontend_design' %}active{% endif %}">
+        {{ icon('sliders') }}<span>Design</span>
+      </a>
+    </div>
+
+    <div class="fe-subnav-group">
       <div class="fe-subnav-group-label">Structure</div>
       <a href="{{ url_for('main.frontend_header') }}"
          class="fe-subnav-link {% if request.endpoint == 'main.frontend_header' %}active{% endif %}">
@@ -44,6 +60,18 @@
          class="fe-subnav-link {% if request.endpoint == 'main.frontend_pages' %}active{% endif %}">
         {{ icon('file-text') }}<span>Pages</span>
       </a>
+      <a href="{{ url_for('main.frontend_404') }}"
+         class="fe-subnav-link {% if request.endpoint == 'main.frontend_404' %}active{% endif %}">
+        {{ icon('alert-circle') }}<span>404 page</span>
+      </a>
     </div>
   </nav>
+
+  {# Sticky save bar — JS shows it (bouncing) whenever any tracked form
+     inside .fe-admin-main becomes dirty. Fixed at the bottom of the
+     sidebar column so it stays in reach while scrolling long pages. #}
+  <div class="fe-save-bar" id="fe-save-bar" hidden>
+    <span class="fe-save-bar-msg">Unsaved changes</span>
+    <button type="button" class="btn fe-save-bar-btn" id="fe-save-bar-btn">Save</button>
+  </div>
 </aside>

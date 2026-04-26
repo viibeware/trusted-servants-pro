@@ -1,0 +1,105 @@
+{# "Recovery Blue" homepage — inspired by dccma.com.
+   Three-up: Meetings / Literature / Fellowship with large icons.
+   Today's Meetings preview pulled from the admin DB.
+   Final CTA to the newcomer / portal flow.
+   The hero is shared with the classic template via _hero.html so the
+   admin's hero settings render identically regardless of template. #}
+{% include "frontend/_hero.html" %}
+
+<section class="fe-recovery-threeup" id="about">
+  <div class="fe-container">
+    <div class="fe-recovery-threeup-grid">
+      <article class="fe-recovery-threeup-card">
+        <div class="fe-recovery-threeup-icon" style="--fe-ic: var(--fe-recovery-blue);">{{ icon('calendar') }}</div>
+        <h2>Meetings</h2>
+        <p>We hold in-person, online, and hybrid meetings 7 days a week across DC, Maryland, Northern Virginia, and on Zoom worldwide.</p>
+        <a class="fe-recovery-cardlink" href="#meetings">Browse the schedule →</a>
+      </article>
+      <article class="fe-recovery-threeup-card">
+        <div class="fe-recovery-threeup-icon" style="--fe-ic: #0ea5a5;">{{ icon('file-text') }}</div>
+        <h2>Literature</h2>
+        <p>Readings, step-and-tradition packets, and other fellowship-approved materials to support your recovery.</p>
+        <a class="fe-recovery-cardlink" href="#literature">Open the library →</a>
+      </article>
+      <article class="fe-recovery-threeup-card">
+        <div class="fe-recovery-threeup-icon" style="--fe-ic: #c2410c;">{{ icon('heart') }}</div>
+        <h2>Fellowship</h2>
+        <p>The only thing you need to join is a desire to stop using — no dues, no fees. We're entirely self-supported by our own contributions.</p>
+        <a class="fe-recovery-cardlink" href="#fellowship">Get involved →</a>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="fe-recovery-meetings" id="meetings">
+  <div class="fe-container">
+    <div class="fe-recovery-section-head">
+      <h2>Today's Meetings</h2>
+      <p class="muted">A look at the published schedule. Sign in to the portal for full Zoom details, host credentials, and OTP codes.</p>
+    </div>
+    {% if meetings %}
+    <div class="fe-recovery-meeting-grid">
+      {% for m in meetings %}
+      <article class="fe-recovery-meeting-card">
+        <div class="fe-recovery-meeting-head">
+          <span class="fe-recovery-meeting-type fe-recovery-meeting-type-{{ m.meeting_type }}">
+            {% if m.meeting_type == 'in_person' %}In Person
+            {% elif m.meeting_type == 'online' %}Online
+            {% else %}Hybrid{% endif %}
+          </span>
+        </div>
+        <h3>{{ m.name }}</h3>
+        {% if m.schedules %}
+        <ul class="fe-recovery-meeting-sched">
+          {% for s in m.schedules[:3] %}
+          <li><span class="day">{{ s.day_name }}</span> · {{ s.start_time|fmt12h }}</li>
+          {% endfor %}
+          {% if m.schedules|length > 3 %}<li class="muted smaller">+{{ m.schedules|length - 3 }} more</li>{% endif %}
+        </ul>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted">No meetings have been published yet.</p>
+    {% endif %}
+    <div class="fe-recovery-section-foot">
+      <a class="fe-recovery-btn fe-recovery-btn-primary" href="{{ url_for('auth.login') }}">View All Meetings</a>
+    </div>
+  </div>
+</section>
+
+<section class="fe-recovery-fellowship" id="fellowship">
+  <div class="fe-container fe-recovery-fellowship-inner">
+    <div>
+      <h2>{{ frontend_about_heading }}</h2>
+      {% if frontend_about_body %}
+      <div class="fe-recovery-fellowship-body">{{ frontend_about_body|markdown }}</div>
+      {% else %}
+      <p>No dues, no fees, no lectures. We stay neutral on politics, religion, and outside causes so we can focus on what really matters: helping the next person find recovery.</p>
+      {% endif %}
+      <a class="fe-recovery-btn fe-recovery-btn-primary" href="#newcomer">Learn More About CMA</a>
+    </div>
+    <div class="fe-recovery-fellowship-side">
+      <div class="fe-recovery-stat"><div class="fe-recovery-stat-num">7</div><div class="fe-recovery-stat-lbl">Days a week</div></div>
+      <div class="fe-recovery-stat"><div class="fe-recovery-stat-num">24/7</div><div class="fe-recovery-stat-lbl">Helpline</div></div>
+      <div class="fe-recovery-stat"><div class="fe-recovery-stat-num">3</div><div class="fe-recovery-stat-lbl">Meeting formats</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="fe-recovery-helpline" id="contact">
+  <div class="fe-container fe-recovery-helpline-inner">
+    <div class="fe-recovery-helpline-eyebrow">{{ frontend_contact_heading }}</div>
+    <a class="fe-recovery-helpline-num" href="tel:+18556384373">855-METH-FREE</a>
+    <p class="fe-recovery-helpline-sub">CMA 24-Hour Helpline · Confidential · Free</p>
+    {% if frontend_contact_body %}
+    <div class="fe-recovery-helpline-body">{{ frontend_contact_body|markdown }}</div>
+    {% endif %}
+    {% if site and site.pic_email %}
+    <p class="fe-recovery-helpline-email">
+      Or email us: <a href="mailto:{{ site.pic_email }}">{{ site.pic_email }}</a>
+    </p>
+    {% endif %}
+  </div>
+</section>

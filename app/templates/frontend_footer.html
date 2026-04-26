@@ -1,45 +1,20 @@
 {% extends "base.html" %}
+{% from "_frontend_template_picker.html" import template_picker %}
+{% set _active = (site.frontend_footer_template if site else 'classic') or 'classic' %}
+{% set _active_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
 {% block heading %}Footer{% endblock %}
 {% block heading_help %}Edit the footer text shown beneath every page on the public frontend.{% endblock %}
 {% block top_actions %}
+{{ template_picker(frontend_themes, _active_theme,
+                    "frontend_theme",
+                    url_for('main.frontend_theme_save'),
+                    "site-theme-modal", "footer", "Site theme", label="Theme") }}
 <a class="btn" href="{{ url_for('frontend.index') }}" target="_blank" rel="noopener">View frontend ↗</a>
 {% endblock %}
 {% block content %}
 <div class="fe-admin-layout">
   {% include "_frontend_subnav.html" %}
   <div class="fe-admin-main">
-
-<section class="card">
-  <div class="card-head">
-    <h2>Template</h2>
-    <span class="muted smaller">Pick a footer layout. Your content is shared across templates.</span>
-  </div>
-  <form class="form" method="post" action="{{ url_for('main.frontend_footer_template_save') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    {% set _active = (site.frontend_footer_template if site else 'classic') or 'classic' %}
-    <div class="template-library-grid">
-      {% for t in footer_templates %}
-      <label class="template-card {% if _active == t.key %}active{% endif %}">
-        <input type="radio" name="frontend_footer_template" value="{{ t.key }}"
-               {% if _active == t.key %}checked{% endif %}>
-        <div class="template-card-preview template-card-preview-footer">
-          <div class="template-card-preview-footer-cols">
-            <span></span><span></span><span></span>
-          </div>
-          <div class="template-card-preview-footer-bar"></div>
-        </div>
-        <div class="template-card-info">
-          <div class="template-card-name">{{ t.name }}
-            {% if _active == t.key %}<span class="template-card-badge">Active</span>{% endif %}
-          </div>
-          <div class="template-card-desc muted small">{{ t.description }}</div>
-        </div>
-      </label>
-      {% endfor %}
-    </div>
-    <div class="form-actions"><button class="btn btn-primary">Use this template</button></div>
-  </form>
-</section>
 
 <section class="card">
   <div class="card-head"><h2>Footer text</h2></div>

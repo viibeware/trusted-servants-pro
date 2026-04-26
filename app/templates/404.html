@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block heading %}404{% endblock %}
+{% block heading_help %}We couldn't find the page you were looking for.{% endblock %}
+{% block content %}
+<section class="card admin-404">
+  <div class="admin-404-art" aria-hidden="true">
+    <svg viewBox="0 0 320 200" width="100%" height="100%">
+      <defs>
+        <linearGradient id="adm404-grad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="var(--brand)"/>
+          <stop offset="100%" stop-color="var(--access)"/>
+        </linearGradient>
+      </defs>
+      {# Empty meeting circle — six chairs, one tipped over. #}
+      <ellipse cx="160" cy="155" rx="130" ry="14" fill="rgba(0,0,0,0.06)"/>
+      {% for cx, cy in [(60,120),(110,100),(160,95),(210,100),(260,120),(160,150)] %}
+        <rect x="{{ cx - 12 }}" y="{{ cy - 18 }}" width="24" height="6" rx="2" fill="var(--muted)" opacity="0.4"/>
+        <rect x="{{ cx - 11 }}" y="{{ cy - 12 }}" width="22" height="14" rx="2" fill="var(--panel-2)" stroke="var(--border)"/>
+      {% endfor %}
+      {# Tipped-over chair — the missing servant #}
+      <g transform="translate(160 110) rotate(-22)">
+        <rect x="-12" y="-18" width="24" height="6" rx="2" fill="url(#adm404-grad)"/>
+        <rect x="-11" y="-12" width="22" height="14" rx="2" fill="var(--panel)" stroke="var(--brand)"/>
+      </g>
+      <text x="50%" y="65" text-anchor="middle"
+            font-family="var(--fe-font-heading, sans-serif)"
+            font-size="58" font-weight="800" fill="url(#adm404-grad)">404</text>
+    </svg>
+  </div>
+
+  <h2 class="admin-404-title">This page doesn't exist</h2>
+  <p class="admin-404-sub muted">
+    The link you followed might be stale or the resource may have been moved.
+    Pick a destination below and we'll get you back on track.
+  </p>
+
+  <div class="admin-404-actions">
+    <a class="btn btn-primary" href="{{ url_for('main.index') }}">Dashboard</a>
+    <a class="btn" href="{{ url_for('main.meetings') }}">Meetings</a>
+    <a class="btn" href="{{ url_for('main.libraries') }}">Libraries</a>
+    {% if current_user.is_authenticated and current_user.is_admin() and site and site.posts_enabled %}
+      <a class="btn" href="{{ url_for('main.posts') }}">Announcements &amp; Events</a>
+    {% endif %}
+  </div>
+
+  <p class="muted smaller admin-404-foot">
+    Looking for something specific?
+    <a href="{{ request.referrer or url_for('main.index') }}">Go back</a>
+    or
+    <a href="{{ url_for('main.index') }}">start over from the dashboard</a>.
+  </p>
+</section>
+{% endblock %}

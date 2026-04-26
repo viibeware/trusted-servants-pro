@@ -20,7 +20,8 @@
 
   <div class="nav-megacol-add-row">
     {% for _k, _lbl in [('link','+ Link'), ('title','+ Title'),
-                        ('button','+ Button'), ('section','+ Section')] %}
+                        ('button','+ Button'), ('section','+ Section'),
+                        ('search','+ Search')] %}
     <form method="post" action="{{ url_for('main.frontend_nav_link_new', cid=col.id) }}"
           class="nav-megacol-addlink-form"
           data-add-block-target="#nav-megacol-links-{{ col.id }}">

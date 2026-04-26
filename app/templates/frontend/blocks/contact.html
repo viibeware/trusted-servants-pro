@@ -1,0 +1,20 @@
+{# Contact / help section with an optional Public Information Chair card. #}
+<section class="fe-section fe-contact" id="contact">
+  <div class="fe-container fe-contact-inner">
+    <h2>{{ frontend_contact_heading }}</h2>
+    {% if frontend_contact_body %}
+    <div class="fe-contact-body">{{ frontend_contact_body|markdown }}</div>
+    {% endif %}
+    {% if site and site.pic_name %}
+    <div class="fe-contact-card">
+      <div class="fe-contact-role">Public Information Chair</div>
+      <div class="fe-contact-name">{{ site.pic_name }}</div>
+      <div class="fe-contact-lines">
+        {% if site.pic_phone %}<a href="tel:{{ site.pic_phone }}">{{ site.pic_phone }}</a>{% endif %}
+        {% if site.pic_phone and site.pic_email %} · {% endif %}
+        {% if site.pic_email %}<a href="mailto:{{ site.pic_email }}">{{ site.pic_email }}</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</section>

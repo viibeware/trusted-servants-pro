@@ -1,28 +1,16 @@
 {% extends "base.html" %}
 {% block heading %}Users{% endblock %}
 {% block content %}
-<section class="card">
-  <div class="card-head"><h2>Public Information Chair</h2></div>
-  <p class="muted small">Contact information shown on the dashboard for members who need help.</p>
-  <form class="form" method="post" action="{{ url_for('main.pic_save') }}">
-<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
-    <div class="pic-form-row">
-      <label>Name<input type="text" name="pic_name" value="{{ (site.pic_name if site else '') or '' }}"></label>
-      <label>Email<input type="email" name="pic_email" value="{{ (site.pic_email if site else '') or '' }}"></label>
-      <label>Phone<input type="tel" name="pic_phone" value="{{ (site.pic_phone if site else '') or '' }}"></label>
-    </div>
-    <div class="form-actions"><button class="btn btn-primary">Save</button></div>
-  </form>
-</section>
 
+{# Top row: Create User (left) + Permissions explainer (right). Two
+   equal columns on wide screens; stack on narrow. #}
 {% set _prefill = request.args.get('prefill', '') %}
-<section class="card users-new-card"{% if _prefill %} data-autofocus-new-user{% endif %}>
-  <div class="card-head"><h2>Create User</h2></div>
-  <form method="post" action="{{ url_for('auth.users_create') }}" class="form">
-<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
-    <div class="users-new-row">
+<div class="users-top-grid">
+  <section class="card users-new-card"{% if _prefill %} data-autofocus-new-user{% endif %}>
+    <div class="card-head"><h2>Create User</h2></div>
+    <form method="post" action="{{ url_for('auth.users_create') }}" class="form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
       <label>Username<input name="username" value="{{ _prefill }}" required></label>
       <label>Email<input name="email" type="email" value="{{ _prefill }}" required></label>
       <label>Password<input name="password" type="password" required></label>
@@ -31,24 +19,54 @@
           {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
         </select>
       </label>
+      <div class="form-actions"><button class="btn btn-primary">Create</button></div>
+    </form>
+  </section>
+
+  <section class="card users-perm-card">
+    <div class="card-head">
+      <h2>Roles &amp; permissions</h2>
+      <span class="muted smaller">What each role can access. Module access is also gated per-module on the <b>Modules</b> tab.</span>
     </div>
-    <div class="form-actions"><button class="btn btn-primary">Create</button></div>
-  </form>
-</section>
-{% if _prefill %}
-<script>
-  (function(){
-    const card = document.querySelector('[data-autofocus-new-user]');
-    if (!card) return;
-    card.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    const pw = card.querySelector('input[name="password"]');
-    if (pw) setTimeout(() => pw.focus(), 250);
-  })();
-</script>
-{% endif %}
+    <ul class="perm-list">
+      <li class="perm-row perm-row-admin">
+        <div class="perm-role">
+          <span class="perm-badge perm-badge-admin">Admin</span>
+        </div>
+        <div class="perm-blurb">
+          <div class="muted small">Full access. Manages users, modules, settings, the Web Frontend, and every other feature in the portal.</div>
+        </div>
+      </li>
+      <li class="perm-row perm-row-editor">
+        <div class="perm-role">
+          <span class="perm-badge perm-badge-editor">Editor</span>
+        </div>
+        <div class="perm-blurb">
+          <div class="muted small">Edits meetings, libraries, readings, and uploads. Cannot reach Settings, Users, or the Web Frontend module.</div>
+        </div>
+      </li>
+      <li class="perm-row perm-row-fe">
+        <div class="perm-role">
+          <span class="perm-badge perm-badge-fe">Frontend editor</span>
+        </div>
+        <div class="perm-blurb">
+          <div class="muted small">Inherits Editor permissions <b>plus</b> the entire Web Frontend module — header, footer, navigation, mega menus, alert bars, homepage content, theme/design tokens, and the public-visibility toggle.</div>
+        </div>
+      </li>
+      <li class="perm-row perm-row-viewer">
+        <div class="perm-role">
+          <span class="perm-badge perm-badge-viewer">Viewer</span>
+        </div>
+        <div class="perm-blurb">
+          <div class="muted small">Read-only. Sees meetings, libraries, files, and any module the admin opens to <i>All signed-in users</i>; cannot edit anything.</div>
+        </div>
+      </li>
+    </ul>
+  </section>
+</div>
 
 <section class="card">
-  <div class="card-head"><h2>All Users</h2></div>
+  <div class="card-head"><h2>All users</h2></div>
   <table class="tbl users-tbl">
     <thead><tr><th>Username</th><th>Email</th><th>Role</th><th>Reset password</th><th></th></tr></thead>
     <tbody>
@@ -94,4 +112,31 @@
     </tbody>
   </table>
 </section>
+
+<section class="card">
+  <div class="card-head"><h2>Public Information Chair</h2></div>
+  <p class="muted small">Contact information shown on the dashboard for members who need help.</p>
+  <form class="form" method="post" action="{{ url_for('main.pic_save') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+    <div class="pic-form-row">
+      <label>Name<input type="text" name="pic_name" value="{{ (site.pic_name if site else '') or '' }}"></label>
+      <label>Email<input type="email" name="pic_email" value="{{ (site.pic_email if site else '') or '' }}"></label>
+      <label>Phone<input type="tel" name="pic_phone" value="{{ (site.pic_phone if site else '') or '' }}"></label>
+    </div>
+    <div class="form-actions"><button class="btn btn-primary">Save</button></div>
+  </form>
+</section>
+
+{% if _prefill %}
+<script>
+  (function(){
+    const card = document.querySelector('[data-autofocus-new-user]');
+    if (!card) return;
+    card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    const pw = card.querySelector('input[name="password"]');
+    if (pw) setTimeout(() => pw.focus(), 250);
+  })();
+</script>
+{% endif %}
 {% endblock %}

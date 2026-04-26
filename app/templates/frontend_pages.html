@@ -1,7 +1,13 @@
 {% extends "base.html" %}
+{% from "_frontend_template_picker.html" import template_picker %}
+{% set _active_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
 {% block heading %}Pages{% endblock %}
 {% block heading_help %}Additional content pages beyond the homepage.{% endblock %}
 {% block top_actions %}
+{{ template_picker(frontend_themes, _active_theme,
+                    "frontend_theme",
+                    url_for('main.frontend_theme_save'),
+                    "site-theme-modal", "homepage", "Site theme", label="Theme") }}
 <a class="btn" href="{{ url_for('frontend.index') }}" target="_blank" rel="noopener">View frontend ↗</a>
 {% endblock %}
 {% block content %}

@@ -1,0 +1,73 @@
+{# "Recovery Blue" mega menu — full-width colored panel with rounded bottom corners,
+   chevron slide-in on hover. Expects `ni` (FrontendNavItem) in scope. #}
+{% macro _icon_style(color, size) -%}
+  {%- set _parts = [] -%}
+  {%- if color %}{% set _ = _parts.append('color: ' ~ color) %}{% endif -%}
+  {%- if size %}{% set _ = _parts.append('--icon-size: ' ~ size ~ 'px') %}{% endif -%}
+  {%- if _parts %} style="{{ _parts|join('; ') }};"{% endif -%}
+{%- endmacro %}
+{% set _mega_bg = (site.frontend_mega_bg_color if site else None) or '#0B5CFF' %}
+{% set _mega_fg = (site.frontend_mega_text_color if site else None) or '#ffffff' %}
+{% set _mega_bl = (site.frontend_mega_radius_bl if site else 18) %}
+{% set _mega_br = (site.frontend_mega_radius_br if site else 18) %}
+{% set _animate = site and site.frontend_megamenu_animate %}
+{% set _animate_ms = (site.frontend_megamenu_animate_ms if site and site.frontend_megamenu_animate_ms else 320) %}
+<div class="fe-megamenu fe-megamenu-recovery-blue{% if _animate %} fe-megamenu-animate{% endif %}" data-megamenu-panel="{{ ni.id }}" aria-hidden="true"
+     style="background: {{ _mega_bg }}; color: {{ _mega_fg }};
+            border-bottom-left-radius: {{ _mega_bl }}px;
+            border-bottom-right-radius: {{ _mega_br }}px;
+            --fe-mm-reveal-ms: {{ _animate_ms }}ms;">
+  <div class="fe-megamenu-inner">
+    {% for col in ni.columns[:3] %}
+    <div class="fe-megamenu-col">
+      <div class="fe-megamenu-blocks">
+        {% for link in col.links %}
+          {% set _k = link.kind or 'link' %}
+          {% set _tgt = ' target="_blank" rel="noopener"' if link.open_in_new_tab else '' %}
+          {% set _i = loop.index0 %}
+          {% if _k == 'title' %}
+            <h4 class="fe-megamenu-block-title" style="--i: {{ _i }};">{{ link.label }}</h4>
+          {% elif _k == 'section' %}
+            <div class="fe-megamenu-block-section" style="--i: {{ _i }};">
+              <span class="fe-megamenu-block-section-line" aria-hidden="true"></span>
+              {% if link.label %}<span class="fe-megamenu-block-section-label">{{ link.label }}</span>{% endif %}
+              <span class="fe-megamenu-block-section-line" aria-hidden="true"></span>
+            </div>
+          {% elif _k == 'search' %}
+            <div class="fe-megamenu-search" style="--i: {{ _i }};">
+              <span class="fe-megamenu-search-icon" aria-hidden="true">{{ icon('search') }}</span>
+              <input type="search" class="fe-megamenu-search-input"
+                     placeholder="{{ link.label }}" aria-label="{{ link.label }}"
+                     data-megamenu-search autocomplete="off">
+            </div>
+          {% elif _k == 'button' %}
+            <a href="{{ link.url or '#' }}"{{ _tgt|safe }}
+               class="fe-megamenu-block-btn fe-megamenu-block-btn-{{ link.button_style or 'pill' }}"
+               style="--i: {{ _i }};">
+              {% if link.icon_before %}<span class="fe-megamenu-icon"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before) }}</span>{% endif %}
+              <span>{{ link.label }}</span>
+              {% if link.icon_after %}<span class="fe-megamenu-icon"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>{% endif %}
+            </a>
+          {% else %}
+            {% set _link_cls = 'fe-megamenu-link' %}
+            {% if link.link_size == 'small' %}{% set _link_cls = _link_cls ~ ' fe-megamenu-link-small' %}
+            {% elif link.link_size == 'large' %}{% set _link_cls = _link_cls ~ ' fe-megamenu-link-large' %}
+            {% endif %}
+            {% set _link_style = '--i: ' ~ _i ~ ';' %}
+            {% if link.override_color and link.custom_color %}
+              {% set _link_cls = _link_cls ~ ' fe-megamenu-link-colored' %}
+              {% set _link_style = _link_style ~ ' --link-color-light: ' ~ link.custom_color ~ '; --link-color-dark: ' ~ (link.custom_color | dark_variant) ~ ';' %}
+            {% endif %}
+            <a href="{{ link.url or '#' }}"{{ _tgt|safe }} class="{{ _link_cls }}" style="{{ _link_style }}">
+              {% if link.icon_before %}<span class="fe-megamenu-icon fe-megamenu-icon-before"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before) }}</span>{% endif %}
+              <span class="fe-megamenu-label">{{ link.label }}</span>
+              {% if link.icon_after %}<span class="fe-megamenu-icon fe-megamenu-icon-after"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>{% endif %}
+              <span class="fe-megamenu-chevron" aria-hidden="true">{{ icon('arrow-right') }}</span>
+            </a>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>

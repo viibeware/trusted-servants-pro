@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% set _is_new = post is none %}
+{% set _p = post %}
+{% block heading %}{{ 'New announcement / event' if _is_new else 'Edit announcement / event' }}{% endblock %}
+{% block heading_help %}{% if _is_new %}Compose an announcement, an event, or both. Tag at least one type so it's published.{% else %}Update the content, type, schedule, location, contact, or media.{% endif %}{% endblock %}
+{% block top_actions %}
+  <a class="btn" href="{{ url_for('main.posts') }}">← All</a>
+  {% if _p and not _p.is_archived %}
+  <form method="post" action="{{ url_for('main.post_archive', pid=_p.id) }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn">Archive</button>
+  </form>
+  {% elif _p and _p.is_archived %}
+  <form method="post" action="{{ url_for('main.post_unarchive', pid=_p.id) }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn">Restore</button>
+  </form>
+  {% endif %}
+{% endblock %}
+{% block content %}
+<form class="form post-form" method="post" action="{{ url_for('main.post_save') }}" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if _p %}<input type="hidden" name="post_id" value="{{ _p.id }}">{% endif %}
+
+  {# ── Type + headline ─────────────────────────────────────────── #}
+  <section class="card">
+    <div class="card-head">
+      <h2>Headline</h2>
+      <span class="muted smaller">Title shown wherever the post appears. Type tags drive how it's shown.</span>
+    </div>
+
+    <div class="post-type-row">
+      <label class="post-type-pill">
+        <input type="checkbox" name="is_announcement" value="1"
+               {% if _p and _p.is_announcement %}checked{% endif %}>
+        <span class="post-type-pill-body">
+          <span class="post-type-pill-title">Announcement</span>
+          <span class="post-type-pill-sub muted smaller">Shows up in announcement feeds.</span>
+        </span>
+      </label>
+      <label class="post-type-pill">
+        <input type="checkbox" name="is_event" value="1"
+               {% if _p and _p.is_event %}checked{% endif %}>
+        <span class="post-type-pill-body">
+          <span class="post-type-pill-title">Event</span>
+          <span class="post-type-pill-sub muted smaller">Picks up the event date / location / contact fields below.</span>
+        </span>
+      </label>
+    </div>
+
+    <label>Title
+      <input type="text" name="title" required maxlength="255"
+             value="{{ _p.title if _p else '' }}"
+             placeholder="Spring serenity workshop">
+    </label>
+    <label>Summary <span class="muted small">(short blurb shown in lists and link previews)</span>
+      <textarea name="summary" rows="2"
+                placeholder="One or two sentences — what is this and why does it matter?">{{ _p.summary if _p else '' }}</textarea>
+    </label>
+    <label>Body <span class="muted small">(full content, Markdown supported)</span>
+      <textarea name="body" rows="8"
+                placeholder="The full body of the post. Markdown supported.">{{ _p.body if _p else '' }}</textarea>
+    </label>
+  </section>
+
+  {# ── Featured image ─────────────────────────────────────────── #}
+  <section class="card">
+    <div class="card-head">
+      <h2>Featured image</h2>
+      <span class="muted smaller">Displayed at the top of the post and in link-preview cards. PNG, JPG, or WebP.</span>
+    </div>
+    <div class="og-image-row">
+      <div class="og-image-preview">
+        {% if _p and _p.featured_image_filename %}
+        <img src="{{ url_for('public.post_featured_image', pid=_p.id) }}" alt="Featured image">
+        <label class="check fe-logo-clear-label">
+          <input type="checkbox" name="clear_featured_image" value="1"><span>Remove current image</span>
+        </label>
+        {% else %}
+        <div class="og-image-empty muted small">No image uploaded yet.</div>
+        {% endif %}
+      </div>
+      <div class="og-image-fields">
+        <label>Replace image
+          <input type="file" name="featured_image" accept="image/png,image/jpeg,image/webp">
+        </label>
+      </div>
+    </div>
+  </section>
+
+  {# ── Event details (date, location, zoom) ──────────────────────── #}
+  <section class="card">
+    <div class="card-head">
+      <h2>Event details</h2>
+      <span class="muted smaller">Filled in when the post is tagged as an event. Posts tagged only as announcements can leave these blank.</span>
+    </div>
+
+    <div class="form-row">
+      <label>Starts
+        <input type="datetime-local" name="event_starts_at"
+               value="{% if _p and _p.event_starts_at %}{{ _p.event_starts_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+      </label>
+      <label>Ends
+        <input type="datetime-local" name="event_ends_at"
+               value="{% if _p and _p.event_ends_at %}{{ _p.event_ends_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+      </label>
+    </div>
+
+    <li class="special-page-row" style="list-style:none; margin: 1rem 0;">
+      <div class="special-page-info">
+        <div class="u-name">Online event</div>
+        <p class="muted small">When on, the location address is optional and the Zoom block below is shown.</p>
+      </div>
+      <label class="mode-toggle">
+        <input type="checkbox" name="is_online" value="1"
+               {% if _p and _p.is_online %}checked{% endif %}>
+        <span class="mode-track"><span class="mode-thumb"></span></span>
+      </label>
+    </li>
+
+    <label>Venue / location name
+      <input type="text" name="location_name" maxlength="255"
+             value="{{ _p.location_name if _p else '' }}"
+             placeholder="Community Center · Hall B">
+    </label>
+    <label>Address
+      <textarea name="location_address" rows="2"
+                placeholder="123 Main St, Springfield, IL 62701">{{ _p.location_address if _p else '' }}</textarea>
+    </label>
+    <label>Google Maps link <span class="muted small">(optional — direct link the front-end can render as "Get directions")</span>
+      <input type="url" name="google_maps_url" maxlength="500"
+             value="{{ _p.google_maps_url if _p else '' }}"
+             placeholder="https://maps.google.com/?q=...">
+    </label>
+
+    <div class="post-zoom-block">
+      <h3 class="post-subhead">Zoom <span class="muted smaller">(for online events)</span></h3>
+      <div class="form-row">
+        <label>Meeting ID
+          <input type="text" name="zoom_meeting_id" maxlength="64"
+                 value="{{ _p.zoom_meeting_id if _p else '' }}"
+                 placeholder="123 456 7890">
+        </label>
+        <label>Passcode
+          <input type="text" name="zoom_passcode" maxlength="128"
+                 value="{{ _p.zoom_passcode if _p else '' }}">
+        </label>
+      </div>
+      <label>Zoom URL
+        <input type="url" name="zoom_url" maxlength="500"
+               value="{{ _p.zoom_url if _p else '' }}"
+               placeholder="https://zoom.us/j/...">
+      </label>
+    </div>
+  </section>
+
+  {# ── Event website / external link ──────────────────────── #}
+  <section class="card">
+    <div class="card-head">
+      <h2>Event website</h2>
+      <span class="muted smaller">A link the public site renders with your chosen label.</span>
+    </div>
+    <div class="form-row">
+      <label>URL
+        <input type="url" name="website_url" maxlength="500"
+               value="{{ _p.website_url if _p else '' }}"
+               placeholder="https://example.org/event">
+      </label>
+      <label>Link label <span class="muted small">(what visitors see on the button)</span>
+        <input type="text" name="website_label" maxlength="120"
+               value="{{ _p.website_label if _p else '' }}"
+               placeholder="Register on Eventbrite">
+      </label>
+    </div>
+  </section>
+
+  {# ── Contact ─────────────────────────────────────────────── #}
+  <section class="card">
+    <div class="card-head">
+      <h2>Event contact</h2>
+      <span class="muted smaller">Optional — shown publicly when set.</span>
+    </div>
+    <label>Name
+      <input type="text" name="contact_name" maxlength="120"
+             value="{{ _p.contact_name if _p else '' }}">
+    </label>
+    <div class="form-row">
+      <label>Phone
+        <input type="tel" name="contact_phone" maxlength="64"
+               value="{{ _p.contact_phone if _p else '' }}">
+      </label>
+      <label>Email
+        <input type="email" name="contact_email" maxlength="255"
+               value="{{ _p.contact_email if _p else '' }}">
+      </label>
+    </div>
+  </section>
+
+  <div class="form-actions">
+    {% if _p %}
+    <form method="post" action="{{ url_for('main.post_delete', pid=_p.id) }}" style="display:inline; margin-right:auto"
+          onsubmit="return confirm('Delete this post permanently? Featured image will be cleaned up.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-danger">Delete post</button>
+    </form>
+    {% endif %}
+    <a class="btn" href="{{ url_for('main.posts') }}">Cancel</a>
+    <button class="btn btn-primary" type="submit">{{ 'Create post' if _is_new else 'Save post' }}</button>
+  </div>
+</form>
+{% endblock %}

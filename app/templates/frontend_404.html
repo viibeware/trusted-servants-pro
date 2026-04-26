@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from "_frontend_template_picker.html" import template_picker %}
+{% set _active_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
+{% block heading %}404 page{% endblock %}
+{% block heading_help %}Customize the page visitors see when they land on a URL that doesn't exist on the public site. All fields are optional — sensible defaults are used when blank.{% endblock %}
+{% block top_actions %}
+{{ template_picker(frontend_themes, _active_theme,
+                    "frontend_theme",
+                    url_for('main.frontend_theme_save'),
+                    "site-theme-modal", "homepage", "Site theme", label="Theme") }}
+<a class="btn" href="{{ url_for('public.frontend_404_preview') }}" target="_blank" rel="noopener">Preview 404 ↗</a>
+{% endblock %}
+{% block content %}
+<div class="fe-admin-layout">
+  {% include "_frontend_subnav.html" %}
+  <div class="fe-admin-main">
+
+<form class="form" method="post" action="{{ url_for('main.frontend_404_save') }}" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Copy</h2>
+      <span class="muted smaller">Headline + supporting text shown on the 404 page.</span>
+    </div>
+    <label>Headline <span class="muted small">(blank = "We couldn't find that page")</span>
+      <input type="text" name="frontend_404_heading" maxlength="200"
+             value="{{ (site.frontend_404_heading if site else '') or '' }}"
+             placeholder="We couldn't find that page">
+    </label>
+    <label>Subheading
+      <textarea name="frontend_404_subheading" rows="3"
+                placeholder="Short, friendly note explaining what happened and how to get back on track.">{{ (site.frontend_404_subheading if site else '') or '' }}</textarea>
+    </label>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Call to action</h2>
+      <span class="muted smaller">Primary button shown under the message. Defaults to "Back to home" pointing at the site root.</span>
+    </div>
+    <div class="form-row" style="display: grid; grid-template-columns: 1fr 2fr; gap: 14px;">
+      <label>Button label
+        <input type="text" name="frontend_404_cta_label" maxlength="120"
+               value="{{ (site.frontend_404_cta_label if site else '') or '' }}"
+               placeholder="Back to home">
+      </label>
+      <label>Button URL
+        <input type="text" name="frontend_404_cta_url" maxlength="500"
+               value="{{ (site.frontend_404_cta_url if site else '') or '' }}"
+               placeholder="/">
+      </label>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Illustration</h2>
+      <span class="muted smaller">Optional image shown above the headline. PNG, JPG, WebP, or SVG. Leave blank for the built-in 404 graphic.</span>
+    </div>
+    <div class="og-image-row">
+      <div class="og-image-preview">
+        {% if site and site.frontend_404_image_filename %}
+        <img src="{{ url_for('public.frontend_404_image') }}" alt="404 illustration">
+        <label class="check fe-logo-clear-label">
+          <input type="checkbox" name="clear_404_image" value="1"><span>Remove current image</span>
+        </label>
+        {% else %}
+        <div class="og-image-empty muted small">No image — using the built-in graphic.</div>
+        {% endif %}
+      </div>
+      <div class="og-image-fields">
+        <label>Replace image
+          <input type="file" name="frontend_404_image"
+                 accept="image/png,image/jpeg,image/webp,image/svg+xml">
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <div class="form-actions"><button class="btn btn-primary">Save 404 page</button></div>
+</form>
+
+  </div>
+</div>
+{% endblock %}

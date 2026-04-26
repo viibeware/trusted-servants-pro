@@ -1,0 +1,93 @@
+{# Upcoming events block — stacked rows sourced from Post rows where
+   is_event = True. Settings come from block_content._events; the
+   resolved list comes from events_list (server-side, see
+   blocks.filtered_events). Past events drop off automatically — the
+   helper filters anything whose end-time is already past. #}
+{% set _es = (block_content.get('_events', {}) if block_content else {}) %}
+{% set _heading = _es.heading or 'Upcoming Events' %}
+{% set _intro = _es.intro or '' %}
+{% set _empty = _es.empty_message or 'No upcoming events — check back soon.' %}
+{% set _anim = _es.animation or 'fade' %}
+{% set _stagger = _es.stagger_ms or 60 %}
+{% set _show_image = _es.show_image if _es.show_image is defined else true %}
+{% set _show_summary = _es.show_summary if _es.show_summary is defined else true %}
+{% set _show_location = _es.show_location if _es.show_location is defined else true %}
+
+<section class="fe-section fe-events fe-events-anim-{{ _anim }}" id="events"
+         style="--fe-events-stagger: {{ _stagger }}ms;">
+  <div class="fe-container">
+    <div class="fe-section-head">
+      <h2>{{ _heading }}</h2>
+      {% if _intro %}<p>{{ _intro }}</p>{% endif %}
+    </div>
+
+    {% if not events_list %}
+    <p class="fe-events-empty muted">{{ _empty }}</p>
+    {% else %}
+    <ol class="fe-events-list">
+      {% for ev in events_list %}
+      {%- set _start = ev.event_starts_at -%}
+      {%- set _end = ev.event_ends_at -%}
+      {%- set _has_image = _show_image and ev.featured_image_filename -%}
+      <li class="fe-event-row" style="--fe-event-i: {{ loop.index0 }};">
+        {% if _start %}
+        <div class="fe-event-date" aria-label="Event date">
+          <span class="fe-event-date-month">{{ _start.strftime('%b') }}</span>
+          <span class="fe-event-date-day">{{ _start.strftime('%-d') }}</span>
+          <span class="fe-event-date-year">{{ _start.strftime('%Y') }}</span>
+        </div>
+        {% endif %}
+
+        {% if _has_image %}
+        <a class="fe-event-thumb"
+           {% if ev.website_url %}href="{{ ev.website_url }}" target="_blank" rel="noopener"{% endif %}
+           tabindex="-1" aria-hidden="true">
+          <img src="{{ url_for('public.post_featured_image', pid=ev.id) }}"
+               alt="" loading="lazy">
+        </a>
+        {% endif %}
+
+        <div class="fe-event-body">
+          <h3 class="fe-event-title">
+            {% if ev.website_url %}
+            <a href="{{ ev.website_url }}" target="_blank" rel="noopener">{{ ev.title }}</a>
+            {% else %}{{ ev.title }}{% endif %}
+          </h3>
+          <div class="fe-event-attrs">
+            {% if _start %}
+            <span class="fe-event-attr fe-event-attr-when">
+              <span class="fe-event-attr-icon" aria-hidden="true">{{ icon('clock') }}</span>
+              <span>{{ _start.strftime('%A, %b %-d') }} · {{ _start.strftime('%-I:%M %p') }}{% if _end %} – {{ _end.strftime('%-I:%M %p') }}{% endif %}</span>
+            </span>
+            {% endif %}
+            {% if _show_location %}
+              {% if ev.is_online %}
+              <span class="fe-event-attr fe-event-attr-online">
+                <span class="fe-event-attr-icon" aria-hidden="true">{{ icon('video') }}</span>
+                <span>Online event</span>
+              </span>
+              {% elif ev.location_name %}
+              <span class="fe-event-attr">
+                <span class="fe-event-attr-icon" aria-hidden="true">{{ icon('map-pin') }}</span>
+                <span>{{ ev.location_name }}</span>
+              </span>
+              {% endif %}
+            {% endif %}
+          </div>
+          {% if _show_summary and ev.summary %}
+          <p class="fe-event-summary muted">{{ ev.summary }}</p>
+          {% endif %}
+        </div>
+
+        {% if ev.website_url %}
+        <a class="fe-event-cta" href="{{ ev.website_url }}" target="_blank" rel="noopener">
+          <span class="fe-event-cta-label">{{ ev.website_label or 'Learn more' }}</span>
+          <span class="fe-event-cta-arrow" aria-hidden="true">→</span>
+        </a>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    {% endif %}
+  </div>
+</section>

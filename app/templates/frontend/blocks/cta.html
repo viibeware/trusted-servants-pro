@@ -1,0 +1,16 @@
+{# Bold full-width call-to-action banner. #}
+{% set _cta = (block_content.cta if block_content else {}) %}
+<section class="fe-section fe-cta-block" aria-label="Call to action">
+  <div class="fe-container fe-cta-inner">
+    <h2>{{ _cta.heading }}</h2>
+    {% if _cta.body %}<p>{{ _cta.body }}</p>{% endif %}
+    <div class="fe-cta-actions">
+      {% if _cta.primary_label %}
+      <a class="fe-btn fe-btn-primary" href="{{ _cta.primary_url or '#' }}">{{ _cta.primary_label }}</a>
+      {% endif %}
+      {% if _cta.secondary_label %}
+      <a class="fe-btn fe-btn-ghost" href="{{ _cta.secondary_url or '#' }}">{{ _cta.secondary_label }}</a>
+      {% endif %}
+    </div>
+  </div>
+</section>

@@ -1,0 +1,12 @@
+{# Number-stat row. Content from site_blocks(site).stats. #}
+{% set _stats = (block_content.stats if block_content else []) %}
+<section class="fe-section fe-stats-block" aria-label="By the numbers">
+  <div class="fe-container fe-stats-grid">
+    {% for s in _stats %}
+    <div class="fe-stat">
+      <div class="fe-stat-num">{{ s.num }}</div>
+      <div class="fe-stat-lbl">{{ s.label }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</section>

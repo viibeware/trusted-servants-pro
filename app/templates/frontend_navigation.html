@@ -1,45 +1,20 @@
 {% extends "base.html" %}
+{% from "_frontend_template_picker.html" import template_picker %}
+{% set _active_mm = (site.frontend_megamenu_template if site else 'recovery-blue') or 'recovery-blue' %}
+{% set _active_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
 {% block heading %}Navigation{% endblock %}
 {% block heading_help %}Top-level header links, mega-menu columns, and the menu's appearance.{% endblock %}
 {% block top_actions %}
+{{ template_picker(frontend_themes, _active_theme,
+                    "frontend_theme",
+                    url_for('main.frontend_theme_save'),
+                    "site-theme-modal", "megamenu", "Site theme", label="Theme") }}
 <a class="btn" href="{{ url_for('frontend.index') }}" target="_blank" rel="noopener">View frontend ↗</a>
 {% endblock %}
 {% block content %}
 <div class="fe-admin-layout">
   {% include "_frontend_subnav.html" %}
   <div class="fe-admin-main">
-
-    <section class="card">
-      <div class="card-head">
-        <h2>Mega menu template</h2>
-        <span class="muted smaller">Pick a layout for the full-width dropdown. Nav items and links are shared across templates.</span>
-      </div>
-      <form class="form" method="post" action="{{ url_for('main.frontend_megamenu_template_save') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        {% set _active_mm = (site.frontend_megamenu_template if site else 'dccma') or 'dccma' %}
-        <div class="template-library-grid">
-          {% for t in megamenu_templates %}
-          <label class="template-card {% if _active_mm == t.key %}active{% endif %}">
-            <input type="radio" name="frontend_megamenu_template" value="{{ t.key }}"
-                   {% if _active_mm == t.key %}checked{% endif %}>
-            <div class="template-card-preview template-card-preview-megamenu">
-              <div class="template-card-preview-mm-bar"></div>
-              <div class="template-card-preview-mm-grid">
-                <span></span><span></span><span></span>
-              </div>
-            </div>
-            <div class="template-card-info">
-              <div class="template-card-name">{{ t.name }}
-                {% if _active_mm == t.key %}<span class="template-card-badge">Active</span>{% endif %}
-              </div>
-              <div class="template-card-desc muted small">{{ t.description }}</div>
-            </div>
-          </label>
-          {% endfor %}
-        </div>
-        <div class="form-actions"><button class="btn btn-primary">Use this template</button></div>
-      </form>
-    </section>
 
     <section class="card">
       <div class="card-head">
@@ -113,6 +88,32 @@
                    value="{{ site.frontend_mega_radius_br if site else 18 }}">
           </label>
         </div>
+        <li class="special-page-row" style="list-style:none; margin-top: 12px;">
+          <div class="special-page-info">
+            <div class="u-name">Staggered reveal animation</div>
+            <p class="muted small">When the mega menu opens, items fade in one after another with a slight slide + rotate. Turn off for an instant appearance.</p>
+          </div>
+          <label class="mode-toggle" title="Toggle mega menu reveal animation">
+            <input type="checkbox" name="frontend_megamenu_animate" value="1"
+                   data-animate-toggle
+                   {% if site and site.frontend_megamenu_animate %}checked{% endif %}>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+          </label>
+        </li>
+        {% set _animate_ms = site.frontend_megamenu_animate_ms if site and site.frontend_megamenu_animate_ms else 320 %}
+        <div class="mega-animate-speed-row" data-animate-speed-row
+             {% if site and not site.frontend_megamenu_animate %}hidden{% endif %}>
+          <label class="mega-animate-speed-label">
+            <div class="mega-animate-speed-head">
+              <span>Animation speed</span>
+              <output data-animate-ms-out>{{ _animate_ms }}</output><span class="muted small">&nbsp;ms</span>
+            </div>
+            <input type="range" name="frontend_megamenu_animate_ms"
+                   min="100" max="1500" step="20" value="{{ _animate_ms }}"
+                   data-animate-ms-input>
+            <p class="muted smaller">How long each block's fade-in lasts. Lower = snappier; higher = more dramatic.</p>
+          </label>
+        </div>
         <div class="form-actions"><button class="btn btn-primary">Save Appearance</button></div>
       </form>
     </section>
@@ -173,5 +174,19 @@
     radios.forEach(r => r.addEventListener('change', apply));
     apply();
   });
+
+  // Animation-speed slider: live ms readout + show/hide when the
+  // staggered-animation toggle is flipped.
+  (function () {
+    const toggle = document.querySelector('[data-animate-toggle]');
+    const row = document.querySelector('[data-animate-speed-row]');
+    const input = document.querySelector('[data-animate-ms-input]');
+    const out = document.querySelector('[data-animate-ms-out]');
+    if (!input || !out) return;
+    input.addEventListener('input', () => { out.textContent = input.value; });
+    if (toggle && row) {
+      toggle.addEventListener('change', () => { row.hidden = !toggle.checked; });
+    }
+  })();
 </script>
 {% endblock %}

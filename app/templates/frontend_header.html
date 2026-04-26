@@ -1,137 +1,20 @@
 {% extends "base.html" %}
+{% from "_frontend_template_picker.html" import template_picker %}
+{% set _active = (site.frontend_header_template if site else 'classic') or 'classic' %}
+{% set _active_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
 {% block heading %}Header{% endblock %}
 {% block heading_help %}Controls the public site's top navigation bar. Logo on the left, navigation on the right.{% endblock %}
 {% block top_actions %}
+{{ template_picker(frontend_themes, _active_theme,
+                    "frontend_theme",
+                    url_for('main.frontend_theme_save'),
+                    "site-theme-modal", "header", "Site theme", label="Theme") }}
 <a class="btn" href="{{ url_for('frontend.index') }}" target="_blank" rel="noopener">View frontend ↗</a>
 {% endblock %}
 {% block content %}
 <div class="fe-admin-layout">
   {% include "_frontend_subnav.html" %}
   <div class="fe-admin-main">
-
-<section class="card">
-  <div class="card-head">
-    <h2>Template</h2>
-    <span class="muted smaller">Pick a layout. Your settings and content are shared across templates.</span>
-  </div>
-  <form class="form" method="post" action="{{ url_for('main.frontend_header_template_save') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    {% set _active = (site.frontend_header_template if site else 'classic') or 'classic' %}
-    <div class="template-library-grid">
-      {% for t in header_templates %}
-      <label class="template-card {% if _active == t.key %}active{% endif %}">
-        <input type="radio" name="frontend_header_template" value="{{ t.key }}"
-               {% if _active == t.key %}checked{% endif %}>
-        <div class="template-card-preview">
-          <div class="template-card-preview-bar"></div>
-          <div class="template-card-preview-body">
-            <span class="template-card-preview-logo"></span>
-            <span class="template-card-preview-nav">
-              <span></span><span></span><span></span><span></span>
-            </span>
-          </div>
-        </div>
-        <div class="template-card-info">
-          <div class="template-card-name">{{ t.name }}
-            {% if _active == t.key %}<span class="template-card-badge">Active</span>{% endif %}
-          </div>
-          <div class="template-card-desc muted small">{{ t.description }}</div>
-        </div>
-      </label>
-      {% endfor %}
-    </div>
-    <div class="form-actions"><button class="btn btn-primary">Use this template</button></div>
-  </form>
-</section>
-
-<section class="card">
-  <div class="card-head"><h2>Width &amp; padding</h2></div>
-  <form class="form" method="post" action="{{ url_for('main.frontend_header_save') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    {% set _is_full = site and site.frontend_header_width_mode == 'full' %}
-    <div class="header-mode-toggle" data-header-mode-toggle>
-      <input type="hidden" name="frontend_header_width_mode" value="{{ 'full' if _is_full else 'boxed' }}" data-header-mode-input>
-      <label class="mode-toggle content-mode-switch">
-        <span class="content-mode-label" data-header-mode-label="boxed">Boxed (fixed width)</span>
-        <input type="checkbox" data-header-mode-check {% if _is_full %}checked{% endif %}>
-        <span class="mode-track"><span class="mode-thumb"></span></span>
-        <span class="content-mode-label" data-header-mode-label="full">Full width</span>
-      </label>
-    </div>
-
-    <fieldset class="fieldset" data-header-panel="boxed"{% if _is_full %} hidden{% endif %}>
-      <legend>Boxed settings</legend>
-      <label>Maximum width <span class="muted small">(600–2400 px)</span>
-        <input type="number" name="frontend_header_max_width" min="600" max="2400" step="20"
-               value="{{ site.frontend_header_max_width if site else 1160 }}">
-      </label>
-    </fieldset>
-
-    <fieldset class="fieldset" data-header-panel="full"{% if not _is_full %} hidden{% endif %}>
-      <legend>Full-width settings</legend>
-      <label>Side padding <span class="muted small">(% of viewport, 0–20)</span>
-        <input type="number" name="frontend_header_padding_pct" min="0" max="20" step="1"
-               value="{{ site.frontend_header_padding_pct if site else 5 }}">
-      </label>
-    </fieldset>
-
-    <fieldset class="fieldset">
-      <legend>Height</legend>
-      {% set _h = (site.frontend_header_height if site else 72) or 72 %}
-      <label>Header height <span class="muted small">(48–100 px)</span>
-        <div class="login-fx-speed-row">
-          <input type="range" name="frontend_header_height" id="fe-header-height-slider"
-                 min="48" max="100" step="1" value="{{ _h }}">
-          <output id="fe-header-height-value" for="fe-header-height-slider">{{ _h }}px</output>
-        </div>
-      </label>
-      <p class="muted smaller" style="margin: 4px 0 0;">
-        Applies to all viewports; mobile scales proportionally so the logo and nav stay readable.
-      </p>
-    </fieldset>
-
-    <div class="form-actions"><button class="btn btn-primary">Save Header Layout</button></div>
-  </form>
-</section>
-
-<section class="card">
-  <div class="card-head"><h2>Logo</h2></div>
-  <form class="form" method="post" action="{{ url_for('main.frontend_logo_save') }}" enctype="multipart/form-data">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    {% set _has_logo = site and site.frontend_logo_filename %}
-    {% set _logo_w = (site.frontend_logo_width if site else 40) or 40 %}
-    <div class="branding-row">
-      <div class="branding-preview-wrap">
-        <div class="muted smaller">Preview</div>
-        <div class="fe-logo-preview-mock">
-          <img id="fe-logo-preview-img"
-               src="{{ url_for('public.site_frontend_logo') if _has_logo else '' }}"
-               alt="" style="width: {{ _logo_w }}px"{% if not _has_logo %} hidden{% endif %}>
-          <div class="fe-logo-preview-empty muted smaller"{% if _has_logo %} hidden{% endif %}>
-            No custom logo — the text site name is shown instead.
-          </div>
-        </div>
-        <label class="width-slider-label">
-          <div class="width-slider-head">
-            <span>Logo width</span>
-            <output id="fe-logo-width-value" for="fe-logo-width-slider">{{ _logo_w }}px</output>
-          </div>
-          <input type="range" name="frontend_logo_width" id="fe-logo-width-slider"
-                 min="16" max="200" step="1" value="{{ _logo_w }}">
-        </label>
-      </div>
-      <div class="branding-fields">
-        <label>Replace image<input type="file" name="frontend_logo" accept="image/*" id="fe-logo-file-input"></label>
-        <label class="check fe-logo-clear-label"{% if not _has_logo %} hidden{% endif %}>
-          <input type="checkbox" name="clear_frontend_logo" value="1"><span>Remove custom logo</span>
-        </label>
-      </div>
-    </div>
-    <div class="form-actions"><button class="btn btn-primary">Save Logo</button></div>
-  </form>
-</section>
 
 {% set _alert_icons = [
   ('', 'No icon'),
@@ -149,9 +32,9 @@
 ] %}
 
 {% macro alert_bar_form(s, prefix, title, blurb, action_url) %}
-<section class="card">
-  <div class="card-head"><h2>{{ title }}</h2></div>
-  <p class="muted small">{{ blurb }}</p>
+<div class="fe-header-grid-item">
+  <h3 class="fe-header-grid-title">{{ title }}</h3>
+  <p class="muted small fe-header-grid-blurb">{{ blurb }}</p>
   {% set _bg   = (s|attr(prefix ~ '_alert_bg_color')) if s else None %}
   {% set _fg   = (s|attr(prefix ~ '_alert_text_color')) if s else None %}
   {% set _icon = (s|attr(prefix ~ '_alert_icon')) if s else None %}
@@ -163,7 +46,7 @@
     <li class="special-page-row" style="list-style:none; padding: 4px 0 12px;">
       <div class="special-page-info">
         <div class="u-name">Show this alert bar</div>
-        <p class="muted small">When enabled, appears on every frontend page.</p>
+        <p class="muted small">Appears on every frontend page when on.</p>
       </div>
       <label class="mode-toggle">
         <input type="checkbox" name="{{ prefix }}_alert_enabled" value="1" {% if _on %}checked{% endif %}>
@@ -198,23 +81,115 @@
     </div>
     <div class="form-actions"><button class="btn btn-primary">Save {{ title }}</button></div>
   </form>
-</section>
+</div>
 {% endmacro %}
 
-{{ alert_bar_form(site, 'top', 'Top alert bar',
-  'Displayed at the very top of every frontend page, above the header.',
-  url_for('main.frontend_top_alert_save')) }}
-
-{{ alert_bar_form(site, 'header', 'Under-header alert bar',
-  'Displayed directly below the header on every frontend page.',
-  url_for('main.frontend_header_alert_save')) }}
-
 <section class="card">
-  <div class="card-head"><h2>Navigation</h2></div>
-  <p class="muted small">
-    Top-level links and the mega menu are now managed on the <a href="{{ url_for('main.frontend_navigation') }}">Navigation</a> page.
+  <div class="card-head">
+    <h2>Header settings</h2>
+    <span class="muted smaller">Layout, logo, and alert bars — all managed here. Saves go through the global save bar.</span>
+  </div>
+  <div class="fe-header-grid">
+
+    <div class="fe-header-grid-item">
+      <h3 class="fe-header-grid-title">Width &amp; padding</h3>
+      <form class="form" method="post" action="{{ url_for('main.frontend_header_save') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        {% set _is_full = site and site.frontend_header_width_mode == 'full' %}
+        <div class="header-mode-toggle" data-header-mode-toggle>
+          <input type="hidden" name="frontend_header_width_mode" value="{{ 'full' if _is_full else 'boxed' }}" data-header-mode-input>
+          <label class="mode-toggle content-mode-switch">
+            <span class="content-mode-label" data-header-mode-label="boxed">Boxed</span>
+            <input type="checkbox" data-header-mode-check {% if _is_full %}checked{% endif %}>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+            <span class="content-mode-label" data-header-mode-label="full">Full width</span>
+          </label>
+        </div>
+
+        <fieldset class="fieldset" data-header-panel="boxed"{% if _is_full %} hidden{% endif %}>
+          <legend>Boxed</legend>
+          <label>Maximum width <span class="muted small">(600–2400 px)</span>
+            <input type="number" name="frontend_header_max_width" min="600" max="2400" step="20"
+                   value="{{ site.frontend_header_max_width if site else 1160 }}">
+          </label>
+        </fieldset>
+
+        <fieldset class="fieldset" data-header-panel="full"{% if not _is_full %} hidden{% endif %}>
+          <legend>Full-width</legend>
+          <label>Side padding <span class="muted small">(% of viewport, 0–20)</span>
+            <input type="number" name="frontend_header_padding_pct" min="0" max="20" step="1"
+                   value="{{ site.frontend_header_padding_pct if site else 5 }}">
+          </label>
+        </fieldset>
+
+        <fieldset class="fieldset">
+          <legend>Height</legend>
+          {% set _h = (site.frontend_header_height if site else 72) or 72 %}
+          <label>Header height <span class="muted small">(48–100 px)</span>
+            <div class="login-fx-speed-row">
+              <input type="range" name="frontend_header_height" id="fe-header-height-slider"
+                     min="48" max="100" step="1" value="{{ _h }}">
+              <output id="fe-header-height-value" for="fe-header-height-slider">{{ _h }}px</output>
+            </div>
+          </label>
+          <p class="muted smaller" style="margin: 4px 0 0;">
+            Mobile scales proportionally so the logo and nav stay readable.
+          </p>
+        </fieldset>
+
+        <div class="form-actions"><button class="btn btn-primary">Save Header Layout</button></div>
+      </form>
+    </div>
+
+    <div class="fe-header-grid-item">
+      <h3 class="fe-header-grid-title">Logo</h3>
+      <form class="form" method="post" action="{{ url_for('main.frontend_logo_save') }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        {% set _has_logo = site and site.frontend_logo_filename %}
+        {% set _logo_w = (site.frontend_logo_width if site else 40) or 40 %}
+        <div class="branding-preview-wrap">
+          <div class="muted smaller">Preview</div>
+          <div class="fe-logo-preview-mock">
+            <img id="fe-logo-preview-img"
+                 src="{{ url_for('public.site_frontend_logo') if _has_logo else '' }}"
+                 alt="" style="width: {{ _logo_w }}px"{% if not _has_logo %} hidden{% endif %}>
+            <div class="fe-logo-preview-empty muted smaller"{% if _has_logo %} hidden{% endif %}>
+              No custom logo — the text site name is shown instead.
+            </div>
+          </div>
+          <label class="width-slider-label">
+            <div class="width-slider-head">
+              <span>Logo width</span>
+              <output id="fe-logo-width-value" for="fe-logo-width-slider">{{ _logo_w }}px</output>
+            </div>
+            <input type="range" name="frontend_logo_width" id="fe-logo-width-slider"
+                   min="16" max="200" step="1" value="{{ _logo_w }}">
+          </label>
+        </div>
+        <label>Replace image<input type="file" name="frontend_logo" accept="image/*" id="fe-logo-file-input"></label>
+        <label class="check fe-logo-clear-label"{% if not _has_logo %} hidden{% endif %}>
+          <input type="checkbox" name="clear_frontend_logo" value="1"><span>Remove custom logo</span>
+        </label>
+        <div class="form-actions"><button class="btn btn-primary">Save Logo</button></div>
+      </form>
+    </div>
+
+    {{ alert_bar_form(site, 'top', 'Top alert bar',
+       'Displayed at the very top of every frontend page, above the header.',
+       url_for('main.frontend_top_alert_save')) }}
+
+    {{ alert_bar_form(site, 'header', 'Under-header alert bar',
+       'Displayed directly below the header on every frontend page.',
+       url_for('main.frontend_header_alert_save')) }}
+
+  </div>
+  <p class="muted small fe-header-grid-foot">
+    Top-level links and the mega menu are managed on the <a href="{{ url_for('main.frontend_navigation') }}">Navigation</a> page.
   </p>
 </section>
+
   </div>
 </div>
 

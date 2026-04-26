@@ -1,0 +1,134 @@
+{# Layout picker with pre-built marketing presets + a drag-and-drop
+   builder for custom layouts. Used on Homepage and Pages admin only.
+
+   Args:
+     layouts        — list of CustomLayout rows (active row tagged via active_key)
+     active_key     — currently saved layout key
+     action_url     — POST endpoint for saving the chosen layout
+     radio_name     — form field name (e.g. "frontend_homepage_template")
+     modal_id       — DOM id for the picker modal
+     builder_modal_id — DOM id for the drag-drop builder modal
+     blocks_catalog — list of {key, name, desc} block types the builder offers
+     save_layout_url — endpoint the builder POSTs new layouts to (JSON)
+#}
+{% macro layout_picker(layouts, active_key, action_url, radio_name, modal_id, builder_modal_id, blocks_catalog, save_layout_url) -%}
+  {# Find the active layout's display name. {% set %} inside {% for %} is
+     loop-scoped in Jinja, so we use a namespace object whose attribute
+     mutations DO escape the loop. #}
+  {%- set _state = namespace(name=active_key) -%}
+  {%- for l in layouts if l.key == active_key %}{% set _state.name = l.name %}{% endfor -%}
+  <div class="fe-template-picker">
+    <span class="fe-template-picker-label muted smaller">Layout:</span>
+    <span class="fe-template-picker-active">{{ _state.name }}</span>
+    <button type="button" class="btn btn-sm" data-open-modal="{{ modal_id }}">Change</button>
+  </div>
+
+  <div class="modal fe-template-picker-modal fe-layout-picker-modal" id="{{ modal_id }}" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel" role="dialog" aria-modal="true">
+      <form class="form" method="post" action="{{ action_url }}" data-fe-skip-save-bar>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-head">
+          <h2>Page layout</h2>
+          <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button>
+        </div>
+        <div class="modal-body">
+          <p class="muted small">Pick a pre-built marketing layout, or build a new one with the drag-and-drop editor.</p>
+          <div class="template-library-grid">
+            {% for l in layouts %}
+            <label class="template-card{% if active_key == l.key %} active{% endif %}{% if not l.is_prebuilt %} template-card-custom{% endif %}"
+                   data-layout-key="{{ l.key }}"
+                   data-layout-name="{{ l.name }}"
+                   data-layout-blocks="{{ l.blocks_json or '[]' }}">
+              <input type="radio" name="{{ radio_name }}" value="{{ l.key }}"
+                     {% if active_key == l.key %}checked{% endif %}>
+              <div class="template-card-preview template-card-preview-blocks">
+                {% for b in (l.blocks_json|from_json)[:6] %}
+                <span class="tcp-block tcp-block-{{ b.type }}" title="{{ b.type }}"></span>
+                {% endfor %}
+              </div>
+              <div class="template-card-info">
+                <div class="template-card-name">{{ l.name }}
+                  {% if l.is_prebuilt %}<span class="template-card-tag muted smaller">Preset</span>{% endif %}
+                  {% if active_key == l.key %}<span class="template-card-badge">Active</span>{% endif %}
+                </div>
+                <div class="template-card-desc muted small">{{ l.description }}</div>
+              </div>
+              {% if not l.is_prebuilt %}
+              <div class="template-card-actions">
+                <button type="button" class="template-card-action-btn" title="Edit layout"
+                        data-edit-layout="{{ l.key }}"
+                        data-builder-modal="{{ builder_modal_id }}">{{ icon('edit') }}</button>
+                <button type="button" class="template-card-action-btn template-card-action-del" title="Delete layout"
+                        data-delete-layout="{{ l.key }}">{{ icon('x') }}</button>
+              </div>
+              {% endif %}
+            </label>
+            {% endfor %}
+            <button type="button" class="template-card template-card-new" data-open-modal="{{ builder_modal_id }}"
+                    data-builder-mode-create>
+              <div class="template-card-preview template-card-preview-new">
+                <span class="tcp-plus">+</span>
+              </div>
+              <div class="template-card-info">
+                <div class="template-card-name">Custom layout</div>
+                <div class="template-card-desc muted small">Build your own page layout by dragging blocks into the order you want.</div>
+              </div>
+            </button>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn" data-close>Cancel</button>
+          <button type="submit" class="btn btn-primary">Use this layout</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {# ---- Drag-and-drop builder modal ---- #}
+  <div class="modal fe-layout-builder-modal" id="{{ builder_modal_id }}" aria-hidden="true"
+       data-save-layout-url="{{ save_layout_url }}"
+       data-update-layout-url="{{ url_for('main.frontend_custom_layout_update', key='__KEY__') }}"
+       data-delete-layout-url="{{ url_for('main.frontend_custom_layout_delete', key='__KEY__') }}"
+       data-activate-url="{{ action_url }}"
+       data-activate-field="{{ radio_name }}"
+       data-csrf-token="{{ csrf_token() }}">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel fe-layout-builder-panel" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <h2 data-builder-title>Build a custom layout</h2>
+        <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button>
+      </div>
+      <div class="modal-body fe-layout-builder-body">
+        <p class="muted small">Drag blocks from the library on the left into the canvas on the right. Reorder by dragging within the canvas. Click × to remove a block.</p>
+        <div class="fe-layout-builder-grid">
+          <div class="fe-layout-builder-library" data-builder-library>
+            {% for b in blocks_catalog %}
+            <div class="fe-builder-block" draggable="true"
+                 data-block-type="{{ b.key }}" data-block-name="{{ b.name }}">
+              <div class="fe-builder-block-icon">{{ icon(b.icon or 'layout-grid') }}</div>
+              <div class="fe-builder-block-meta">
+                <div class="fe-builder-block-name">{{ b.name }}</div>
+                <div class="fe-builder-block-desc muted smaller">{{ b.desc }}</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="fe-layout-builder-canvas-wrap">
+            <label>Layout name
+              <input type="text" data-builder-name placeholder="e.g. Spring 2026 campaign" maxlength="120">
+            </label>
+            <div class="fe-layout-builder-canvas" data-builder-canvas
+                 aria-label="Drop blocks here in the order they should render">
+              <div class="fe-builder-empty muted small">Drag a block here to start.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="button" class="btn btn-primary" data-builder-save>Save layout</button>
+      </div>
+    </div>
+  </div>
+{%- endmacro %}

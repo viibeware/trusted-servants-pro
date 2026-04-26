@@ -1,0 +1,102 @@
+{% extends "frontend/base.html" %}
+{% block title %}{{ meeting.name }} · {{ frontend_title }}{% endblock %}
+{% block content %}
+<section class="fe-section fe-meeting-detail" id="meeting">
+  <div class="fe-container fe-meeting-detail-inner">
+    <a class="fe-meeting-detail-back" href="{{ url_for('frontend.index') }}#meetings">← Back to meetings</a>
+
+    <header class="fe-meeting-detail-head">
+      <span class="fe-meeting-type fe-meeting-type-{{ meeting.meeting_type }}">
+        {% if meeting.meeting_type == 'in_person' %}In Person
+        {% elif meeting.meeting_type == 'online' %}Online
+        {% else %}Hybrid{% endif %}
+      </span>
+      <h1>{{ meeting.name }}</h1>
+    </header>
+
+    {% if meeting.alert_message %}
+    <div class="fe-meeting-detail-alert" role="status">
+      {{ icon('alert-triangle') }}
+      <span>{{ meeting.alert_message }}</span>
+    </div>
+    {% endif %}
+
+    {% if meeting.description %}
+    <div class="fe-meeting-detail-desc">
+      {{ meeting.description|markdown }}
+    </div>
+    {% endif %}
+
+    <div class="fe-meeting-detail-grid">
+      {% if meeting.schedules %}
+      <section class="fe-meeting-detail-card">
+        <h3>{{ icon('calendar') }} Schedule</h3>
+        <ul class="fe-meeting-detail-sched">
+          {% for s in meeting.schedules %}
+          <li>
+            <span class="fe-meeting-detail-day">{{ s.day_name }}</span>
+            <span class="fe-meeting-detail-time">
+              {{ s.start_time|fmt12h }}{% if s.end_time %} – {{ s.end_time|fmt12h }}{% endif %}
+              {% if s.duration_minutes %}<span class="muted smaller"> · {{ s.duration_minutes }} min</span>{% endif %}
+            </span>
+            {% if s.opens_time %}<span class="muted smaller">Doors / Zoom open at {{ s.opens_time|fmt12h }}</span>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+
+      {% if meeting.meeting_type in ('in_person', 'hybrid') and meeting.location %}
+      <section class="fe-meeting-detail-card">
+        <h3>{{ icon('map-pin') }} Location</h3>
+        <p class="fe-meeting-detail-location">{{ meeting.location }}</p>
+        {% set _maps = "https://www.google.com/maps/search/?api=1&query=" ~ (meeting.location|urlencode) %}
+        <a class="fe-btn fe-btn-ghost" href="{{ _maps }}" target="_blank" rel="noopener">Open in Maps ↗</a>
+      </section>
+      {% endif %}
+
+      {% if meeting.meeting_type in ('online', 'hybrid') and (meeting.zoom_link or meeting.zoom_meeting_id) %}
+      <section class="fe-meeting-detail-card fe-meeting-detail-zoom">
+        <h3>{{ icon('video') }} Zoom</h3>
+        {% if meeting.zoom_link %}
+        <a class="fe-btn fe-btn-primary" href="{{ meeting.zoom_link }}" target="_blank" rel="noopener">Join via Zoom ↗</a>
+        {% endif %}
+        <dl class="fe-meeting-detail-creds">
+          {% if meeting.zoom_meeting_id %}
+          <dt>Meeting ID</dt>
+          <dd>
+            <code>{{ meeting.zoom_meeting_id }}</code>
+            <button type="button" class="fe-copy-btn" data-copy="{{ meeting.zoom_meeting_id }}" title="Copy">{{ icon('copy') }}</button>
+          </dd>
+          {% endif %}
+          {% if meeting.zoom_passcode %}
+          <dt>Passcode</dt>
+          <dd>
+            <code>{{ meeting.zoom_passcode }}</code>
+            <button type="button" class="fe-copy-btn" data-copy="{{ meeting.zoom_passcode }}" title="Copy">{{ icon('copy') }}</button>
+          </dd>
+          {% endif %}
+          {% if meeting.zoom_opens_time %}
+          <dt>Zoom opens</dt>
+          <dd>{{ meeting.zoom_opens_time|fmt12h }}</dd>
+          {% endif %}
+        </dl>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<script>
+  document.querySelectorAll('.fe-copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const v = btn.getAttribute('data-copy') || '';
+      if (!v || !navigator.clipboard) return;
+      navigator.clipboard.writeText(v).then(() => {
+        btn.classList.add('is-copied');
+        setTimeout(() => btn.classList.remove('is-copied'), 1400);
+      });
+    });
+  });
+</script>
+{% endblock %}

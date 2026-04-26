@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block heading %}Announcements &amp; Events{% endblock %}
+{% block heading_help %}Tag a post as announcement, event, or both. Events auto-archive the day after they end; manual archive is also supported.{% endblock %}
+{% block top_actions %}
+  <div class="view-controls">
+    <div class="view-toggle">
+      <a class="btn btn-sm {% if kind == 'all' %}active{% endif %}"
+         href="{{ url_for('main.posts', show=show, kind='all') }}">All</a>
+      <a class="btn btn-sm {% if kind == 'announcements' %}active{% endif %}"
+         href="{{ url_for('main.posts', show=show, kind='announcements') }}">Announcements</a>
+      <a class="btn btn-sm {% if kind == 'events' %}active{% endif %}"
+         href="{{ url_for('main.posts', show=show, kind='events') }}">Events</a>
+    </div>
+    <div class="view-toggle">
+      <a class="btn btn-sm {% if show != 'archived' %}active{% endif %}"
+         href="{{ url_for('main.posts', show='active', kind=kind) }}">Active</a>
+      <a class="btn btn-sm {% if show == 'archived' %}active{% endif %}"
+         href="{{ url_for('main.posts', show='archived', kind=kind) }}">Archived</a>
+    </div>
+  </div>
+  <a class="btn btn-primary" href="{{ url_for('main.post_new') }}">+ New</a>
+{% endblock %}
+{% block content %}
+{% if posts %}
+<section class="card posts-card">
+  <table class="tbl posts-tbl">
+    <thead>
+      <tr>
+        <th class="posts-th-thumb"></th>
+        <th>Title</th>
+        <th class="hide-sm">Type</th>
+        <th class="hide-sm">When</th>
+        <th class="hide-sm">Where</th>
+        <th class="posts-th-actions"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for p in posts %}
+      <tr>
+        <td class="posts-td-thumb">
+          {% if p.featured_image_filename %}
+          <img class="posts-thumb" src="{{ url_for('public.post_featured_image', pid=p.id) }}" alt="">
+          {% else %}
+          <div class="posts-thumb posts-thumb-empty">{{ icon('megaphone') }}</div>
+          {% endif %}
+        </td>
+        <td>
+          <a class="posts-title" href="{{ url_for('main.post_edit', pid=p.id) }}">{{ p.title }}</a>
+          {% if p.summary %}<div class="muted small posts-summary">{{ p.summary[:140] }}{% if p.summary|length > 140 %}…{% endif %}</div>{% endif %}
+        </td>
+        <td class="hide-sm">
+          {% if p.is_announcement %}<span class="post-chip post-chip-announcement">Announcement</span>{% endif %}
+          {% if p.is_event %}<span class="post-chip post-chip-event">Event</span>{% endif %}
+        </td>
+        <td class="hide-sm">
+          {% if p.event_starts_at %}
+            <div class="muted small">{{ p.event_starts_at.strftime('%b %d, %Y') }}</div>
+            <div class="muted smaller">{{ p.event_starts_at.strftime('%-I:%M %p') }}{% if p.event_ends_at %} – {{ p.event_ends_at.strftime('%-I:%M %p') }}{% endif %}</div>
+          {% else %}
+            <span class="muted smaller">—</span>
+          {% endif %}
+        </td>
+        <td class="hide-sm">
+          {% if p.is_online and p.is_event %}<span class="post-chip post-chip-online">Online</span>{% endif %}
+          {% if p.location_name %}<div class="muted small">{{ p.location_name }}</div>{% endif %}
+          {% if not p.is_online and not p.location_name %}<span class="muted smaller">—</span>{% endif %}
+        </td>
+        <td class="posts-td-actions">
+          <div class="row-actions">
+            <a class="btn btn-sm" href="{{ url_for('main.post_edit', pid=p.id) }}">Edit</a>
+            {% if p.is_archived %}
+              <form method="post" action="{{ url_for('main.post_unarchive', pid=p.id) }}" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm" title="Restore">Restore</button>
+              </form>
+            {% else %}
+              <form method="post" action="{{ url_for('main.post_archive', pid=p.id) }}" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm" title="Archive">Archive</button>
+              </form>
+            {% endif %}
+            <form method="post" action="{{ url_for('main.post_delete', pid=p.id) }}" style="display:inline"
+                  onsubmit="return confirm('Delete this post permanently? Featured image will be cleaned up.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% else %}
+<section class="card">
+  <p class="muted">
+    {% if show == 'archived' %}Nothing archived.
+    {% else %}Nothing here yet — click <b>+ New</b> above to create an announcement or event.{% endif %}
+  </p>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,118 @@
+{# Shared hero block. Included by both classic.html and recovery-blue.html homepage
+   templates so the hero (background style, typography, CTAs, particles,
+   dynamic text colors) is identical regardless of which template is on. #}
+{% set _bg_style = (site.frontend_hero_bg_style if site else 'frosty') or 'frosty' %}
+{% set _h_font = (site.frontend_hero_heading_font if site else 'fraunces') or 'fraunces' %}
+{% set _h_size_pct = (site.frontend_hero_heading_size if site else 100) or 100 %}
+{% set _h_grad_s = (site.frontend_hero_heading_grad_start if site else None) %}
+{% set _h_grad_e = (site.frontend_hero_heading_grad_end if site else None) %}
+{% set _tagline_on = site is none or site.frontend_tagline_enabled %}
+
+{# Dynamic text-color: when on, derive a single representative bg lightness
+   from the chosen style and its colors. < 0.5 → light text (white wash);
+   ≥ 0.5 → dark text. Frosty/image default to light bg → dark text. #}
+{% set _dyn_on = site and site.frontend_hero_text_dynamic %}
+{% set _bg_lightness = 0.95 %}
+{% if _dyn_on %}
+  {% if _bg_style == 'solid' and site and site.frontend_hero_bg_color %}
+    {% set _bg_lightness = (site.frontend_hero_bg_color | hex_lightness) or 0.95 %}
+  {% elif _bg_style == 'gradient' %}
+    {% set _bg_lightness = ([(site.frontend_hero_bg_color or '#ffffff'),
+                             (site.frontend_hero_bg_color_2 or '#e0e7ff')] | avg_lightness) or 0.95 %}
+  {% elif _bg_style == 'sinewave' and site and site.frontend_hero_sinewave_colors %}
+    {% set _bg_lightness = ((site.frontend_hero_sinewave_colors | from_json) | avg_lightness) or 0.55 %}
+  {% endif %}
+{% endif %}
+{% set _dyn_class = ' fe-hero-text-light' if _dyn_on and _bg_lightness < 0.55 else (' fe-hero-text-dark' if _dyn_on else '') %}
+
+{% set _heading_style = '' %}
+{% if _h_size_pct and _h_size_pct != 100 %}
+  {% set _heading_style = _heading_style ~ '--fe-hero-h-size: ' ~ (_h_size_pct / 100) ~ '; ' %}
+{% endif %}
+{% if _h_grad_s %}{% set _heading_style = _heading_style ~ '--fe-hero-h-grad-s: ' ~ _h_grad_s ~ '; ' %}{% endif %}
+{% if _h_grad_e %}{% set _heading_style = _heading_style ~ '--fe-hero-h-grad-e: ' ~ _h_grad_e ~ '; ' %}{% endif %}
+
+{% set _hero_style = '' %}
+{% if _bg_style == 'solid' and site and site.frontend_hero_bg_color %}
+  {% set _hero_style = 'background: ' ~ site.frontend_hero_bg_color ~ ';' %}
+{% elif _bg_style == 'gradient' %}
+  {% set _g1 = (site.frontend_hero_bg_color if site else None) or '#ffffff' %}
+  {% set _g2 = (site.frontend_hero_bg_color_2 if site else None) or '#e0e7ff' %}
+  {% set _gang = (site.frontend_hero_bg_gradient_angle if site else 180) or 180 %}
+  {% set _hero_style = 'background: linear-gradient(' ~ _gang ~ 'deg, ' ~ _g1 ~ ', ' ~ _g2 ~ ');' %}
+{% elif _bg_style == 'image' and site and site.frontend_hero_bg_image_filename %}
+  {% set _im_mode = (site.frontend_hero_bg_image_mode if site else 'cover') or 'cover' %}
+  {% set _im_scale = (site.frontend_hero_bg_image_scale if site else 100) or 100 %}
+  {% if _im_mode == 'tile' %}
+    {% set _hero_style = 'background: url(' ~ url_for('public.site_hero_bg_image') ~ ') repeat; background-size: ' ~ _im_scale ~ 'px ' ~ _im_scale ~ 'px;' %}
+  {% else %}
+    {% set _hero_style = 'background: url(' ~ url_for('public.site_hero_bg_image') ~ ') center/cover no-repeat;' %}
+  {% endif %}
+{% endif %}
+
+<section class="fe-hero fe-hero-bg-{{ _bg_style }}{{ _dyn_class }}"
+         {% if _hero_style %}style="{{ _hero_style }}"{% endif %}
+         {% if _bg_style == 'sinewave' and site and site.frontend_hero_sinewave_colors %}data-sinewave-colors='{{ site.frontend_hero_sinewave_colors }}'{% endif %}>
+  {% if _bg_style == 'frosty' %}
+    {% set _hue_a = site.frontend_hero_bg_hue if site else 225 %}
+    {% set _hue_b = site.frontend_hero_bg_hue_2 if site else 170 %}
+    {% set _blur = site.frontend_hero_bg_blur if site else 80 %}
+    {% set _op = (site.frontend_hero_bg_opacity if site else 45) / 100 %}
+    {% set _rand = site and site.frontend_hero_bg_randomize %}
+    <div class="fe-hero-bg" aria-hidden="true" data-hero-blobs
+         {% if _rand %}data-randomize="1"{% endif %}
+         style="--fe-blob-hue-a: {{ _hue_a }}; --fe-blob-hue-b: {{ _hue_b }}; --fe-blob-blur: {{ _blur }}px; --fe-blob-op: {{ _op }};">
+      <div class="fe-hero-blob fe-hero-blob-a" data-hero-blob></div>
+      <div class="fe-hero-blob fe-hero-blob-b" data-hero-blob></div>
+      <div class="fe-hero-blob fe-hero-blob-c" data-hero-blob></div>
+    </div>
+  {% endif %}
+  {% if _bg_style == 'video' and site and site.frontend_hero_bg_video_filename %}
+    {% set _vspeed = site.frontend_hero_bg_video_speed or 100 %}
+    <video class="fe-hero-video" muted playsinline autoplay loop
+           data-hero-video data-speed="{{ _vspeed }}"
+           preload="auto">
+      <source src="{{ url_for('public.site_hero_bg_video') }}">
+    </video>
+  {% endif %}
+  {% if site and site.frontend_hero_particle_enabled and site.frontend_hero_particle_effect != 'off' %}
+  <canvas class="fe-hero-particles" aria-hidden="true"
+          data-hero-particles
+          data-effect="{{ site.frontend_hero_particle_effect }}"
+          data-speed="{{ site.frontend_hero_particle_speed }}"
+          data-size="{{ site.frontend_hero_particle_size }}"></canvas>
+  {% endif %}
+  <div class="fe-container fe-hero-inner">
+    {% if _tagline_on and frontend_tagline %}
+    <p class="fe-hero-eyebrow">{{ frontend_tagline }}</p>
+    {% endif %}
+    <h1 class="fe-hero-heading fe-hero-heading-{{ _h_font }}"
+        {% if _heading_style %}style="{{ _heading_style }}"{% endif %}>{{ frontend_hero_heading }}</h1>
+    <p class="fe-hero-sub">{{ frontend_hero_subheading }}</p>
+    <div class="fe-hero-cta">
+      {% if hero_buttons %}
+        {% for b in hero_buttons %}
+          {% set _tgt = ' target="_blank" rel="noopener"' if b.open_in_new_tab else '' %}
+          {% set _bstyle = 'ghost' if b.style == 'ghost' else 'primary' %}
+          {% set _cls = 'fe-btn fe-btn-' ~ _bstyle %}
+          {% set _btn_style = '' %}
+          {% if _bstyle == 'primary' %}
+            {% if b.custom_bg_color %}{% set _btn_style = _btn_style ~ 'background: ' ~ b.custom_bg_color ~ '; border-color: ' ~ b.custom_bg_color ~ '; ' %}{% endif %}
+            {% if b.custom_text_color %}{% set _btn_style = _btn_style ~ 'color: ' ~ b.custom_text_color ~ '; ' %}{% endif %}
+          {% endif %}
+          <a href="{{ b.url or '#' }}"{{ _tgt|safe }} class="{{ _cls }}"
+             {% if _btn_style %}style="{{ _btn_style }}"{% endif %}>
+            {% if b.icon_before %}<span class="fe-btn-icon"
+              style="{% if b.icon_before_color %}color: {{ b.icon_before_color }};{% endif %}{% if b.icon_before_size %} --icon-size: {{ b.icon_before_size }}px;{% endif %}">{{ icon(b.icon_before) }}</span>{% endif %}
+            <span>{{ b.label }}</span>
+            {% if b.icon_after %}<span class="fe-btn-icon"
+              style="{% if b.icon_after_color %}color: {{ b.icon_after_color }};{% endif %}{% if b.icon_after_size %} --icon-size: {{ b.icon_after_size }}px;{% endif %}">{{ icon(b.icon_after) }}</span>{% endif %}
+          </a>
+        {% endfor %}
+      {% else %}
+        <a href="#meetings" class="fe-btn fe-btn-primary">Find a Meeting</a>
+        <a href="#contact" class="fe-btn fe-btn-ghost">Need Help Now?</a>
+      {% endif %}
+    </div>
+  </div>
+</section>

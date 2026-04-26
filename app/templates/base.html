@@ -49,47 +49,14 @@
         <div class="brand-sub">Pro</div>
       </div>
     </div>
-    <nav>
-      <a href="{{ url_for('main.index') }}" class="{% if request.endpoint=='main.index' %}active{% endif %}">Dashboard</a>
-      <a href="{{ url_for('main.meetings') }}" class="{% if 'meeting' in request.endpoint %}active{% endif %}">Meetings</a>
-      <a href="{{ url_for('main.libraries') }}" class="{% if 'librar' in request.endpoint or 'reading' in request.endpoint %}active{% endif %}">Libraries</a>
-      <a href="{{ url_for('main.media_list') }}" class="{% if 'media' in request.endpoint %}active{% endif %}">File Browser</a>
-      <a href="{{ url_for('main.zoom_accounts') }}" class="{% if 'zoom_account' in request.endpoint %}active{% endif %}">Zoom Accounts</a>
-      {% if site and site.intergroup_enabled %}
-      <a href="{{ url_for('main.intergroup') }}" class="{% if request.endpoint=='main.intergroup' %}active{% endif %}">{{ site.ig_page_title or 'Intergroup' }}</a>
-      {% endif %}
-      {% if site and site.zoom_tech_enabled %}
-      <a href="{{ url_for('main.zoom_tech') }}" class="{% if request.endpoint=='main.zoom_tech' %}active{% endif %}">{{ site.zoom_tech_title or 'Zoom Tech Training' }}</a>
-      {% endif %}
-      <div class="sidebar-nav-divider" id="sidebar-custom-nav-divider"
-           {% if not nav_links %}hidden{% endif %}>
-        <span class="sidebar-nav-label">External</span>
-      </div>
-      <span id="sidebar-custom-nav">
-      {% for n in (nav_links or []) %}
-        <a href="{{ n.url }}" target="_blank" rel="noopener" data-nav-custom>{{ n.title }} ↗</a>
-      {% endfor %}
-      </span>
-      {% if current_user.is_admin() or current_user.can_edit_frontend() %}
-      <div class="sidebar-nav-divider">
-        <span class="sidebar-nav-label">Admin</span>
-      </div>
-      {% if current_user.is_admin() %}
-      <a href="{{ url_for('main.access_requests') }}" class="{% if 'access_request' in request.endpoint %}active{% endif %}">
-        Access Requests{% if pending_access_count %}<span class="nav-badge">{{ pending_access_count }}</span>{% endif %}
-      </a>
-      {% endif %}
-      {% if site and site.frontend_module_enabled and current_user.can_edit_frontend() %}
-      <a href="{{ url_for('main.frontend_dashboard') }}"
-         class="{% if request.endpoint and request.endpoint.startswith('main.frontend_') %}active{% endif %}">Web Frontend{% if not site.frontend_enabled %} <span class="nav-badge nav-badge-muted" title="Public access is off — only signed-in admins and frontend editors can preview">Off</span>{% endif %}</a>
-      {% endif %}
-      {% endif %}
+    <nav id="sidebar-nav">
+      {% include "_sidebar_nav.html" %}
     </nav>
     <div class="sidebar-footer">
       {% set _flogo = (site.footer_logo_filename if site else None) %}
       {% set _furl = (site.footer_logo_url if site else None) or '' %}
       {% set _fw = (site.footer_logo_width if site else None) or 32 %}
-      <a class="dccma-link" id="sidebar-footer-link" href="{{ _furl or '#' }}" target="_blank" rel="noopener"{% if not _flogo %} hidden{% endif %}>
+      <a class="sidebar-footer-img-link" id="sidebar-footer-link" href="{{ _furl or '#' }}" target="_blank" rel="noopener"{% if not _flogo %} hidden{% endif %}>
         <img id="sidebar-footer-logo" src="{{ url_for('public.site_footer_logo') if _flogo else '' }}" alt=""{% if _fw %} style="width: {{ _fw }}px"{% endif %}>
       </a>
       <div class="brand-version">v{{ app_version }}</div>
@@ -155,11 +122,10 @@
       {% if current_user.is_admin() %}
       <button type="button" class="settings-tab" data-tab="users">Users</button>
       <button type="button" class="settings-tab" data-tab="locations">Meeting Locations</button>
-      <button type="button" class="settings-tab" data-tab="navigation">External Links</button>
-      <button type="button" class="settings-tab" data-tab="special-pages">Special Sections</button>
+      <button type="button" class="settings-tab" data-tab="sidebar">Sidebar</button>
+      <button type="button" class="settings-tab" data-tab="modules">Modules</button>
       <button type="button" class="settings-tab" data-tab="email">Email</button>
       <button type="button" class="settings-tab" data-tab="security">Security</button>
-      <button type="button" class="settings-tab" data-tab="web-frontend">Web Frontend</button>
       <button type="button" class="settings-tab" data-tab="data">Data</button>
       {% endif %}
       <button type="button" class="settings-tab" data-tab="about">About</button>
@@ -201,7 +167,7 @@
             <div class="branding-preview-wrap">
               <div class="muted smaller">Preview</div>
               <div class="sidebar-footer-mock">
-                <a class="dccma-link" tabindex="-1">
+                <a class="sidebar-footer-img-link" tabindex="-1">
                   <img id="branding-preview-img" src="{{ _current_logo_src }}" alt="" style="width: {{ _current_width }}px"{% if not _has_logo %} hidden{% endif %}>
                 </a>
                 <div class="branding-preview-empty muted smaller"{% if _has_logo %} hidden{% endif %}>No logo set</div>
@@ -324,7 +290,7 @@
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="u-name">Open Graph / Link Previews</div>
           <p class="muted small">Controls the title, description, and image other sites show when someone pastes a link to this portal into Slack, iMessage, Facebook, Twitter/X, or similar. Image is served publicly so crawlers can fetch it.</p>
-          <li class="special-page-row og-toggle-row" style="list-style:none; padding:0;">
+          <div class="special-page-row og-toggle-row">
             <div class="special-page-info">
               <div class="u-name">Enable link previews</div>
               <p class="muted small">When off, no Open Graph or Twitter Card tags are emitted.</p>
@@ -333,7 +299,7 @@
               <input type="checkbox" name="og_enabled" value="1" {% if site and site.og_enabled %}checked{% endif %}>
               <span class="mode-track"><span class="mode-thumb"></span></span>
             </label>
-          </li>
+          </div>
           <label>Title
             <input type="text" name="og_title" maxlength="200" value="{{ (site.og_title if site else '') or '' }}" placeholder="Trusted Servants Pro">
           </label>
@@ -467,17 +433,116 @@
       <div class="settings-pane" data-pane="locations">
         <iframe class="settings-frame" data-src="{{ url_for('main.locations') }}?embed=1"></iframe>
       </div>
-      <div class="settings-pane" data-pane="navigation">
-        <iframe class="settings-frame" data-src="{{ url_for('main.nav_links') }}?embed=1"></iframe>
+      <div class="settings-pane" data-pane="sidebar">
+        {% if current_user.is_admin() %}
+        {% set _side_mode = (site.sidebar_sort_mode if site else 'auto-asc') or 'auto-asc' %}
+        {% set _side_catalog = sidebar_reorder_catalog(site) %}
+        {% set _side_order = (site.sidebar_order_json or '{}') | from_json %}
+        <form class="form sidebar-order-form" method="post" action="{{ url_for('main.sidebar_save') }}" id="sidebar-order-form" data-refresh-sidebar="1">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="sidebar-order-head">
+            <div class="u-name sidebar-order-title">Sidebar layout</div>
+            <button type="submit" class="btn btn-primary">Save sidebar order</button>
+          </div>
+          <p class="muted small">Reorder the items in the main sidebar and manage external links inline. Dashboard is always pinned at the top. Auto modes alphabetise items inside each section (Main → External → Admin order); pick Manual to drag any item or section to a new position.</p>
+
+          <fieldset class="sidebar-mode-fieldset">
+            <legend class="sr-only">Sort mode</legend>
+            {% for v, lbl in [('auto-asc', 'Auto · A → Z'), ('auto-desc', 'Auto · Z → A'), ('manual', 'Manual (drag &amp; drop)')] %}
+            <label class="sidebar-mode-pill">
+              <input type="radio" name="sidebar_sort_mode" value="{{ v }}"
+                     {% if _side_mode == v %}checked{% endif %}>
+              <span class="sidebar-mode-pill-label">{{ lbl|safe }}</span>
+            </label>
+            {% endfor %}
+          </fieldset>
+
+          <div class="sidebar-order-manual" data-sidebar-manual
+               {% if _side_mode != 'manual' %}hidden{% endif %}>
+            {% include "_sidebar_order_manual.html" %}
+          </div>
+        </form>
+
+        {# Modal: add a new external link. POST hits the existing
+           /nav-links/new endpoint which redirects back so the modal
+           re-renders with the new entry on the next paint. #}
+        <div class="modal" id="navlink-new-modal" aria-hidden="true">
+          <div class="modal-backdrop" data-close></div>
+          <div class="modal-panel" role="dialog" aria-modal="true">
+            <form method="post" action="{{ url_for('main.nav_link_new') }}" class="form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <div class="modal-head">
+                <h2>New external link</h2>
+                <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button>
+              </div>
+              <div class="modal-body">
+                <label>Title<input name="title" required maxlength="100"></label>
+                <label>URL<input name="url" type="url" required placeholder="https://example.com"></label>
+              </div>
+              <div class="modal-foot">
+                <button type="button" class="btn" data-close>Cancel</button>
+                <button class="btn btn-primary">Create</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        {% for n in nav_links %}
+        <div class="modal" id="navlink-edit-{{ n.id }}" aria-hidden="true">
+          <div class="modal-backdrop" data-close></div>
+          <div class="modal-panel" role="dialog" aria-modal="true">
+            <form method="post" action="{{ url_for('main.nav_link_edit', nid=n.id) }}" class="form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <div class="modal-head">
+                <h2>Edit external link</h2>
+                <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button>
+              </div>
+              <div class="modal-body">
+                <label>Title<input name="title" required maxlength="100" value="{{ n.title }}"></label>
+                <label>URL<input name="url" type="url" required value="{{ n.url }}"></label>
+              </div>
+              <div class="modal-foot">
+                <button type="button" class="btn" data-close>Cancel</button>
+                <button class="btn btn-primary">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+        {% endif %}
       </div>
-      <div class="settings-pane" data-pane="special-pages">
+      <div class="settings-pane" data-pane="modules">
+        {# Per-module role-permission picker — sits between the info
+           column and the on/off toggle on each row. The dropdown
+           submits on change so the admin doesn't have to click Save.
+           A single endpoint handles all four modules; the hidden
+           `module` field tells it which row was changed. #}
+        {% macro module_role_picker(module_key, current_role) %}
+        <form method="post" action="{{ url_for('main.module_role_save') }}"
+              class="module-role-form" data-module-role-form
+              data-refresh-sidebar="1">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="module" value="{{ module_key }}">
+          <label class="module-role-label">
+            <span class="muted smaller">Access</span>
+            <select name="required_role" onchange="this.form.submit()"
+                    title="Who can access this module">
+              {% for k, lbl in role_tiers %}
+              <option value="{{ k }}" {% if current_role == k %}selected{% endif %}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <noscript><button class="btn btn-sm">Save</button></noscript>
+        </form>
+        {% endmacro %}
         <ul class="special-pages-list">
           <li class="special-page-row">
             <div class="special-page-info">
               <div class="u-name">{{ site.ig_page_title or 'Intergroup' }}</div>
               <p class="muted small">Show or hide the {{ site.ig_page_title or 'Intergroup' }} page from the dashboard and sidebar.</p>
             </div>
-            <form method="post" action="{{ url_for('main.intergroup_toggle') }}" class="special-page-toggle-form">
+            {{ module_role_picker('intergroup', site.intergroup_required_role if site else 'viewer') }}
+            <form method="post" action="{{ url_for('main.intergroup_toggle') }}" class="special-page-toggle-form" data-refresh-sidebar="1">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <label class="mode-toggle" title="Enable {{ site.ig_page_title or 'Intergroup' }} page">
                 <input type="checkbox" name="intergroup_enabled" value="1"
@@ -493,12 +558,47 @@
               <div class="u-name">{{ site.zoom_tech_title or 'Zoom Tech Training' }}</div>
               <p class="muted small">Show or hide the Zoom Tech Training page from the sidebar.</p>
             </div>
-            <form method="post" action="{{ url_for('main.zoom_tech_toggle') }}" class="special-page-toggle-form">
+            {{ module_role_picker('zoom_tech', site.zoom_tech_required_role if site else 'viewer') }}
+            <form method="post" action="{{ url_for('main.zoom_tech_toggle') }}" class="special-page-toggle-form" data-refresh-sidebar="1">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <label class="mode-toggle" title="Enable Zoom Tech Training page">
                 <input type="checkbox" name="zoom_tech_enabled" value="1"
                        onchange="this.form.submit()"
                        {% if site and site.zoom_tech_enabled %}checked{% endif %}>
+                <span class="mode-track"><span class="mode-thumb"></span></span>
+              </label>
+              <noscript><button class="btn btn-sm btn-primary">Save</button></noscript>
+            </form>
+          </li>
+          <li class="special-page-row">
+            <div class="special-page-info">
+              <div class="u-name">Announcements &amp; Events</div>
+              <p class="muted small">Show or hide the Announcements &amp; Events module. When off, the sidebar entry disappears and the routes return 404; existing posts are kept and reappear when re-enabled.</p>
+            </div>
+            {{ module_role_picker('posts', site.posts_required_role if site else 'admin') }}
+            <form method="post" action="{{ url_for('main.posts_toggle') }}" class="special-page-toggle-form" data-refresh-sidebar="1">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <label class="mode-toggle" title="Enable Announcements &amp; Events">
+                <input type="checkbox" name="posts_enabled" value="1"
+                       onchange="this.form.submit()"
+                       {% if site and site.posts_enabled %}checked{% endif %}>
+                <span class="mode-track"><span class="mode-thumb"></span></span>
+              </label>
+              <noscript><button class="btn btn-sm btn-primary">Save</button></noscript>
+            </form>
+          </li>
+          <li class="special-page-row">
+            <div class="special-page-info">
+              <div class="u-name">Web Frontend module</div>
+              <p class="muted small">Turn the entire Web Frontend module on or off. When off, the <b>Web Frontend</b> entry disappears from the sidebar, the editor routes are blocked, and the public homepage won't serve. The role gate here only hides/shows the sidebar entry — the underlying editor routes always require the <code>frontend_editor</code> permission.</p>
+            </div>
+            {{ module_role_picker('frontend_module', site.frontend_module_required_role if site else 'frontend_editor') }}
+            <form method="post" action="{{ url_for('main.frontend_module_toggle') }}" class="special-page-toggle-form" data-refresh-sidebar="1" data-reload-on-save="1">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <label class="mode-toggle" title="Toggle Web Frontend module">
+                <input type="checkbox" name="frontend_module_enabled" value="1"
+                       onchange="this.form.submit()"
+                       {% if site and site.frontend_module_enabled %}checked{% endif %}>
                 <span class="mode-track"><span class="mode-thumb"></span></span>
               </label>
               <noscript><button class="btn btn-sm btn-primary">Save</button></noscript>
@@ -610,22 +710,6 @@
           </div>
         </div>
       </div>
-      <div class="settings-pane" data-pane="web-frontend">
-        <form class="form" method="post" action="{{ url_for('main.frontend_module_toggle') }}" data-reload-on-save="1">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <li class="special-page-row" style="list-style:none;">
-            <div class="special-page-info">
-              <div class="u-name">Web Frontend module</div>
-              <p class="muted small">Turn the entire Web Frontend module on or off. When off, the <b>Web Frontend</b> entry disappears from the sidebar, the editor routes are blocked, and the public homepage won't serve. Turn this back on to resume editing and previewing the site.</p>
-            </div>
-            <label class="mode-toggle" title="Toggle Web Frontend module">
-              <input type="checkbox" name="frontend_module_enabled" value="1" {% if site and site.frontend_module_enabled %}checked{% endif %}>
-              <span class="mode-track"><span class="mode-thumb"></span></span>
-            </label>
-          </li>
-          <div class="form-actions"><button class="btn btn-primary">Save</button></div>
-        </form>
-      </div>
       <div class="settings-pane" data-pane="data">
         <div class="data-grid">
           <div class="data-col">
@@ -695,6 +779,37 @@
             </div>
           </div>
         </div>
+
+        {# ── Daily SQLite snapshots ────────────────────────────── #}
+        <hr class="settings-sep">
+        <div class="data-col data-snapshots">
+          <div class="u-name">Database snapshots</div>
+          <p class="muted small">
+            One snapshot of <code>tsp.db</code> is taken automatically each day at app start.
+            The most recent 14 are kept; older ones are pruned. Use these to roll back from
+            an accidental delete or a broken migration.
+          </p>
+          {% set _snaps = db_snapshots() %}
+          {% if _snaps %}
+          <ul class="data-snapshot-list">
+            {% for path, dt, size in _snaps %}
+            <li class="data-snapshot-row">
+              <span class="data-snapshot-name"><code>{{ path.name }}</code></span>
+              <span class="muted smaller">{{ dt.strftime('%b %-d, %Y') }} · {{ (size / 1024) | round(1) }} KB</span>
+              <a class="btn btn-sm" href="{{ url_for('main.data_snapshot_download', name=path.name) }}">Download</a>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="muted">No snapshots yet — one will be created on the next app start.</p>
+          {% endif %}
+          <div class="form-actions">
+            <form method="post" action="{{ url_for('main.data_snapshot_now') }}" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn">Snapshot now</button>
+            </form>
+          </div>
+        </div>
       </div>
 {% endif %}
       <div class="settings-pane" data-pane="about">
@@ -747,6 +862,30 @@
 
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
+            <li>
+              <div class="u-name">1.7.0</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Announcements &amp; Events module</b> — brand-new <code>Post</code> table + sidebar entry (admin-only by default; opt anyone in via the per-module role dropdown). Each post can be tagged announcement, event, or both, with a featured image, summary, body (Markdown), event start/end, online flag, location + Google Maps link, event website + custom button label, contact (name/phone/email), and Zoom (meeting id, passcode, URL). Manual archive, automatic archive the day after an event ends, and a public <code>/post-image/&lt;id&gt;</code> endpoint for link previews. Fully gated on <code>posts_enabled</code> — turning the module off hides it everywhere and 404s every <code>/posts</code> route.</li>
+                <li><b>Upcoming Events block</b> — new homepage block in the layout builder. Stacked rows (date stamp on the left, optional thumbnail, title + when + location chips + summary, pill-style CTA on the right). Cards stagger in with fade or slide animation. Per-block settings for heading, intro, max count, animation, stagger, and toggles for image / summary / location. Past events drop off automatically.</li>
+                <li><b>Site-wide Design tokens</b> — every public page now reads from a layered token system (<code>app/design.py</code>) emitted as CSS custom properties on <code>&lt;body&gt;</code>. Theme defaults + per-site overrides for spacing scale, radius scale, shadow scale, brand/accent/surface/border/text/link colors, header-nav-link, mega-menu-link, button radius/padding/weight/text-transform/decoration, link decoration, container max width, base text size + line height. New <i>Design</i> admin page (Web Frontend → Setup) lets admins override any subset; reset-to-default per field and a Reset all button. Mega-menu link auto-derives a slightly-dimmed dark-mode variant.</li>
+                <li><b>Recovery Blue theme rename</b> — the second built-in theme is now called <i>Recovery Blue</i> across the admin UI and the rendered HTML. Internal key, template paths, CSS classes (<code>fe-dccma-*</code> → <code>fe-recovery-*</code>), CSS variables, and image asset directory all migrated; existing rows in <code>SiteSetting.frontend_theme</code> are auto-rewritten on the first boot after upgrade.</li>
+                <li><b>Two-panel split — admin visualization + settings</b> — the layout builder's split block now renders an admin card that mirrors the live layout: each panel shows the editor cards for the blocks placed inside it, in the same left/right arrangement. Per-split controls for width (boxed / full), inner padding, top gap, bottom gap, gap between columns, and three independent background colors (whole section, left panel, right panel). New <i>Dark-mode background</i> toggle auto-derives a hue-preserving dark variant of every chosen color and swaps to it under <code>[data-theme="dark"]</code>. Outer top/bottom margin defaults to <code>none</code> so splits sit flush against neighbors unless the admin opts in.</li>
+                <li><b>Custom layouts — edit, delete, and rename</b> — every non-prebuilt layout in the picker now has Edit and Delete icon buttons. Edit pre-populates the drag-drop builder with the existing blocks; saving updates the row in place and round-trips split settings (so opening then re-saving never drops the spacing/colors the homepage admin set). New layouts auto-activate on the page that created them — no second click. The picker pill displays the layout's full <i>name</i> (not the slug-key) — fixes a Jinja loop-scope bug that was leaking the hyphenated key.</li>
+                <li><b>Per-module role permissions</b> — Settings → <i>Special Sections</i> renamed to <i>Modules</i>. Each toggle row now has an <i>Access</i> dropdown to its left: <i>All signed-in users</i>, <i>Editors and admins</i>, <i>Frontend editors and admins</i>, or <i>Admins only</i>. Sidebar visibility AND route gates respect the choice for Intergroup, Zoom Tech, and Posts; the Web Frontend module's dropdown gates sidebar visibility while routes keep the existing <code>frontend_editor_required</code> safety. Modules with <i>Admins only</i> auto-render in the sidebar's Admin section; anything else lives in Main — and switches sections live without a page reload.</li>
+                <li><b>Sidebar reorder</b> — Settings → External Links tab renamed <i>Sidebar</i> and merged with the new sidebar-order controls + inline external-link CRUD. Three modes: Auto A → Z, Auto Z → A, or Manual drag-and-drop. Manual mode lets admins drag whole sections (Main / External / Admin) and individual items inside them. Dashboard is pinned at the top regardless of mode. The order is admin-configurable but applies app-wide. Saves over AJAX so the modal stays open; the live sidebar AND the manual-reorder list refresh in place after every save (toggle, role change, or order save).</li>
+                <li><b>Customizable public 404 + playful admin 404</b> — every public URL that doesn't match a route renders a customizable 404 page with the active theme's header / footer / mega menu (admin can configure heading, sub-heading, CTA label + URL, and an optional uploaded illustration on the new Web Frontend → 404 page). Admin <code>/tspro</code> 404s render a fun in-house page with quick-link buttons back to Dashboard, Meetings, Libraries, and Announcements. When the Web Frontend module is disabled, public-URL hits redirect anonymous visitors to login and render the admin 404 for signed-in users.</li>
+                <li><b>Custom fonts library</b> — new <i>Fonts &amp; Icons</i> admin page (renamed from <i>Settings</i>). Upload TTF/OTF/WOFF/WOFF2 files (up to 4 MB each), or paste a Google Fonts CSS URL — the server fetches the CSS, downloads every referenced <code>woff2</code> binary to local storage, rewrites the @font-face <code>src</code> URLs to point at this server, and persists the rewritten CSS so visitors never connect to <code>fonts.gstatic.com</code> at request time. Every font (vendored Inter / Fraunces + custom uploads) shows in the unified library with a Built-in pill on vendored entries; custom fonts can be deleted, vendored ones can't.</li>
+                <li><b>Custom icons library</b> — the same Fonts &amp; Icons page exposes a Custom icon library card with an <b>Add icon</b> button that opens the existing icon-picker modal in upload mode. Each tile has a clean rectangular X delete button (always visible in the corner). Re-uses the existing <code>CustomIcon</code> upload + delete endpoints.</li>
+                <li><b>Frontend favicon, OG fields, and meta-tag split</b> — public site gets its own favicon (Web Frontend → Branding &amp; SEO), independent of the admin /tspro favicon. Open Graph metadata is now split between backend (<code>og_*</code>, used on /tspro pages) and frontend (<code>frontend_og_*</code>, used on the public site); a one-shot data migration seeds the new frontend fields from the legacy values so existing public-site previews don't disappear on upgrade. The Branding &amp; SEO admin card is a 2-column grid: Site name + Favicon on the left, Open Graph on the right.</li>
+                <li><b>Daily SQLite snapshots</b> — new <code>app/backup.py</code> uses SQLite's online <code>.backup()</code> API to snapshot <code>tsp.db</code> to <code>data/backups/tsp-YYYYMMDD.db</code> on every boot (idempotent for the same day, pruned to the most recent 14 days). Settings → Data tab lists every snapshot with file size, a per-snapshot Download button, and a <i>Snapshot now</i> button for on-demand backups. Path-traversal-guarded download endpoint.</li>
+                <li><b>Universal Settings-pane defaults</b> — every Settings tab now inherits 2 rem padding, 1 rem gap between cards, 1 rem section titles, and 1 rem padding inside toggle rows from a single <code>.settings-pane.active</code> rule. New tabs no longer need per-pane spacing CSS. Iframe-backed panes opt out automatically via <code>:has(&gt; iframe.settings-frame)</code>.</li>
+                <li><b>Users tab restructure</b> — Create User and a new Roles &amp; Permissions explainer (color-coded badges per role with one-line descriptions of access) sit side-by-side in a 2-column grid at the top. All Users table sits below; Public Information Chair card moves to the bottom.</li>
+                <li><b>Web Frontend toggle moved</b> — the standalone <i>Web Frontend</i> Settings tab is gone; the module on/off lives in the Modules tab as a fourth toggle row alongside Intergroup, Zoom Tech, and Announcements &amp; Events.</li>
+                <li><b>Visual icon picker for mega-menu links</b> — the two <i>Icon before</i> / <i>Icon after</i> dropdowns on every mega-menu link block became a preview-and-button trigger plus a searchable modal grid grouped by category. Bundled, self-hosted Lucide library at <code>app/static/vendor/lucide/icons.json</code> — nothing fetched from a CDN. Per-icon colour (hex, default <code>#747474</code>) and size (12–64 px). New <code>CustomIcon</code> table with sanitized SVG / PNG uploads (max 512 KB), served at <code>/pub/icon/&lt;id&gt;</code>; nav-link references use <code>custom:&lt;id&gt;</code>.</li>
+                <li><b>Full-width Web Frontend admin pages + theme-aware picker polish</b> — the seven frontend admin pages span the browser width via <code>.content:has(.fe-admin-layout) { max-width: none; }</code>. Picker trigger, modal search, and grid cells use <code>var(--panel-2)</code> / <code>var(--brand-soft)</code> so all themes render correctly; the Recovery Blue mega menu's <code>mega-active</code> state has a dark-mode override.</li>
+              </ul>
+            </li>
             <li>
               <div class="u-name">1.6.2</div>
               <div class="muted smaller">April 2026</div>

@@ -1,0 +1,79 @@
+{# Block-driven homepage renderer. Walks `homepage_blocks` (a list of
+   {"type": "<key>", "enabled"?: bool, "left"?: [...], "right"?: [...]}
+   dicts) and includes the matching block partial in order. Blocks
+   marked enabled=false in the layout, or with their type globally
+   disabled via block_content._visibility, are skipped silently. #}
+{% macro render_block(_block) -%}
+  {%- set _bt = (_block.type if _block.type is defined else _block.get('type', '')) -%}
+  {%- if _block.enabled is sameas false %}{# enabled === false: skip #}{% else -%}
+  {%- set _vis = block_content.get('_visibility', {}) if block_content else {} -%}
+  {%- if _vis.get(_bt, True) -%}
+    {%- if _bt == 'hero' %}{% include "frontend/_hero.html" %}
+    {%- elif _bt == 'quick_links' %}{% include "frontend/blocks/quick_links.html" %}
+    {%- elif _bt == 'meetings' %}{% include "frontend/blocks/meetings.html" %}
+    {%- elif _bt == 'events' %}{% include "frontend/blocks/events.html" %}
+    {%- elif _bt == 'about' %}{% include "frontend/blocks/about.html" %}
+    {%- elif _bt == 'contact' %}{% include "frontend/blocks/contact.html" %}
+    {%- elif _bt == 'features' %}{% include "frontend/blocks/features.html" %}
+    {%- elif _bt == 'cta' %}{% include "frontend/blocks/cta.html" %}
+    {%- elif _bt == 'stats' %}{% include "frontend/blocks/stats.html" %}
+    {%- elif _bt == 'testimonials' %}{% include "frontend/blocks/testimonials.html" %}
+    {%- elif _bt == 'faq' %}{% include "frontend/blocks/faq.html" %}
+    {%- elif _bt == 'split' -%}
+      {%- set _sw  = _block.width or 'boxed' -%}
+      {%- set _sp  = _block.padding or 'default' -%}
+      {%- set _sgp = _block.gap or 'none' -%}
+      {# Legacy `margin` migrates into top + bottom gap on render too,
+         so layouts saved before the fields were split still spaced
+         correctly until the admin re-saves them. #}
+      {%- set _sm  = _block.margin or '' -%}
+      {%- set _sgt = _block.gap_top    or _sm or 'none' -%}
+      {%- set _sgb = _block.gap_bottom or _sm or 'none' -%}
+      {%- set _sbg   = _block.bg_color or '' -%}
+      {%- set _sbg_l = _block.bg_color_left or '' -%}
+      {%- set _sbg_r = _block.bg_color_right or '' -%}
+      {# Dark-mode-aware backgrounds: if the toggle is on, derive a dark
+         variant of each chosen colour and emit both as CSS custom
+         properties. The CSS rule for [data-theme=dark] picks --bg-d
+         when present, so the section gracefully shifts in dark mode
+         without losing the admin's chosen palette. #}
+      {%- set _dark = _block.bg_dark_mode and (_sbg or _sbg_l or _sbg_r) -%}
+      {%- if _dark -%}
+        {%- set _sbg_d   = derive_dark_color(_sbg)   if _sbg   else '' -%}
+        {%- set _sbg_l_d = derive_dark_color(_sbg_l) if _sbg_l else '' -%}
+        {%- set _sbg_r_d = derive_dark_color(_sbg_r) if _sbg_r else '' -%}
+      {%- endif -%}
+      {%- set _sec_style -%}
+        {%- if _sbg %}--fe-split-bg-l: {{ _sbg }}; {% endif -%}
+        {%- if _dark and _sbg_d %}--fe-split-bg-d: {{ _sbg_d }}; {% endif -%}
+        {%- if _sbg %}background: {{ _sbg }};{% endif -%}
+      {%- endset -%}
+      {%- set _left_style -%}
+        {%- if _sbg_l %}--fe-split-col-bg-l: {{ _sbg_l }}; {% endif -%}
+        {%- if _dark and _sbg_l_d %}--fe-split-col-bg-d: {{ _sbg_l_d }}; {% endif -%}
+        {%- if _sbg_l %}background: {{ _sbg_l }};{% endif -%}
+      {%- endset -%}
+      {%- set _right_style -%}
+        {%- if _sbg_r %}--fe-split-col-bg-l: {{ _sbg_r }}; {% endif -%}
+        {%- if _dark and _sbg_r_d %}--fe-split-col-bg-d: {{ _sbg_r_d }}; {% endif -%}
+        {%- if _sbg_r %}background: {{ _sbg_r }};{% endif -%}
+      {%- endset -%}
+      <section class="fe-section fe-split fe-split--w-{{ _sw }} fe-split--p-{{ _sp }} fe-split--g-{{ _sgp }} fe-split--gt-{{ _sgt }} fe-split--gb-{{ _sgb }}{% if _dark %} fe-split--dark-aware{% endif %}"
+               {% if _sec_style %}style="{{ _sec_style }}"{% endif %}>
+        <div class="{% if _sw == 'boxed' %}fe-container {% endif %}fe-split-grid">
+          <div class="fe-split-col fe-split-col-left"{% if _left_style %} style="{{ _left_style }}"{% endif %}>
+            {% for _inner in (_block.left or []) %}{{ render_block(_inner) }}{% endfor %}
+          </div>
+          <div class="fe-split-col fe-split-col-right"{% if _right_style %} style="{{ _right_style }}"{% endif %}>
+            {% for _inner in (_block.right or []) %}{{ render_block(_inner) }}{% endfor %}
+          </div>
+        </div>
+      </section>
+    {%- endif -%}
+  {%- endif -%}
+  {%- endif -%}
+{%- endmacro %}
+
+{% for _block in (homepage_blocks or []) %}
+  {{ render_block(_block) }}
+{% endfor %}

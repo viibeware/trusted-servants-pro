@@ -501,9 +501,54 @@
       });
     });
 
-    // Rewire checkbox toggle-on-change so it fires our submit handler (form.submit() does not).
-    settingsModal.querySelectorAll('input[onchange*="this.form.submit()"]').forEach(inp => {
-      inp.setAttribute("onchange", "this.form.requestSubmit()");
+    // Rewire any element that does `this.form.submit()` on change — that
+    // bypasses the submit event so our AJAX handler never sees it (the
+    // modal would close on the resulting full-page redirect). Replace
+    // with requestSubmit() which DOES fire the event. Covers both
+    // checkboxes (toggles) and selects (the per-module role picker).
+    settingsModal.querySelectorAll(
+      'input[onchange*="this.form.submit()"], select[onchange*="this.form.submit()"]'
+    ).forEach(el => {
+      el.setAttribute("onchange", "this.form.requestSubmit()");
+    });
+
+    // Live sidebar refresh — forms tagged with data-refresh-sidebar
+    // (module toggles, role pickers, and the sidebar-order form) trigger
+    // a fetch of the rendered nav fragment after a successful save and
+    // swap it into the live sidebar. The Sidebar tab's manual reorder
+    // list is also swapped so its Main/Admin partitioning mirrors the
+    // current role-based section placement. No reload, modal stays open.
+    let _sidebarRefreshing = false;
+    settingsModal.addEventListener("settings:saved", e => {
+      const f = e.target;
+      if (!f || !(f instanceof HTMLFormElement)) return;
+      if (f.dataset.refreshSidebar !== "1") return;
+      if (_sidebarRefreshing) return;
+      _sidebarRefreshing = true;
+      // Skip refreshing the manual section if THIS form IS the
+      // sidebar-order form — replacing the very form the admin just
+      // submitted would obliterate any in-flight UI state. The role-
+      // based section placement still applies on the next load.
+      const refreshManual = f.id !== "sidebar-order-form";
+      Promise.all([
+        fetch("/tspro/_sidebar/nav", {
+          credentials: "same-origin",
+          headers: { "X-Requested-With": "fetch" },
+        }).then(r => r.ok ? r.text() : Promise.reject(r))
+          .then(html => {
+            const nav = document.getElementById("sidebar-nav");
+            if (nav) nav.innerHTML = html;
+          }),
+        refreshManual ? fetch("/tspro/_sidebar/order-manual", {
+          credentials: "same-origin",
+          headers: { "X-Requested-With": "fetch" },
+        }).then(r => r.ok ? r.text() : null)
+          .then(html => {
+            if (!html) return;
+            const wrap = document.querySelector("[data-sidebar-manual]");
+            if (wrap) wrap.innerHTML = html;
+          }) : Promise.resolve(),
+      ]).catch(() => {}).finally(() => { _sidebarRefreshing = false; });
     });
   }
 
@@ -700,18 +745,18 @@
     const bindItem = (item) => {
       if (item.__tspSortableBound) return;
       item.__tspSortableBound = true;
-      // Only make the item draggable while the user is pressing on the drag
-      // handle. Otherwise text selection inside nested inputs would get
-      // hijacked by a container drag.
+      // Track whether the most recent mousedown started inside the drag
+      // handle. We use this in dragstart to decide whether to allow the
+      // drag — keeping the row draggable=true at all times so the browser
+      // never decides not to start a drag because of stale state. Text
+      // selection inside cells still works because dragstart preventDefault
+      // bails out on non-handle drags.
+      let mousedownOnHandle = false;
       item.addEventListener("mousedown", (e) => {
-        item.draggable = !!e.target.closest?.(".drag-handle");
+        mousedownOnHandle = !!e.target.closest?.(".drag-handle");
       });
-      const restoreDraggable = () => { item.draggable = true; };
-      item.addEventListener("mouseup", restoreDraggable);
-      item.addEventListener("mouseleave", restoreDraggable);
       item.addEventListener("dragstart", (e) => {
-        const handle = e.target.closest?.(".drag-handle");
-        if (!handle) {
+        if (!mousedownOnHandle) {
           e.preventDefault();
           return;
         }
@@ -724,7 +769,7 @@
         item.classList.remove("dragging");
         list.querySelectorAll(":scope > .drag-over").forEach(x => x.classList.remove("drag-over"));
         dragging = null;
-        item.draggable = true;
+        mousedownOnHandle = false;
       });
       item.addEventListener("dragover", (e) => {
         if (!dragging || dragging === item) return;
@@ -1315,6 +1360,11 @@
       li.querySelectorAll("[data-block-field]").forEach((el) => {
         const name = el.getAttribute("data-block-field");
         if (el.type === "checkbox") block[name] = el.checked;
+        else if (el.type === "radio") {
+          // Radios share a `data-block-field`; only record the checked one.
+          if (el.checked) block[name] = el.value;
+          else if (!(name in block)) block[name] = "";
+        }
         else block[name] = el.value;
       });
       out.push(block);
@@ -1356,6 +1406,17 @@
     if (!btn) return;
     e.preventDefault();
     save(btn);
+  });
+
+  // Override-color toggle: enable/disable the color picker inline.
+  document.addEventListener("change", (e) => {
+    const toggle = e.target.closest("[data-color-override-toggle]");
+    if (!toggle) return;
+    const field = toggle.closest("[data-color-override-field]");
+    if (!field) return;
+    const picker = field.querySelector('input[type="color"][data-block-field="custom_color"]');
+    field.classList.toggle("is-on", toggle.checked);
+    if (picker) picker.disabled = !toggle.checked;
   });
 
   // Mark the editor + save button dirty on any field change, so the user has a
@@ -1449,3 +1510,1054 @@
   setTimeout(check, 10000);
   setInterval(check, CHECK_INTERVAL_MS);
 })();
+
+// ── LAYOUT BUILDER (drag-and-drop block composer) ─────────────────────────
+// Library blocks are drag-sources; the canvas is the drop-zone. Canvas
+// blocks themselves are re-orderable via the same dragstart/dragover
+// handlers. Save POSTs the resulting block sequence to the backend.
+(function feLayoutBuilder() {
+  document.querySelectorAll(".fe-layout-builder-modal").forEach(modal => {
+    const canvas = modal.querySelector("[data-builder-canvas]");
+    const library = modal.querySelector("[data-builder-library]");
+    const saveBtn = modal.querySelector("[data-builder-save]");
+    const nameInp = modal.querySelector("[data-builder-name]");
+    const titleEl = modal.querySelector("[data-builder-title]");
+    const saveUrl = modal.dataset.saveLayoutUrl;
+    const updateUrlTpl = modal.dataset.updateLayoutUrl;     // contains __KEY__
+    const deleteUrlTpl = modal.dataset.deleteLayoutUrl;     // contains __KEY__
+    const activateUrl = modal.dataset.activateUrl;
+    const activateField = modal.dataset.activateField;
+    const csrf = modal.dataset.csrfToken;
+    if (!canvas || !library || !saveBtn) return;
+
+    const SVG_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true";';
+
+    function refreshEmpty() {
+      const hasBlocks = !!canvas.querySelector(".fe-builder-canvas-block");
+      let empty = canvas.querySelector(".fe-builder-empty");
+      if (!hasBlocks && !empty) {
+        empty = document.createElement("div");
+        empty.className = "fe-builder-empty muted small";
+        empty.textContent = "Drag a block here to start.";
+        canvas.appendChild(empty);
+      } else if (hasBlocks && empty) {
+        empty.remove();
+      }
+    }
+    function makeCanvasBlock(type, name, iconHtml, opts) {
+      const el = document.createElement("div");
+      el.draggable = true;
+      el.dataset.blockType = type;
+      // Preserve split-level settings (width / margin / padding) on the
+      // DOM node so the round-trip through the builder doesn't blow away
+      // values the homepage admin's split settings card has written. The
+      // builder itself doesn't expose UI for these — they're stored, not
+      // shown — but they MUST survive serialize → save unchanged.
+      if (type === "split" && opts) {
+        if (opts.width)   el.dataset.splitWidth   = opts.width;
+        if (opts.margin)  el.dataset.splitMargin  = opts.margin;
+        if (opts.padding) el.dataset.splitPadding = opts.padding;
+      }
+      if (type === "split") {
+        el.className = "fe-builder-canvas-block fe-builder-split";
+        el.innerHTML =
+          '<div class="fe-builder-split-head">' +
+            '<div class="fe-builder-block-icon">' + (iconHtml || '') + '</div>' +
+            '<div class="fe-builder-block-meta"><div class="fe-builder-block-name">' +
+            escapeHtml(name) + '</div><div class="fe-builder-block-desc muted smaller">' +
+            'Two side-by-side panels — drag blocks into each.</div></div>' +
+            '<button type="button" class="fe-builder-canvas-remove" title="Remove">&times;</button>' +
+          '</div>' +
+          '<div class="fe-builder-split-cols">' +
+            '<div class="fe-builder-split-col" data-split-side="left">' +
+              '<div class="fe-builder-empty muted smaller">Left panel</div>' +
+            '</div>' +
+            '<div class="fe-builder-split-col" data-split-side="right">' +
+              '<div class="fe-builder-empty muted smaller">Right panel</div>' +
+            '</div>' +
+          '</div>';
+      } else {
+        el.className = "fe-builder-canvas-block";
+        el.innerHTML =
+          '<div class="fe-builder-block-icon">' + (iconHtml || '') + '</div>' +
+          '<div class="fe-builder-block-meta"><div class="fe-builder-block-name">' +
+          escapeHtml(name) + '</div></div>' +
+          '<button type="button" class="fe-builder-canvas-remove" title="Remove">&times;</button>';
+      }
+      return el;
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[c]));
+    }
+
+    // Library blocks: drag → set type, on drop in canvas → append.
+    library.querySelectorAll(".fe-builder-block").forEach(block => {
+      block.addEventListener("dragstart", e => {
+        e.dataTransfer.effectAllowed = "copy";
+        e.dataTransfer.setData("application/x-fe-block-type", block.dataset.blockType);
+        e.dataTransfer.setData("application/x-fe-block-name", block.dataset.blockName);
+        e.dataTransfer.setData("text/plain", block.dataset.blockName);
+      });
+    });
+
+    // Canvas drag handlers: accept new blocks from library, reorder existing.
+    // Both the top-level canvas AND each .fe-builder-split-col panel are
+    // valid drop zones; we look up the closest such zone on dragover/drop.
+    let dragging = null;
+    function dropZoneFor(target) {
+      return target.closest(".fe-builder-split-col") || target.closest("[data-builder-canvas]");
+    }
+    function handleDragOver(e) {
+      const zone = dropZoneFor(e.target);
+      if (!zone) return;
+      e.preventDefault();
+      e.stopPropagation();
+      // Highlight only the active zone.
+      modal.querySelectorAll(".is-drop-target").forEach(el => el.classList.remove("is-drop-target"));
+      zone.classList.add("is-drop-target");
+      if (dragging) {
+        // Don't allow nesting splits inside splits — too much complexity.
+        if (dragging.dataset.blockType === "split" && zone.classList.contains("fe-builder-split-col")) return;
+        const after = [...zone.querySelectorAll(":scope > .fe-builder-canvas-block:not(.dragging)")]
+          .find(b => e.clientY < b.getBoundingClientRect().top + b.offsetHeight / 2);
+        if (after) zone.insertBefore(dragging, after);
+        else zone.appendChild(dragging);
+      }
+    }
+    function handleDrop(e) {
+      const zone = dropZoneFor(e.target);
+      if (!zone) return;
+      e.preventDefault();
+      e.stopPropagation();
+      modal.querySelectorAll(".is-drop-target").forEach(el => el.classList.remove("is-drop-target"));
+      if (dragging) { return; }   // reorder case is handled by dragover
+      const type = e.dataTransfer.getData("application/x-fe-block-type");
+      const name = e.dataTransfer.getData("application/x-fe-block-name");
+      if (!type) return;
+      // Block split from being placed inside another split's panel.
+      if (type === "split" && zone.classList.contains("fe-builder-split-col")) return;
+      const libBlock = library.querySelector(
+        '.fe-builder-block[data-block-type="' + CSS.escape(type) + '"]');
+      const iconHtml = libBlock ? libBlock.querySelector(".fe-builder-block-icon").innerHTML : '';
+      // Drop the placeholder if present.
+      zone.querySelectorAll(":scope > .fe-builder-empty").forEach(el => el.remove());
+      zone.appendChild(makeCanvasBlock(type, name, iconHtml));
+      refreshEmpty();
+    }
+    canvas.addEventListener("dragover", handleDragOver);
+    canvas.addEventListener("dragleave", e => {
+      const zone = dropZoneFor(e.target);
+      if (zone) zone.classList.remove("is-drop-target");
+    });
+    canvas.addEventListener("drop", handleDrop);
+
+    canvas.addEventListener("dragstart", e => {
+      const block = e.target.closest(".fe-builder-canvas-block");
+      if (!block) return;
+      dragging = block;
+      block.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+    });
+    canvas.addEventListener("dragend", () => {
+      if (dragging) dragging.classList.remove("dragging");
+      dragging = null;
+      modal.querySelectorAll(".is-drop-target").forEach(el => el.classList.remove("is-drop-target"));
+      refreshEmpty();
+    });
+    canvas.addEventListener("click", e => {
+      const rm = e.target.closest(".fe-builder-canvas-remove");
+      if (!rm) return;
+      const block = rm.closest(".fe-builder-canvas-block");
+      if (block) block.remove();
+      refreshEmpty();
+    });
+
+    function serializeBlocks(zone) {
+      // Walk direct children of `zone` and capture nested split panels.
+      return [...zone.querySelectorAll(":scope > .fe-builder-canvas-block")].map(b => {
+        const t = b.dataset.blockType;
+        if (t === "split") {
+          const left = b.querySelector('.fe-builder-split-col[data-split-side="left"]');
+          const right = b.querySelector('.fe-builder-split-col[data-split-side="right"]');
+          const out = {
+            type: "split",
+            left: left ? serializeBlocks(left) : [],
+            right: right ? serializeBlocks(right) : [],
+          };
+          // Round-trip width / margin / padding stashed in the dataset
+          // when this block was hydrated from an existing layout, so
+          // editing the structure doesn't drop spacing settings the
+          // homepage admin's split card has written.
+          if (b.dataset.splitWidth)   out.width   = b.dataset.splitWidth;
+          if (b.dataset.splitMargin)  out.margin  = b.dataset.splitMargin;
+          if (b.dataset.splitPadding) out.padding = b.dataset.splitPadding;
+          return out;
+        }
+        return { type: t };
+      });
+    }
+
+    // Restore the canvas to its empty state (drop placeholder only).
+    function clearCanvas() {
+      canvas.innerHTML = '<div class="fe-builder-empty muted small">Drag a block here to start.</div>';
+    }
+
+    // Inverse of serializeBlocks: takes a [{type, left?, right?}, …] list
+    // and rebuilds DOM nodes inside the given drop-zone. Used for Edit
+    // mode so the canvas reflects the layout being modified.
+    function blockNameForType(type) {
+      const lib = library.querySelector(
+        '.fe-builder-block[data-block-type="' + CSS.escape(type) + '"]');
+      return lib ? lib.dataset.blockName : type;
+    }
+    function blockIconForType(type) {
+      const lib = library.querySelector(
+        '.fe-builder-block[data-block-type="' + CSS.escape(type) + '"]');
+      return lib ? lib.querySelector(".fe-builder-block-icon").innerHTML : '';
+    }
+    function hydrateZone(zone, blocks) {
+      zone.querySelectorAll(":scope > .fe-builder-empty").forEach(el => el.remove());
+      (blocks || []).forEach(b => {
+        const t = b && b.type;
+        if (!t) return;
+        const splitOpts = (t === "split")
+          ? { width: b.width, margin: b.margin, padding: b.padding }
+          : null;
+        const node = makeCanvasBlock(t, blockNameForType(t), blockIconForType(t), splitOpts);
+        zone.appendChild(node);
+        if (t === "split") {
+          const left = node.querySelector('.fe-builder-split-col[data-split-side="left"]');
+          const right = node.querySelector('.fe-builder-split-col[data-split-side="right"]');
+          if (left) {
+            left.querySelectorAll(":scope > .fe-builder-empty").forEach(el => el.remove());
+            hydrateZone(left, b.left || []);
+          }
+          if (right) {
+            right.querySelectorAll(":scope > .fe-builder-empty").forEach(el => el.remove());
+            hydrateZone(right, b.right || []);
+          }
+          // Re-add empty placeholders if a side ended up empty.
+          [left, right].forEach(side => {
+            if (side && !side.querySelector(":scope > .fe-builder-canvas-block")) {
+              const ph = document.createElement("div");
+              ph.className = "fe-builder-empty muted smaller";
+              ph.textContent = side.dataset.splitSide === "left" ? "Left panel" : "Right panel";
+              side.appendChild(ph);
+            }
+          });
+        }
+      });
+      refreshEmpty();
+    }
+
+    // Edit mode is signaled by setting modal.dataset.editKey before opening.
+    // The picker macro stores the layout's blocks JSON + name on each card;
+    // the click handler below copies them into the modal before opening.
+    function enterCreateMode() {
+      delete modal.dataset.editKey;
+      if (titleEl) titleEl.textContent = "Build a custom layout";
+      if (nameInp) nameInp.value = "";
+      saveBtn.textContent = "Save layout";
+      clearCanvas();
+    }
+    function enterEditMode(key, name, blocks) {
+      modal.dataset.editKey = key;
+      if (titleEl) titleEl.textContent = "Edit layout";
+      if (nameInp) nameInp.value = name || "";
+      saveBtn.textContent = "Save changes";
+      clearCanvas();
+      hydrateZone(canvas, blocks);
+    }
+
+    // Wire the edit / delete icon buttons on each non-prebuilt layout card
+    // in the picker grid (not inside the modal — these live in the picker
+    // modal that opens this builder modal). We use document-level
+    // delegation so only the builder modal whose data-builder-modal id
+    // matches reacts.
+    const builderModalId = modal.id;
+    document.addEventListener("click", async (e) => {
+      const editBtn = e.target.closest("[data-edit-layout]");
+      if (editBtn && editBtn.getAttribute("data-builder-modal") === builderModalId) {
+        e.preventDefault(); e.stopPropagation();
+        const card = editBtn.closest(".template-card");
+        if (!card) return;
+        let blocks = [];
+        try { blocks = JSON.parse(card.dataset.layoutBlocks || "[]"); } catch (_) {}
+        enterEditMode(card.dataset.layoutKey, card.dataset.layoutName, blocks);
+        // Close the picker modal and open the builder modal.
+        const pickerModal = card.closest(".fe-layout-picker-modal");
+        if (pickerModal) {
+          pickerModal.classList.remove("open");
+          pickerModal.setAttribute("aria-hidden", "true");
+        }
+        modal.classList.add("open");
+        modal.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+        return;
+      }
+      const delBtn = e.target.closest("[data-delete-layout]");
+      if (delBtn) {
+        // Only the matching modal should handle this — but since there's
+        // typically just one builder modal per page, all instances will
+        // see the click. Guard by checking the URL template exists.
+        if (!deleteUrlTpl) return;
+        e.preventDefault(); e.stopPropagation();
+        const key = delBtn.getAttribute("data-delete-layout");
+        const card = delBtn.closest(".template-card");
+        if (!confirm("Delete this layout? Any page currently using it will fall back to the Classic layout.")) return;
+        try {
+          const url = deleteUrlTpl.replace("__KEY__", encodeURIComponent(key));
+          const fd = new FormData(); fd.append("csrf_token", csrf);
+          const r = await fetch(url, { method: "POST", credentials: "same-origin", body: fd });
+          const data = await r.json();
+          if (!r.ok || !data.ok) throw new Error(data.error || "Delete failed");
+          if (card && card.classList.contains("active")) {
+            // The active layout was deleted; reload so the picker reflects
+            // the fallback the server picked (classic).
+            window.location.reload();
+          } else if (card) {
+            card.remove();
+          }
+        } catch (err) {
+          (window.tspShowToast || alert)("Could not delete layout: " + (err.message || ""));
+        }
+        return;
+      }
+      const newBtn = e.target.closest("[data-builder-mode-create]");
+      if (newBtn && newBtn.getAttribute("data-open-modal") === builderModalId) {
+        // Reset to create mode every time the "+ Custom layout" tile is
+        // clicked, so editing then bailing then creating doesn't smuggle
+        // the prior layout's state into a new save.
+        enterCreateMode();
+      }
+    });
+
+    saveBtn.addEventListener("click", async () => {
+      const blocks = serializeBlocks(canvas);
+      if (!blocks.length) {
+        (window.tspShowToast || alert)("Add at least one block before saving.");
+        return;
+      }
+      const name = (nameInp && nameInp.value.trim()) || "Custom layout";
+      const editKey = modal.dataset.editKey;
+      saveBtn.disabled = true;
+      const orig = saveBtn.textContent;
+      saveBtn.textContent = "Saving…";
+      try {
+        const url = editKey
+          ? updateUrlTpl.replace("__KEY__", encodeURIComponent(editKey))
+          : saveUrl;
+        const r = await fetch(url, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+          body: JSON.stringify({ name, blocks }),
+        });
+        const data = await r.json();
+        if (!r.ok || !data.ok) throw new Error(data.error || "Save failed");
+        // Auto-activate: tell the picker form to use the saved layout for
+        // this page. Skip when editing the layout that's already active
+        // (a re-POST of the same value would just be a no-op).
+        if (activateUrl && activateField && data.key) {
+          const fd = new FormData();
+          fd.append("csrf_token", csrf);
+          fd.append(activateField, data.key);
+          await fetch(activateUrl, {
+            method: "POST", credentials: "same-origin", body: fd,
+          }).catch(() => {});
+        }
+        window.location.reload();
+      } catch (e) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = orig;
+        (window.tspShowToast || alert)("Could not save layout: " + (e.message || ""));
+      }
+    });
+  });
+})();
+
+// ── COLLAPSIBLE CARDS (Web Frontend admin) ─────────────────────────────────
+// Adds a chevron toggle to every .card inside .fe-admin-main. Clicking the
+// chevron OR anywhere on the .card-head (excluding nested buttons / links /
+// inputs) toggles the .is-collapsed class. State is remembered per-page in
+// localStorage so cards stay collapsed across reloads.
+(function feCollapsibleCards() {
+  const main = document.querySelector(".fe-admin-main");
+  if (!main) return;
+
+  const STORAGE_KEY = "fe-card-collapse:" + window.location.pathname;
+  let stored = {};
+  try { stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch (_) {}
+
+  // Each card needs a stable id so we can persist its state across reloads.
+  // Use the heading text as the key; it's stable per-page.
+  function cardKey(card) {
+    const h = card.querySelector(".card-head h2");
+    return h ? h.textContent.trim() : null;
+  }
+  function persist() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(stored)); } catch (_) {}
+  }
+
+  // Lucide chevron-up SVG paths; matches the rest of the icon set.
+  const CHEVRON_SVG =
+    '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="m18 15-6-6-6 6"/></svg>';
+
+  function decorate(card) {
+    if (card.__feCollapseInit) return;
+    card.__feCollapseInit = true;
+    const head = card.querySelector(".card-head");
+    if (!head) return;
+
+    // Inject the chevron toggle button at the end of card-head.
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "fe-card-toggle";
+    btn.setAttribute("aria-label", "Toggle section");
+    btn.innerHTML = CHEVRON_SVG;
+    head.appendChild(btn);
+
+    // Restore persisted state.
+    const key = cardKey(card);
+    if (key && stored[key]) card.classList.add("is-collapsed");
+    btn.setAttribute("aria-expanded", card.classList.contains("is-collapsed") ? "false" : "true");
+
+    function toggle() {
+      card.classList.toggle("is-collapsed");
+      const isCollapsed = card.classList.contains("is-collapsed");
+      btn.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
+      const k = cardKey(card);
+      if (k) {
+        if (isCollapsed) stored[k] = 1; else delete stored[k];
+        persist();
+      }
+    }
+
+    // Click handler bound to the card itself so the entire card surface is
+    // clickable when collapsed. When expanded the click zone extends from
+    // the top of the card down through the heading's bottom edge — the
+    // strip of padding above the heading is included so the title row
+    // doesn't have a dead zone above it. Clicks inside the body still
+    // interact with form fields normally instead of collapsing the card.
+    card.addEventListener("click", (e) => {
+      const interactive = e.target.closest("button, a, input, select, textarea, label, .row-actions");
+      if (interactive && interactive !== btn) return;
+      const isCollapsed = card.classList.contains("is-collapsed");
+      if (isCollapsed) { toggle(); return; }
+      // Expanded: only toggle if the click is at or above the heading's
+      // bottom edge (i.e. inside the head row OR in the card padding
+      // above it).
+      const headRect = head.getBoundingClientRect();
+      if (e.clientY <= headRect.bottom) toggle();
+    });
+  }
+
+  main.querySelectorAll(".card").forEach(decorate);
+
+  // Pick up cards added later (modal-rendered, fetch-injected, etc).
+  const mo = new MutationObserver(records => {
+    for (const r of records) {
+      r.addedNodes.forEach(n => {
+        if (n.nodeType !== 1) return;
+        if (n.classList && n.classList.contains("card")) decorate(n);
+        n.querySelectorAll && n.querySelectorAll(".card").forEach(decorate);
+      });
+    }
+  });
+  mo.observe(main, { childList: true, subtree: true });
+})();
+
+// ── TEMPLATE-PICKER LIVE HIGHLIGHT ─────────────────────────────────────────
+// When the user picks a different template radio inside a .template-library
+// -grid the visual .active class needs to follow so they can confirm which
+// card will be submitted. Server only marks the originally-active one.
+(function () {
+  document.addEventListener("change", (e) => {
+    const inp = e.target;
+    if (!inp || inp.type !== "radio") return;
+    const grid = inp.closest(".template-library-grid");
+    if (!grid) return;
+    const newCard = inp.closest(".template-card");
+    grid.querySelectorAll(".template-card.active").forEach(c => c.classList.remove("active"));
+    if (newCard) newCard.classList.add("active");
+  });
+})();
+
+// ── FRONTEND-ADMIN SAVE BAR ────────────────────────────────────────────────
+// One yellow bar pinned to the sidebar that batches saves across every
+// tracked form on the page. Show + bounce when anything becomes dirty;
+// click to POST every dirty form sequentially, then reload so the freshly
+// rendered admin sees its own values.
+(function feSaveBar(){
+  const bar = document.getElementById('fe-save-bar');
+  const main = document.querySelector('.fe-admin-main');
+  if (!bar || !main) return;
+  const btn = document.getElementById('fe-save-bar-btn');
+  const msg = bar.querySelector('.fe-save-bar-msg');
+  const dirty = new Set();
+
+  document.body.classList.add('has-fe-save-bar');
+
+  function show() {
+    bar.hidden = false;
+    msg.textContent = dirty.size > 1
+      ? 'Unsaved changes (' + dirty.size + ' sections)'
+      : 'Unsaved changes';
+  }
+  function hide() {
+    bar.hidden = true;
+    dirty.clear();
+  }
+
+  function trackable(form) {
+    if (!form.method || form.method.toLowerCase() !== 'post') return false;
+    if (form.closest('.modal')) return false;             // skip in-modal forms
+    if (form.matches('[data-fe-skip-save-bar]')) return false;
+    // Skip the dashboard's auto-submitting toggle (clicking it navigates the
+    // page itself; nothing for us to track).
+    if (form.matches('[data-fe-auto-submit]')) return false;
+    return true;
+  }
+
+  function instrument(form) {
+    if (form.__feSaveBound) return;
+    form.__feSaveBound = true;
+    const onChange = () => { dirty.add(form); show(); };
+    form.addEventListener('input', onChange);
+    form.addEventListener('change', onChange);
+  }
+  main.querySelectorAll('form').forEach(f => { if (trackable(f)) instrument(f); });
+
+  // Some forms are spliced in later (e.g. mega menu blocks via fetch); pick
+  // them up via a MutationObserver so they participate too.
+  const mo = new MutationObserver(records => {
+    for (const r of records) {
+      r.addedNodes.forEach(n => {
+        if (n.nodeType !== 1) return;
+        if (n.tagName === 'FORM' && trackable(n)) instrument(n);
+        n.querySelectorAll && n.querySelectorAll('form').forEach(f => {
+          if (trackable(f)) instrument(f);
+        });
+      });
+    }
+  });
+  mo.observe(main, { childList: true, subtree: true });
+
+  btn && btn.addEventListener('click', async () => {
+    if (!dirty.size) { hide(); return; }
+    btn.disabled = true;
+    const origLabel = btn.textContent;
+    btn.textContent = 'Saving…';
+    const forms = [...dirty];
+    try {
+      for (const f of forms) {
+        const fd = new FormData(f);
+        const r = await fetch(f.action || window.location.href, {
+          method: 'POST',
+          credentials: 'same-origin',
+          body: fd,
+        });
+        if (!r.ok) throw new Error('save failed: ' + r.status);
+      }
+      // Animate the bar dropping out of view, then reload so the freshly
+      // saved values are reflected in the form fields.
+      msg.textContent = 'Saved';
+      const reload = () => window.location.reload();
+      bar.addEventListener('animationend', reload, { once: true });
+      bar.classList.add('is-leaving');
+      // Safety net: if the animationend doesn't fire (reduced-motion etc.)
+      // reload anyway after the keyframe duration.
+      setTimeout(reload, 360);
+    } catch (_) {
+      btn.disabled = false;
+      btn.textContent = origLabel;
+      msg.textContent = 'Save failed — try again';
+    }
+  });
+})();
+
+
+// ── ICON PICKER MODAL ───────────────────────────────────────────────────────
+// Triggered by any button with [data-open-icon-picker]. The trigger stores
+// selector strings pointing at the hidden icon-name, color, and size inputs
+// it should write back into. Two sources feed the grid: the Lucide catalog
+// JSON (bundled, fetched once and cached) and the user's Custom icons
+// (server-backed list plus upload/delete endpoints).
+(function () {
+  const modal = document.getElementById("icon-picker-modal");
+  if (!modal) return;
+
+  const DEFAULT_COLOR = "#747474";
+  const DEFAULT_SIZE = 20;
+  const SVG_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+
+  let catalog = null;             // Lucide JSON
+  let catalogPromise = null;
+  let customIcons = [];           // array of {id, name, url, ref}
+  let customPromise = null;
+
+  let activeTrigger = null;
+  let activeField = null;
+  let activeIconInput = null;
+  let activeColorInput = null;
+  let activeSizeInput = null;
+  let activePreview = null;
+  let pendingRef = "";   // deferred-commit: icon ref currently highlighted in the grid
+
+  const catalogUrl = modal.getAttribute("data-catalog-url");
+  const customListUrl = modal.getAttribute("data-custom-list-url");
+  const customUploadUrl = modal.getAttribute("data-custom-upload-url");
+  const customDeleteUrlTpl = modal.getAttribute("data-custom-delete-url"); // ends with /0/delete
+  const csrfToken = modal.getAttribute("data-csrf-token");
+
+  const searchEl = modal.querySelector("[data-icon-search]");
+  const catalogEl = modal.querySelector("[data-icon-catalog]");
+  const modalColorEl = modal.querySelector("[data-icon-modal-color]");
+  const modalSizeEl = modal.querySelector("[data-icon-modal-size]");
+  const modalSizeOut = modal.querySelector("[data-icon-size-out]");
+  const uploadInput = modal.querySelector("[data-icon-upload]");
+  const removeBtn = modal.querySelector("[data-icon-picker-remove]");
+  const saveBtn = modal.querySelector("[data-icon-picker-save]");
+
+  function renderSvg(paths) {
+    return '<svg class="icon" ' + SVG_ATTRS + '>' + paths + '</svg>';
+  }
+  function renderCustom(ci) {
+    return '<img class="icon icon-custom" src="' + escapeAttr(ci.url) +
+           '" alt="' + escapeAttr(ci.name) + '">';
+  }
+
+  function loadCatalog() {
+    if (catalog) return Promise.resolve(catalog);
+    if (catalogPromise) return catalogPromise;
+    catalogPromise = fetch(catalogUrl, { credentials: "same-origin" })
+      .then(r => r.json())
+      .then(data => { catalog = data; return data; })
+      .catch(() => null);
+    return catalogPromise;
+  }
+
+  function loadCustom() {
+    if (customPromise) return customPromise;
+    customPromise = fetch(customListUrl, { credentials: "same-origin" })
+      .then(r => r.json())
+      .then(data => { customIcons = data.icons || []; return customIcons; })
+      .catch(() => { customIcons = []; return customIcons; });
+    return customPromise;
+  }
+
+  function findIcon(ref) {
+    if (!ref) return null;
+    if (ref.indexOf("custom:") === 0) {
+      const ci = customIcons.find(x => x.ref === ref);
+      return ci ? { kind: "custom", data: ci } : null;
+    }
+    for (const cat of (catalog && catalog.categories) || []) {
+      for (const ic of cat.icons || []) {
+        if (ic.name === ref) return { kind: "lucide", data: ic };
+      }
+    }
+    return null;
+  }
+
+  function renderIconHtml(found) {
+    if (!found) return "";
+    return found.kind === "custom" ? renderCustom(found.data) : renderSvg(found.data.paths);
+  }
+
+  function buildGrid(filter) {
+    const q = (filter || "").trim().toLowerCase();
+    const html = [];
+
+    function cellSelectedCls(ref) {
+      return ref && ref === pendingRef ? " is-selected" : "";
+    }
+
+    // Custom icons first (so uploads are easy to find).
+    const customMatching = customIcons.filter(ic =>
+      !q || ic.name.toLowerCase().indexOf(q) !== -1);
+    if (customMatching.length) {
+      html.push('<div class="icon-picker-group">');
+      html.push('<div class="icon-picker-group-title">Your uploads</div>');
+      html.push('<div class="icon-picker-grid">');
+      for (const ci of customMatching) {
+        html.push(
+          '<div class="icon-picker-cell is-custom' + cellSelectedCls(ci.ref) +
+          '" data-icon-ref="' + escapeAttr(ci.ref) +
+          '" title="' + escapeAttr(ci.name) + '">' +
+          '<button type="button" class="icon-picker-cell-del" data-custom-delete="' +
+          ci.id + '" title="Delete">&times;</button>' +
+          renderCustom(ci) +
+          '<span class="icon-picker-cell-label">' + escapeHtml(ci.name) + '</span>' +
+          '</div>'
+        );
+      }
+      html.push('</div></div>');
+    }
+
+    // Built-in Lucide icons by category.
+    for (const cat of (catalog && catalog.categories) || []) {
+      const matching = [];
+      for (const ic of (cat.icons || [])) {
+        const hay = (ic.name + " " + (ic.keywords || "")).toLowerCase();
+        if (!q || hay.indexOf(q) !== -1) matching.push(ic);
+      }
+      if (!matching.length) continue;
+      html.push('<div class="icon-picker-group">');
+      html.push('<div class="icon-picker-group-title">' + escapeHtml(cat.name) + '</div>');
+      html.push('<div class="icon-picker-grid">');
+      for (const ic of matching) {
+        html.push(
+          '<button type="button" class="icon-picker-cell' + cellSelectedCls(ic.name) +
+          '" data-icon-ref="' +
+          escapeAttr(ic.name) + '" title="' + escapeAttr(ic.name) + '">' +
+          renderSvg(ic.paths) +
+          '<span class="icon-picker-cell-label">' + escapeHtml(ic.name) + '</span>' +
+          '</button>'
+        );
+      }
+      html.push('</div></div>');
+    }
+
+    if (!html.length) {
+      catalogEl.innerHTML = '<p class="muted smaller" style="padding: 16px;">No icons match “' +
+        escapeHtml(q) + '”.</p>';
+    } else {
+      catalogEl.innerHTML = html.join("");
+    }
+    applyModalColor();
+    applyModalSize();
+  }
+
+  function applyModalColor() {
+    const c = modalColorEl && modalColorEl.value;
+    if (!c) return;
+    catalogEl.style.color = c;
+  }
+
+  function applyModalSize() {
+    const s = modalSizeEl && parseInt(modalSizeEl.value, 10);
+    if (modalSizeOut) modalSizeOut.textContent = s || DEFAULT_SIZE;
+    if (!catalogEl) return;
+    catalogEl.style.setProperty("--icon-size", (s || DEFAULT_SIZE) + "px");
+  }
+
+  function refreshSelectedCell(newRef) {
+    // Update cell highlight in the grid without rebuilding the whole thing.
+    catalogEl.querySelectorAll(".icon-picker-cell.is-selected").forEach(el =>
+      el.classList.remove("is-selected"));
+    if (newRef) {
+      const cell = catalogEl.querySelector(
+        '.icon-picker-cell[data-icon-ref="' + CSS.escape(newRef) + '"]');
+      if (cell) cell.classList.add("is-selected");
+    }
+    pendingRef = newRef || "";
+    if (saveBtn) saveBtn.disabled = !pendingRef;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+  function escapeAttr(s) { return escapeHtml(s); }
+
+  function openPicker(trigger) {
+    activeTrigger = trigger;
+    activeField = trigger.closest("[data-icon-field]");
+    activeIconInput = document.querySelector(trigger.getAttribute("data-icon-target"));
+    activeColorInput = document.querySelector(trigger.getAttribute("data-color-target"));
+    const sizeSel = trigger.getAttribute("data-size-target");
+    activeSizeInput = sizeSel && document.querySelector(sizeSel);
+    activePreview = trigger.querySelector("[data-icon-preview]");
+
+    modalColorEl.value = (activeColorInput && activeColorInput.value) || DEFAULT_COLOR;
+    const storedSize = activeSizeInput && parseInt(activeSizeInput.value, 10);
+    modalSizeEl.value = (storedSize && storedSize > 0) ? storedSize : DEFAULT_SIZE;
+    pendingRef = (activeIconInput && activeIconInput.value) || "";
+    if (saveBtn) saveBtn.disabled = !pendingRef;
+    applyModalColor();
+    applyModalSize();
+    searchEl.value = "";
+
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    searchEl.focus();
+
+    Promise.all([loadCatalog(), loadCustom()]).then(() => buildGrid(""));
+  }
+
+  function closePicker() {
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    activeTrigger = null;
+    activeField = null;
+    activeIconInput = null;
+    activeColorInput = null;
+    activeSizeInput = null;
+    activePreview = null;
+  }
+
+  function dispatchChange(el) {
+    if (!el) return;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function applyIconSelection(ref, found, opts) {
+    opts = opts || {};
+    if (activeIconInput) {
+      activeIconInput.value = ref || "";
+      dispatchChange(activeIconInput);
+    }
+    if (activeColorInput) {
+      if (opts.clear || !ref) {
+        activeColorInput.value = "";
+      } else {
+        activeColorInput.value = (modalColorEl && modalColorEl.value) || DEFAULT_COLOR;
+      }
+      dispatchChange(activeColorInput);
+    }
+    if (activeSizeInput) {
+      if (opts.clear || !ref) {
+        activeSizeInput.value = "";
+      } else {
+        activeSizeInput.value = (modalSizeEl && modalSizeEl.value) || DEFAULT_SIZE;
+      }
+      dispatchChange(activeSizeInput);
+    }
+    if (activePreview) {
+      activePreview.innerHTML = ref ? renderIconHtml(found) : "";
+      const storedColor = activeColorInput && activeColorInput.value;
+      activePreview.style.color = storedColor || "";
+      const storedSize = activeSizeInput && activeSizeInput.value;
+      if (storedSize) activePreview.style.setProperty("--icon-size", storedSize + "px");
+      else activePreview.style.removeProperty("--icon-size");
+    }
+    if (activeField) {
+      activeField.classList.toggle("has-icon", !!ref);
+    }
+  }
+
+  // Wire triggers (event delegation so templates added via AJAX still work).
+  document.addEventListener("click", (e) => {
+    const trigger = e.target.closest("[data-open-icon-picker]");
+    if (trigger) { e.preventDefault(); openPicker(trigger); return; }
+    const clear = e.target.closest("[data-icon-clear]");
+    if (clear) {
+      e.preventDefault();
+      const fieldWrap = clear.closest("[data-icon-field]");
+      if (!fieldWrap) return;
+      const iconHidden = fieldWrap.querySelector('input[type="hidden"][data-block-field="icon_before"], input[type="hidden"][data-block-field="icon_after"]');
+      const colorHidden = fieldWrap.querySelector('input[type="hidden"][data-block-field$="_color"]');
+      const sizeHidden = fieldWrap.querySelector('input[type="hidden"][data-block-field$="_size"]');
+      const preview = fieldWrap.querySelector("[data-icon-preview]");
+      if (iconHidden) { iconHidden.value = ""; dispatchChange(iconHidden); }
+      if (colorHidden) { colorHidden.value = ""; dispatchChange(colorHidden); }
+      if (sizeHidden) { sizeHidden.value = ""; dispatchChange(sizeHidden); }
+      if (preview) {
+        preview.innerHTML = "";
+        preview.style.color = "";
+        preview.style.removeProperty("--icon-size");
+      }
+      fieldWrap.classList.remove("has-icon");
+      return;
+    }
+  });
+
+  // Modal internals.
+  catalogEl.addEventListener("click", async (e) => {
+    const delBtn = e.target.closest("[data-custom-delete]");
+    if (delBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const cid = delBtn.getAttribute("data-custom-delete");
+      if (!confirm("Delete this custom icon? It will be removed from every link that uses it.")) return;
+      const url = customDeleteUrlTpl.replace(/\/0\/delete$/, "/" + cid + "/delete");
+      try {
+        const r = await fetch(url, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "X-CSRFToken": csrfToken },
+        });
+        if (!r.ok) throw new Error("delete failed");
+        customIcons = customIcons.filter(ci => String(ci.id) !== String(cid));
+        buildGrid(searchEl.value);
+      } catch (_) {
+        (window.tspShowToast || alert)("Could not delete icon");
+      }
+      return;
+    }
+    const cell = e.target.closest("[data-icon-ref]");
+    if (!cell) return;
+    // Deferred commit: clicking a cell only highlights it. The color and size
+    // sliders update the grid preview live but don't touch the nav-link field
+    // until the user clicks Save.
+    refreshSelectedCell(cell.getAttribute("data-icon-ref"));
+  });
+
+  searchEl.addEventListener("input", () => buildGrid(searchEl.value));
+  modalColorEl.addEventListener("input", () => applyModalColor());
+  modalSizeEl.addEventListener("input", () => applyModalSize());
+
+  // Upload flow — POST the chosen file, splice into `customIcons`, redraw grid.
+  uploadInput.addEventListener("change", async () => {
+    const file = uploadInput.files && uploadInput.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("icon", file);
+    fd.append("csrf_token", csrfToken);
+    try {
+      const r = await fetch(customUploadUrl, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "X-CSRFToken": csrfToken },
+        body: fd,
+      });
+      const data = await r.json();
+      if (!r.ok || !data.ok) {
+        (window.tspShowToast || alert)(data.error || "Upload failed");
+      } else {
+        customIcons.unshift(data.icon);
+        buildGrid(searchEl.value);
+        // Broadcast so pages that show the icon library (e.g. Fonts & Icons)
+        // can refresh their tile grid without depending on this module's state.
+        document.dispatchEvent(new CustomEvent("frontend-icon:uploaded", { detail: data.icon }));
+      }
+    } catch (_) {
+      (window.tspShowToast || alert)("Upload failed");
+    } finally {
+      uploadInput.value = "";
+    }
+  });
+
+  removeBtn.addEventListener("click", () => {
+    applyIconSelection("", null, { clear: true });
+    closePicker();
+  });
+
+  if (saveBtn) saveBtn.addEventListener("click", () => {
+    if (!pendingRef) return;
+    applyIconSelection(pendingRef, findIcon(pendingRef));
+    closePicker();
+  });
+
+  modal.querySelectorAll("[data-close]").forEach(el =>
+    el.addEventListener("click", closePicker));
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && modal.classList.contains("open")) {
+      closePicker();
+    }
+  });
+})();
+
+
+// ── SIDEBAR ORDER (Settings → Appearance) ────────────────────────────
+// Mode radio toggles the manual drag-drop panel's visibility. Inside
+// manual mode, two drag scopes: sections (whole groups) and items
+// inside Main/Admin. After every drop, serialize the current order
+// into the hidden JSON input so the form save persists exactly what
+// the admin sees.
+(function feSidebarOrder() {
+  const form = document.getElementById("sidebar-order-form");
+  if (!form) return;
+
+  const manualWrap = form.querySelector("[data-sidebar-manual]");
+  const sectionList = form.querySelector("[data-sidebar-section-list]");
+  const orderInput = form.querySelector("[data-sidebar-order-json]");
+  if (!manualWrap || !sectionList || !orderInput) return;
+
+  // Mode radios — show/hide the manual panel.
+  form.querySelectorAll('input[name="sidebar_sort_mode"]').forEach(r => {
+    r.addEventListener("change", () => {
+      manualWrap.hidden = r.value !== "manual";
+    });
+  });
+
+  // Helpers ----------------------------------------------------------
+  function serialize() {
+    const sections = [...sectionList.querySelectorAll(":scope > .sidebar-order-section")]
+      .map(sec => sec.getAttribute("data-section-key"));
+    const out = { sections };
+    ["main", "admin"].forEach(scope => {
+      const ul = sectionList.querySelector('[data-section-items="' + scope + '"]');
+      if (!ul) return;
+      out[scope] = [...ul.querySelectorAll(':scope > .sidebar-order-item')]
+        .map(li => li.getAttribute("data-item-key"));
+    });
+    orderInput.value = JSON.stringify(out);
+  }
+  // Seed once on load so the hidden input is in sync with the rendered
+  // list even before the admin drags anything.
+  serialize();
+
+  // Generic drag-drop wiring for sections + items. Browsers won't let
+  // you mix two scopes by default; here `dragging` carries the active
+  // scope so we know which targets accept the drop.
+  let dragging = null;
+  function within(el, selector) { return el.closest(selector); }
+
+  sectionList.addEventListener("dragstart", e => {
+    const item = within(e.target, ".sidebar-order-item");
+    const sec = within(e.target, ".sidebar-order-section");
+    if (item) {
+      dragging = { kind: "item", el: item, scope: item.parentElement.getAttribute("data-section-items") };
+      item.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", "item:" + item.getAttribute("data-item-key"));
+    } else if (sec) {
+      dragging = { kind: "section", el: sec };
+      sec.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", "section:" + sec.getAttribute("data-section-key"));
+    }
+  });
+
+  sectionList.addEventListener("dragend", () => {
+    if (dragging && dragging.el) dragging.el.classList.remove("dragging");
+    dragging = null;
+    serialize();
+  });
+
+  sectionList.addEventListener("dragover", e => {
+    if (!dragging) return;
+    if (dragging.kind === "item") {
+      const ul = within(e.target, '[data-section-items="' + dragging.scope + '"]');
+      if (!ul) return;
+      e.preventDefault();
+      const after = [...ul.querySelectorAll(':scope > .sidebar-order-item:not(.dragging)')]
+        .find(li => e.clientY < li.getBoundingClientRect().top + li.offsetHeight / 2);
+      if (after) ul.insertBefore(dragging.el, after);
+      else ul.appendChild(dragging.el);
+    } else if (dragging.kind === "section") {
+      // Section-level drag: the only valid drop targets are other
+      // sections at the top level of the section list.
+      const sec = within(e.target, ".sidebar-order-section");
+      if (!sec || sec === dragging.el) return;
+      e.preventDefault();
+      const after = e.clientY < sec.getBoundingClientRect().top + sec.offsetHeight / 2;
+      if (after) sectionList.insertBefore(dragging.el, sec);
+      else sectionList.insertBefore(dragging.el, sec.nextSibling);
+    }
+  });
+
+  sectionList.addEventListener("drop", e => {
+    if (!dragging) return;
+    e.preventDefault();
+    serialize();
+  });
+
+  // Re-serialize on every input event in case the admin uses keyboard
+  // reordering in a future iteration; harmless either way.
+  form.addEventListener("submit", serialize);
+})();
+

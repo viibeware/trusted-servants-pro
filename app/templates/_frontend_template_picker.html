@@ -1,0 +1,84 @@
+{# Compact template picker for the Web Frontend admin pages.
+   Renders both:
+     1. A small trigger pill ("Template: <name>" + Change button) intended
+        for the top-actions row, beside "View frontend ↗".
+     2. A hidden modal containing the original template-card grid + form.
+
+   Args:
+     templates    — list of dicts (key, name, description)
+     active       — currently-active template key
+     radio_name   — form input name (e.g. "frontend_header_template")
+     action_url   — form post action
+     modal_id     — DOM id for the modal (must be unique per page)
+     preview_kind — 'header' | 'homepage' | 'megamenu' | 'footer'
+     title        — long label for the modal heading (e.g. "Header template")
+#}
+{% macro template_picker(templates, active, radio_name, action_url, modal_id, preview_kind, title, label='Template') -%}
+  {%- set _active_name = active -%}
+  {%- for t in templates if t.key == active %}{% set _active_name = t.name %}{% endfor -%}
+  <div class="fe-template-picker">
+    <span class="fe-template-picker-label muted smaller">{{ label }}:</span>
+    <span class="fe-template-picker-active">{{ _active_name }}</span>
+    <button type="button" class="btn btn-sm" data-open-modal="{{ modal_id }}">Change</button>
+  </div>
+
+  <div class="modal fe-template-picker-modal" id="{{ modal_id }}" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel" role="dialog" aria-modal="true">
+      <form class="form" method="post" action="{{ action_url }}" data-fe-skip-save-bar>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-head">
+          <h2>{{ title }}</h2>
+          <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button>
+        </div>
+        <div class="modal-body">
+          <p class="muted small">Pick a layout. Settings and content are shared across templates.</p>
+          <div class="template-library-grid">
+            {% for t in templates %}
+            <label class="template-card{% if active == t.key %} active{% endif %}">
+              <input type="radio" name="{{ radio_name }}" value="{{ t.key }}"
+                     {% if active == t.key %}checked{% endif %}>
+              <div class="template-card-preview template-card-preview-{{ preview_kind }}">
+                {% if preview_kind == 'header' %}
+                  <div class="template-card-preview-bar"></div>
+                  <div class="template-card-preview-body">
+                    <span class="template-card-preview-logo"></span>
+                    <span class="template-card-preview-nav">
+                      <span></span><span></span><span></span><span></span>
+                    </span>
+                  </div>
+                {% elif preview_kind == 'homepage' %}
+                  <div class="template-card-preview-homepage-hero"></div>
+                  <div class="template-card-preview-homepage-grid">
+                    <span></span><span></span><span></span>
+                  </div>
+                {% elif preview_kind == 'megamenu' %}
+                  <div class="template-card-preview-mm-bar"></div>
+                  <div class="template-card-preview-mm-grid">
+                    <span></span><span></span><span></span>
+                  </div>
+                {% elif preview_kind == 'footer' %}
+                  <div class="template-card-preview-footer-cols">
+                    <span></span><span></span><span></span>
+                  </div>
+                  <div class="template-card-preview-footer-bar"></div>
+                {% endif %}
+              </div>
+              <div class="template-card-info">
+                <div class="template-card-name">{{ t.name }}
+                  <span class="template-card-badge">Active</span>
+                </div>
+                <div class="template-card-desc muted small">{{ t.description }}</div>
+              </div>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn" data-close>Cancel</button>
+          <button type="submit" class="btn btn-primary">Use this template</button>
+        </div>
+      </form>
+    </div>
+  </div>
+{%- endmacro %}

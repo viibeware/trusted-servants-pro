@@ -2,7 +2,7 @@
 import hashlib
 from pathlib import Path
 
-__version__ = "1.6.2"
+__version__ = "1.7.0"
 
 
 def _compute_build_id() -> str:

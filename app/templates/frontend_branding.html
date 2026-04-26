@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% from "_frontend_template_picker.html" import template_picker %}
+{% set _active_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
+{% block heading %}Branding &amp; SEO{% endblock %}
+{% block heading_help %}Site name and Open Graph metadata used when your pages are shared on social media or in chat apps.{% endblock %}
+{% block top_actions %}
+{{ template_picker(frontend_themes, _active_theme,
+                    "frontend_theme",
+                    url_for('main.frontend_theme_save'),
+                    "site-theme-modal", "homepage", "Site theme", label="Theme") }}
+<a class="btn" href="{{ url_for('frontend.index') }}" target="_blank" rel="noopener">View frontend ↗</a>
+{% endblock %}
+{% block content %}
+<div class="fe-admin-layout">
+  {% include "_frontend_subnav.html" %}
+  <div class="fe-admin-main">
+
+<form class="form" method="post" action="{{ url_for('main.frontend_branding_save') }}" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Site identity</h2>
+      <span class="muted smaller">Public-site name, browser-tab favicon, and Open Graph link-preview metadata. All independent from the admin (<code>/tspro</code>) equivalents in Settings → Appearance.</span>
+    </div>
+
+    <div class="fe-branding-grid">
+      {# ── Site name + Favicon (paired) ── #}
+      <div class="fe-header-grid-item">
+        <h3 class="fe-header-grid-title">Site name &amp; favicon</h3>
+        <p class="fe-header-grid-blurb muted small">Browser-tab name + icon for the public site. The site name also appears in the footer and as the OG site name when shared.</p>
+
+        <label>Name
+          <input type="text" name="frontend_title" value="{{ (site.frontend_title if site else '') or '' }}" placeholder="Trusted Servants">
+        </label>
+
+        <div class="fe-favicon-block">
+          <div class="fe-favicon-block-preview">
+            {% if site and site.frontend_favicon_filename %}
+            <img class="fe-favicon-current" src="{{ url_for('public.site_frontend_favicon') }}" alt="Current favicon">
+            {% else %}
+            <div class="fe-favicon-current fe-favicon-current--empty muted smaller" title="No favicon set">—</div>
+            {% endif %}
+          </div>
+          <div class="fe-favicon-block-fields">
+            <div class="muted smaller">Favicon — PNG, ICO, or SVG, square, 64×64+ recommended.</div>
+            <label>Replace
+              <input type="file" name="frontend_favicon" accept="image/png,image/x-icon,image/vnd.microsoft.icon,image/svg+xml">
+            </label>
+            {% if site and site.frontend_favicon_filename %}
+            <label class="check fe-logo-clear-label">
+              <input type="checkbox" name="clear_favicon" value="1"><span>Remove current favicon</span>
+            </label>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      {# ── Open Graph ── #}
+      <div class="fe-header-grid-item">
+        <h3 class="fe-header-grid-title">Open Graph (link previews)</h3>
+        <p class="fe-header-grid-blurb muted small">How the site appears when shared on Slack, iMessage, Discord, Facebook, LinkedIn, etc.</p>
+
+        <div class="fe-og-toggle-row">
+          <span class="muted small">Enable</span>
+          <label class="mode-toggle">
+            <input type="checkbox" name="og_enabled" value="1"
+                   {% if site and site.frontend_og_enabled %}checked{% endif %}>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+          </label>
+        </div>
+
+        <label>Title <span class="muted small">(falls back to the site name)</span>
+          <input type="text" name="og_title" value="{{ (site.frontend_og_title if site else '') or '' }}" maxlength="200" placeholder="Trusted Servants Pro">
+        </label>
+        <label>Description <span class="muted small">(120–200 chars works best)</span>
+          <textarea name="og_description" rows="3" placeholder="A recovery fellowship portal — find meetings, stay connected, take the next step.">{{ (site.frontend_og_description if site else '') or '' }}</textarea>
+        </label>
+
+        <div class="fe-og-image-stack">
+          <div class="muted smaller">Preview image (1200×630 recommended)</div>
+          {% if site and site.frontend_og_image_filename %}
+          <img class="fe-og-image-current" src="{{ url_for('public.site_frontend_og_image') }}" alt="Open Graph preview">
+          {% else %}
+          <div class="og-image-empty muted small">No image uploaded yet — platforms will fall back to scraping the page itself.</div>
+          {% endif %}
+          <label>Replace image
+            <input type="file" name="og_image" accept="image/png,image/jpeg,image/webp">
+          </label>
+          {% if site and site.frontend_og_image_filename %}
+          <label class="check fe-logo-clear-label">
+            <input type="checkbox" name="clear_og_image" value="1"><span>Remove current image</span>
+          </label>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="form-actions"><button class="btn btn-primary">Save Branding</button></div>
+</form>
+
+  </div>
+</div>
+{% endblock %}

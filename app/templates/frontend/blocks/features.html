@@ -1,0 +1,19 @@
+{# Three-up feature columns. Content from site_blocks(site).features. #}
+{% set _features = (block_content.features if block_content else []) %}
+<section class="fe-section fe-features" aria-label="Features">
+  <div class="fe-container">
+    <div class="fe-section-head">
+      <h2>What we offer</h2>
+      <p>Everything a fellowship needs to stay connected and welcoming.</p>
+    </div>
+    <div class="fe-features-grid">
+      {% for f in _features %}
+      <article class="fe-feature-card">
+        <div class="fe-feature-icon">{{ icon(f.icon or 'star') }}</div>
+        <h3>{{ f.title }}</h3>
+        <p>{{ f.body }}</p>
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+</section>

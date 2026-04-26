@@ -1,71 +1,745 @@
 {% extends "base.html" %}
+{% from "_frontend_template_picker.html" import template_picker %}
+{% from "_frontend_layout_picker.html" import layout_picker %}
+{% set _active_hp = (site.frontend_homepage_template if site else 'classic') or 'classic' %}
+{% set _active_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
 {% block heading %}Homepage{% endblock %}
-{% block heading_help %}Edit the content that appears on the public homepage: hero, about, and contact sections.{% endblock %}
+{% block heading_help %}Edit the content, hero, background, and CTA buttons that appear on the public homepage.{% endblock %}
 {% block top_actions %}
+{{ layout_picker(homepage_layouts, _active_hp,
+                  url_for('main.frontend_homepage_template_save'),
+                  "frontend_homepage_template",
+                  "homepage-layout-modal", "homepage-builder-modal",
+                  homepage_block_catalog,
+                  url_for('main.frontend_custom_layout_save')) }}
+{{ template_picker(frontend_themes, _active_theme,
+                    "frontend_theme",
+                    url_for('main.frontend_theme_save'),
+                    "site-theme-modal", "homepage", "Site theme", label="Theme") }}
 <a class="btn" href="{{ url_for('frontend.index') }}" target="_blank" rel="noopener">View frontend ↗</a>
 {% endblock %}
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/frontend.css') }}">
 <div class="fe-admin-layout">
   {% include "_frontend_subnav.html" %}
   <div class="fe-admin-main">
 
-<section class="card">
+<section class="card hero-unified">
   <div class="card-head">
-    <h2>Template</h2>
-    <span class="muted smaller">Pick a homepage layout. Your copy fills whichever template you activate.</span>
+    <h2>Hero</h2>
+    <span class="muted smaller">Heading, background, and call-to-action buttons for the homepage hero.</span>
   </div>
-  <form class="form" method="post" action="{{ url_for('main.frontend_homepage_template_save') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    {% set _active_hp = (site.frontend_homepage_template if site else 'classic') or 'classic' %}
-    <div class="template-library-grid">
-      {% for t in homepage_templates %}
-      <label class="template-card {% if _active_hp == t.key %}active{% endif %}">
-        <input type="radio" name="frontend_homepage_template" value="{{ t.key }}"
-               {% if _active_hp == t.key %}checked{% endif %}>
-        <div class="template-card-preview template-card-preview-homepage">
-          <div class="template-card-preview-homepage-hero"></div>
-          <div class="template-card-preview-homepage-grid">
-            <span></span><span></span><span></span>
+
+  {% set _pv_font = (site.frontend_hero_heading_font if site else 'fraunces') or 'fraunces' %}
+  {% set _pv_size = (site.frontend_hero_heading_size if site else 100) or 100 %}
+  {% set _pv_grad_s = (site.frontend_hero_heading_grad_start if site else None) or '#0f172a' %}
+  {% set _pv_grad_e = (site.frontend_hero_heading_grad_end if site else None) or '#374151' %}
+  {% set _pv_bg_style = (site.frontend_hero_bg_style if site else 'frosty') or 'frosty' %}
+  {% set _pv_hue_a = site.frontend_hero_bg_hue if site else 225 %}
+  {% set _pv_hue_b = site.frontend_hero_bg_hue_2 if site else 170 %}
+  {% set _pv_blur = site.frontend_hero_bg_blur if site else 80 %}
+  {% set _pv_op = (site.frontend_hero_bg_opacity if site else 45) / 100 %}
+  {% set _pv_g1 = (site.frontend_hero_bg_color if site else None) or '#ffffff' %}
+  {% set _pv_g2 = (site.frontend_hero_bg_color_2 if site else None) or '#e0e7ff' %}
+  {% set _pv_gang = (site.frontend_hero_bg_gradient_angle if site else 180) or 180 %}
+  {% set _pv_tagline_on = site is none or site.frontend_tagline_enabled %}
+  {% set _pv_tagline = (site.frontend_tagline if site else None) or 'A recovery fellowship portal.' %}
+  {% set _pv_heading_txt = (site.frontend_hero_heading if site else None) or 'You are not alone.' %}
+  {% set _pv_sub_txt = (site.frontend_hero_subheading if site else None) or 'Find meetings, connect with your community, and take the next step in your recovery journey.' %}
+  {% set _pv_hero_style = '' %}
+  {% if _pv_bg_style == 'solid' and site and site.frontend_hero_bg_color %}
+    {% set _pv_hero_style = 'background: ' ~ site.frontend_hero_bg_color ~ ';' %}
+  {% elif _pv_bg_style == 'gradient' %}
+    {% set _pv_hero_style = 'background: linear-gradient(' ~ _pv_gang ~ 'deg, ' ~ _pv_g1 ~ ', ' ~ _pv_g2 ~ ');' %}
+  {% elif _pv_bg_style == 'image' and site and site.frontend_hero_bg_image_filename %}
+    {% set _pv_im_mode = (site.frontend_hero_bg_image_mode if site else 'cover') or 'cover' %}
+    {% set _pv_im_scale = (site.frontend_hero_bg_image_scale if site else 100) or 100 %}
+    {% if _pv_im_mode == 'tile' %}
+      {% set _pv_hero_style = 'background: url(' ~ url_for('public.site_hero_bg_image') ~ ') repeat; background-size: ' ~ _pv_im_scale ~ 'px ' ~ _pv_im_scale ~ 'px;' %}
+    {% else %}
+      {% set _pv_hero_style = 'background: url(' ~ url_for('public.site_hero_bg_image') ~ ') center/cover no-repeat;' %}
+    {% endif %}
+  {% endif %}
+
+  <div class="hero-full-preview-clip">
+    <p class="hero-full-preview-label muted smaller">Live preview</p>
+    <div class="hero-full-preview frontend-body">
+      <section class="fe-hero fe-hero-bg-{{ _pv_bg_style }}" id="hero-preview-section"
+               {% if _pv_hero_style %}style="{{ _pv_hero_style }}"{% endif %}>
+        <div class="fe-hero-bg" id="hero-preview-bg" aria-hidden="true"
+             {% if _pv_bg_style != 'frosty' %}hidden{% endif %}
+             style="--fe-blob-hue-a: {{ _pv_hue_a }}; --fe-blob-hue-b: {{ _pv_hue_b }}; --fe-blob-blur: {{ _pv_blur }}px; --fe-blob-op: {{ _pv_op }};">
+          <div class="fe-hero-blob fe-hero-blob-a"></div>
+          <div class="fe-hero-blob fe-hero-blob-b"></div>
+          <div class="fe-hero-blob fe-hero-blob-c"></div>
+        </div>
+        <canvas class="fe-hero-particles" id="hero-preview-particles" aria-hidden="true"
+                {% if not site or not site.frontend_hero_particle_enabled %}hidden{% endif %}></canvas>
+        <video class="fe-hero-video" id="hero-preview-video" muted autoplay loop playsinline
+               {% if not site or not site.frontend_hero_bg_video_filename or _pv_bg_style != 'video' %}hidden{% endif %}>
+          {% if site and site.frontend_hero_bg_video_filename %}
+          <source src="{{ url_for('public.site_hero_bg_video') }}?v={{ site.frontend_hero_bg_video_filename }}">
+          {% endif %}
+        </video>
+        <div class="fe-container fe-hero-inner">
+          <p class="fe-hero-eyebrow" id="hero-preview-eyebrow"
+             {% if not _pv_tagline_on or not _pv_tagline %}hidden{% endif %}>{{ _pv_tagline }}</p>
+          <h1 class="fe-hero-heading fe-hero-heading-{{ _pv_font }}" id="hero-preview-heading"
+              style="--fe-hero-h-size: {{ _pv_size / 100 }}; --fe-hero-h-grad-s: {{ _pv_grad_s }}; --fe-hero-h-grad-e: {{ _pv_grad_e }};">{{ _pv_heading_txt }}</h1>
+          <p class="fe-hero-sub" id="hero-preview-sub">{{ _pv_sub_txt }}</p>
+          <div class="fe-hero-cta">
+            {% if hero_buttons %}
+              {% for b in hero_buttons %}
+                {% set _bstyle = 'ghost' if b.style == 'ghost' else 'primary' %}
+                {% set _btn_style = '' %}
+                {% if _bstyle == 'primary' %}
+                  {% if b.custom_bg_color %}{% set _btn_style = _btn_style ~ 'background: ' ~ b.custom_bg_color ~ '; border-color: ' ~ b.custom_bg_color ~ '; ' %}{% endif %}
+                  {% if b.custom_text_color %}{% set _btn_style = _btn_style ~ 'color: ' ~ b.custom_text_color ~ '; ' %}{% endif %}
+                {% endif %}
+                <a class="fe-btn fe-btn-{{ _bstyle }}" {% if _btn_style %}style="{{ _btn_style }}"{% endif %}>
+                  {% if b.icon_before %}<span class="fe-btn-icon"
+                    style="{% if b.icon_before_color %}color: {{ b.icon_before_color }};{% endif %}{% if b.icon_before_size %} --icon-size: {{ b.icon_before_size }}px;{% endif %}">{{ icon(b.icon_before) }}</span>{% endif %}
+                  <span>{{ b.label }}</span>
+                  {% if b.icon_after %}<span class="fe-btn-icon"
+                    style="{% if b.icon_after_color %}color: {{ b.icon_after_color }};{% endif %}{% if b.icon_after_size %} --icon-size: {{ b.icon_after_size }}px;{% endif %}">{{ icon(b.icon_after) }}</span>{% endif %}
+                </a>
+              {% endfor %}
+            {% else %}
+              <a class="fe-btn fe-btn-primary">Find a Meeting</a>
+              <a class="fe-btn fe-btn-ghost">Need Help Now?</a>
+            {% endif %}
           </div>
         </div>
-        <div class="template-card-info">
-          <div class="template-card-name">{{ t.name }}
-            {% if _active_hp == t.key %}<span class="template-card-badge">Active</span>{% endif %}
-          </div>
-          <div class="template-card-desc muted small">{{ t.description }}</div>
-        </div>
-      </label>
-      {% endfor %}
+      </section>
     </div>
-    <div class="form-actions"><button class="btn btn-primary">Use this template</button></div>
+  </div>
+
+  <div class="hero-section-grid">
+  <form id="hero-save-form" class="form hero-grid-form" method="post" action="{{ url_for('main.frontend_hero_save') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="hero-text-col">
+    <h3 class="hero-sub-heading">Text</h3>
+    <label>Heading
+      <input type="text" name="frontend_hero_heading" id="hero-heading-input" value="{{ (site.frontend_hero_heading if site else '') or '' }}" placeholder="You are not alone.">
+    </label>
+    <label>Subheading
+      <textarea name="frontend_hero_subheading" rows="8" style="min-height: 240px;" placeholder="Find meetings, connect with your community…">{{ (site.frontend_hero_subheading if site else '') or '' }}</textarea>
+    </label>
+    <label>Tagline <span class="muted small">(rendered as a small pill above the heading)</span>
+      <input type="text" name="frontend_tagline" value="{{ (site.frontend_tagline if site else '') or '' }}" placeholder="A recovery fellowship portal.">
+    </label>
+    <li class="special-page-row" style="list-style:none; margin: 1rem 0;">
+      <div class="special-page-info">
+        <div class="u-name">Show tagline in hero</div>
+        <p class="muted small">Toggle the eyebrow pill above the heading on or off.</p>
+      </div>
+      <label class="mode-toggle">
+        <input type="checkbox" name="frontend_tagline_enabled" value="1"
+               {% if not site or site.frontend_tagline_enabled %}checked{% endif %}>
+        <span class="mode-track"><span class="mode-thumb"></span></span>
+      </label>
+    </li>
+
+    <div class="hero-heading-opts">
+      <div class="nav-megalink-field">
+        <span class="nav-megalink-field-lbl">Font family</span>
+        <div class="nav-megalink-seg">
+          {% set _hf = (site.frontend_hero_heading_font if site else 'fraunces') or 'fraunces' %}
+          <label class="nav-megalink-seg-opt">
+            <input type="radio" name="frontend_hero_heading_font" value="fraunces" {% if _hf == 'fraunces' %}checked{% endif %}>
+            <span>Fraunces · serif</span>
+          </label>
+          <label class="nav-megalink-seg-opt">
+            <input type="radio" name="frontend_hero_heading_font" value="inter" {% if _hf == 'inter' %}checked{% endif %}>
+            <span>Inter · sans</span>
+          </label>
+        </div>
+      </div>
+      <div class="nav-megalink-field hero-slider-field">
+        <span class="nav-megalink-field-lbl">Size <output data-slider-out>{{ site.frontend_hero_heading_size if site else 100 }}</output>%</span>
+        <input type="range" name="frontend_hero_heading_size" min="50" max="200" step="5"
+               value="{{ site.frontend_hero_heading_size if site else 100 }}" data-slider-input>
+      </div>
+    </div>
+    <div class="hero-heading-opts hero-heading-grad-row">
+      <div class="nav-megalink-field">
+        <span class="nav-megalink-field-lbl">Gradient start</span>
+        <input type="color" class="nav-megalink-color-input"
+               name="frontend_hero_heading_grad_start"
+               value="{{ (site.frontend_hero_heading_grad_start if site else None) or '#0f172a' }}">
+      </div>
+      <div class="nav-megalink-field">
+        <span class="nav-megalink-field-lbl">Gradient end</span>
+        <input type="color" class="nav-megalink-color-input"
+               name="frontend_hero_heading_grad_end"
+               value="{{ (site.frontend_hero_heading_grad_end if site else None) or '#374151' }}">
+      </div>
+      <label class="hero-reset-row">
+        <input type="checkbox" name="reset_heading_colors" value="1">
+        <span>Reset to default</span>
+      </label>
+    </div>
+    <li class="special-page-row" style="list-style:none; margin: 1rem 0;">
+      <div class="special-page-info">
+        <div class="u-name">Dynamic text colors</div>
+        <p class="muted small">Auto-pick contrasting heading + subheading colors based on the background's lightness. Overrides the gradient swatches above when on.</p>
+      </div>
+      <label class="mode-toggle">
+        <input type="checkbox" name="frontend_hero_text_dynamic" value="1"
+               {% if site and site.frontend_hero_text_dynamic %}checked{% endif %}>
+        <span class="mode-track"><span class="mode-thumb"></span></span>
+      </label>
+    </li>
+    </div>{# /hero-text-col #}
+
+    <div class="hero-bg-col">
+    <h3 class="hero-sub-heading">Background</h3>
+    <p class="muted smaller hero-sub-help">Pick a style, tweak it, or upload an image.</p>
+    {% set _bs = (site.frontend_hero_bg_style if site else 'frosty') or 'frosty' %}
+    <div class="nav-megalink-field">
+      <span class="nav-megalink-field-lbl">Style</span>
+      <div class="nav-megalink-seg">
+        {% for _k, _lbl in [('frosty','Frosty'), ('solid','Solid'), ('gradient','Gradient'), ('image','Image'), ('sinewave','Sinewave'), ('video','Video')] %}
+        <label class="nav-megalink-seg-opt">
+          <input type="radio" name="frontend_hero_bg_style" value="{{ _k }}"
+                 data-bg-style-radio {% if _bs == _k %}checked{% endif %}>
+          <span>{{ _lbl }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="hero-bg-panels">
+      <div class="hero-bg-panel" data-bg-panel="frosty" {% if _bs != 'frosty' %}hidden{% endif %}>
+        <p class="muted smaller">Animated blurred colour blobs over a light wash — the original frosty look.</p>
+        <div class="hero-bg-grid">
+          <div class="nav-megalink-field hero-slider-field">
+            <span class="nav-megalink-field-lbl">Primary hue <output data-slider-out>{{ site.frontend_hero_bg_hue if site else 225 }}</output>°</span>
+            <input type="range" name="frontend_hero_bg_hue" min="0" max="360" step="5"
+                   value="{{ site.frontend_hero_bg_hue if site else 225 }}" data-slider-input>
+          </div>
+          <div class="nav-megalink-field hero-slider-field">
+            <span class="nav-megalink-field-lbl">Accent hue <output data-slider-out>{{ site.frontend_hero_bg_hue_2 if site else 170 }}</output>°</span>
+            <input type="range" name="frontend_hero_bg_hue_2" min="0" max="360" step="5"
+                   value="{{ site.frontend_hero_bg_hue_2 if site else 170 }}" data-slider-input>
+          </div>
+          <div class="nav-megalink-field hero-slider-field">
+            <span class="nav-megalink-field-lbl">Blur <output data-slider-out>{{ site.frontend_hero_bg_blur if site else 80 }}</output>px</span>
+            <input type="range" name="frontend_hero_bg_blur" min="0" max="200" step="5"
+                   value="{{ site.frontend_hero_bg_blur if site else 80 }}" data-slider-input>
+          </div>
+          <div class="nav-megalink-field hero-slider-field">
+            <span class="nav-megalink-field-lbl">Intensity <output data-slider-out>{{ site.frontend_hero_bg_opacity if site else 45 }}</output>%</span>
+            <input type="range" name="frontend_hero_bg_opacity" min="0" max="100" step="5"
+                   value="{{ site.frontend_hero_bg_opacity if site else 45 }}" data-slider-input>
+          </div>
+        </div>
+        <li class="special-page-row" style="list-style:none; margin-top: 12px;">
+          <div class="special-page-info">
+            <div class="u-name">Randomize on every page load</div>
+            <p class="muted small">Picks fresh hues each time the homepage renders so it never looks the same twice.</p>
+          </div>
+          <label class="mode-toggle">
+            <input type="checkbox" name="frontend_hero_bg_randomize" value="1"
+                   {% if site and site.frontend_hero_bg_randomize %}checked{% endif %}>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+          </label>
+        </li>
+      </div>
+
+      <div class="hero-bg-panel" data-bg-panel="solid" {% if _bs != 'solid' %}hidden{% endif %}>
+        <p class="muted smaller">A single flat colour behind the hero.</p>
+        <div class="nav-megalink-field">
+          <span class="nav-megalink-field-lbl">Background color</span>
+          <input type="color" class="nav-megalink-color-input"
+                 name="frontend_hero_bg_color"
+                 value="{{ (site.frontend_hero_bg_color if site else None) or '#f6f7fb' }}">
+        </div>
+      </div>
+
+      <div class="hero-bg-panel" data-bg-panel="gradient" {% if _bs != 'gradient' %}hidden{% endif %}>
+        <p class="muted smaller">A two-colour linear gradient at a chosen angle.</p>
+        <div class="hero-bg-grid">
+          <div class="nav-megalink-field">
+            <span class="nav-megalink-field-lbl">Start color</span>
+            <input type="color" class="nav-megalink-color-input"
+                   name="frontend_hero_bg_color"
+                   value="{{ (site.frontend_hero_bg_color if site else None) or '#ffffff' }}">
+          </div>
+          <div class="nav-megalink-field">
+            <span class="nav-megalink-field-lbl">End color</span>
+            <input type="color" class="nav-megalink-color-input"
+                   name="frontend_hero_bg_color_2"
+                   value="{{ (site.frontend_hero_bg_color_2 if site else None) or '#e0e7ff' }}">
+          </div>
+          <div class="nav-megalink-field hero-slider-field">
+            <span class="nav-megalink-field-lbl">Angle <output data-slider-out>{{ site.frontend_hero_bg_gradient_angle if site else 180 }}</output>°</span>
+            <input type="range" name="frontend_hero_bg_gradient_angle" min="0" max="360" step="5"
+                   value="{{ site.frontend_hero_bg_gradient_angle if site else 180 }}" data-slider-input>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-bg-panel" data-bg-panel="image" {% if _bs != 'image' %}hidden{% endif %}>
+        <p class="muted smaller">Upload a photo, illustration, or SVG. Use <b>Tile</b> for repeating patterns and the scale slider to size a single repeat.</p>
+        {% if site and site.frontend_hero_bg_image_filename %}
+        <div class="hero-bg-image-preview">
+          <img src="{{ url_for('public.site_hero_bg_image') }}?v={{ site.frontend_hero_bg_image_filename }}" alt="Current hero background">
+          <label class="nav-megalink-newtab">
+            <input type="checkbox" name="clear_hero_bg_image" value="1">
+            <span>Remove current image</span>
+          </label>
+        </div>
+        {% endif %}
+        <label>Upload image <span class="muted small">(PNG, JPG, or SVG)</span>
+          <input type="file" name="frontend_hero_bg_image" accept="image/*">
+        </label>
+        <div class="hero-bg-grid">
+          <div class="nav-megalink-field">
+            <span class="nav-megalink-field-lbl">Display mode</span>
+            {% set _im = (site.frontend_hero_bg_image_mode if site else 'cover') or 'cover' %}
+            <div class="nav-megalink-seg">
+              <label class="nav-megalink-seg-opt">
+                <input type="radio" name="frontend_hero_bg_image_mode" value="cover" {% if _im == 'cover' %}checked{% endif %}>
+                <span>Cover</span>
+              </label>
+              <label class="nav-megalink-seg-opt">
+                <input type="radio" name="frontend_hero_bg_image_mode" value="tile" {% if _im == 'tile' %}checked{% endif %}>
+                <span>Tile</span>
+              </label>
+            </div>
+          </div>
+          <div class="nav-megalink-field hero-slider-field">
+            <span class="nav-megalink-field-lbl">Scale <output data-slider-out>{{ site.frontend_hero_bg_image_scale if site else 100 }}</output>%</span>
+            <input type="range" name="frontend_hero_bg_image_scale" min="10" max="400" step="5"
+                   value="{{ site.frontend_hero_bg_image_scale if site else 100 }}" data-slider-input>
+          </div>
+        </div>
+      </div>
+
+      {# Sinewave: 1–4 hex colors painted as a multi-stop animated gradient
+         (same generator as the login screen). Empty stops are skipped on
+         save; if all four are empty the public site falls back to the
+         default teal→blue→purple. #}
+      {% set _sw_defaults = ['#16c2ba', '#1883d5', '#5a1ce5', '#0a3eb5'] %}
+      {% set _sw = [] %}
+      {% if site and site.frontend_hero_sinewave_colors %}
+        {% set _sw = (site.frontend_hero_sinewave_colors | from_json) %}
+      {% endif %}
+      <div class="hero-bg-panel" data-bg-panel="sinewave" {% if _bs != 'sinewave' %}hidden{% endif %}>
+        <p class="muted smaller">A flowing multi-color sine-wave gradient. Pick 2–4 colors below; leave a slot blank to drop it.</p>
+        <div class="hero-bg-grid">
+          {% for i in range(1, 5) %}
+          <div class="nav-megalink-field">
+            <span class="nav-megalink-field-lbl">Color {{ i }}</span>
+            <input type="color" class="nav-megalink-color-input"
+                   name="frontend_hero_sinewave_c{{ i }}"
+                   value="{{ _sw[i-1] if _sw and _sw|length >= i else _sw_defaults[i-1] }}"
+                   data-sinewave-input>
+          </div>
+          {% endfor %}
+          <div class="nav-megalink-field hero-reset-field">
+            <span class="nav-megalink-field-lbl">Palette</span>
+            <button type="button" class="btn btn-sm" data-sinewave-randomize>Random palette</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-bg-panel" data-bg-panel="video" {% if _bs != 'video' %}hidden{% endif %}>
+        <p class="muted smaller">Upload a short MP4/WebM clip. The video plays muted, autoplays, and fills the hero edge-to-edge (no letterboxing). Bounce mode plays forward then reverses to keep the loop seamless.</p>
+        {% if site and site.frontend_hero_bg_video_filename %}
+        <div class="hero-bg-image-preview">
+          <video src="{{ url_for('public.site_hero_bg_video') }}?v={{ site.frontend_hero_bg_video_filename }}"
+                 muted autoplay loop playsinline
+                 style="max-width: 220px; max-height: 120px; border-radius: 6px;"></video>
+          <label class="nav-megalink-newtab">
+            <input type="checkbox" name="clear_hero_bg_video" value="1">
+            <span>Remove current video</span>
+          </label>
+        </div>
+        {% endif %}
+        <label>Upload video <span class="muted small">(MP4 or WebM, ≤ 256 MB)</span>
+          <input type="file" name="frontend_hero_bg_video" accept="video/mp4,video/webm,video/quicktime">
+        </label>
+        <div class="hero-bg-grid">
+          <div class="nav-megalink-field">
+            <span class="nav-megalink-field-lbl">Speed</span>
+            {% set _vsp = (site.frontend_hero_bg_video_speed if site else 100) or 100 %}
+            <select name="frontend_hero_bg_video_speed">
+              {% for _v, _lbl in [(50,'0.5×'), (100,'1×'), (150,'1.5×'), (200,'2×'), (300,'3×')] %}
+              <option value="{{ _v }}" {% if _vsp == _v %}selected{% endif %}>{{ _lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Particle overlay — works with any bg style. Layers a canvas of moving
+       particles (network/stars/etc.) on top of the chosen bg, identical
+       to the login screen's effect engine. #}
+    <h3 class="hero-sub-heading" style="margin-top: 1.5rem;">Particle overlay</h3>
+    <li class="special-page-row" style="list-style:none; margin: 1rem 0;">
+      <div class="special-page-info">
+        <div class="u-name">Show particles</div>
+        <p class="muted small">Animated particle layer above the background.</p>
+      </div>
+      <label class="mode-toggle">
+        <input type="checkbox" name="frontend_hero_particle_enabled" value="1"
+               {% if site and site.frontend_hero_particle_enabled %}checked{% endif %}>
+        <span class="mode-track"><span class="mode-thumb"></span></span>
+      </label>
+    </li>
+    <div class="hero-bg-grid">
+      <div class="nav-megalink-field">
+        <span class="nav-megalink-field-lbl">Effect</span>
+        <select name="frontend_hero_particle_effect">
+          {% set _peff = (site.frontend_hero_particle_effect if site else 'stars') or 'stars' %}
+          {% for _e in ['network','stars','fireflies','bubbles','snow','waves','orbits','rain'] %}
+          <option value="{{ _e }}" {% if _peff == _e %}selected{% endif %}>{{ _e|capitalize }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="nav-megalink-field hero-slider-field">
+        <span class="nav-megalink-field-lbl">Speed <output data-slider-out>{{ site.frontend_hero_particle_speed if site else 100 }}</output>%</span>
+        <input type="range" name="frontend_hero_particle_speed" min="10" max="300" step="5"
+               value="{{ site.frontend_hero_particle_speed if site else 100 }}" data-slider-input>
+      </div>
+      <div class="nav-megalink-field hero-slider-field">
+        <span class="nav-megalink-field-lbl">Size <output data-slider-out>{{ site.frontend_hero_particle_size if site else 100 }}</output>%</span>
+        <input type="range" name="frontend_hero_particle_size" min="25" max="400" step="5"
+               value="{{ site.frontend_hero_particle_size if site else 100 }}" data-slider-input>
+      </div>
+    </div>
+
+    </div>{# /hero-bg-col #}
+
   </form>
+
+  <div class="hero-buttons-col">
+  <h3 class="hero-sub-heading">
+    Call-to-action buttons
+    <button type="button" class="btn btn-sm btn-primary hero-sub-add" data-open-modal="hero-btn-new-modal">+ Add button</button>
+  </h3>
+  <p class="muted small hero-sub-help">Rendered under the hero subheading. Drag the handle to reorder.</p>
+  {% if hero_buttons %}
+  <div class="fe-tbl-scroll">
+  <table class="tbl">
+    <thead><tr><th style="width:28px;"></th><th style="width:32px;"></th><th>Label</th><th>Style</th><th>URL</th><th></th></tr></thead>
+    <tbody id="hero-buttons-sortable" class="file-list-sortable"
+           data-reorder-url="{{ url_for('main.frontend_hero_buttons_reorder') }}"
+           data-reorder-toast="Button order">
+      {% for b in hero_buttons %}
+      <tr data-item-id="{{ b.id }}" draggable="true">
+        <td class="drag-handle-cell drag-handle" title="Drag to reorder">{{ icon('grip-vertical') }}</td>
+        <td class="muted">{{ loop.index }}.</td>
+        <td><b>{{ b.label or '—' }}</b></td>
+        <td><span class="chip">{{ b.style }}</span></td>
+        <td class="muted small trunc" style="max-width: 300px;">{{ b.url or '—' }}</td>
+        <td class="row-actions">
+          <button type="button" class="btn btn-sm" data-open-modal="hero-btn-edit-{{ b.id }}">Edit</button>
+          <form method="post" action="{{ url_for('main.frontend_hero_button_delete', bid=b.id) }}"
+                onsubmit="return confirm('Delete this button?');" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="muted">No hero buttons yet. Add one to replace the default pair.</p>
+  {% endif %}
+  </div>{# /hero-buttons-col #}
+  </div>{# /hero-section-grid #}
+
+  <div class="form-actions hero-unified-actions">
+    <button type="submit" form="hero-save-form" class="btn btn-primary">Save hero</button>
+  </div>
 </section>
 
 <form class="form" method="post" action="{{ url_for('main.frontend_save') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-  <section class="card">
-    <div class="card-head"><h2>Branding</h2></div>
-    <label>Site name
-      <input type="text" name="frontend_title" value="{{ (site.frontend_title if site else '') or '' }}" placeholder="Trusted Servants">
+  {# Editor cards are conditional on the active layout's block sequence —
+     only show editors for the blocks that the chosen layout actually
+     renders. `active_layout_blocks` is a list of block-type strings.
+     Each card has a visibility toggle in its head — flipping it off
+     hides the block on the public site without dropping it from the
+     layout. #}
+  {% set _blocks = active_layout_blocks or [] %}
+  {% set _splits = active_layout_splits or [] %}
+  {% set _vis = (block_content.get('_visibility', {}) if block_content else {}) %}
+  {# Block types that live inside any split's panel — used to skip them
+     in the standalone-editor pass below so we don't render their card
+     twice (once inside the split, once after it). #}
+  {% set _split_block_types = [] %}
+  {% for sp in _splits %}{% for t in (sp.left or []) %}{% if _split_block_types.append(t) %}{% endif %}{% endfor %}{% for t in (sp.right or []) %}{% if _split_block_types.append(t) %}{% endif %}{% endfor %}{% endfor %}
+  {% set _split_block_types = _split_block_types | unique | list %}
+  {% macro vis_toggle(block_type) %}
+    <input type="hidden" name="block_visible_present" value="{{ block_type }}">
+    <label class="mode-toggle fe-block-vis" title="Show this section on the public site">
+      <input type="checkbox" name="block_visible_{{ block_type }}" value="1"
+             {% if _vis.get(block_type, True) %}checked{% endif %}>
+      <span class="mode-track"><span class="mode-thumb"></span></span>
     </label>
-    <label>Tagline <span class="muted small">(shown under the site name in the footer)</span>
-      <input type="text" name="frontend_tagline" value="{{ (site.frontend_tagline if site else '') or '' }}" placeholder="A recovery fellowship portal.">
+  {% endmacro %}
+
+  {# One macro per editor card. Called both at the top-level standalone
+     position AND from inside a split panel, so a block that lives in a
+     split renders its full editor right inside that panel rather than
+     stranded below the split visualization. #}
+  {% macro editor_quick_links() %}
+  <section class="card">
+    <div class="card-head">
+      <h2>Quick links</h2>
+      <span class="muted smaller">Four nav cards · one per line: <code>icon | title | body | href</code></span>
+      {{ vis_toggle('quick_links') }}
+    </div>
+    <label>Cards
+      <textarea name="block_quick_links" rows="6" placeholder="◈ | Meetings | Find a meeting … | #meetings">{{ block_text.quick_links or '' }}</textarea>
     </label>
   </section>
+  {% endmacro %}
 
+  {% macro editor_features() %}
   <section class="card">
-    <div class="card-head"><h2>Hero</h2></div>
+    <div class="card-head">
+      <h2>Features</h2>
+      <span class="muted smaller">Three feature columns · one per line: <code>icon-name | title | body</code></span>
+      {{ vis_toggle('features') }}
+    </div>
+    <label>Items
+      <textarea name="block_features" rows="6" placeholder="calendar | Live schedule | Every meeting, every day…">{{ block_text.features or '' }}</textarea>
+    </label>
+  </section>
+  {% endmacro %}
+
+  {% macro editor_cta() %}
+  <section class="card">
+    <div class="card-head">
+      <h2>Call-to-action banner</h2>
+      {{ vis_toggle('cta') }}
+    </div>
+    {% set _cta = block_content.cta if block_content else {} %}
     <label>Heading
-      <input type="text" name="frontend_hero_heading" value="{{ (site.frontend_hero_heading if site else '') or '' }}" placeholder="You are not alone.">
+      <input type="text" name="block_cta_heading" value="{{ _cta.heading or '' }}" placeholder="You don't have to do this alone.">
     </label>
-    <label>Subheading
-      <textarea name="frontend_hero_subheading" rows="2" placeholder="Find meetings, connect with your community…">{{ (site.frontend_hero_subheading if site else '') or '' }}</textarea>
+    <label>Body
+      <textarea name="block_cta_body" rows="2" placeholder="Find a meeting today, or call our helpline 24/7.">{{ _cta.body or '' }}</textarea>
+    </label>
+    <div class="form .row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+      <label>Primary button label
+        <input type="text" name="block_cta_primary_label" value="{{ _cta.primary_label or '' }}">
+      </label>
+      <label>Primary URL
+        <input type="text" name="block_cta_primary_url" value="{{ _cta.primary_url or '' }}">
+      </label>
+      <label>Secondary button label
+        <input type="text" name="block_cta_secondary_label" value="{{ _cta.secondary_label or '' }}">
+      </label>
+      <label>Secondary URL
+        <input type="text" name="block_cta_secondary_url" value="{{ _cta.secondary_url or '' }}">
+      </label>
+    </div>
+  </section>
+  {% endmacro %}
+
+  {% macro editor_stats() %}
+  <section class="card">
+    <div class="card-head">
+      <h2>Stats</h2>
+      <span class="muted smaller">One per line: <code>number | label</code></span>
+      {{ vis_toggle('stats') }}
+    </div>
+    <label>Items
+      <textarea name="block_stats" rows="5" placeholder="7 | Days a week">{{ block_text.stats or '' }}</textarea>
     </label>
   </section>
+  {% endmacro %}
 
+  {% macro editor_testimonials() %}
   <section class="card">
-    <div class="card-head"><h2>About section</h2></div>
+    <div class="card-head">
+      <h2>Testimonials</h2>
+      <span class="muted smaller">One per line: <code>quote | attribution</code></span>
+      {{ vis_toggle('testimonials') }}
+    </div>
+    <label>Items
+      <textarea name="block_testimonials" rows="6" placeholder="My first meeting felt like coming home. | Member, four years sober">{{ block_text.testimonials or '' }}</textarea>
+    </label>
+  </section>
+  {% endmacro %}
+
+  {% macro editor_meetings() %}
+  {% set _ms = (block_content.get('_meetings', {}) if block_content else {}) %}
+  <section class="card">
+    <div class="card-head">
+      <h2>Meetings list</h2>
+      <span class="muted smaller">Pulls live from the admin DB. Filter + presentation are configured below.</span>
+      {{ vis_toggle('meetings') }}
+    </div>
+    <label>Section heading
+      <input type="text" name="meetings_heading" value="{{ _ms.heading or '' }}" placeholder="Upcoming Meetings">
+    </label>
+    <label>Intro line
+      <input type="text" name="meetings_intro" value="{{ _ms.intro or '' }}" placeholder="A quick look at what's on the schedule…">
+    </label>
+    <div class="hero-bg-grid">
+      <div class="nav-megalink-field">
+        <span class="nav-megalink-field-lbl">Filter</span>
+        <select name="meetings_filter">
+          {% for _v, _lbl in [
+            ('upcoming_today', 'Today — upcoming only (drop off as the day progresses)'),
+            ('today_all',      'Today — all meetings'),
+            ('next_24h',       'Next 24 hours'),
+            ('next_7_days',    'Next 7 days'),
+            ('this_week',      'This week (Mon–Sun)'),
+            ('all',            'All meetings'),
+          ] %}
+          <option value="{{ _v }}" {% if (_ms.filter or 'upcoming_today') == _v %}selected{% endif %}>{{ _lbl }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="nav-megalink-field hero-slider-field">
+        <span class="nav-megalink-field-lbl">Max meetings <output data-slider-out>{{ _ms.max_count or 6 }}</output></span>
+        <input type="range" name="meetings_max_count" min="1" max="30" step="1"
+               value="{{ _ms.max_count or 6 }}" data-slider-input>
+      </div>
+      <div class="nav-megalink-field hero-slider-field">
+        <span class="nav-megalink-field-lbl">Schedule lines per card <output data-slider-out>{{ _ms.show_first_n or 3 }}</output></span>
+        <input type="range" name="meetings_show_first_n" min="1" max="7" step="1"
+               value="{{ _ms.show_first_n or 3 }}" data-slider-input>
+      </div>
+      <div class="nav-megalink-field">
+        <span class="nav-megalink-field-lbl">Animation</span>
+        <select name="meetings_animation">
+          {% for _v, _lbl in [('fade','Fade in'), ('slide','Slide up + fade'), ('none','None')] %}
+          <option value="{{ _v }}" {% if (_ms.animation or 'fade') == _v %}selected{% endif %}>{{ _lbl }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="nav-megalink-field hero-slider-field">
+        <span class="nav-megalink-field-lbl">Stagger <output data-slider-out>{{ _ms.stagger_ms or 60 }}</output>ms</span>
+        <input type="range" name="meetings_stagger_ms" min="0" max="200" step="10"
+               value="{{ _ms.stagger_ms or 60 }}" data-slider-input>
+      </div>
+    </div>
+    <li class="special-page-row" style="list-style:none; margin: 1rem 0 0;">
+      <div class="special-page-info">
+        <div class="u-name">Group by day</div>
+        <p class="muted small">When the filter spans multiple days, group cards under a day heading.</p>
+      </div>
+      <label class="mode-toggle">
+        <input type="checkbox" name="meetings_group_by_day" value="1" {% if _ms.group_by_day %}checked{% endif %}>
+        <span class="mode-track"><span class="mode-thumb"></span></span>
+      </label>
+    </li>
+    <li class="special-page-row" style="list-style:none; margin: 0;">
+      <div class="special-page-info">
+        <div class="u-name">Show meeting type chip</div>
+        <p class="muted small">Small badge for In Person / Online / Hybrid.</p>
+      </div>
+      <label class="mode-toggle">
+        <input type="checkbox" name="meetings_show_type_chip" value="1" {% if _ms.show_type_chip %}checked{% endif %}>
+        <span class="mode-track"><span class="mode-thumb"></span></span>
+      </label>
+    </li>
+    <li class="special-page-row" style="list-style:none; margin: 0 0 1rem;">
+      <div class="special-page-info">
+        <div class="u-name">Show schedule lines</div>
+        <p class="muted small">Day-and-time bullets under each meeting name.</p>
+      </div>
+      <label class="mode-toggle">
+        <input type="checkbox" name="meetings_show_schedule" value="1" {% if _ms.show_schedule %}checked{% endif %}>
+        <span class="mode-track"><span class="mode-thumb"></span></span>
+      </label>
+    </li>
+    <label>Empty-state message
+      <input type="text" name="meetings_empty_message" value="{{ _ms.empty_message or '' }}" placeholder="No meetings scheduled — check back soon.">
+    </label>
+  </section>
+  {% endmacro %}
+
+  {% macro editor_events() %}
+  {% set _es = (block_content.get('_events', {}) if block_content else {}) %}
+  <section class="card">
+    <div class="card-head">
+      <h2>Upcoming Events</h2>
+      <span class="muted smaller">Cards built from the Announcements &amp; Events module. Past events drop off automatically.</span>
+      {{ vis_toggle('events') }}
+    </div>
+    <label>Section heading
+      <input type="text" name="events_heading" value="{{ _es.heading or '' }}" placeholder="Upcoming Events">
+    </label>
+    <label>Intro line
+      <input type="text" name="events_intro" value="{{ _es.intro or '' }}" placeholder="A look at what's coming up.">
+    </label>
+    <div class="hero-bg-grid">
+      <div class="nav-megalink-field hero-slider-field">
+        <span class="nav-megalink-field-lbl">Max events <output data-slider-out>{{ _es.max_count or 6 }}</output></span>
+        <input type="range" name="events_max_count" min="1" max="24" step="1"
+               value="{{ _es.max_count or 6 }}" data-slider-input>
+      </div>
+      <div class="nav-megalink-field">
+        <span class="nav-megalink-field-lbl">Animation</span>
+        <select name="events_animation">
+          {% for _v, _lbl in [('fade','Fade in'), ('slide','Slide up + fade'), ('none','None')] %}
+          <option value="{{ _v }}" {% if (_es.animation or 'fade') == _v %}selected{% endif %}>{{ _lbl }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="nav-megalink-field hero-slider-field">
+        <span class="nav-megalink-field-lbl">Stagger <output data-slider-out>{{ _es.stagger_ms or 60 }}</output>ms</span>
+        <input type="range" name="events_stagger_ms" min="0" max="200" step="10"
+               value="{{ _es.stagger_ms or 60 }}" data-slider-input>
+      </div>
+    </div>
+    <li class="special-page-row" style="list-style:none; margin: 1rem 0 0;">
+      <div class="special-page-info">
+        <div class="u-name">Show featured image</div>
+        <p class="muted small">Display the post's featured image on each event card.</p>
+      </div>
+      <label class="mode-toggle">
+        <input type="checkbox" name="events_show_image" value="1" {% if _es.show_image is not defined or _es.show_image %}checked{% endif %}>
+        <span class="mode-track"><span class="mode-thumb"></span></span>
+      </label>
+    </li>
+    <li class="special-page-row" style="list-style:none; margin: 0;">
+      <div class="special-page-info">
+        <div class="u-name">Show summary text</div>
+        <p class="muted small">Show the short blurb under each event title (truncated to ~3 lines).</p>
+      </div>
+      <label class="mode-toggle">
+        <input type="checkbox" name="events_show_summary" value="1" {% if _es.show_summary is not defined or _es.show_summary %}checked{% endif %}>
+        <span class="mode-track"><span class="mode-thumb"></span></span>
+      </label>
+    </li>
+    <li class="special-page-row" style="list-style:none; margin: 0 0 1rem;">
+      <div class="special-page-info">
+        <div class="u-name">Show location / online tag</div>
+        <p class="muted small">Display the venue name (or "Online event" tag) under the event time.</p>
+      </div>
+      <label class="mode-toggle">
+        <input type="checkbox" name="events_show_location" value="1" {% if _es.show_location is not defined or _es.show_location %}checked{% endif %}>
+        <span class="mode-track"><span class="mode-thumb"></span></span>
+      </label>
+    </li>
+    <label>Empty-state message
+      <input type="text" name="events_empty_message" value="{{ _es.empty_message or '' }}" placeholder="No upcoming events — check back soon.">
+    </label>
+  </section>
+  {% endmacro %}
+
+  {% macro editor_about() %}
+  <section class="card">
+    <div class="card-head">
+      <h2>About section</h2>
+      {{ vis_toggle('about') }}
+    </div>
     <label>Heading
       <input type="text" name="frontend_about_heading" value="{{ (site.frontend_about_heading if site else '') or '' }}" placeholder="About the Fellowship">
     </label>
@@ -73,9 +747,27 @@
       <textarea name="frontend_about_body" rows="8" placeholder="## Who we are&#10;&#10;Write the story of your fellowship here…">{{ (site.frontend_about_body if site else '') or '' }}</textarea>
     </label>
   </section>
+  {% endmacro %}
 
+  {% macro editor_faq() %}
   <section class="card">
-    <div class="card-head"><h2>Contact / help section</h2></div>
+    <div class="card-head">
+      <h2>FAQ</h2>
+      <span class="muted smaller">One per line: <code>question | answer</code></span>
+      {{ vis_toggle('faq') }}
+    </div>
+    <label>Items
+      <textarea name="block_faq" rows="6" placeholder="Do I have to share? | Never. Many newcomers attend …">{{ block_text.faq or '' }}</textarea>
+    </label>
+  </section>
+  {% endmacro %}
+
+  {% macro editor_contact() %}
+  <section class="card">
+    <div class="card-head">
+      <h2>Contact / help section</h2>
+      {{ vis_toggle('contact') }}
+    </div>
     <label>Heading
       <input type="text" name="frontend_contact_heading" value="{{ (site.frontend_contact_heading if site else '') or '' }}" placeholder="Need Help Right Now?">
     </label>
@@ -83,9 +775,678 @@
       <textarea name="frontend_contact_body" rows="5">{{ (site.frontend_contact_body if site else '') or '' }}</textarea>
     </label>
   </section>
+  {% endmacro %}
+
+  {# Dispatch helper — calls the right editor macro by block type. #}
+  {% macro editor_for(bt) -%}
+    {%- if bt == 'quick_links' %}{{ editor_quick_links() }}
+    {%- elif bt == 'features' %}{{ editor_features() }}
+    {%- elif bt == 'cta' %}{{ editor_cta() }}
+    {%- elif bt == 'stats' %}{{ editor_stats() }}
+    {%- elif bt == 'testimonials' %}{{ editor_testimonials() }}
+    {%- elif bt == 'meetings' %}{{ editor_meetings() }}
+    {%- elif bt == 'events' %}{{ editor_events() }}
+    {%- elif bt == 'about' %}{{ editor_about() }}
+    {%- elif bt == 'faq' %}{{ editor_faq() }}
+    {%- elif bt == 'contact' %}{{ editor_contact() }}
+    {%- endif -%}
+  {%- endmacro %}
+
+  {# Two-panel split sections from the active custom layout. One card per
+     split, in document order. Inner editor cards render INSIDE the
+     left/right panel boxes so the admin layout mirrors what the visitor
+     sees. The card's outer margin scales with the chosen `margin` so
+     loose vs. default vs. tight is visible right here on the admin too. #}
+  {% if _splits %}
+    {% for sp in _splits %}
+    {% set _i = sp.index %}
+    <section class="card fe-split-admin-card fe-split-admin-card--gt-{{ sp.gap_top }} fe-split-admin-card--gb-{{ sp.gap_bottom }}">
+      <div class="card-head">
+        <h2>Two-panel split</h2>
+        <span class="muted smaller">From the <b>{{ active_layout_key }}</b> layout · controls width, spacing, and background on the public site.</span>
+      </div>
+
+      <div class="fe-split-admin-preview" aria-label="Split preview"
+           {% if sp.bg_color %}style="background: {{ sp.bg_color }};"{% endif %}>
+        <div class="fe-split-admin-panel"
+             {% if sp.bg_color_left %}style="background: {{ sp.bg_color_left }};"{% endif %}>
+          <div class="fe-split-admin-panel-label muted smaller">Left panel</div>
+          {% if sp.left %}
+            {% for t in sp.left %}{{ editor_for(t) }}{% endfor %}
+          {% else %}
+            <div class="fe-split-admin-empty muted smaller">empty</div>
+          {% endif %}
+        </div>
+        <div class="fe-split-admin-panel"
+             {% if sp.bg_color_right %}style="background: {{ sp.bg_color_right }};"{% endif %}>
+          <div class="fe-split-admin-panel-label muted smaller">Right panel</div>
+          {% if sp.right %}
+            {% for t in sp.right %}{{ editor_for(t) }}{% endfor %}
+          {% else %}
+            <div class="fe-split-admin-empty muted smaller">empty</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="fe-split-admin-settings">
+        {# Marker so the save endpoint knows this split was on the form
+           even if every select kept its default value. #}
+        <input type="hidden" name="split_present" value="{{ _i }}">
+
+        <label class="fe-split-admin-setting">
+          <span class="muted smaller">Width</span>
+          <select name="split_{{ _i }}_width">
+            <option value="boxed"{% if sp.width == 'boxed' %} selected{% endif %}>Boxed (matches site container)</option>
+            <option value="full"{% if sp.width == 'full' %} selected{% endif %}>Full width (edge-to-edge)</option>
+          </select>
+        </label>
+
+        <label class="fe-split-admin-setting">
+          <span class="muted smaller">Inner padding</span>
+          <select name="split_{{ _i }}_padding">
+            {% for v, lbl in [('none','None (0)'), ('tight','Tight'), ('default','Default'), ('loose','Loose')] %}
+            <option value="{{ v }}"{% if sp.padding == v %} selected{% endif %}>{{ lbl }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label class="fe-split-admin-setting">
+          <span class="muted smaller">Gap between columns</span>
+          <select name="split_{{ _i }}_gap">
+            {% for v, lbl in [('none','None (flush)'), ('tight','Tight'), ('default','Default'), ('loose','Loose')] %}
+            <option value="{{ v }}"{% if sp.gap == v %} selected{% endif %}>{{ lbl }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label class="fe-split-admin-setting">
+          <span class="muted smaller">Gap on top</span>
+          <select name="split_{{ _i }}_gap_top">
+            {% for v, lbl in [('none','None (flush)'), ('tight','Tight'), ('default','Default'), ('loose','Loose')] %}
+            <option value="{{ v }}"{% if sp.gap_top == v %} selected{% endif %}>{{ lbl }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label class="fe-split-admin-setting">
+          <span class="muted smaller">Gap on bottom</span>
+          <select name="split_{{ _i }}_gap_bottom">
+            {% for v, lbl in [('none','None (flush)'), ('tight','Tight'), ('default','Default'), ('loose','Loose')] %}
+            <option value="{{ v }}"{% if sp.gap_bottom == v %} selected{% endif %}>{{ lbl }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label class="fe-split-admin-setting fe-split-admin-bg">
+          <span class="muted smaller">Background — whole section</span>
+          <span class="fe-split-admin-bg-row">
+            <input type="checkbox" name="split_{{ _i }}_bg_color_enabled" value="1"
+                   {% if sp.bg_color %}checked{% endif %}
+                   title="Off = transparent">
+            <input type="color" name="split_{{ _i }}_bg_color"
+                   value="{{ sp.bg_color or '#ffffff' }}">
+          </span>
+        </label>
+
+        <label class="fe-split-admin-setting fe-split-admin-bg">
+          <span class="muted smaller">Background — left panel</span>
+          <span class="fe-split-admin-bg-row">
+            <input type="checkbox" name="split_{{ _i }}_bg_color_left_enabled" value="1"
+                   {% if sp.bg_color_left %}checked{% endif %}
+                   title="Off = transparent">
+            <input type="color" name="split_{{ _i }}_bg_color_left"
+                   value="{{ sp.bg_color_left or '#ffffff' }}">
+          </span>
+        </label>
+
+        <label class="fe-split-admin-setting fe-split-admin-bg">
+          <span class="muted smaller">Background — right panel</span>
+          <span class="fe-split-admin-bg-row">
+            <input type="checkbox" name="split_{{ _i }}_bg_color_right_enabled" value="1"
+                   {% if sp.bg_color_right %}checked{% endif %}
+                   title="Off = transparent">
+            <input type="color" name="split_{{ _i }}_bg_color_right"
+                   value="{{ sp.bg_color_right or '#ffffff' }}">
+          </span>
+        </label>
+
+        <label class="fe-split-admin-setting fe-split-admin-bg">
+          <span class="muted smaller">Dark-mode background</span>
+          <span class="fe-split-admin-bg-row">
+            <input type="checkbox" name="split_{{ _i }}_bg_dark_mode" value="1"
+                   {% if sp.bg_dark_mode %}checked{% endif %}>
+            <span class="muted smaller">Auto-derive a dark variant of each background for dark mode.</span>
+          </span>
+        </label>
+      </div>
+    </section>
+    {% endfor %}
+  {% endif %}
+
+  {# Standalone editors — render every block from the active layout that
+     ISN'T inside a split. Blocks inside splits already had their editor
+     rendered in the split's panel above, so we skip them here to avoid
+     duplicate `name="..."` form fields. #}
+  {% for bt in ['quick_links', 'features', 'cta', 'stats', 'testimonials',
+                'meetings', 'events', 'about', 'faq', 'contact'] %}
+    {% if bt in _blocks and bt not in _split_block_types %}
+      {{ editor_for(bt) }}
+    {% endif %}
+  {% endfor %}
 
   <div class="form-actions"><button class="btn btn-primary">Save Homepage</button></div>
 </form>
+
+<script>
+// Auto-enable the bg-color checkbox when the admin picks a colour. The
+// checkbox is the "use background" gate the save endpoint reads; without
+// this hook, picking a colour while the checkbox is unchecked silently
+// discards the choice on save.
+(function () {
+  document.querySelectorAll('.fe-split-admin-bg-row').forEach(function (row) {
+    var cb = row.querySelector('input[type="checkbox"]');
+    var picker = row.querySelector('input[type="color"]');
+    if (!cb || !picker) return;
+    picker.addEventListener('input', function () { cb.checked = true; });
+  });
+})();
+</script>
+
   </div>
 </div>
+
+{# ---- Icon picker modal (shared by hero button editors) ---- #}
+<div class="modal icon-picker-modal" id="icon-picker-modal" aria-hidden="true"
+     data-catalog-url="{{ url_for('static', filename='vendor/lucide/icons.json') }}"
+     data-custom-list-url="{{ url_for('main.frontend_custom_icons_list') }}"
+     data-custom-upload-url="{{ url_for('main.frontend_custom_icon_upload') }}"
+     data-custom-delete-url="{{ url_for('main.frontend_custom_icon_delete', cid=0) }}"
+     data-csrf-token="{{ csrf_token() }}">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <div class="modal-head"><h2>Choose an icon</h2>
+      <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button></div>
+    <div class="modal-body icon-picker-body">
+      <div class="icon-picker-toolbar">
+        <input type="search" class="icon-picker-search" placeholder="Search icons…" data-icon-search autocomplete="off">
+        <label class="icon-picker-color-label">
+          <span class="muted smaller">Color</span>
+          <input type="color" data-icon-modal-color value="#747474">
+        </label>
+        <label class="icon-picker-size-label">
+          <span class="muted smaller">Size <output data-icon-size-out>20</output>px</span>
+          <input type="range" min="12" max="64" step="1" value="20" data-icon-modal-size>
+        </label>
+        <label class="icon-picker-upload-btn btn btn-sm">
+          {{ icon('upload') }} <span>Upload</span>
+          <input type="file" accept=".svg,.png,image/svg+xml,image/png" data-icon-upload hidden>
+        </label>
+      </div>
+      <div class="icon-picker-catalog" data-icon-catalog>
+        <p class="muted smaller" style="padding: 16px;">Loading icons…</p>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" data-close>Cancel</button>
+      <button type="button" class="btn btn-danger" data-icon-picker-remove>Remove icon</button>
+      <button type="button" class="btn btn-primary" data-icon-picker-save disabled>Save</button>
+    </div>
+  </div>
+</div>
+
+{# ---- Hero button: new ---- #}
+{% macro _hero_button_fields(b) %}
+<label>Label
+  <input type="text" name="label" value="{{ (b.label if b else '') or '' }}" placeholder="Find a Meeting" required>
+</label>
+<label>URL
+  <input type="text" name="url" value="{{ (b.url if b else '') or '' }}" placeholder="#meetings or https://…">
+</label>
+<div class="hero-bg-grid">
+  <div class="nav-megalink-field">
+    <span class="nav-megalink-field-lbl">Style</span>
+    <select name="style">
+      {% set _bs = (b.style if b else 'primary') or 'primary' %}
+      <option value="primary"{% if _bs == 'primary' %} selected{% endif %}>Primary (filled)</option>
+      <option value="ghost"{% if _bs == 'ghost' %} selected{% endif %}>Ghost (outlined)</option>
+    </select>
+  </div>
+  <div class="nav-megalink-field">
+    <span class="nav-megalink-field-lbl">Custom bg</span>
+    <input type="color" class="nav-megalink-color-input" name="custom_bg_color"
+           value="{{ (b.custom_bg_color if b else None) or '#0f172a' }}">
+  </div>
+  <div class="nav-megalink-field">
+    <span class="nav-megalink-field-lbl">Custom text</span>
+    <input type="color" class="nav-megalink-color-input" name="custom_text_color"
+           value="{{ (b.custom_text_color if b else None) or '#ffffff' }}">
+  </div>
+</div>
+<div class="nav-megalink-row nav-megalink-row-icons" style="margin-top: 12px;">
+  <div class="nav-megalink-field nav-megalink-icon-field{% if b and b.icon_before %} has-icon{% endif %}" data-icon-field>
+    <span class="nav-megalink-field-lbl">Icon before</span>
+    <div class="icon-picker-trigger-wrap">
+      <button type="button" class="icon-picker-trigger"
+              data-open-icon-picker
+              data-icon-target="#hero-btn-{{ (b.id if b else 'new') }}-icon-before"
+              data-color-target="#hero-btn-{{ (b.id if b else 'new') }}-icon-before-color"
+              data-size-target="#hero-btn-{{ (b.id if b else 'new') }}-icon-before-size">
+        <span class="icon-picker-preview" data-icon-preview
+              style="{% if b and b.icon_before_color %}color: {{ b.icon_before_color }};{% endif %}{% if b and b.icon_before_size %} --icon-size: {{ b.icon_before_size }}px;{% endif %}">
+          {% if b and b.icon_before %}{{ icon(b.icon_before) }}{% endif %}
+        </span>
+        <span class="icon-picker-trigger-empty" data-icon-empty>Icon</span>
+      </button>
+      <button type="button" class="icon-picker-clear" data-icon-clear title="Clear icon">{{ icon('x') }}</button>
+    </div>
+    <input type="hidden" id="hero-btn-{{ (b.id if b else 'new') }}-icon-before"
+           name="icon_before" data-block-field="icon_before" value="{{ (b.icon_before if b else '') or '' }}">
+    <input type="hidden" id="hero-btn-{{ (b.id if b else 'new') }}-icon-before-color"
+           name="icon_before_color" data-block-field="icon_before_color" value="{{ (b.icon_before_color if b else '') or '' }}">
+    <input type="hidden" id="hero-btn-{{ (b.id if b else 'new') }}-icon-before-size"
+           name="icon_before_size" data-block-field="icon_before_size" value="{{ (b.icon_before_size if b else '') or '' }}">
+  </div>
+  <div class="nav-megalink-field nav-megalink-icon-field{% if b and b.icon_after %} has-icon{% endif %}" data-icon-field>
+    <span class="nav-megalink-field-lbl">Icon after</span>
+    <div class="icon-picker-trigger-wrap">
+      <button type="button" class="icon-picker-trigger"
+              data-open-icon-picker
+              data-icon-target="#hero-btn-{{ (b.id if b else 'new') }}-icon-after"
+              data-color-target="#hero-btn-{{ (b.id if b else 'new') }}-icon-after-color"
+              data-size-target="#hero-btn-{{ (b.id if b else 'new') }}-icon-after-size">
+        <span class="icon-picker-preview" data-icon-preview
+              style="{% if b and b.icon_after_color %}color: {{ b.icon_after_color }};{% endif %}{% if b and b.icon_after_size %} --icon-size: {{ b.icon_after_size }}px;{% endif %}">
+          {% if b and b.icon_after %}{{ icon(b.icon_after) }}{% endif %}
+        </span>
+        <span class="icon-picker-trigger-empty" data-icon-empty>Icon</span>
+      </button>
+      <button type="button" class="icon-picker-clear" data-icon-clear title="Clear icon">{{ icon('x') }}</button>
+    </div>
+    <input type="hidden" id="hero-btn-{{ (b.id if b else 'new') }}-icon-after"
+           name="icon_after" data-block-field="icon_after" value="{{ (b.icon_after if b else '') or '' }}">
+    <input type="hidden" id="hero-btn-{{ (b.id if b else 'new') }}-icon-after-color"
+           name="icon_after_color" data-block-field="icon_after_color" value="{{ (b.icon_after_color if b else '') or '' }}">
+    <input type="hidden" id="hero-btn-{{ (b.id if b else 'new') }}-icon-after-size"
+           name="icon_after_size" data-block-field="icon_after_size" value="{{ (b.icon_after_size if b else '') or '' }}">
+  </div>
+</div>
+<label class="nav-megalink-newtab" style="margin-top: 12px;">
+  <input type="checkbox" name="open_in_new_tab" value="1" {% if b and b.open_in_new_tab %}checked{% endif %}>
+  <span>Open in new tab</span>
+</label>
+{% endmacro %}
+
+<div class="modal" id="hero-btn-new-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form class="form" method="post" action="{{ url_for('main.frontend_hero_button_new') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-head"><h2>Add hero button</h2>
+        <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button></div>
+      <div class="modal-body">{{ _hero_button_fields(None) }}</div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Add button</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% for b in hero_buttons %}
+<div class="modal" id="hero-btn-edit-{{ b.id }}" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form class="form" method="post" action="{{ url_for('main.frontend_hero_button_edit', bid=b.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-head"><h2>Edit hero button</h2>
+        <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button></div>
+      <div class="modal-body">{{ _hero_button_fields(b) }}</div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+<script src="{{ url_for('static', filename='js/login_fx.js') }}"></script>
+<script>
+  // Live-update slider readouts (size %, hue °, angle °, blur px, etc.)
+  document.querySelectorAll('[data-slider-input]').forEach(inp => {
+    const fieldLabel = inp.closest('.nav-megalink-field');
+    const out = fieldLabel && fieldLabel.querySelector('[data-slider-out]');
+    if (!out) return;
+    inp.addEventListener('input', () => { out.textContent = inp.value; });
+  });
+  // Show the matching hero-bg panel when the style radio changes.
+  document.querySelectorAll('[data-bg-style-radio]').forEach(r => {
+    r.addEventListener('change', () => {
+      const active = r.value;
+      document.querySelectorAll('[data-bg-panel]').forEach(p => {
+        p.hidden = (p.dataset.bgPanel !== active);
+      });
+    });
+  });
+
+  // Live preview: every hero setting (text, typography, background) reflects
+  // immediately in the scaled-down hero rendered at the top of the card.
+  (function heroFullPreview(){
+    const section = document.getElementById('hero-preview-section');
+    const bg = document.getElementById('hero-preview-bg');
+    const eyebrow = document.getElementById('hero-preview-eyebrow');
+    const heading = document.getElementById('hero-preview-heading');
+    const sub = document.getElementById('hero-preview-sub');
+    if (!section || !heading) return;
+
+    // Auto-fit: only the .fe-hero-inner content (eyebrow + heading + sub +
+    // buttons) is scaled to contain-fit the 320px clip. The background
+    // canvas (.fe-hero) stays at full clip width so frosty/solid/gradient/
+    // image styles span edge-to-edge regardless of how tightly the content
+    // fits. Recompute on any content or container size change.
+    const inner = document.querySelector('.hero-full-preview .fe-hero-inner');
+    const clip  = document.querySelector('.hero-full-preview-clip');
+    function fitPreview() {
+      if (!inner || !clip) return;
+      // Reset transform so offsetWidth/Height report the unscaled box.
+      inner.style.transform = '';
+      const cw = clip.clientWidth, ch = clip.clientHeight;
+      const nw = inner.offsetWidth, nh = inner.offsetHeight;
+      if (!nw || !nh) return;
+      // Contain-fit so nothing gets cropped. Cap at 1 so content never
+      // upscales beyond its natural size on very wide admin viewports,
+      // then knock 20% off so the content sits comfortably inside the
+      // bg canvas with breathing room around it.
+      const scale = Math.min(cw / nw, ch / nh, 1) * 0.8;
+      inner.style.transform = 'scale(' + scale + ')';
+    }
+    if (typeof ResizeObserver !== 'undefined' && inner && clip) {
+      const ro = new ResizeObserver(() => fitPreview());
+      ro.observe(clip);
+      ro.observe(inner);
+    } else {
+      window.addEventListener('resize', fitPreview);
+    }
+    // Initial fit after layout settles (fonts may shift sizes).
+    requestAnimationFrame(fitPreview);
+    setTimeout(fitPreview, 200);
+
+    const DEFAULT_HEADING = 'You are not alone.';
+    const DEFAULT_SUB = 'Find meetings, connect with your community, and take the next step in your recovery journey.';
+    const DEFAULT_TAGLINE = 'A recovery fellowship portal.';
+    const DEFAULT_GRAD_S = '#0f172a';
+    const DEFAULT_GRAD_E = '#374151';
+    const q = (sel) => document.querySelector(sel);
+
+    // Text content
+    const inH = q('input[name="frontend_hero_heading"]');
+    inH && inH.addEventListener('input', () => {
+      heading.textContent = inH.value || DEFAULT_HEADING;
+    });
+    const inSub = q('textarea[name="frontend_hero_subheading"]');
+    inSub && inSub.addEventListener('input', () => {
+      sub.textContent = inSub.value || DEFAULT_SUB;
+    });
+    // Tagline (Branding card) — also mirrors eyebrow toggle
+    const inTagline = q('input[name="frontend_tagline"]');
+    const inTagEn = q('input[name="frontend_tagline_enabled"]');
+    function refreshEyebrow() {
+      const on = !inTagEn || inTagEn.checked;
+      const val = (inTagline && inTagline.value) || DEFAULT_TAGLINE;
+      if (eyebrow) {
+        eyebrow.textContent = val;
+        eyebrow.hidden = !(on && val);
+      }
+    }
+    inTagline && inTagline.addEventListener('input', refreshEyebrow);
+    inTagEn && inTagEn.addEventListener('change', refreshEyebrow);
+
+    // Heading typography
+    document.querySelectorAll('input[name="frontend_hero_heading_font"]').forEach(r => {
+      r.addEventListener('change', () => {
+        heading.classList.remove('fe-hero-heading-fraunces', 'fe-hero-heading-inter');
+        heading.classList.add('fe-hero-heading-' + r.value);
+      });
+    });
+    const inSize = q('input[name="frontend_hero_heading_size"]');
+    inSize && inSize.addEventListener('input', () => {
+      heading.style.setProperty('--fe-hero-h-size', (parseInt(inSize.value, 10) / 100).toString());
+    });
+    const inGradS = q('input[name="frontend_hero_heading_grad_start"]');
+    const inGradE = q('input[name="frontend_hero_heading_grad_end"]');
+    inGradS && inGradS.addEventListener('input', () => {
+      heading.style.setProperty('--fe-hero-h-grad-s', inGradS.value);
+    });
+    inGradE && inGradE.addEventListener('input', () => {
+      heading.style.setProperty('--fe-hero-h-grad-e', inGradE.value);
+    });
+    const inReset = q('input[name="reset_heading_colors"]');
+    inReset && inReset.addEventListener('change', () => {
+      if (inReset.checked) {
+        heading.style.setProperty('--fe-hero-h-grad-s', DEFAULT_GRAD_S);
+        heading.style.setProperty('--fe-hero-h-grad-e', DEFAULT_GRAD_E);
+      } else {
+        if (inGradS) heading.style.setProperty('--fe-hero-h-grad-s', inGradS.value);
+        if (inGradE) heading.style.setProperty('--fe-hero-h-grad-e', inGradE.value);
+      }
+    });
+
+    // Hero background. Solid and gradient panels reuse the same input name
+    // (frontend_hero_bg_color), so we always pull from the currently-active
+    // panel's inputs rather than the first match.
+    function activePanel(style) {
+      return document.querySelector('[data-bg-panel="' + style + '"]');
+    }
+    function activeStyle() {
+      const r = document.querySelector('[data-bg-style-radio]:checked');
+      return r ? r.value : 'frosty';
+    }
+    function sinewaveColors() {
+      const out = [];
+      document.querySelectorAll('input[data-sinewave-input]').forEach(inp => {
+        const v = (inp.value || '').trim();
+        if (/^#[0-9a-fA-F]{6}$/.test(v)) out.push(v);
+      });
+      return out.length ? out : ['#16c2ba', '#1883d5', '#5a1ce5'];
+    }
+    const previewVideo = document.getElementById('hero-preview-video');
+    function applyVideoState() {
+      if (!previewVideo) return;
+      const speedInp = q('select[name="frontend_hero_bg_video_speed"]');
+      const speed = (parseInt(speedInp && speedInp.value, 10) || 100) / 100;
+      try { previewVideo.playbackRate = speed; } catch (_) {}
+      previewVideo.loop = true;
+    }
+    function applyBackground() {
+      const style = activeStyle();
+      section.classList.remove('fe-hero-bg-frosty', 'fe-hero-bg-solid',
+                               'fe-hero-bg-gradient', 'fe-hero-bg-image',
+                               'fe-hero-bg-sinewave', 'fe-hero-bg-video');
+      section.classList.add('fe-hero-bg-' + style);
+      if (bg) bg.hidden = (style !== 'frosty');
+      if (previewVideo) {
+        const showVideo = (style === 'video' && previewVideo.querySelector('source'));
+        previewVideo.hidden = !showVideo;
+        if (showVideo) {
+          applyVideoState();
+          previewVideo.play().catch(() => {});
+        } else {
+          previewVideo.pause();
+        }
+      }
+      // Reset everything before re-applying — sinewave sets backgroundImage,
+      // gradient/solid set background, others should clear.
+      section.style.background = '';
+      section.style.backgroundImage = '';
+      section.style.backgroundSize = '';
+      section.style.backgroundRepeat = '';
+      section.style.backgroundColor = '';
+      const panel = activePanel(style);
+      if (style === 'solid' && panel) {
+        const c = panel.querySelector('input[name="frontend_hero_bg_color"]');
+        section.style.background = (c && c.value) || '';
+      } else if (style === 'gradient' && panel) {
+        const c1 = panel.querySelector('input[name="frontend_hero_bg_color"]');
+        const c2 = panel.querySelector('input[name="frontend_hero_bg_color_2"]');
+        const ang = q('input[name="frontend_hero_bg_gradient_angle"]');
+        if (c1 && c2 && ang) {
+          section.style.background = 'linear-gradient(' + ang.value + 'deg, ' + c1.value + ', ' + c2.value + ')';
+        }
+      } else if (style === 'sinewave' && window.loginFxUtils) {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const adjusted = window.loginFxUtils.adjustPaletteForTheme(sinewaveColors(), isDark);
+        window.loginFxUtils.applyBackground(section, adjusted);
+      }
+    }
+    document.querySelectorAll('[data-bg-style-radio]').forEach(r => {
+      r.addEventListener('change', applyBackground);
+    });
+    ['frontend_hero_bg_color', 'frontend_hero_bg_color_2',
+     'frontend_hero_bg_gradient_angle'].forEach(name => {
+      document.querySelectorAll('input[name="' + name + '"]').forEach(inp => {
+        inp.addEventListener('input', applyBackground);
+      });
+    });
+    document.querySelectorAll('input[data-sinewave-input]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        if (activeStyle() === 'sinewave') applyBackground();
+        applyDynamicText();
+      });
+    });
+    // Video bg: speed live-updates the preview video.
+    const _vSpeedSel = q('select[name="frontend_hero_bg_video_speed"]');
+    _vSpeedSel && _vSpeedSel.addEventListener('change', applyVideoState);
+
+    // Dynamic text colors: tag the preview section with .fe-hero-text-light
+    // / .fe-hero-text-dark based on the chosen bg's average lightness. CSS
+    // then takes over to swap heading + sub colors.
+    const dynOn = q('input[name="frontend_hero_text_dynamic"]');
+    function hexLightness(h) {
+      h = (h || '').replace('#', '');
+      if (h.length === 3) h = h.split('').map(c => c + c).join('');
+      if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+      const r = parseInt(h.slice(0, 2), 16) / 255;
+      const g = parseInt(h.slice(2, 4), 16) / 255;
+      const b = parseInt(h.slice(4, 6), 16) / 255;
+      return (Math.max(r, g, b) + Math.min(r, g, b)) / 2;
+    }
+    function avg(values) {
+      const v = values.filter(x => x != null);
+      return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+    }
+    function applyDynamicText() {
+      section.classList.remove('fe-hero-text-light', 'fe-hero-text-dark');
+      if (!dynOn || !dynOn.checked) return;
+      const style = activeStyle();
+      let l = 0.95;  // frosty / image default to a light bg
+      const panel = activePanel(style);
+      if (style === 'solid' && panel) {
+        const c = panel.querySelector('input[name="frontend_hero_bg_color"]');
+        l = hexLightness(c && c.value) ?? 0.95;
+      } else if (style === 'gradient' && panel) {
+        const c1 = panel.querySelector('input[name="frontend_hero_bg_color"]');
+        const c2 = panel.querySelector('input[name="frontend_hero_bg_color_2"]');
+        l = avg([hexLightness(c1 && c1.value), hexLightness(c2 && c2.value)]) ?? 0.95;
+      } else if (style === 'sinewave') {
+        const cs = Array.from(document.querySelectorAll('input[data-sinewave-input]'))
+          .map(i => hexLightness(i.value));
+        l = avg(cs) ?? 0.55;
+      }
+      section.classList.add(l < 0.55 ? 'fe-hero-text-light' : 'fe-hero-text-dark');
+    }
+    dynOn && dynOn.addEventListener('change', applyDynamicText);
+    document.querySelectorAll('[data-bg-style-radio]').forEach(r =>
+      r.addEventListener('change', applyDynamicText));
+    document.querySelectorAll('input[name="frontend_hero_bg_color"], input[name="frontend_hero_bg_color_2"]').forEach(inp =>
+      inp.addEventListener('input', applyDynamicText));
+    const swRandomBtn = q('[data-sinewave-randomize]');
+    swRandomBtn && swRandomBtn.addEventListener('click', () => {
+      if (!window.loginFxUtils) return;
+      const palette = window.loginFxUtils.randomPalette(4);
+      document.querySelectorAll('input[data-sinewave-input]').forEach((inp, i) => {
+        if (palette[i]) inp.value = palette[i];
+      });
+      // Switch to sinewave style if not already, then repaint
+      const sw = document.querySelector('[data-bg-style-radio][value="sinewave"]');
+      if (sw && !sw.checked) {
+        sw.checked = true;
+        document.querySelectorAll('[data-bg-panel]').forEach(p => {
+          p.hidden = (p.dataset.bgPanel !== 'sinewave');
+        });
+      }
+      applyBackground();
+    });
+
+    // Particle overlay live preview — keeps a single initLoginFX instance
+    // alive and tweaks its effect/speed/size in place. Toggling enabled or
+    // changing the effect destroys + recreates so the canvas restarts cleanly.
+    const partCanvas = document.getElementById('hero-preview-particles');
+    const partOn = q('input[name="frontend_hero_particle_enabled"]');
+    const partEff = q('select[name="frontend_hero_particle_effect"]');
+    const partSpeed = q('input[name="frontend_hero_particle_speed"]');
+    const partSize = q('input[name="frontend_hero_particle_size"]');
+    let partFx = null;
+    function destroyPart() {
+      if (partFx) { try { partFx.destroy(); } catch (_) {} partFx = null; }
+    }
+    function buildPart() {
+      destroyPart();
+      if (!partCanvas || !window.initLoginFX) return;
+      partCanvas.hidden = false;
+      partFx = window.initLoginFX(partCanvas, {
+        effect: (partEff && partEff.value) || 'stars',
+        speed: parseInt((partSpeed && partSpeed.value) || '100', 10),
+        size: parseInt((partSize && partSize.value) || '100', 10),
+      });
+    }
+    function refreshPart() {
+      if (!partOn || !partOn.checked) {
+        destroyPart();
+        if (partCanvas) partCanvas.hidden = true;
+        return;
+      }
+      buildPart();
+    }
+    partOn && partOn.addEventListener('change', refreshPart);
+    partEff && partEff.addEventListener('change', refreshPart);  // rebuild on effect change
+    partSpeed && partSpeed.addEventListener('input', () => {
+      if (partFx) partFx.setSpeed(parseInt(partSpeed.value, 10));
+    });
+    partSize && partSize.addEventListener('input', () => {
+      if (partFx) partFx.setSize(parseInt(partSize.value, 10));
+    });
+    // Boot once the DOM is settled so canvas dimensions are valid.
+    requestAnimationFrame(refreshPart);
+
+    // First call to paint sinewave / clear bg if needed on load.
+    applyBackground();
+    applyDynamicText();
+
+    // When the admin toggles light/dark, the sinewave should repaint with
+    // the adjusted palette and the dynamic-text class needs to refresh.
+    const themeMo = new MutationObserver(records => {
+      for (const r of records) {
+        if (r.attributeName === 'data-theme') {
+          if (activeStyle() === 'sinewave') applyBackground();
+          applyDynamicText();
+          break;
+        }
+      }
+    });
+    themeMo.observe(document.documentElement, { attributes: true });
+
+    // Frosty blob tunables — CSS custom properties on the blob container.
+    const frosty = [
+      ['frontend_hero_bg_hue', '--fe-blob-hue-a', v => v],
+      ['frontend_hero_bg_hue_2', '--fe-blob-hue-b', v => v],
+      ['frontend_hero_bg_blur', '--fe-blob-blur', v => v + 'px'],
+      ['frontend_hero_bg_opacity', '--fe-blob-op', v => (parseInt(v, 10) / 100).toString()],
+    ];
+    frosty.forEach(([name, prop, fmt]) => {
+      const inp = q('input[name="' + name + '"]');
+      if (!inp || !bg) return;
+      inp.addEventListener('input', () => bg.style.setProperty(prop, fmt(inp.value)));
+    });
+  })();
+</script>
 {% endblock %}

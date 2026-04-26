@@ -1,0 +1,18 @@
+{# Member testimonial blocks. Content from site_blocks(site).testimonials. #}
+{% set _ts = (block_content.testimonials if block_content else []) %}
+<section class="fe-section fe-testimonials" aria-label="Stories">
+  <div class="fe-container">
+    <div class="fe-section-head">
+      <h2>From the fellowship</h2>
+      <p>Stories shared anonymously by members of our community.</p>
+    </div>
+    <div class="fe-testimonial-grid">
+      {% for t in _ts %}
+      <blockquote class="fe-testimonial">
+        <p>“{{ t.quote }}”</p>
+        <cite>— {{ t.attribution }}</cite>
+      </blockquote>
+      {% endfor %}
+    </div>
+  </div>
+</section>

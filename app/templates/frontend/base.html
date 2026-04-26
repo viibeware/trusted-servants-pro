@@ -4,25 +4,55 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{% block title %}{{ frontend_title }}{% endblock %}</title>
-{% if site and site.og_enabled %}
-{% set _og_title = site.og_title or frontend_title %}
+{# Frontend (public site) Open Graph — controlled by the Web Frontend's
+   Branding & SEO admin page. The admin /tspro pages render their own,
+   independent og_* tags via app/templates/base.html. #}
+{% if site and site.frontend_og_enabled %}
+{% set _og_title = site.frontend_og_title or frontend_title %}
 <meta property="og:title" content="{{ _og_title }}">
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ request.url }}">
 <meta property="og:site_name" content="{{ frontend_title }}">
-{% if site.og_description %}<meta property="og:description" content="{{ site.og_description }}">{% endif %}
-{% if site.og_image_filename %}<meta property="og:image" content="{{ url_for('public.site_og_image', _external=True) }}">{% endif %}
-<meta name="twitter:card" content="{% if site.og_image_filename %}summary_large_image{% else %}summary{% endif %}">
+{% if site.frontend_og_description %}<meta property="og:description" content="{{ site.frontend_og_description }}">{% endif %}
+{% if site.frontend_og_image_filename %}<meta property="og:image" content="{{ url_for('public.site_frontend_og_image', _external=True) }}">{% endif %}
+<meta name="twitter:card" content="{% if site.frontend_og_image_filename %}summary_large_image{% else %}summary{% endif %}">
 <meta name="twitter:title" content="{{ _og_title }}">
-{% if site.og_description %}<meta name="twitter:description" content="{{ site.og_description }}">{% endif %}
-{% if site.og_image_filename %}<meta name="twitter:image" content="{{ url_for('public.site_og_image', _external=True) }}">{% endif %}
-{% if site.og_description %}<meta name="description" content="{{ site.og_description }}">{% endif %}
+{% if site.frontend_og_description %}<meta name="twitter:description" content="{{ site.frontend_og_description }}">{% endif %}
+{% if site.frontend_og_image_filename %}<meta name="twitter:image" content="{{ url_for('public.site_frontend_og_image', _external=True) }}">{% endif %}
+{% if site.frontend_og_description %}<meta name="description" content="{{ site.frontend_og_description }}">{% endif %}
 {% elif frontend_tagline %}
 <meta name="description" content="{{ frontend_tagline }}">
 {% endif %}
+{% if site and site.frontend_favicon_filename %}
+<link rel="icon" href="{{ url_for('public.site_frontend_favicon') }}">
+{% else %}
 <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+{% endif %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/frontend.css') }}">
+{# Admin-added custom fonts. Both upload and google sources are served
+   entirely from this server — Google CSS is pre-fetched at add time and
+   rewritten to reference local binaries, so nothing leaks to fonts.google.com
+   or fonts.gstatic.com at request time. #}
+{% set _custom_fonts = custom_fonts() %}
+{% if _custom_fonts %}
+{% set _uploaded = _custom_fonts | selectattr('source', 'equalto', 'upload') | list %}
+{% if _uploaded %}
+<style>
+{% for cf in _uploaded %}
+@font-face {
+  font-family: '{{ cf.family }}';
+  src: url('{{ url_for("public.public_custom_font", fid=cf.id) }}');
+  font-display: swap;
+}
+{% endfor %}
+</style>
+{% endif %}
+{% for cf in _custom_fonts if cf.source == 'google' %}
+<link rel="stylesheet" href="{{ url_for('public.public_custom_font', fid=cf.id) }}">
+{% endfor %}
+{% endif %}
+<script src="{{ url_for('static', filename='js/login_fx.js') }}"></script>
 <script>
   // Apply saved frontend theme before first paint so there's no flash.
   try {
@@ -35,7 +65,10 @@
   } catch (e) {}
 </script>
 </head>
-<body class="frontend-body">
+{% set _fe_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
+{% set _font_vars = font_css_vars(site) %}
+{% set _design_vars = design_css_vars(site) %}
+<body class="frontend-body" data-fe-theme="{{ _fe_theme }}" style="{{ _font_vars }} {{ _design_vars }}">
 {% if site and not site.frontend_enabled and current_user.is_authenticated and current_user.can_edit_frontend() %}
 <div class="fe-admin-preview-bar" role="status">
   <div class="fe-container fe-admin-preview-inner">
@@ -71,7 +104,7 @@
 {# ── Mega menu panels (one per nav item with has_megamenu) ── #}
 {% if nav_items %}
 {% for ni in nav_items if ni.has_megamenu and ni.columns %}
-  {% include megamenu_template_partial|default('frontend/megamenus/dccma.html') %}
+  {% include megamenu_template_partial|default('frontend/megamenus/recovery-blue.html') %}
 {% endfor %}
 
 {# Backdrop that blurs everything BELOW the header when any mega menu is open. #}
@@ -93,7 +126,17 @@
     const btn = document.getElementById('fe-menu-btn');
     const header = document.getElementById('fe-header');
     if (btn && header) {
-      btn.addEventListener('click', () => header.classList.toggle('fe-nav-open'));
+      btn.addEventListener('click', () => {
+        // If a mega menu is open, the hamburger (now an X) closes that first.
+        // Clicking the backdrop triggers the mega-menu init's close handler,
+        // which removes the open classes on the panel, backdrop, and body.
+        if (document.body.classList.contains('fe-megamenu-open')) {
+          const backdrop = document.querySelector('.fe-megamenu-backdrop');
+          if (backdrop) backdrop.click();
+          return;
+        }
+        header.classList.toggle('fe-nav-open');
+      });
     }
     const onScroll = () => {
       if (!header) return;
@@ -121,13 +164,91 @@
       if (window.ResizeObserver) new ResizeObserver(setH).observe(h);
     })();
 
+    // Randomize hero-blob positions on every page load so the frosty bg
+    // never looks the same twice. Also re-derive hues if the admin opted
+    // into per-load randomness.
+    (function randomHeroBlobs(){
+      const wrap = document.querySelector('[data-hero-blobs]');
+      if (!wrap) return;
+      if (wrap.dataset.randomize === '1') {
+        const a = Math.floor(Math.random() * 360);
+        const b = (a + 140 + Math.floor(Math.random() * 80)) % 360;
+        wrap.style.setProperty('--fe-blob-hue-a', a);
+        wrap.style.setProperty('--fe-blob-hue-b', b);
+      }
+      // Each blob gets its own randomly placed center + animation phase so
+      // they orbit the hero from a fresh starting position every time.
+      wrap.querySelectorAll('[data-hero-blob]').forEach((b, i) => {
+        const xPct = (Math.random() * 90 - 15).toFixed(1);
+        const yPct = (Math.random() * 90 - 15).toFixed(1);
+        const dur  = (12 + Math.random() * 14).toFixed(1);
+        const delay = (-Math.random() * 18).toFixed(1);
+        b.style.left = xPct + '%';
+        b.style.top  = yPct + '%';
+        b.style.right = 'auto';
+        b.style.bottom = 'auto';
+        b.style.animationDuration = dur + 's';
+        b.style.animationDelay = delay + 's';
+      });
+    })();
+
+    // Hero background video — muted autoplay loop with playbackRate from
+    // the admin's speed picker. The native `loop` attribute on <video>
+    // handles the seamless restart.
+    (function heroVideo(){
+      const v = document.querySelector('[data-hero-video]');
+      if (!v) return;
+      const speed = (parseInt(v.dataset.speed, 10) || 100) / 100;
+      const apply = () => { try { v.playbackRate = speed; } catch (_) {} };
+      v.addEventListener('loadedmetadata', apply);
+      apply();
+      v.play().catch(() => {});
+    })();
+
+    // Hero particle overlay — reuses the login screen's canvas FX.
+    (function heroParticles(){
+      const canvas = document.querySelector('[data-hero-particles]');
+      if (!canvas || !window.initLoginFX) return;
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const effect = canvas.dataset.effect || 'stars';
+      if (effect === 'off') { canvas.remove(); return; }
+      const speed = parseInt(canvas.dataset.speed, 10) || 100;
+      const size = parseInt(canvas.dataset.size, 10) || 100;
+      window.initLoginFX(canvas, { effect, speed, size });
+    })();
+
+    // Sinewave hero bg — reuses the login screen's gradient generator and
+    // dims/mutes the palette based on the active theme. Re-renders whenever
+    // the user toggles light/dark so the gradient never looks too vibrant
+    // on a dark background or too washed out on a light one.
+    (function heroSinewave(){
+      const section = document.querySelector('.fe-hero-bg-sinewave');
+      if (!section || !window.loginFxUtils) return;
+      let colors = null;
+      try { colors = JSON.parse(section.dataset.sinewaveColors || ''); } catch (_) {}
+      if (!colors || !colors.length) colors = ['#16c2ba', '#1883d5', '#5a1ce5'];
+      function paint(){
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const adjusted = window.loginFxUtils.adjustPaletteForTheme(colors, isDark);
+        window.loginFxUtils.applyBackground(section, adjusted);
+      }
+      paint();
+      const mo = new MutationObserver(records => {
+        for (const r of records) if (r.attributeName === 'data-theme') { paint(); break; }
+      });
+      mo.observe(document.documentElement, { attributes: true });
+    })();
+
     // Mega menu: show the matching panel on hover, hide on mouseleave, close on ESC.
+    // On touch/mobile: a tap on the parent link opens the matching panel and
+    // closes the hamburger dropdown so only the mega menu is in view.
     (function initMegaMenu(){
       const parents = document.querySelectorAll('[data-megamenu]');
       if (!parents.length) return;
       const panels  = document.querySelectorAll('[data-megamenu-panel]');
       const backdrop = document.querySelector('.fe-megamenu-backdrop');
       const body = document.body;
+      const MOBILE_MQ = window.matchMedia('(max-width: 880px)');
       let closeTimer = null;
       let activeId = null;
       function open(id) {
@@ -143,6 +264,8 @@
         });
         if (backdrop) backdrop.classList.add('open');
         body.classList.add('fe-megamenu-open');
+        // Mobile: collapse the hamburger dropdown so the mega menu owns the screen.
+        if (MOBILE_MQ.matches && header) header.classList.remove('fe-nav-open');
       }
       function close(force) {
         activeId = null;
@@ -162,6 +285,15 @@
         parent.addEventListener('mouseenter', () => open(id));
         parent.addEventListener('focus', () => open(id));
         parent.addEventListener('mouseleave', scheduleClose);
+        // Mobile tap: intercept so the first tap opens the panel instead of
+        // following the parent's href. Users can still reach the destination
+        // via a link inside the mega menu.
+        parent.addEventListener('click', (e) => {
+          if (!MOBILE_MQ.matches) return;
+          e.preventDefault();
+          if (activeId === id) close(true);
+          else open(id);
+        });
       });
       panels.forEach(p => {
         p.addEventListener('mouseenter', () => clearTimeout(closeTimer));

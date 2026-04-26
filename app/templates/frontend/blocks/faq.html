@@ -1,0 +1,18 @@
+{# Accordion FAQ. Content from site_blocks(site).faq. #}
+{% set _faq = (block_content.faq if block_content else []) %}
+<section class="fe-section fe-faq" aria-label="Frequently asked questions">
+  <div class="fe-container">
+    <div class="fe-section-head">
+      <h2>Frequently asked questions</h2>
+      <p>Common questions from people who are about to attend their first meeting.</p>
+    </div>
+    <div class="fe-faq-list">
+      {% for q in _faq %}
+      <details class="fe-faq-item">
+        <summary>{{ q.question }}</summary>
+        <p>{{ q.answer }}</p>
+      </details>
+      {% endfor %}
+    </div>
+  </div>
+</section>

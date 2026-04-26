@@ -1,0 +1,72 @@
+{# Inner contents of the Sidebar tab's manual drag-drop section. Used
+   by both base.html (initial render) and /tspro/_sidebar/order-manual
+   (live refresh after a role/toggle save) so the drag-drop list always
+   reflects the current dynamic section placement of module-gated items. #}
+{% set _side_order = (site.sidebar_order_json or '{}') | from_json %}
+{% set _side_catalog = sidebar_reorder_catalog(site) %}
+<p class="muted smaller">Drag the ⋮⋮ handles to reorder. Sections move as whole groups; items inside Main and Admin reorder individually.</p>
+{% set _section_keys = (_side_order.sections if _side_order.sections else ['main','external','admin']) %}
+{% set _seen = [] %}
+{% set _all_sections = _section_keys + ['main','external','admin'] %}
+<div class="sidebar-order-sections" data-sidebar-section-list>
+  {% for sk in _all_sections %}
+    {% if sk not in _seen %}{% set _ = _seen.append(sk) %}
+    <div class="sidebar-order-section" data-section-key="{{ sk }}" draggable="true">
+      <div class="sidebar-order-section-head">
+        <span class="sidebar-order-handle" aria-hidden="true">⋮⋮</span>
+        <span class="sidebar-order-section-name">
+          {% if sk == 'main' %}Main{% elif sk == 'external' %}External links{% else %}Admin{% endif %}
+        </span>
+      </div>
+      {% if sk in ('main', 'admin') %}
+        {% set _saved = _side_order.get(sk) or [] %}
+        {% set _cat = _side_catalog[sk] %}
+        {% set _by_key = {} %}
+        {% for c in _cat %}{% set _ = _by_key.update({c.key: c}) %}{% endfor %}
+        {% set _seen_keys = [] %}
+        {% set _final = _saved + (_cat | map(attribute='key') | list) %}
+        <ul class="sidebar-order-items" data-section-items="{{ sk }}">
+          {% for k in _final %}
+            {% if k in _by_key and k not in _seen_keys %}{% set _ = _seen_keys.append(k) %}
+            <li class="sidebar-order-item" data-item-key="{{ k }}" draggable="true">
+              <span class="sidebar-order-handle" aria-hidden="true">⋮⋮</span>
+              <span class="sidebar-order-item-name">{{ _by_key[k].label }}</span>
+            </li>
+            {% endif %}
+          {% endfor %}
+        </ul>
+      {% else %}
+        {# External links inline CRUD. The drag-drop reorder for
+           individual links is served by /nav-links/reorder; the
+           whole-section move is captured in the parent JSON. #}
+        {% if nav_links %}
+        <ul class="sidebar-extlink-list file-list-sortable"
+            data-reorder-url="{{ url_for('main.nav_link_reorder') }}">
+          {% for n in nav_links %}
+          <li class="sidebar-extlink-row" data-item-id="{{ n.id }}" draggable="true">
+            <span class="sidebar-order-handle" aria-hidden="true">⋮⋮</span>
+            <div class="sidebar-extlink-meta">
+              <div class="sidebar-extlink-title">{{ n.title }}</div>
+              <a class="muted smaller sidebar-extlink-url" href="{{ n.url }}" target="_blank" rel="noopener">{{ n.url }}</a>
+            </div>
+            <button type="button" class="btn btn-sm" data-open-modal="navlink-edit-{{ n.id }}">Edit</button>
+            <form method="post" action="{{ url_for('main.nav_link_delete', nid=n.id) }}"
+                  onsubmit="return confirm('Delete this link?');" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-danger">{{ icon('x') }}</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted smaller sidebar-extlink-empty">No external links yet.</p>
+        {% endif %}
+        <button type="button" class="btn btn-sm sidebar-extlink-add"
+                data-open-modal="navlink-new-modal">+ Add link</button>
+      {% endif %}
+    </div>
+    {% endif %}
+  {% endfor %}
+</div>
+<input type="hidden" name="sidebar_order_json" data-sidebar-order-json
+       value="{{ site.sidebar_order_json or '{}' }}">

@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% from "_frontend_template_picker.html" import template_picker %}
+{% set _active_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
+{% set _resolved = resolve_design(site) %}
+{% set _theme_default = design_theme_defaults.get(_active_theme) or design_theme_defaults.classic %}
+{% set _overrides = (site.frontend_design_json or '{}') | from_json %}
+{% block heading %}Design{% endblock %}
+{% block heading_help %}Site-wide design tokens — colors, spacing, buttons, links, text — that every section reads from. Each theme ships sensible defaults; override any value to apply it everywhere.{% endblock %}
+{% block top_actions %}
+{{ template_picker(frontend_themes, _active_theme,
+                    "frontend_theme",
+                    url_for('main.frontend_theme_save'),
+                    "site-theme-modal", "homepage", "Site theme", label="Theme") }}
+<a class="btn" href="{{ url_for('frontend.index') }}" target="_blank" rel="noopener">View frontend ↗</a>
+{% endblock %}
+{% block content %}
+
+{# Helper macros — one per field kind. Each takes the field schema dict
+   and renders the appropriate input. The override value comes from the
+   _overrides JSON; if absent, the input shows blank/placeholder so the
+   admin can see "this is using the theme default". #}
+{% macro field_label(f) %}
+  <span class="fe-design-field-label">
+    <b>{{ f.label }}</b>
+    {% if f.help %}<span class="muted small fe-design-field-help">{{ f.help }}</span>{% endif %}
+    <span class="muted smaller fe-design-field-default">
+      Theme default: <code>{{ _theme_default[f.key] }}</code>
+    </span>
+  </span>
+{% endmacro %}
+
+{% macro reset_btn(f) %}
+  <button type="button" class="fe-design-reset" data-design-reset="{{ f.key }}"
+          title="Use theme default">↺</button>
+{% endmacro %}
+
+{% macro render_field(f) %}
+  {% set has_override = f.key in _overrides %}
+  {% set current = _overrides[f.key] if has_override else _theme_default[f.key] %}
+  <div class="fe-design-field{% if has_override %} fe-design-field--overridden{% endif %}"
+       data-field-key="{{ f.key }}">
+    {{ field_label(f) }}
+
+    {% if f.kind == 'color' %}
+      <div class="fe-design-field-control">
+        <input type="checkbox" name="design_{{ f.key }}_enabled" value="1"
+               {% if has_override %}checked{% endif %}
+               class="fe-design-color-toggle"
+               title="Off = use theme default">
+        <input type="color" name="design_{{ f.key }}"
+               value="{{ current }}"
+               class="fe-design-color-input">
+        {{ reset_btn(f) }}
+      </div>
+
+    {% elif f.kind == 'scale' %}
+      {% set scale_dict = design_spacing_scale if f.scale == 'spacing'
+                          else design_radius_scale if f.scale == 'radius'
+                          else design_shadow_scale %}
+      <div class="fe-design-field-control">
+        <select name="design_{{ f.key }}">
+          <option value="" {% if not has_override %}selected{% endif %}>— Theme default ({{ _theme_default[f.key] }}) —</option>
+          {% for k, v in scale_dict.items() %}
+          <option value="{{ k }}" {% if has_override and current == k %}selected{% endif %}>{{ k }} · {{ v }}</option>
+          {% endfor %}
+        </select>
+        {{ reset_btn(f) }}
+      </div>
+
+    {% elif f.kind == 'select' %}
+      <div class="fe-design-field-control">
+        <select name="design_{{ f.key }}">
+          <option value="" {% if not has_override %}selected{% endif %}>— Theme default ({{ _theme_default[f.key] }}) —</option>
+          {% for c in f.choices %}
+          <option value="{{ c }}" {% if has_override and current == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+        {{ reset_btn(f) }}
+      </div>
+
+    {% elif f.kind == 'int' %}
+      <div class="fe-design-field-control">
+        <input type="number" name="design_{{ f.key }}"
+               value="{% if has_override %}{{ current }}{% endif %}"
+               placeholder="{{ _theme_default[f.key] }}"
+               min="{{ f.min }}" max="{{ f.max }}" step="{{ f.step or 1 }}">
+        {{ reset_btn(f) }}
+      </div>
+
+    {% elif f.kind == 'text' %}
+      <div class="fe-design-field-control">
+        <input type="text" name="design_{{ f.key }}"
+               value="{% if has_override %}{{ current }}{% endif %}"
+               placeholder="{{ f.placeholder or _theme_default[f.key] }}"
+               maxlength="{{ f.max_len or 80 }}">
+        {{ reset_btn(f) }}
+      </div>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+<div class="fe-admin-layout">
+  {% include "_frontend_subnav.html" %}
+  <div class="fe-admin-main">
+
+<form class="form" method="post" action="{{ url_for('main.frontend_design_save') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <section class="card">
+    <div class="card-head">
+      <h2>How this works</h2>
+      <span class="muted smaller">Theme defaults + per-site overrides → CSS custom properties.</span>
+    </div>
+    {% set _active_theme_name = ((frontend_themes | selectattr('key', 'equalto', _active_theme) | list)[0].name if (frontend_themes | selectattr('key', 'equalto', _active_theme) | list) else _active_theme|capitalize) %}
+    <p class="muted small">Every section on the public site reads from these tokens. The active theme — <b>{{ _active_theme_name }}</b> — provides a complete set of defaults. Override any value to apply it site-wide; clear an override to fall back to the theme. Per-section settings (like a split's spacing dropdown) resolve through the same scales, so picking <code>tight</code> anywhere always means the same value.</p>
+  </section>
+
+  {% for grp in design_groups %}
+  <section class="card">
+    <div class="card-head">
+      <h2>{{ grp }}</h2>
+      <span class="muted smaller">{% if grp == 'Colors' %}Brand palette + neutral surfaces, links, and text colors.
+      {% elif grp == 'Layout' %}Container width, default section rhythm, card radius + shadow.
+      {% elif grp == 'Buttons' %}Default radius, padding, font weight, and text transform.
+      {% elif grp == 'Links' %}How links read in body copy (decoration on/off, hover behavior).
+      {% elif grp == 'Text' %}Base text size and line height for body copy.{% endif %}</span>
+    </div>
+    <div class="fe-design-grid">
+      {% for f in design_fields if f.group == grp %}
+        {{ render_field(f) }}
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+
+  <div class="form-actions">
+    <button class="btn" formaction="{{ url_for('main.frontend_design_reset') }}"
+            formmethod="post"
+            onclick="return confirm('Clear every override and use the theme defaults for everything?');">Reset to theme defaults</button>
+    <button class="btn btn-primary">Save design</button>
+  </div>
+</form>
+
+  </div>
+</div>
+
+<script>
+// Reset-one-field button: clear the field's input/select to the empty
+// state (which the save endpoint reads as "no override → theme default").
+// For colors we also flip the gating checkbox off.
+(function () {
+  document.querySelectorAll('[data-design-reset]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var field = btn.closest('.fe-design-field');
+      if (!field) return;
+      var sel = field.querySelector('select');
+      if (sel) sel.value = '';
+      var num = field.querySelector('input[type=number]');
+      if (num) num.value = '';
+      var txt = field.querySelector('input[type=text]');
+      if (txt) txt.value = '';
+      var cb = field.querySelector('.fe-design-color-toggle');
+      if (cb) cb.checked = false;
+      field.classList.remove('fe-design-field--overridden');
+    });
+  });
+  // Color picker flips the gating checkbox on automatically (same pattern
+  // as the split bg pickers).
+  document.querySelectorAll('.fe-design-color-input').forEach(function (picker) {
+    picker.addEventListener('input', function () {
+      var cb = picker.parentElement.querySelector('.fe-design-color-toggle');
+      if (cb) cb.checked = true;
+      var field = picker.closest('.fe-design-field');
+      if (field) field.classList.add('fe-design-field--overridden');
+    });
+  });
+})();
+</script>
+{% endblock %}

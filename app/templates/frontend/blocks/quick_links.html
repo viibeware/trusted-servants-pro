@@ -1,0 +1,13 @@
+{# Quick-link cards. Content from site_blocks(site).quick_links. #}
+{% set _ql = (block_content.quick_links if block_content else []) %}
+<section class="fe-quick" aria-label="Quick links">
+  <div class="fe-container fe-quick-grid">
+    {% for l in _ql %}
+    <a class="fe-quick-card" href="{{ l.href or '#' }}">
+      <div class="fe-quick-icon">{{ l.icon or '◈' }}</div>
+      <h3>{{ l.title }}</h3>
+      <p>{{ l.body }}</p>
+    </a>
+    {% endfor %}
+  </div>
+</section>

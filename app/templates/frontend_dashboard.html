@@ -1,7 +1,13 @@
 {% extends "base.html" %}
+{% from "_frontend_template_picker.html" import template_picker %}
+{% set _active_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
 {% block heading %}Web Frontend{% endblock %}
 {% block heading_help %}Manage the public-facing website served at the root URL. The admin portal lives at <code>/tspro</code>.{% endblock %}
 {% block top_actions %}
+{{ template_picker(frontend_themes, _active_theme,
+                    "frontend_theme",
+                    url_for('main.frontend_theme_save'),
+                    "site-theme-modal", "homepage", "Site theme", label="Theme") }}
 <a class="btn" href="{{ url_for('frontend.index') }}" target="_blank" rel="noopener">View frontend ↗</a>
 {% endblock %}
 {% block content %}
@@ -27,7 +33,8 @@
             {% endif %}
           </p>
         </div>
-        <form method="post" action="{{ url_for('main.frontend_toggle') }}" class="special-page-toggle-form">
+        <form method="post" action="{{ url_for('main.frontend_toggle') }}" class="special-page-toggle-form"
+              data-fe-auto-submit>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <label class="mode-toggle" title="Toggle public web frontend">
             <input type="checkbox" name="frontend_enabled" value="1"

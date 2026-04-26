@@ -1,0 +1,75 @@
+{# "Recovery Blue" footer — inspired by dccma.com: a meeting-locations row, a
+   contact block, and a secondary link strip with copyright. #}
+<footer class="fe-footer-recovery">
+  <div class="fe-footer-recovery-locations">
+    <div class="fe-container">
+      <h3 class="fe-footer-recovery-heading">Search Meeting Locations</h3>
+      <div class="fe-footer-recovery-loc-grid">
+        <a class="fe-footer-recovery-loc" href="https://triangleclub.org/" target="_blank" rel="noopener">
+          <div class="fe-footer-recovery-loc-name">TRIANGLE CLUB</div>
+          <div class="fe-footer-recovery-loc-addr">1638 R St NW<br>Washington, DC 20009</div>
+          <div class="fe-footer-recovery-loc-note">— with the "red door"</div>
+        </a>
+        <a class="fe-footer-recovery-loc" href="http://www.dupontcircleclub.org/" target="_blank" rel="noopener">
+          <div class="fe-footer-recovery-loc-name">DUPONT CIRCLE CLUB</div>
+          <div class="fe-footer-recovery-loc-addr">1623 Connecticut Avenue, NW<br>Washington, DC 20009</div>
+          <div class="fe-footer-recovery-loc-note">— second floor</div>
+        </a>
+        <a class="fe-footer-recovery-loc" href="#" target="_blank" rel="noopener">
+          <div class="fe-footer-recovery-loc-name">EMMANUEL EPISCOPAL CHURCH</div>
+          <div class="fe-footer-recovery-loc-addr">811 Cathedral Street<br>Baltimore, MD 21201</div>
+          <div class="fe-footer-recovery-loc-note">— enter on W. Read Street</div>
+        </a>
+        <a class="fe-footer-recovery-loc fe-footer-recovery-loc-world" href="https://www.crystalmeth.org/" target="_blank" rel="noopener">
+          <div class="fe-footer-recovery-loc-name">IN OTHER CITIES</div>
+          <div class="fe-footer-recovery-loc-addr">World-wide CMA meeting search</div>
+          <div class="fe-footer-recovery-loc-note">crystalmeth.org →</div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="fe-footer-recovery-contact">
+    <div class="fe-container fe-footer-recovery-contact-inner">
+      <div>
+        <h3 class="fe-footer-recovery-heading">Contact Us</h3>
+        <p>For general inquiries about CMA in DC, Maryland and Northern Virginia:
+          {% if site and site.pic_email %}
+          <a href="mailto:{{ site.pic_email }}">{{ site.pic_email }}</a>
+          {% else %}
+          <a href="https://www.crystalmeth.org/contact-help/" target="_blank" rel="noopener">contact us</a>
+          {% endif %}</p>
+        <p>For CMA services worldwide:
+          <a href="https://www.crystalmeth.org/" target="_blank" rel="noopener">crystalmeth.org</a></p>
+      </div>
+      <div>
+        <h3 class="fe-footer-recovery-heading">Meetings</h3>
+        <p>We have in-person, online and hybrid meetings 7 days a week at multiple times each day. See our
+          <a href="{{ url_for('frontend.index') }}#meetings">Meetings page</a> for more information.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="fe-footer-recovery-bottom">
+    <div class="fe-container fe-footer-recovery-bottom-inner">
+      <div class="fe-footer-recovery-brand">
+        {% set _ff_logo = (site.frontend_logo_filename if site else None) or (site.footer_logo_filename if site else None) %}
+        {% if site and site.frontend_logo_filename %}
+        <img src="{{ url_for('public.site_frontend_logo') }}" alt="" class="fe-footer-recovery-logo">
+        {% elif site and site.footer_logo_filename %}
+        <img src="{{ url_for('public.site_footer_logo') }}" alt="" class="fe-footer-recovery-logo">
+        {% else %}
+        <img src="{{ url_for('static', filename='img/recovery-blue/logo.svg') }}" alt="" class="fe-footer-recovery-logo fe-footer-recovery-logo-default">
+        {% endif %}
+      </div>
+      <div class="fe-footer-recovery-copy">
+        {% if frontend_footer_text %}{{ frontend_footer_text|safe_html }}
+        {% else %}&copy; {{ now.year if now else 2026 }} {{ frontend_title }}{% endif %}
+      </div>
+      <div class="fe-footer-recovery-links">
+        <a href="{{ url_for('auth.login') }}">Portal</a>
+        <a href="https://www.crystalmeth.org/" target="_blank" rel="noopener">crystalmeth.org</a>
+      </div>
+    </div>
+  </div>
+</footer>
