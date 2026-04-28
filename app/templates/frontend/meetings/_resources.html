@@ -1,0 +1,70 @@
+{# Files (public_visible) + readings (public_readings) for a meeting,
+   shown after the Zoom/Location info on every meeting template. Empty
+   block render-collapses naturally — no wrapper is emitted. #}
+{% set _meeting_slug = (meeting.name | slugify) if (meeting.name | slugify) else 'meeting' %}
+{% set _public_files = meeting.public_files() %}
+{% set _public_readings = meeting.public_readings %}
+{% if _public_files or _public_readings %}
+<section class="fe-meeting-resources" aria-labelledby="meeting-resources-head">
+  <h3 id="meeting-resources-head">{{ icon('file-text') }} Files &amp; Readings</h3>
+
+  {% if _public_files %}
+  {% set _by_cat = {} %}
+  {% for f in _public_files %}
+    {% set _ = _by_cat.setdefault(f.category, []).append(f) %}
+  {% endfor %}
+  {% set _cat_labels = {
+    'documents': 'Documents',
+    'scripts': 'Scripts',
+    'readings': 'Readings',
+    'external_links': 'Links',
+    'videos': 'Videos',
+    'images': 'Images',
+  } %}
+  {% for cat, label in _cat_labels.items() if _by_cat.get(cat) %}
+  <div class="fe-meeting-resources-group">
+    <h4>{{ label }}</h4>
+    <ul>
+      {% for f in _by_cat[cat] %}
+      {# External links + videos point straight at f.url so the visitor
+         sees the real destination on hover and in the status bar. Other
+         categories go through the meeting-resource route — even when they
+         carry a URL — because they may also have a stored upload or
+         body content the route knows how to resolve. #}
+      {% set _is_link_only = cat in ('external_links', 'videos') %}
+      {% set _href = f.url if (_is_link_only and f.url) else url_for('frontend.meeting_resource', slug=_meeting_slug, resource=f.url_slug) %}
+      <li>
+        <a href="{{ _href }}" target="_blank" rel="noopener">
+          {{ f.title }}
+          <span aria-hidden="true">↗</span>
+        </a>
+        {% if f.description %}<span class="muted small">{{ f.description }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if _public_readings %}
+  <div class="fe-meeting-resources-group">
+    <h4>Readings</h4>
+    <ul>
+      {% for r in _public_readings %}
+      {# A reading that's purely an external URL (no body, no upload)
+         links straight to the destination — same rationale as external
+         links above. #}
+      {% set _is_link_only = r.url and not r.body and not r.stored_filename %}
+      {% set _href = r.url if _is_link_only else url_for('frontend.meeting_resource', slug=_meeting_slug, resource=r.url_slug) %}
+      <li>
+        <a href="{{ _href }}" target="_blank" rel="noopener">
+          {{ r.title }}
+          <span aria-hidden="true">↗</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</section>
+{% endif %}

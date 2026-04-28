@@ -9,7 +9,7 @@ Admin pages remain at /tspro/* and the authenticated dashboard is at /tspro/.
 """
 from flask import Blueprint, render_template, redirect, url_for, abort
 from flask_login import current_user
-from .models import SiteSetting, Meeting, FrontendNavItem
+from .models import SiteSetting, Meeting, FrontendNavItem, Post
 
 bp = Blueprint("frontend", __name__)
 
@@ -96,12 +96,190 @@ HOMEPAGE_TEMPLATES = [
     },
 ]
 
+# ---------------------------------------------------------------------------
+# Reusable templates for entity-detail pages. Unlike layouts (which apply to
+# a single page slug like the homepage), these are picked once and apply to
+# every meeting / every event detail page rendered from dynamic data. The
+# admin "Templates" section drives selection.
+# ---------------------------------------------------------------------------
+MEETING_TEMPLATES = [
+    {
+        "key": "classic",
+        "name": "Classic",
+        "description": "Two-column card grid with schedule, location, and Zoom side-by-side. Balanced and familiar — matches the original site.",
+        "partial": "frontend/meetings/classic.html",
+    },
+    {
+        "key": "card_stack",
+        "name": "Card Stack",
+        "description": "Gradient hero banner with a big primary action card up top — pulls the join/directions CTA above the fold. Mobile-first, single column.",
+        "partial": "frontend/meetings/card_stack.html",
+    },
+    {
+        "key": "magazine",
+        "name": "Magazine",
+        "description": "Editorial: serif headline, hairline rule, long-form description on the left, sticky meta sidebar (schedule / location / Zoom) on the right.",
+        "partial": "frontend/meetings/magazine.html",
+    },
+    {
+        "key": "minimal",
+        "name": "Minimal",
+        "description": "Spare and typography-driven. No cards — just generous whitespace, an eyebrow label, the meeting name, and a simple labeled list of details.",
+        "partial": "frontend/meetings/minimal.html",
+    },
+]
+
+EVENT_TEMPLATES = [
+    {
+        "key": "classic",
+        "name": "Classic",
+        "description": "Featured image up top, type chips, summary, then a clean two-column grid of When / Where / Zoom / Website / Contact cards.",
+        "partial": "frontend/events/classic.html",
+    },
+    {
+        "key": "poster",
+        "name": "Poster",
+        "description": "Full-bleed featured image as a darkened backdrop with the title overlaid, then a stylized ticket card with the date block, key details, and CTAs.",
+        "partial": "frontend/events/poster.html",
+    },
+    {
+        "key": "timeline",
+        "name": "Timeline",
+        "description": "Big calendar-style date block on the left (month / day stacked), event content beside it. Reads like a marked-up date in a journal.",
+        "partial": "frontend/events/timeline.html",
+    },
+    {
+        "key": "minimal",
+        "name": "Minimal",
+        "description": "Centered, no images, no chips. A thin date line, a serif title, the body text, and a compact labeled detail block. Maximum focus on the writing.",
+        "partial": "frontend/events/minimal.html",
+    },
+]
+
 
 def _template_meta(templates, key):
     for t in templates:
         if t["key"] == key:
             return t
     return templates[0]
+
+
+# ---------------------------------------------------------------------------
+# Per-template appearance overrides.
+#
+# Stored as a JSON blob on SiteSetting.frontend_template_settings_json keyed
+# by content-type then template key. Each leaf is a dict with:
+#   bg            — hex color (page background) or "" to fall through to the
+#                   site's design tokens
+#   heading_font  — font key from app.fonts (inter / fraunces / custom:N)
+#                   or "" for theme default
+#   body_font     — same shape as heading_font
+#   heading_size  — int percent scale (default 100)
+#   body_size     — int percent scale (default 100)
+#
+# Resolves at render time into a CSS-vars string injected onto the template's
+# top-level <section> via inline style. Each template's CSS reads those vars
+# (--tpl-bg, --tpl-heading-font, --tpl-body-font, --tpl-heading-scale,
+# --tpl-body-scale) with the page-level design tokens as fallback — so when
+# a value is empty the template falls through to the global Design page.
+# ---------------------------------------------------------------------------
+
+import re as _re_tpl
+_HEX_RE_TPL = _re_tpl.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
+
+
+def template_settings(site, kind, key):
+    """Return the saved per-template overrides as a dict, with sane defaults
+    for any missing keys. Never raises — bad/missing JSON returns the
+    all-defaults dict so the page still renders.
+
+    ``heading_size`` / ``body_size`` are absolute font sizes in *rem*.
+    A value of ``0`` means "no override" (the template falls through to its
+    own responsive default). Valid range is 0.5–4.0 rem."""
+    import json
+    defaults = {"bg": "", "heading_font": "", "body_font": "",
+                "heading_size": 0.0, "body_size": 0.0}
+    raw = (site.frontend_template_settings_json if site else None) or ""
+    if not raw:
+        return defaults
+    try:
+        data = json.loads(raw)
+    except (ValueError, TypeError):
+        return defaults
+    leaf = ((data.get(kind) or {}).get(key)) or {}
+    out = dict(defaults)
+    if isinstance(leaf.get("bg"), str) and _HEX_RE_TPL.match(leaf["bg"]):
+        out["bg"] = leaf["bg"]
+    if isinstance(leaf.get("heading_font"), str):
+        out["heading_font"] = leaf["heading_font"].strip()
+    if isinstance(leaf.get("body_font"), str):
+        out["body_font"] = leaf["body_font"].strip()
+    for k in ("heading_size", "body_size"):
+        try:
+            v = float(leaf.get(k))
+            if 0.5 <= v <= 4.0:
+                out[k] = round(v, 1)
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
+def _fluid_clamp(rem, abs_floor, min_vp=320, max_vp=1200):
+    """Convert a desktop-intent rem override into a mobile-aware
+    ``clamp(min, calc(offset + slope*vw), max)`` expression that
+    interpolates linearly between ``min_vp`` (mobile floor) and
+    ``max_vp`` (the admin's intended desktop size).
+
+    Result for a 4rem override with 1.25rem floor over the default
+    320–1200px range::
+
+        clamp(2rem, calc(1.273rem + 3.64vw), 4rem)
+
+    At 320px viewport: ≈2rem (the floor).
+    At 768px viewport: ≈3.02rem.
+    At 1200px viewport and beyond: 4rem (the max, capped).
+
+    When the override value is small enough that the floor would meet
+    or exceed it, the expression collapses to a plain rem constant —
+    no scaling needed."""
+    floor = max(abs_floor, round(rem * 0.5, 2))
+    floor = min(rem, floor)
+    if floor >= rem:
+        return f"{rem:.2f}rem".rstrip("0").rstrip(".")
+    diff_px = (rem - floor) * 16
+    span_px = max_vp - min_vp
+    slope_vw = round(diff_px / span_px * 100, 2)        # vw units
+    offset_px = floor * 16 - (diff_px / span_px) * min_vp
+    offset_rem = round(offset_px / 16, 3)
+    return (f"clamp({floor:g}rem, "
+            f"calc({offset_rem}rem + {slope_vw}vw), "
+            f"{rem:.2f}rem)".replace(".00rem)", "rem)"))
+
+
+def template_css_vars(settings):
+    """Inline ``style=""`` value for the template's top-level section.
+    Empty/default values are skipped so the template falls through to the
+    page-level design tokens / template responsive defaults.
+
+    Heading and body size overrides are emitted as ``clamp()`` expressions
+    so the admin-chosen rem value behaves as the *desktop* size and shrinks
+    on narrow viewports — matching the responsive behavior of each
+    template's built-in defaults."""
+    from .fonts import font_stack
+    parts = []
+    if settings.get("bg"):
+        parts.append(f"--tpl-bg: {settings['bg']};")
+    if settings.get("heading_font"):
+        parts.append(f"--tpl-heading-font: {font_stack(settings['heading_font'])};")
+    if settings.get("body_font"):
+        parts.append(f"--tpl-body-font: {font_stack(settings['body_font'])};")
+    hs = settings.get("heading_size") or 0
+    if hs:
+        parts.append(f"--tpl-heading-size: {_fluid_clamp(hs, 1.25)};")
+    bs = settings.get("body_size") or 0
+    if bs:
+        parts.append(f"--tpl-body-size: {_fluid_clamp(bs, 1.0)};")
+    return " ".join(parts)
 
 
 def _site():
@@ -242,4 +420,116 @@ def meeting_detail(slug):
     if m is None:
         abort(404)
     ctx = _frontend_context(site)
-    return render_template("frontend/meeting_detail.html", meeting=m, **ctx)
+    tpl = _template_meta(MEETING_TEMPLATES,
+                         (site.frontend_meeting_template if site else None) or "classic")
+    tpl_style = template_css_vars(template_settings(site, "meeting", tpl["key"]))
+    return render_template(tpl["partial"], meeting=m, tpl_style=tpl_style, **ctx)
+
+
+@bp.route("/meeting/<slug>/<path:resource>")
+def meeting_resource(slug, resource):
+    """Resolve a public file or reading attached to a meeting via its
+    pretty URL — e.g. ``/meeting/daily-zoom-round-up/opening-statement.pdf``.
+
+    The route looks up the meeting by slug first (same logic as
+    ``meeting_detail``), then matches ``resource`` against the meeting's
+    public files (``MeetingFile.public_visible=True``) and any
+    ``meeting.public_readings`` by their respective ``url_slug`` properties.
+    Files take precedence over readings on slug collision."""
+    from flask import send_from_directory, current_app
+    from .colors import slugify
+    site = _site()
+    gate = _frontend_gate(site)
+    if gate is not None:
+        return gate
+    candidates = (Meeting.query
+                  .filter(Meeting.archived_at.is_(None))
+                  .order_by(Meeting.id)
+                  .all())
+    m = next((mt for mt in candidates if slugify(mt.name) == slug), None)
+    if m is None:
+        abort(404)
+
+    # Files first, then readings — first match by url_slug wins.
+    for f in m.public_files():
+        if f.url_slug == resource:
+            if f.category in ("readings", "scripts") and f.body:
+                return render_template("reading_view.html", title=f.title,
+                                       body=f.body,
+                                       back_url=url_for("frontend.meeting_detail", slug=slug))
+            if f.url:
+                return redirect(f.url)
+            if f.stored_filename:
+                return send_from_directory(
+                    current_app.config["UPLOAD_FOLDER"],
+                    f.stored_filename, as_attachment=False,
+                    download_name=f.original_filename or f.stored_filename)
+            abort(404)
+
+    for r in m.public_readings:
+        if r.url_slug == resource:
+            if r.body:
+                return render_template("reading_view.html", title=r.title,
+                                       body=r.body,
+                                       back_url=url_for("frontend.meeting_detail", slug=slug))
+            if r.url:
+                return redirect(r.url)
+            if r.stored_filename:
+                return send_from_directory(
+                    current_app.config["UPLOAD_FOLDER"],
+                    r.stored_filename, as_attachment=False,
+                    download_name=r.original_filename or r.stored_filename)
+            abort(404)
+
+    abort(404)
+
+
+@bp.route("/meetings")
+def meetings_list():
+    """Public list of every active meeting, grouped by day. Linked from
+    the homepage Upcoming Meetings block via the "See all meetings"
+    CTA. Uses the same Meeting query the homepage block does, but with
+    the full week so visitors can browse the whole schedule."""
+    site = _site()
+    gate = _frontend_gate(site)
+    if gate is not None:
+        return gate
+    ctx = _frontend_context(site)
+    from .blocks import filtered_meetings
+    all_groups = filtered_meetings({
+        "filter": "next_7_days",
+        "max_count": 200,
+        "group_by_day": True,
+    })
+    return render_template("frontend/meetings_list.html",
+                           all_meetings_groups=all_groups, **ctx)
+
+
+@bp.route("/event/<slug>")
+def event_detail(slug):
+    """Public event detail page — featured image, schedule, location,
+    online/Zoom info, contact, and full body. The slug is the event
+    title with non-alphanumerics collapsed to hyphens. Drafts and
+    archived events are not viewable. Past events remain reachable by
+    direct link until the auto-archive sweep marks them archived."""
+    from .colors import slugify
+    site = _site()
+    gate = _frontend_gate(site)
+    if gate is not None:
+        return gate
+    if not site or not getattr(site, "posts_enabled", True):
+        abort(404)
+    candidates = (Post.query
+                  .filter(Post.is_event.is_(True),
+                          Post.is_archived.is_(False),
+                          Post.is_draft.is_(False))
+                  .order_by(Post.id)
+                  .all())
+    ev = next((p for p in candidates if slugify(p.title) == slug), None)
+    if ev is None:
+        abort(404)
+    ctx = _frontend_context(site)
+    tpl = _template_meta(EVENT_TEMPLATES,
+                         (site.frontend_event_template if site else None) or "classic")
+    tpl_style = template_css_vars(template_settings(site, "event", tpl["key"]))
+    return render_template(tpl["partial"], event=ev, tpl_style=tpl_style, **ctx)

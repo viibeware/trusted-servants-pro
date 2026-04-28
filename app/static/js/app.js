@@ -596,6 +596,33 @@
     });
   });
 
+  // Per-row "Public" toggle in the meeting modal's file list. Posts to a
+  // JSON endpoint so the row can flip without closing the modal.
+  document.querySelectorAll("[data-file-public-toggle]").forEach(input => {
+    input.addEventListener("change", async () => {
+      const fid = input.dataset.filePublicToggle;
+      const fd = new FormData();
+      fd.append("public_visible", input.checked ? "1" : "0");
+      input.disabled = true;
+      try {
+        const r = await fetch(`/tspro/files/${fid}/public-toggle`, {
+          method: "POST", body: fd, credentials: "same-origin",
+          headers: { "X-Requested-With": "XMLHttpRequest" },
+        });
+        if (!r.ok) throw new Error("toggle failed");
+        const data = await r.json();
+        // Reflect the canonical value the server saw.
+        input.checked = !!data.public_visible;
+      } catch (err) {
+        // Roll back the visual state if the request failed.
+        input.checked = !input.checked;
+        console.error(err);
+      } finally {
+        input.disabled = false;
+      }
+    });
+  });
+
 // Media library: upload input
   const mediaUploadInput = document.getElementById("media-upload-input");
   if (mediaUploadInput) {

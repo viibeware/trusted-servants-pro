@@ -1,29 +1,36 @@
 {% extends "frontend/base.html" %}
 {% block title %}{{ meeting.name }} · {{ frontend_title }}{% endblock %}
 {% block content %}
-<section class="fe-section fe-meeting-detail" id="meeting">
+<section class="fe-section fe-meeting-detail fe-meeting-classic" id="meeting"
+         style="{{ tpl_style or '' }}">
   <div class="fe-container fe-meeting-detail-inner">
     <a class="fe-meeting-detail-back" href="{{ url_for('frontend.index') }}#meetings">← Back to meetings</a>
 
     <header class="fe-meeting-detail-head">
-      <span class="fe-meeting-type fe-meeting-type-{{ meeting.meeting_type }}">
-        {% if meeting.meeting_type == 'in_person' %}In Person
-        {% elif meeting.meeting_type == 'online' %}Online
-        {% else %}Hybrid{% endif %}
-      </span>
-      <h1>{{ meeting.name }}</h1>
+      {% if meeting.logo_filename %}
+      <div class="fe-meeting-detail-head-logo">
+        <img class="fe-meeting-logo" src="{{ url_for('public.public_meeting_logo', mid=meeting.id) }}" alt="">
+      </div>
+      {% endif %}
+      <div class="fe-meeting-detail-head-content">
+        <span class="fe-meeting-type fe-meeting-type-{{ meeting.meeting_type }}">
+          {% if meeting.meeting_type == 'in_person' %}In Person
+          {% elif meeting.meeting_type == 'online' %}Online
+          {% else %}Hybrid{% endif %}
+        </span>
+        <h1>{{ meeting.name }}</h1>
+        {% if meeting.description %}
+        <div class="fe-meeting-detail-desc">
+          {{ meeting.description|markdown }}
+        </div>
+        {% endif %}
+      </div>
     </header>
 
-    {% if meeting.alert_message %}
+    {% if meeting.public_alert_message %}
     <div class="fe-meeting-detail-alert" role="status">
       {{ icon('alert-triangle') }}
-      <span>{{ meeting.alert_message }}</span>
-    </div>
-    {% endif %}
-
-    {% if meeting.description %}
-    <div class="fe-meeting-detail-desc">
-      {{ meeting.description|markdown }}
+      <span>{{ meeting.public_alert_message }}</span>
     </div>
     {% endif %}
 
@@ -83,20 +90,11 @@
         </dl>
       </section>
       {% endif %}
+
+      {% include "frontend/meetings/_resources.html" %}
     </div>
   </div>
 </section>
 
-<script>
-  document.querySelectorAll('.fe-copy-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const v = btn.getAttribute('data-copy') || '';
-      if (!v || !navigator.clipboard) return;
-      navigator.clipboard.writeText(v).then(() => {
-        btn.classList.add('is-copied');
-        setTimeout(() => btn.classList.remove('is-copied'), 1400);
-      });
-    });
-  });
-</script>
+{% include "frontend/meetings/_copy_script.html" %}
 {% endblock %}

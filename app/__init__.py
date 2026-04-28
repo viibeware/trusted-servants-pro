@@ -434,6 +434,7 @@ def _migrate_sqlite(app):
                          ("zoom_account_id", "INTEGER REFERENCES zoom_account(id)"),
                          ("zoom_link", "VARCHAR(1000)"),
                          ("alert_message", "TEXT"),
+                         ("public_alert_message", "TEXT"),
                          ("archived_at", "DATETIME"),
                          ("show_otp", "BOOLEAN NOT NULL DEFAULT 1")):
             add("meeting", col, ddl)
@@ -441,7 +442,8 @@ def _migrate_sqlite(app):
             add("library", col, ddl)
         for col, ddl in (("mode", "VARCHAR(16) NOT NULL DEFAULT 'all'"),):
             add("meeting_libraries", col, ddl)
-        for col, ddl in (("position", "INTEGER NOT NULL DEFAULT 0"),):
+        for col, ddl in (("position", "INTEGER NOT NULL DEFAULT 0"),
+                         ("public_visible", "BOOLEAN NOT NULL DEFAULT 0")):
             add("meeting_file", col, ddl)
         for col, ddl in (("opens_time", "VARCHAR(8)"),):
             add("meeting_schedule", col, ddl)
@@ -536,6 +538,9 @@ def _migrate_sqlite(app):
                          ("frontend_footer_template", "VARCHAR(64) NOT NULL DEFAULT 'classic'"),
                          ("frontend_homepage_template", "VARCHAR(64) NOT NULL DEFAULT 'classic'"),
                          ("frontend_megamenu_template", "VARCHAR(64) NOT NULL DEFAULT 'recovery-blue'"),
+                         ("frontend_meeting_template", "VARCHAR(64) NOT NULL DEFAULT 'classic'"),
+                         ("frontend_event_template", "VARCHAR(64) NOT NULL DEFAULT 'classic'"),
+                         ("frontend_template_settings_json", "TEXT"),
                          ("frontend_theme", "VARCHAR(64) NOT NULL DEFAULT 'classic'"),
                          ("frontend_fonts_json", "TEXT"),
                          ("frontend_blocks_json", "TEXT"),
@@ -608,6 +613,8 @@ def _migrate_sqlite(app):
             add("frontend_nav_item", col, ddl)
         for col, ddl in (("asset_files_json", "TEXT"),):
             add("custom_font", col, ddl)
+        for col, ddl in (("is_draft", "BOOLEAN NOT NULL DEFAULT 0"),):
+            add("post", col, ddl)
         for col, ddl in (("kind", "VARCHAR(16) NOT NULL DEFAULT 'link'"),
                          ("button_style", "VARCHAR(16) NOT NULL DEFAULT 'pill'"),
                          ("open_in_new_tab", "BOOLEAN NOT NULL DEFAULT 0"),

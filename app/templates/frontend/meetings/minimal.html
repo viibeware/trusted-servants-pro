@@ -1,0 +1,87 @@
+{% extends "frontend/base.html" %}
+{% block title %}{{ meeting.name }} · {{ frontend_title }}{% endblock %}
+{% block content %}
+<section class="fe-meeting-min" id="meeting" style="{{ tpl_style or '' }}">
+  <div class="fe-container fe-meeting-min-inner">
+    <a class="fe-meeting-min-back" href="{{ url_for('frontend.index') }}#meetings">← back</a>
+
+    {% if meeting.logo_filename %}
+    <div class="fe-meeting-logo-wrap fe-meeting-logo-wrap-center">
+      <img class="fe-meeting-logo" src="{{ url_for('public.public_meeting_logo', mid=meeting.id) }}" alt="">
+    </div>
+    {% endif %}
+
+    <header class="fe-meeting-min-head">
+      <span class="fe-meeting-min-eyebrow">
+        {% if meeting.meeting_type == 'in_person' %}In&nbsp;person
+        {% elif meeting.meeting_type == 'online' %}Online
+        {% else %}Hybrid{% endif %}
+      </span>
+      <h1>{{ meeting.name }}</h1>
+    </header>
+
+    {% if meeting.public_alert_message %}
+    <p class="fe-meeting-min-alert" role="status">{{ meeting.public_alert_message }}</p>
+    {% endif %}
+
+    {% if meeting.description %}
+    <div class="fe-meeting-min-desc">
+      {{ meeting.description|markdown }}
+    </div>
+    {% endif %}
+
+    <dl class="fe-meeting-min-info">
+      {% if meeting.schedules %}
+      <dt>When</dt>
+      <dd>
+        <ul>
+          {% for s in meeting.schedules %}
+          <li>
+            <span>{{ s.day_name }}</span>
+            <span>{{ s.start_time|fmt12h }}{% if s.end_time %} – {{ s.end_time|fmt12h }}{% endif %}</span>
+            {% if s.duration_minutes %}<span class="muted">{{ s.duration_minutes }} min</span>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </dd>
+      {% endif %}
+
+      {% if meeting.meeting_type in ('in_person', 'hybrid') and meeting.location %}
+      <dt>Where</dt>
+      <dd>
+        {{ meeting.location }}
+        {% set _maps = "https://www.google.com/maps/search/?api=1&query=" ~ (meeting.location|urlencode) %}
+        <a class="fe-meeting-min-link" href="{{ _maps }}" target="_blank" rel="noopener">map →</a>
+      </dd>
+      {% endif %}
+
+      {% if meeting.meeting_type in ('online', 'hybrid') and meeting.zoom_link %}
+      <dt>Zoom</dt>
+      <dd>
+        <a class="fe-meeting-min-link fe-meeting-min-link-strong" href="{{ meeting.zoom_link }}" target="_blank" rel="noopener">
+          Join the meeting →
+        </a>
+        {% if meeting.zoom_meeting_id %}
+        <div class="fe-meeting-min-cred">
+          <span class="muted">ID</span>
+          <code>{{ meeting.zoom_meeting_id }}</code>
+          <button type="button" class="fe-copy-btn" data-copy="{{ meeting.zoom_meeting_id }}" title="Copy">{{ icon('copy') }}</button>
+        </div>
+        {% endif %}
+        {% if meeting.zoom_passcode %}
+        <div class="fe-meeting-min-cred">
+          <span class="muted">Passcode</span>
+          <code>{{ meeting.zoom_passcode }}</code>
+          <button type="button" class="fe-copy-btn" data-copy="{{ meeting.zoom_passcode }}" title="Copy">{{ icon('copy') }}</button>
+        </div>
+        {% endif %}
+      </dd>
+      {% endif %}
+    </dl>
+
+    {% include "frontend/meetings/_resources.html" %}
+  </div>
+</section>
+
+{% include "frontend/meetings/_copy_script.html" %}
+{% endblock %}

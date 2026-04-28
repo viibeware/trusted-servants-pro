@@ -16,6 +16,17 @@ meeting_reading_selections = db.Table(
     db.Column("reading_id", db.Integer, db.ForeignKey("reading.id", ondelete="CASCADE"), primary_key=True),
 )
 
+# Per-meeting per-reading visibility on the public web frontend. A reading
+# present in this table is shown on the meeting's public detail page in the
+# same place files-marked-public are listed. Independent from the granular-
+# mode selection table above (which controls *which readings the meeting
+# scopes itself to* on the backend).
+meeting_reading_public = db.Table(
+    "meeting_reading_public",
+    db.Column("meeting_id", db.Integer, db.ForeignKey("meeting.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("reading_id", db.Integer, db.ForeignKey("reading.id", ondelete="CASCADE"), primary_key=True),
+)
+
 
 class MeetingLibrary(db.Model):
     __tablename__ = "meeting_libraries"
@@ -62,7 +73,8 @@ class Meeting(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
-    alert_message = db.Column(db.Text)
+    alert_message = db.Column(db.Text)         # admin-only — shown on the backend meeting list / detail page
+    public_alert_message = db.Column(db.Text)  # rendered on the public meeting detail page
     day_of_week = db.Column(db.String(32))  # legacy, unused by new UI
     time = db.Column(db.String(32))         # legacy, unused by new UI
     location = db.Column(db.String(255))
@@ -84,12 +96,22 @@ class Meeting(db.Model):
     libraries = association_proxy("library_assocs", "library",
                                   creator=lambda lib: MeetingLibrary(library=lib))
     selected_readings = db.relationship("Reading", secondary=meeting_reading_selections)
+    public_readings = db.relationship("Reading", secondary=meeting_reading_public)
     schedules = db.relationship("MeetingSchedule", backref="meeting",
                                 cascade="all, delete-orphan", lazy="select",
                                 order_by="MeetingSchedule.day_of_week, MeetingSchedule.start_time")
 
     def files_by_category(self, category):
         return self.files.filter_by(category=category).order_by(MeetingFile.position, MeetingFile.id).all()
+
+    def public_files(self):
+        """Return all files this meeting has marked publicly visible,
+        sorted in admin-defined order. Used by the public meeting-detail
+        templates to render the Files & Readings block."""
+        return (self.files.filter_by(public_visible=True)
+                          .order_by(MeetingFile.category,
+                                    MeetingFile.position,
+                                    MeetingFile.id).all())
 
     def library_mode(self, library):
         for a in self.library_assocs:
@@ -313,6 +335,17 @@ class SiteSetting(db.Model):
     frontend_footer_template = db.Column(db.String(64), nullable=False, default="classic")
     frontend_homepage_template = db.Column(db.String(64), nullable=False, default="classic")
     frontend_megamenu_template = db.Column(db.String(64), nullable=False, default="recovery-blue")
+    # Reusable templates for entity-detail pages. Unlike layouts (which are
+    # tied to a specific page slug), these apply to every meeting / every
+    # event detail page rendered from dynamic content. Pickers live on the
+    # admin's "Templates" page.
+    frontend_meeting_template = db.Column(db.String(64), nullable=False, default="classic")
+    frontend_event_template = db.Column(db.String(64), nullable=False, default="classic")
+    # Per-template appearance overrides. JSON dict keyed by content type +
+    # template key, e.g. {"meeting": {"card_stack": {"bg": "#fff", ...}}}.
+    # Each leaf dict allows: bg (hex), heading_font (font key), body_font
+    # (font key), heading_size (int %), body_size (int %).
+    frontend_template_settings_json = db.Column(db.Text)
     # Global visual theme — applies to every section. The per-section
     # template_* fields above act as overrides when the user picks a layout
     # different from the active theme on a specific page.
@@ -394,7 +427,25 @@ class MeetingFile(db.Model):
     original_filename = db.Column(db.String(500))
     body = db.Column(db.Text)
     position = db.Column(db.Integer, nullable=False, default=0)
+    # Whether this file/link is shown on the public meeting detail page.
+    # Off by default — admins explicitly opt files in via the meeting edit
+    # screen. Each row toggles independently.
+    public_visible = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @property
+    def url_slug(self):
+        """URL-safe display name for the public route. The route looks up
+        by id, so this slug is purely decorative — but having it in the URL
+        gives visitors a meaningful filename when they hover/right-click
+        instead of just an opaque number."""
+        from .colors import slugify
+        if self.original_filename:
+            # Preserve the extension when present so PDFs land as .pdf etc.
+            name, dot, ext = self.original_filename.rpartition(".")
+            if dot and ext and 1 <= len(ext) <= 10 and name:
+                return f"{slugify(name)}.{slugify(ext)}"
+        return slugify(self.title)
 
 
 class MediaItem(db.Model):
@@ -450,6 +501,16 @@ class Reading(db.Model):
     thumbnail_filename = db.Column(db.String(500))
     position = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @property
+    def url_slug(self):
+        """See ``MeetingFile.url_slug`` — same purpose, same shape."""
+        from .colors import slugify
+        if self.original_filename:
+            name, dot, ext = self.original_filename.rpartition(".")
+            if dot and ext and 1 <= len(ext) <= 10 and name:
+                return f"{slugify(name)}.{slugify(ext)}"
+        return slugify(self.title)
 
 
 class UrlRedirect(db.Model):
@@ -615,7 +676,11 @@ class Post(db.Model):
     contact_phone = db.Column(db.String(64))
     contact_email = db.Column(db.String(255))
 
-    # Lifecycle.
+    # Lifecycle. Posts are in one of three states:
+    #   draft    → is_draft=True  (edited in private; not on the public site)
+    #   active   → both False     (live)
+    #   archived → is_archived=True (hidden, kept for reference)
+    is_draft = db.Column(db.Boolean, nullable=False, default=False)
     is_archived = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

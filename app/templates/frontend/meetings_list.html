@@ -1,63 +1,50 @@
-{# Filtered + animated meetings list. Settings come from
-   block_content._meetings; the actual rows come from meetings_groups
-   (resolved server-side by blocks.filtered_meetings). #}
-{% set _ms = (block_content.get('_meetings', {}) if block_content else {}) %}
-{% set _anim = _ms.animation or 'fade' %}
-{% set _stagger = _ms.stagger_ms or 60 %}
-{% set _show_chip = _ms.show_type_chip if _ms.show_type_chip is defined else true %}
-{% set _show_sched = _ms.show_schedule if _ms.show_schedule is defined else true %}
-{% set _first_n = _ms.show_first_n or 3 %}
-{% set _empty = _ms.empty_message or 'No meetings scheduled.' %}
-{% set _heading = _ms.heading or 'Upcoming Meetings' %}
-{% set _intro = _ms.intro or '' %}
-{# Jinja variables set inside a for-loop are loop-local, so use a namespace
-   object to collect the "any items?" flag across groups. #}
-{% set _state = namespace(has_any=false) %}
-{% for _g in (meetings_groups or []) %}
-  {% if _g['items'] %}{% set _state.has_any = true %}{% endif %}
-{% endfor %}
-{% set _has_any = _state.has_any %}
-
-<section class="fe-section fe-meetings fe-meetings-anim-{{ _anim }}" id="meetings"
-         style="--fe-meetings-stagger: {{ _stagger }}ms;">
+{% extends "frontend/base.html" %}
+{% block title %}All meetings · {{ frontend_title }}{% endblock %}
+{% block content %}
+<section class="fe-section fe-meetings" id="meetings">
   <div class="fe-container">
     <div class="fe-section-head">
-      <h2>{{ _heading }}</h2>
-      {% if _intro %}<p>{{ _intro }}</p>{% endif %}
+      <h2>All meetings</h2>
+      <p>Every meeting across the week, grouped by day. Tap a card for full details, the Zoom link, or directions.</p>
     </div>
 
-    {% if not _has_any %}
-    <p class="fe-meetings-empty muted">{{ _empty }}</p>
+    {% set _state = namespace(has_any=false) %}
+    {% for _g in (all_meetings_groups or []) %}
+      {% if _g['items'] %}{% set _state.has_any = true %}{% endif %}
+    {% endfor %}
+
+    {% if not _state.has_any %}
+    <p class="fe-meetings-empty muted">No meetings on the calendar.</p>
     {% else %}
       {% set _global_idx = namespace(n=0) %}
-      {% for _group in meetings_groups %}
+      {% for _group in all_meetings_groups %}
         {% if _group['items'] %}
+          {% if _group['label'] %}
+          <h3 class="fe-meetings-day-heading">{{ _group['label'] }}</h3>
+          {% endif %}
           <div class="fe-meeting-grid">
             {% for it in _group['items'] %}
             {% set m = it['meeting'] %}
-            {% set sch = it['schedule'] %}
             <div class="fe-meeting-card" style="--i: {{ _global_idx.n }};">
-              {% if _show_chip %}
               <div class="fe-meeting-type fe-meeting-type-{{ m.meeting_type }}">
                 {% if m.meeting_type == 'in_person' %}In Person
                 {% elif m.meeting_type == 'online' %}Online
                 {% else %}Hybrid{% endif %}
               </div>
-              {% endif %}
               <h3>
                 <a class="fe-meeting-card-link"
                    href="{{ url_for('frontend.meeting_detail', slug=m.name|slugify) }}">{{ m.name }}</a>
               </h3>
-              {% if _show_sched and m.schedules %}
+              {% if m.schedules %}
               <ul class="fe-meeting-sched">
-                {% for s in m.schedules[:_first_n] %}
+                {% for s in m.schedules[:3] %}
                 <li>
                   <span class="fe-meeting-day">{{ s.day_name }}</span>
                   · {{ s.start_time|fmt12h }}
                 </li>
                 {% endfor %}
-                {% if m.schedules|length > _first_n %}
-                <li class="muted smaller">+ {{ m.schedules|length - _first_n }} more</li>
+                {% if m.schedules|length > 3 %}
+                <li class="muted smaller">+ {{ m.schedules|length - 3 }} more</li>
                 {% endif %}
               </ul>
               {% endif %}
@@ -83,11 +70,7 @@
           </div>
         {% endif %}
       {% endfor %}
-
-      <div class="fe-meetings-foot">
-        <a class="fe-btn fe-btn-ghost" href="{{ url_for('frontend.meetings_list') }}">See all meetings</a>
-      </div>
     {% endif %}
-
   </div>
 </section>
+{% endblock %}

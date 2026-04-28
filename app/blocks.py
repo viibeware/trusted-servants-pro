@@ -242,7 +242,9 @@ def filtered_events(events_settings, site=None):
     now = datetime.utcnow()
 
     rows = (Post.query
-            .filter(Post.is_event.is_(True), Post.is_archived.is_(False))
+            .filter(Post.is_event.is_(True),
+                    Post.is_archived.is_(False),
+                    Post.is_draft.is_(False))
             .order_by(Post.event_starts_at.asc().nulls_last())
             .all())
     out = []

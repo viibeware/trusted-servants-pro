@@ -1,0 +1,12 @@
+<script>
+  document.querySelectorAll('.fe-copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const v = btn.getAttribute('data-copy') || '';
+      if (!v || !navigator.clipboard) return;
+      navigator.clipboard.writeText(v).then(() => {
+        btn.classList.add('is-copied');
+        setTimeout(() => btn.classList.remove('is-copied'), 1400);
+      });
+    });
+  });
+</script>

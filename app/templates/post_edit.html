@@ -5,6 +5,9 @@
 {% block heading_help %}{% if _is_new %}Compose an announcement, an event, or both. Tag at least one type so it's published.{% else %}Update the content, type, schedule, location, contact, or media.{% endif %}{% endblock %}
 {% block top_actions %}
   <a class="btn" href="{{ url_for('main.posts') }}">← All</a>
+  {% if _p and _p.is_draft %}
+  <span class="post-chip post-chip-draft post-chip-header">Draft</span>
+  {% endif %}
   {% if _p and not _p.is_archived %}
   <form method="post" action="{{ url_for('main.post_archive', pid=_p.id) }}" style="display:inline">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -16,9 +19,43 @@
     <button type="submit" class="btn">Restore</button>
   </form>
   {% endif %}
+  {# Save buttons sit at the top so the primary action stays in reach
+     without scrolling. The form="post-edit-form" attribute submits the
+     main post-edit form even though the buttons live outside it. The
+     name="action" / value="…" pair tells post_save what state to set:
+       new post  → choice between "Save as draft" + "Publish post"
+       draft     → "Save draft" (keeps draft) + "Publish" (state route)
+       active    → "Save post" (keeps active) + "Move to drafts" (state route)
+  #}
+  {% if _is_new %}
+    <button type="submit" form="post-edit-form" name="action" value="draft" class="btn">Save as draft</button>
+    <button type="submit" form="post-edit-form" name="action" value="publish" class="btn btn-primary">Publish post</button>
+  {% elif _p and _p.is_draft %}
+    <button type="submit" form="post-edit-form" name="action" value="draft" class="btn">Save draft</button>
+    <form method="post" action="{{ url_for('main.post_publish', pid=_p.id) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-primary" title="Publish this draft">Publish</button>
+    </form>
+  {% else %}
+    <button type="submit" form="post-edit-form" class="btn btn-primary">Save post</button>
+    {% if _p %}
+    <form method="post" action="{{ url_for('main.post_unpublish', pid=_p.id) }}" style="display:inline"
+          onsubmit="return confirm('Move this published post back to drafts? It will disappear from the public site until republished.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn" title="Move to Drafts">Move to Drafts</button>
+    </form>
+    {% endif %}
+  {% endif %}
+  {% if _p %}
+  <form method="post" action="{{ url_for('main.post_delete', pid=_p.id) }}" style="display:inline"
+        onsubmit="return confirm('Delete this post permanently? Featured image will be cleaned up.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-danger">Delete</button>
+  </form>
+  {% endif %}
 {% endblock %}
 {% block content %}
-<form class="form post-form" method="post" action="{{ url_for('main.post_save') }}" enctype="multipart/form-data">
+<form id="post-edit-form" class="form post-form" method="post" action="{{ url_for('main.post_save') }}" enctype="multipart/form-data">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% if _p %}<input type="hidden" name="post_id" value="{{ _p.id }}">{% endif %}
 
@@ -50,16 +87,16 @@
 
     <label>Title
       <input type="text" name="title" required maxlength="255"
-             value="{{ _p.title if _p else '' }}"
+             value="{{ (_p.title if _p else '') or '' }}"
              placeholder="Spring serenity workshop">
     </label>
     <label>Summary <span class="muted small">(short blurb shown in lists and link previews)</span>
       <textarea name="summary" rows="2"
-                placeholder="One or two sentences — what is this and why does it matter?">{{ _p.summary if _p else '' }}</textarea>
+                placeholder="One or two sentences — what is this and why does it matter?">{{ (_p.summary if _p else '') or '' }}</textarea>
     </label>
     <label>Body <span class="muted small">(full content, Markdown supported)</span>
       <textarea name="body" rows="8"
-                placeholder="The full body of the post. Markdown supported.">{{ _p.body if _p else '' }}</textarea>
+                placeholder="The full body of the post. Markdown supported.">{{ (_p.body if _p else '') or '' }}</textarea>
     </label>
   </section>
 
@@ -120,16 +157,16 @@
 
     <label>Venue / location name
       <input type="text" name="location_name" maxlength="255"
-             value="{{ _p.location_name if _p else '' }}"
+             value="{{ (_p.location_name if _p else '') or '' }}"
              placeholder="Community Center · Hall B">
     </label>
     <label>Address
       <textarea name="location_address" rows="2"
-                placeholder="123 Main St, Springfield, IL 62701">{{ _p.location_address if _p else '' }}</textarea>
+                placeholder="123 Main St, Springfield, IL 62701">{{ (_p.location_address if _p else '') or '' }}</textarea>
     </label>
     <label>Google Maps link <span class="muted small">(optional — direct link the front-end can render as "Get directions")</span>
       <input type="url" name="google_maps_url" maxlength="500"
-             value="{{ _p.google_maps_url if _p else '' }}"
+             value="{{ (_p.google_maps_url if _p else '') or '' }}"
              placeholder="https://maps.google.com/?q=...">
     </label>
 
@@ -138,17 +175,17 @@
       <div class="form-row">
         <label>Meeting ID
           <input type="text" name="zoom_meeting_id" maxlength="64"
-                 value="{{ _p.zoom_meeting_id if _p else '' }}"
+                 value="{{ (_p.zoom_meeting_id if _p else '') or '' }}"
                  placeholder="123 456 7890">
         </label>
         <label>Passcode
           <input type="text" name="zoom_passcode" maxlength="128"
-                 value="{{ _p.zoom_passcode if _p else '' }}">
+                 value="{{ (_p.zoom_passcode if _p else '') or '' }}">
         </label>
       </div>
       <label>Zoom URL
         <input type="url" name="zoom_url" maxlength="500"
-               value="{{ _p.zoom_url if _p else '' }}"
+               value="{{ (_p.zoom_url if _p else '') or '' }}"
                placeholder="https://zoom.us/j/...">
       </label>
     </div>
@@ -163,12 +200,12 @@
     <div class="form-row">
       <label>URL
         <input type="url" name="website_url" maxlength="500"
-               value="{{ _p.website_url if _p else '' }}"
+               value="{{ (_p.website_url if _p else '') or '' }}"
                placeholder="https://example.org/event">
       </label>
       <label>Link label <span class="muted small">(what visitors see on the button)</span>
         <input type="text" name="website_label" maxlength="120"
-               value="{{ _p.website_label if _p else '' }}"
+               value="{{ (_p.website_label if _p else '') or '' }}"
                placeholder="Register on Eventbrite">
       </label>
     </div>
@@ -182,30 +219,19 @@
     </div>
     <label>Name
       <input type="text" name="contact_name" maxlength="120"
-             value="{{ _p.contact_name if _p else '' }}">
+             value="{{ (_p.contact_name if _p else '') or '' }}">
     </label>
     <div class="form-row">
       <label>Phone
         <input type="tel" name="contact_phone" maxlength="64"
-               value="{{ _p.contact_phone if _p else '' }}">
+               value="{{ (_p.contact_phone if _p else '') or '' }}">
       </label>
       <label>Email
         <input type="email" name="contact_email" maxlength="255"
-               value="{{ _p.contact_email if _p else '' }}">
+               value="{{ (_p.contact_email if _p else '') or '' }}">
       </label>
     </div>
   </section>
 
-  <div class="form-actions">
-    {% if _p %}
-    <form method="post" action="{{ url_for('main.post_delete', pid=_p.id) }}" style="display:inline; margin-right:auto"
-          onsubmit="return confirm('Delete this post permanently? Featured image will be cleaned up.');">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-danger">Delete post</button>
-    </form>
-    {% endif %}
-    <a class="btn" href="{{ url_for('main.posts') }}">Cancel</a>
-    <button class="btn btn-primary" type="submit">{{ 'Create post' if _is_new else 'Save post' }}</button>
-  </div>
 </form>
 {% endblock %}

@@ -63,11 +63,13 @@ body.frontend-body {
 .fe-page .btn, .frontend-body .btn,
 .fe-page .fe-btn, .frontend-body .fe-btn,
 .frontend-body .fe-nav-cta,
-.frontend-body .fe-recovery-nav-cta { text-decoration: var(--fe-btn-decoration, none); }
+.frontend-body .fe-recovery-nav-cta,
+.fe-page .fe-event-cta, .frontend-body .fe-event-cta { text-decoration: var(--fe-btn-decoration, none); }
 .fe-page .btn:hover, .frontend-body .btn:hover,
 .fe-page .fe-btn:hover, .frontend-body .fe-btn:hover,
 .frontend-body .fe-nav-cta:hover,
-.frontend-body .fe-recovery-nav-cta:hover { text-decoration: var(--fe-btn-decoration, none); }
+.frontend-body .fe-recovery-nav-cta:hover,
+.fe-page .fe-event-cta:hover, .frontend-body .fe-event-cta:hover { text-decoration: var(--fe-btn-decoration, none); }
 /* Mega-menu links read their own colour + decoration tokens so they
    don't inherit the body-link colour. */
 .fe-megamenu-link { text-decoration: var(--fe-megamenu-link-decoration, none); }
@@ -271,17 +273,34 @@ html[data-theme="dark"]           .fe-theme-toggle-sun  { display: inline-flex; 
   font-weight: 700; }
 .fe-recovery-nav-newcomer:hover { background: #eef3ff; text-decoration: none; }
 
-.fe-recovery-nav-cta { background: var(--fe-recovery-blue); color: #fff !important;
+.fe-recovery-nav-cta {
+  background: var(--fe-color-btn-primary-bg, var(--fe-recovery-blue));
+  color: var(--fe-color-btn-primary-text, #fff) !important;
   font-weight: 700; padding: 9px 18px !important; border-radius: 999px;
-  margin-left: 4px; font-size: 1rem; }
-.fe-recovery-nav-cta:hover { background: var(--fe-recovery-blue-2); text-decoration: none; }
+  margin-left: 4px; font-size: 1rem;
+}
+.fe-recovery-nav-cta:hover {
+  background: color-mix(in srgb, var(--fe-color-btn-primary-bg, var(--fe-recovery-blue)) 88%, black);
+  text-decoration: none;
+}
 
-.fe-recovery-nav-btn-rounded { background: var(--fe-recovery-blue); color: #fff !important;
+.fe-recovery-nav-btn-rounded {
+  background: var(--fe-color-btn-primary-bg, var(--fe-recovery-blue));
+  color: var(--fe-color-btn-primary-text, #fff) !important;
   font-weight: 700; padding: 9px 18px !important; border-radius: 1rem;
-  margin-left: 4px; font-size: 1rem; }
-.fe-recovery-nav-btn-rounded:hover { background: var(--fe-recovery-blue-2); text-decoration: none; }
-html[data-theme="dark"] .fe-recovery-nav-btn-rounded { background: var(--fe-recovery-blue, #0B5CFF); color: #fff !important; }
-html[data-theme="dark"] .fe-recovery-nav-btn-rounded:hover { background: #3d6dff; }
+  margin-left: 4px; font-size: 1rem;
+}
+.fe-recovery-nav-btn-rounded:hover {
+  background: color-mix(in srgb, var(--fe-color-btn-primary-bg, var(--fe-recovery-blue)) 88%, black);
+  text-decoration: none;
+}
+html[data-theme="dark"] .fe-recovery-nav-btn-rounded {
+  background: var(--fe-color-btn-primary-bg, var(--fe-recovery-blue, #0B5CFF));
+  color: var(--fe-color-btn-primary-text, #fff) !important;
+}
+html[data-theme="dark"] .fe-recovery-nav-btn-rounded:hover {
+  background: color-mix(in srgb, var(--fe-color-btn-primary-bg, var(--fe-recovery-blue)) 78%, white);
+}
 
 .fe-recovery-nav-portal { color: var(--fe-recovery-ink-soft); font-weight: 500; font-size: 0.875rem;
   margin-left: 4px; }
@@ -340,11 +359,32 @@ body.fe-megamenu-open .fe-recovery-menu-btn span:last-child {
   padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 0.9375rem;
   text-decoration: none; border: 2px solid transparent;
   transition: background 140ms ease, border-color 140ms ease, transform 120ms ease; }
-.fe-recovery-btn-primary { background: var(--fe-recovery-blue); color: #fff; }
-.fe-recovery-btn-primary:hover { background: var(--fe-recovery-blue-2); transform: translateY(-1px); }
-.fe-recovery-btn-ghost { background: transparent; color: var(--fe-recovery-blue);
-  border-color: var(--fe-recovery-blue); }
-.fe-recovery-btn-ghost:hover { background: var(--fe-recovery-blue); color: #fff; }
+.fe-recovery-btn-primary,
+.fe-page .fe-recovery-btn-primary,
+.frontend-body .fe-recovery-btn-primary {
+  background: var(--fe-color-btn-primary-bg, var(--fe-recovery-blue));
+  color: var(--fe-color-btn-primary-text, #fff);
+}
+.fe-recovery-btn-primary:hover,
+.fe-page .fe-recovery-btn-primary:hover,
+.frontend-body .fe-recovery-btn-primary:hover {
+  background: color-mix(in srgb, var(--fe-color-btn-primary-bg, var(--fe-recovery-blue)) 88%, black);
+  color: var(--fe-color-btn-primary-text, #fff);
+  transform: translateY(-1px);
+}
+.fe-recovery-btn-ghost,
+.fe-page .fe-recovery-btn-ghost,
+.frontend-body .fe-recovery-btn-ghost {
+  background: var(--fe-color-btn-secondary-bg, transparent);
+  color: var(--fe-color-btn-secondary-text, var(--fe-recovery-blue));
+  border-color: var(--fe-color-btn-secondary-text, var(--fe-recovery-blue));
+}
+.fe-recovery-btn-ghost:hover,
+.fe-page .fe-recovery-btn-ghost:hover,
+.frontend-body .fe-recovery-btn-ghost:hover {
+  background: color-mix(in srgb, var(--fe-color-btn-secondary-bg, var(--fe-recovery-blue)) 90%, black);
+  color: var(--fe-color-btn-secondary-text, var(--fe-recovery-blue));
+}
 
 .fe-recovery-threeup { padding: 64px 0; background: #f6f9ff; border-bottom: 1px solid #e5e9f0; }
 .fe-recovery-threeup-grid { display: grid; gap: 20px;
@@ -630,18 +670,35 @@ body.fe-megamenu-open .fe-recovery-menu-btn span:last-child {
   transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
   cursor: pointer;
 }
-.fe-btn-primary {
-  background: var(--fe-ink); color: #fff;
+.fe-btn-primary,
+.fe-page .fe-btn-primary,
+.frontend-body .fe-btn-primary {
+  background: var(--fe-color-btn-primary-bg, var(--fe-ink));
+  color: var(--fe-color-btn-primary-text, #fff);
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
 }
-.fe-btn-primary:hover {
-  transform: translateY(-1px); background: var(--fe-accent);
+.fe-btn-primary:hover,
+.fe-page .fe-btn-primary:hover,
+.frontend-body .fe-btn-primary:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--fe-color-btn-primary-bg, var(--fe-ink)) 88%, black);
+  color: var(--fe-color-btn-primary-text, #fff);
   box-shadow: 0 10px 28px rgba(81, 100, 255, 0.32);
 }
-.fe-btn-ghost {
-  background: transparent; color: var(--fe-ink); border-color: var(--fe-border);
+.fe-btn-ghost,
+.fe-page .fe-btn-ghost,
+.frontend-body .fe-btn-ghost {
+  background: var(--fe-color-btn-secondary-bg, transparent);
+  color: var(--fe-color-btn-secondary-text, var(--fe-ink));
+  border-color: var(--fe-border);
 }
-.fe-btn-ghost:hover { background: var(--fe-panel-soft); border-color: var(--fe-ink); }
+.fe-btn-ghost:hover,
+.fe-page .fe-btn-ghost:hover,
+.frontend-body .fe-btn-ghost:hover {
+  background: color-mix(in srgb, var(--fe-color-btn-secondary-bg, var(--fe-panel-soft)) 92%, black);
+  color: var(--fe-color-btn-secondary-text, var(--fe-ink));
+  border-color: var(--fe-color-btn-secondary-text, var(--fe-ink));
+}
 .fe-btn { gap: 10px; }
 .fe-btn-icon {
   display: inline-flex; align-items: center; justify-content: center;
@@ -709,18 +766,59 @@ body.fe-megamenu-open .fe-recovery-menu-btn span:last-child {
 .fe-meeting-grid {
   display: grid; gap: 18px;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-auto-rows: 1fr;
+  align-items: stretch;
 }
 .fe-meeting-card {
+  position: relative;
+  display: flex; flex-direction: column;
   padding: 22px 22px 20px; border-radius: 16px;
-  background: #fff; border: 1px solid var(--fe-border);
-  transition: transform 180ms ease, box-shadow 180ms ease;
+  background: #fff; border: 1px solid var(--fe-accent);
+  transition: transform 200ms ease, box-shadow 200ms ease;
 }
 .fe-meeting-card:hover {
   transform: translateY(-2px);
-  box-shadow: var(--fe-shadow);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.10);
 }
+.fe-meeting-card h3 { color: inherit; }
+.fe-meeting-card-link,
+.fe-page .fe-meeting-card-link,
+.fe-page .fe-meeting-card-link:hover,
+.frontend-body .fe-meeting-card-link,
+.frontend-body .fe-meeting-card-link:hover {
+  color: inherit; text-decoration: none;
+}
+/* Stretched-link overlay — makes the whole card clickable while still
+   leaving inner buttons (zoom / directions) clickable separately via
+   their own z-index above this layer. */
+.fe-meeting-card-link::after {
+  content: ""; position: absolute; inset: 0;
+  border-radius: inherit;
+}
+.fe-meeting-card-cta {
+  display: inline-block;
+  align-self: flex-start;
+  margin-top: 14px;
+  transition: color 160ms ease;
+}
+.fe-meeting-card:hover .fe-meeting-card-cta { color: var(--fe-accent); }
+.fe-meeting-card-actions {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; gap: 8px;
+  margin-top: auto; padding-top: 14px;
+}
+.fe-meeting-card-actions .fe-btn,
+.fe-page .fe-meeting-card-actions .fe-btn,
+.frontend-body .fe-meeting-card-actions .fe-btn {
+  flex: 1 1 0; min-width: 0;
+  padding: 8px 14px; font-size: 0.875rem;
+  text-align: center;
+  box-shadow: none;
+}
+.fe-meeting-card-actions .fe-btn:hover { box-shadow: none; }
 .fe-meeting-type {
-  display: inline-block; padding: 3px 10px; border-radius: 999px;
+  display: inline-block; align-self: flex-start;
+  padding: 3px 10px; border-radius: 999px;
   font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -1427,25 +1525,10 @@ html[data-theme="dark"] .fe-meetings-day-heading { color: #e2e8f0; }
   padding: 48px 0; text-align: center; font-size: 1.0625rem;
 }
 
-/* Today badge — tints active meeting cards. */
-/* Clickable meeting card: behave like a link without losing the layout. */
-a.fe-meeting-card { display: block; color: inherit; text-decoration: none;
-  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease; }
-a.fe-meeting-card:hover { transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.10); border-color: var(--fe-accent); }
-.fe-meeting-card-cta { display: inline-block; margin-top: 14px; }
-a.fe-meeting-card:hover .fe-meeting-card-cta { color: var(--fe-accent); }
-
-.fe-meeting-card.is-today { border-color: var(--fe-accent); }
-.fe-meeting-card.is-today::before {
-  content: "Today";
-  position: absolute; top: 14px; right: 16px;
-  background: var(--fe-accent); color: #fff;
-  font-size: 0.6875rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.06em;
-  padding: 3px 8px; border-radius: 999px;
+/* Section foot — "See all meetings" CTA below the grid. */
+.fe-meetings-foot {
+  margin-top: 28px; text-align: center;
 }
-.fe-meeting-card { position: relative; }
 
 /* Animation classes — each card gets its own --i index from the template
    so cards stagger in. Using opacity+transform keeps the layout stable
@@ -1481,21 +1564,27 @@ a.fe-meeting-card:hover .fe-meeting-card-cta { color: var(--fe-accent); }
    left-anchored date stamp, optional thumbnail, title + meta + CTA
    flowing horizontally. Reads more like a schedule than a card grid.
    ============================================================ */
-.fe-events .fe-section-head { margin-bottom: 28px; }
 .fe-events-empty { text-align: center; padding: 32px 0; }
 
 .fe-events-list {
   list-style: none; padding: 0; margin: 0;
-  display: flex; flex-direction: column;
-  border-top: 1px solid var(--fe-color-border, #e2e8f0);
+  display: flex; flex-direction: column; gap: 18px;
 }
 .fe-event-row {
+  position: relative;
   display: flex; align-items: center; gap: 24px;
-  padding: 22px 4px;
-  border-bottom: 1px solid var(--fe-color-border, #e2e8f0);
-  transition: background 160ms ease;
+  padding: 22px 22px 20px;
+  background: #fff;
+  border: 1px solid var(--fe-accent);
+  border-radius: 16px;
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
 }
-.fe-event-row:hover { background: var(--fe-color-surface-alt, #f8fafc); }
+.fe-event-row:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.10);
+}
+html[data-theme="dark"] .fe-event-row { background: #131a33; border-color: #1f2a44; }
+html[data-theme="dark"] .fe-event-row:hover { box-shadow: 0 10px 28px rgba(0,0,0,0.45); }
 
 /* Date stamp on the far left — month/day/year stacked */
 .fe-event-date {
@@ -1568,37 +1657,71 @@ a.fe-meeting-card:hover .fe-meeting-card-cta { color: var(--fe-accent); }
 }
 
 /* CTA on the far right — pill-style button-like link */
-.fe-event-cta {
+.fe-event-cta,
+.fe-page .fe-event-cta,
+.frontend-body .fe-event-cta {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; gap: 8px;
   padding: 8px 16px; border-radius: 999px;
   background: transparent;
-  border: 1.5px solid var(--fe-color-border, #e2e8f0);
-  color: var(--fe-color-brand, #0b5cff);
-  text-decoration: none; font-weight: 600; font-size: 0.9rem;
+  border: 1.5px solid var(--fe-color-btn-primary-bg, var(--fe-color-brand, #0b5cff));
+  color: var(--fe-color-btn-primary-bg, var(--fe-color-brand, #0b5cff));
+  font-weight: 600; font-size: 0.9rem;
   white-space: nowrap;
-  transition: background 160ms ease, border-color 160ms ease, gap 160ms ease;
+  transition: background 160ms ease, border-color 160ms ease, gap 160ms ease, color 160ms ease;
 }
-.fe-event-cta:hover {
-  background: var(--fe-color-brand, #0b5cff);
-  border-color: var(--fe-color-brand, #0b5cff);
-  color: #fff; gap: 10px; text-decoration: none;
+.fe-event-cta:hover,
+.fe-page .fe-event-cta:hover,
+.frontend-body .fe-event-cta:hover {
+  background: var(--fe-color-btn-primary-bg, var(--fe-color-brand, #0b5cff));
+  border-color: var(--fe-color-btn-primary-bg, var(--fe-color-brand, #0b5cff));
+  color: var(--fe-color-btn-primary-text, #fff);
+  gap: 10px;
 }
 .fe-event-cta-arrow { transition: transform 160ms ease; }
 .fe-event-cta:hover .fe-event-cta-arrow { transform: translateX(2px); }
 
-/* Compact phone layout — date stamp pulls up to a horizontal pill,
-   thumbnail moves to a small inline avatar, CTA wraps to its own row. */
-@media (max-width: 720px) {
-  .fe-event-row { flex-wrap: wrap; gap: 12px 16px; padding: 18px 0; }
+/* Tablet / narrow desktop — keep the row horizontal but tighten gaps,
+   shrink the thumbnail, and let the View Event pill drop to its own
+   centered row underneath so the body has room to breathe. */
+@media (max-width: 1023px) {
+  .fe-event-row {
+    flex-wrap: wrap; gap: 14px 18px; padding: 20px;
+  }
+  .fe-event-thumb { width: 80px; height: 80px; }
+  .fe-event-body { flex: 1 1 200px; min-width: 0; }
+  .fe-event-cta,
+  .fe-page .fe-event-cta,
+  .frontend-body .fe-event-cta {
+    flex: 1 1 100%; justify-content: center; order: 99;
+    padding: 10px 16px;
+  }
+}
+
+/* Mobile — stack everything vertically. Image on top (full-width
+   banner), then a compact horizontal date pill, then title + meta,
+   then the CTA spans the card width. */
+@media (max-width: 640px) {
+  .fe-event-row {
+    flex-direction: column; align-items: stretch;
+    flex-wrap: nowrap; gap: 14px; padding: 16px;
+  }
+  .fe-event-thumb {
+    order: -1;
+    width: 100%; height: 180px;
+    border-radius: 12px;
+  }
   .fe-event-date {
     flex-direction: row; align-items: baseline; gap: 8px;
     min-width: 0; padding: 6px 12px;
+    align-self: flex-start;
   }
-  .fe-event-date-day { font-size: 1.25rem; }
-  .fe-event-thumb { width: 64px; height: 64px; }
-  .fe-event-body { flex: 1 1 100%; order: 3; }
-  .fe-event-cta { order: 4; }
+  .fe-event-date-month { font-size: 0.7rem; }
+  .fe-event-date-day { font-size: 1.1rem; margin-top: 0; }
+  .fe-event-date-year { font-size: 0.7rem; margin-top: 0; }
+  .fe-event-title { font-size: 1.1rem; }
+  .fe-event-attrs { gap: 4px 14px; font-size: 0.8125rem; }
+  .fe-event-summary { font-size: 0.9rem; }
 }
 
 /* Stagger animation — fades or slides each row in sequence. */
@@ -1626,20 +1749,43 @@ a.fe-meeting-card:hover .fe-meeting-card-cta { color: var(--fe-accent); }
 /* ============================================================
    PUBLIC MEETING DETAIL PAGE
    ============================================================ */
-.fe-meeting-detail { padding: 56px 0 80px; background: #fff; }
+.fe-meeting-detail {
+  padding: 56px 0 80px;
+  background: var(--tpl-bg, var(--fe-color-surface, #fff));
+}
 .fe-meeting-detail-inner { max-width: 880px; margin: 0 auto; }
 .fe-meeting-detail-back {
   display: inline-block; margin-bottom: 24px;
   color: var(--fe-ink-muted); font-size: 0.9rem; text-decoration: none;
 }
 .fe-meeting-detail-back:hover { color: var(--fe-accent); text-decoration: none; }
-.fe-meeting-detail-head .fe-meeting-type {
-  margin-bottom: 16px;
+/* Header is a flex row: logo (when present) on the left, then a content
+   column with the type pill, h1, and description. When no logo is uploaded,
+   the logo column is omitted and the content column flows flush left
+   without any reserved gutter. */
+.fe-meeting-detail-head {
+  display: flex; align-items: flex-start; gap: 28px;
+  margin-bottom: 32px;
 }
+.fe-meeting-detail-head-logo { flex: 0 0 auto; }
+.fe-meeting-detail-head-logo .fe-meeting-logo {
+  display: block; width: 180px; height: auto;
+  border-radius: var(--fe-card-radius, 12px);
+}
+.fe-meeting-detail-head-content { flex: 1 1 auto; min-width: 0; }
+.fe-meeting-detail-head .fe-meeting-type { margin-bottom: 16px; }
 .fe-meeting-detail-head h1 {
-  font-family: var(--fe-font-heading); font-weight: 800;
-  font-size: clamp(2rem, 5vw, 3rem); line-height: 1.1;
-  margin: 0 0 24px; letter-spacing: -0.02em; color: var(--fe-ink);
+  font-family: var(--tpl-heading-font, var(--fe-font-heading));
+  font-weight: 800;
+  font-size: var(--tpl-heading-size, clamp(2rem, 5vw, 3rem));
+  line-height: 1.1; margin: 0 0 16px;
+  letter-spacing: -0.02em;
+  color: var(--fe-color-text, var(--fe-ink));
+}
+.fe-meeting-detail-head-content .fe-meeting-detail-desc { margin-bottom: 0; }
+@media (max-width: 600px) {
+  .fe-meeting-detail-head { flex-direction: column; gap: 18px; }
+  .fe-meeting-detail-head-logo .fe-meeting-logo { width: 140px; }
 }
 .fe-meeting-detail-alert {
   display: flex; align-items: flex-start; gap: 12px;
@@ -1650,7 +1796,9 @@ a.fe-meeting-card:hover .fe-meeting-card-cta { color: var(--fe-accent); }
 }
 .fe-meeting-detail-alert .icon { width: 20px; height: 20px; flex: 0 0 auto; margin-top: 2px; }
 .fe-meeting-detail-desc {
-  font-size: 1.0625rem; line-height: 1.65; color: var(--fe-ink);
+  font-family: var(--tpl-body-font, var(--fe-font-body, inherit));
+  font-size: var(--tpl-body-size, 1.0625rem);
+  line-height: 1.65; color: var(--fe-color-text, var(--fe-ink));
   margin-bottom: 32px;
 }
 .fe-meeting-detail-desc p { margin: 0 0 16px; }
@@ -1716,6 +1864,122 @@ html[data-theme="dark"] .fe-copy-btn { border-color: #334155; }
 html[data-theme="dark"] .fe-meeting-detail-alert {
   background: rgba(245, 158, 11, 0.15); color: #fbbf24;
   border-color: rgba(245, 158, 11, 0.30);
+}
+
+/* ============================================================
+   PUBLIC EVENT DETAIL PAGE
+   Mirrors the meeting-detail layout: max-width column, optional
+   cover image, header, summary, body, then a grid of cards (when,
+   location, zoom, website, contact).
+   ============================================================ */
+.fe-event-detail {
+  padding: 56px 0 80px;
+  background: var(--tpl-bg, var(--fe-color-surface, #fff));
+}
+.fe-event-detail-inner { max-width: 880px; margin: 0 auto; }
+.fe-event-detail-back {
+  display: inline-block; margin-bottom: 24px;
+  color: var(--fe-ink-muted); font-size: 0.9rem; text-decoration: none;
+}
+.fe-event-detail-back:hover { color: var(--fe-accent); text-decoration: none; }
+.fe-event-detail-cover {
+  margin: 0 0 28px;
+  border-radius: 16px; overflow: hidden;
+  background: var(--fe-color-surface-alt, #f8fafc);
+  border: 1px solid var(--fe-border);
+}
+.fe-event-detail-cover img {
+  display: block; width: 100%; height: auto; max-height: 420px;
+  object-fit: cover;
+}
+.fe-event-detail-chips {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+}
+.fe-event-detail-head h1 {
+  font-family: var(--tpl-heading-font, var(--fe-font-heading));
+  font-weight: 700;
+  font-size: var(--tpl-heading-size, clamp(2rem, 4vw, 2.75rem));
+  line-height: 1.15; letter-spacing: -0.02em;
+  margin: 0 0 12px; color: var(--fe-color-text, var(--fe-ink));
+}
+.fe-event-detail-summary {
+  font-size: 1.125rem; line-height: 1.55;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted));
+  margin: 0 0 24px;
+}
+.fe-event-detail-desc {
+  font-family: var(--tpl-body-font, var(--fe-font-body, inherit));
+  font-size: var(--tpl-body-size, 1.0625rem);
+  line-height: 1.7; color: var(--fe-color-text, var(--fe-ink));
+  margin: 0 0 32px;
+}
+.fe-event-detail-desc p { margin: 0 0 16px; }
+.fe-event-detail-desc > :first-child { margin-top: 0; }
+.fe-event-detail-desc > :last-child { margin-bottom: 0; }
+.fe-event-detail-grid {
+  display: grid; gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.fe-event-detail-card {
+  padding: 22px 24px; background: var(--fe-color-surface-alt, #f8fafc);
+  border-radius: 14px; border: 1px solid var(--fe-border);
+}
+.fe-event-detail-card h3 {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--fe-font-heading); font-weight: 700;
+  font-size: 1rem; margin: 0 0 12px; color: var(--fe-ink);
+}
+.fe-event-detail-card h3 .icon { width: 18px; height: 18px; color: var(--fe-accent); }
+.fe-event-detail-when {
+  margin: 0; display: flex; flex-direction: column; gap: 4px;
+}
+.fe-event-detail-day {
+  font-weight: 700; color: var(--fe-ink); font-size: 1rem;
+}
+.fe-event-detail-time {
+  color: var(--fe-ink); font-variant-numeric: tabular-nums;
+}
+.fe-event-detail-location-name {
+  font-weight: 700; color: var(--fe-ink); margin: 0 0 4px;
+}
+.fe-event-detail-location {
+  font-size: 1rem; line-height: 1.55; color: var(--fe-ink);
+  margin: 0 0 14px; white-space: pre-line;
+}
+.fe-event-detail-zoom .fe-btn { margin-bottom: 18px; }
+.fe-event-detail-creds { margin: 0; display: grid;
+  grid-template-columns: max-content 1fr; column-gap: 14px; row-gap: 8px;
+}
+.fe-event-detail-creds dt {
+  font-size: 0.8125rem; font-weight: 600; color: var(--fe-ink-muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.fe-event-detail-creds dd { margin: 0; display: flex; align-items: center; gap: 8px; }
+.fe-event-detail-creds code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95rem; padding: 4px 8px;
+  background: #fff; border: 1px solid var(--fe-border); border-radius: 6px;
+  color: var(--fe-ink);
+}
+.fe-event-detail-creds a { color: var(--fe-accent); text-decoration: none; }
+.fe-event-detail-creds a:hover { text-decoration: underline; }
+
+html[data-theme="dark"] .fe-event-detail { background: #0b1026; }
+html[data-theme="dark"] .fe-event-detail-head h1 { color: #f1f5f9; }
+html[data-theme="dark"] .fe-event-detail-summary { color: #cbd5e1; }
+html[data-theme="dark"] .fe-event-detail-desc { color: #e2e8f0; }
+html[data-theme="dark"] .fe-event-detail-card {
+  background: #131a33; border-color: transparent;
+}
+html[data-theme="dark"] .fe-event-detail-day,
+html[data-theme="dark"] .fe-event-detail-time,
+html[data-theme="dark"] .fe-event-detail-location,
+html[data-theme="dark"] .fe-event-detail-location-name { color: #e2e8f0; }
+html[data-theme="dark"] .fe-event-detail-creds code {
+  background: #0f172a; color: #e2e8f0; border-color: #334155;
+}
+html[data-theme="dark"] .fe-event-detail-cover {
+  background: #131a33; border-color: #1f2a44;
 }
 
 /* ============================================================
@@ -1825,3 +2089,910 @@ html[data-theme="dark"] .fe-testimonial cite { color: #94a3b8; }
 html[data-theme="dark"] .fe-faq-item { background: #131a33; border-color: transparent; }
 html[data-theme="dark"] .fe-faq-item summary { color: #e2e8f0; }
 html[data-theme="dark"] .fe-faq-item p { color: #94a3b8; }
+
+/* ===========================================================================
+   Meeting logo — shared across every public meeting detail template. Pulled
+   from Meeting.logo_filename via /pub/meeting-logo/<id>.
+   =========================================================================== */
+.fe-meeting-logo-wrap { margin: 0 0 24px; }
+.fe-meeting-logo-wrap-center { text-align: center; }
+.fe-meeting-logo {
+  display: block; width: 180px; max-width: 100%; height: auto;
+  border-radius: var(--fe-card-radius, 12px);
+}
+.fe-meeting-logo-wrap-center .fe-meeting-logo { margin: 0 auto; }
+
+/* ===========================================================================
+   Files & Readings block — admin-curated public-visible files/readings
+   shown after Zoom/Location on every meeting detail template. Inside the
+   Classic grid it acts as a sibling card; on the other templates it stands
+   on its own and inherits surrounding spacing from the parent layout.
+   =========================================================================== */
+.fe-meeting-resources {
+  background: var(--fe-color-surface, var(--fe-panel));
+  border: 1px solid var(--fe-color-border, var(--fe-border));
+  border-radius: var(--fe-card-radius, 14px);
+  padding: 22px 24px;
+}
+.fe-meeting-detail-grid > .fe-meeting-resources {
+  /* When dropped in the Classic grid the surrounding cards use a soft
+     surface — match that for visual consistency. */
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft));
+}
+.fe-meeting-resources h3 {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.875rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted));
+  margin: 0 0 14px;
+}
+.fe-meeting-resources h3 .icon {
+  width: 18px; height: 18px;
+  color: var(--fe-color-brand, var(--fe-accent));
+}
+.fe-meeting-resources-group + .fe-meeting-resources-group { margin-top: 16px; }
+.fe-meeting-resources-group h4 {
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted));
+  margin: 0 0 8px;
+}
+.fe-meeting-resources-group ul {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.fe-meeting-resources-group li {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.fe-page .fe-meeting-resources-group li > a,
+.frontend-body .fe-meeting-resources-group li > a {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--fe-color-link, var(--fe-color-brand, var(--fe-accent)));
+  font-weight: 600;
+}
+html[data-theme="dark"] .fe-meeting-resources { background: #131a33; border-color: transparent; }
+html[data-theme="dark"] .fe-meeting-detail-grid > .fe-meeting-resources { background: #1a2247; }
+
+/* ===========================================================================
+   Reusable detail-page templates (Meeting Detail / Event Detail variants).
+
+   All colors, surfaces, borders, radii, and shadows source from the design
+   tokens emitted by app/design.py (--fe-color-*, --fe-card-radius,
+   --fe-card-shadow, etc.) so that whatever an admin chooses on the
+   Web Frontend → Design page applies uniformly across every variant.
+   Raw :root vars are kept as fallbacks for safety.
+
+   Buttons reuse the global .fe-btn/.fe-btn-primary/.fe-btn-ghost system —
+   not a separate per-template button — so primary/secondary colors and
+   text-decoration always match the design admin's button settings. The
+   per-template `.fe-*-cta` classes are *modifiers only* (they tune icon
+   spacing inside the button, not its colors).
+   =========================================================================== */
+
+/* ----- Token aliases used below ----------------------------------------- */
+/* Each rule below substitutes:
+   var(--fe-color-text,        var(--fe-ink))         — body/headline color
+   var(--fe-color-text-soft,   var(--fe-ink-muted))   — muted text
+   var(--fe-color-surface,     var(--fe-panel))       — page bg
+   var(--fe-color-surface-alt, var(--fe-panel-soft))  — soft surfaces / chips
+   var(--fe-color-border,      var(--fe-border))      — hairlines / outlines
+   var(--fe-color-brand,       var(--fe-accent))      — accent / link color
+   var(--fe-color-link,        var(--fe-color-brand, var(--fe-accent))) — inline links
+*/
+
+/* ===========================================================================
+   Meeting detail — Card Stack template
+   Gradient hero banner + big primary action card up top. Mobile-first.
+   =========================================================================== */
+.fe-meeting-stack {
+  background: var(--tpl-bg, var(--fe-color-surface, var(--fe-panel))); padding: 0 0 80px;
+}
+.fe-meeting-stack-hero {
+  position: relative; padding: 56px 0 64px;
+  background:
+    radial-gradient(120% 80% at 20% 0%,
+      color-mix(in srgb, var(--fe-color-brand, var(--fe-accent)) 22%, transparent) 0%, transparent 60%),
+    radial-gradient(120% 80% at 100% 100%,
+      color-mix(in srgb, var(--fe-color-accent, var(--fe-accent-2, var(--fe-accent))) 22%, transparent) 0%, transparent 60%),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--fe-color-brand, var(--fe-accent)) 8%, var(--fe-color-surface, var(--fe-panel))) 0%,
+      var(--fe-color-surface, var(--fe-panel)) 100%);
+  overflow: hidden;
+}
+.fe-meeting-stack-hero-glow {
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(60% 60% at 50% 100%, rgba(255,255,255,0.6) 0%, transparent 70%);
+}
+.fe-meeting-stack-hero-inner {
+  position: relative; max-width: 760px; margin: 0 auto; padding: 0 24px;
+  text-align: center;
+}
+.fe-page .fe-meeting-stack-back,
+.frontend-body .fe-meeting-stack-back {
+  display: inline-block; margin-bottom: 24px;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted));
+  text-decoration: none; font-size: 0.875rem;
+}
+.fe-page .fe-meeting-stack-back:hover,
+.frontend-body .fe-meeting-stack-back:hover {
+  color: var(--fe-color-brand, var(--fe-accent)); text-decoration: none;
+}
+.fe-meeting-stack-chip {
+  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px;
+  padding: 6px 14px; border-radius: 999px;
+  background: rgba(255,255,255,0.85); backdrop-filter: blur(6px);
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--fe-color-text, var(--fe-ink));
+  border: 1px solid var(--fe-color-border, var(--fe-border));
+}
+.fe-meeting-stack-chip .icon { width: 14px; height: 14px; }
+.fe-meeting-stack-hero-inner h1 {
+  margin: 0 0 14px;
+  font-family: var(--tpl-heading-font, var(--fe-font-heading, inherit));
+  font-size: var(--tpl-heading-size, clamp(2rem, 5vw, 3.25rem));
+  line-height: 1.1; font-weight: 700;
+  color: var(--fe-color-text, var(--fe-ink));
+  letter-spacing: -0.02em;
+}
+.fe-meeting-stack-subline {
+  margin: 0; color: var(--fe-color-text-soft, var(--fe-ink-muted));
+  font-size: 0.95rem;
+  display: inline-flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+}
+.fe-meeting-stack-subline .dot { color: var(--fe-color-border, var(--fe-border)); }
+.fe-meeting-stack-body {
+  max-width: 760px; margin: -32px auto 0; padding: 0 24px;
+  display: flex; flex-direction: column; gap: 22px;
+  position: relative; z-index: 2;
+}
+.fe-meeting-stack-alert {
+  display: flex; gap: 10px; padding: 14px 16px;
+  border-radius: var(--fe-card-radius, 12px);
+  background: rgba(245, 158, 11, 0.10); color: #78350f;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  font-size: 0.9375rem; line-height: 1.5;
+}
+.fe-meeting-stack-alert .icon { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 2px; }
+.fe-meeting-stack-action {
+  background: var(--fe-color-surface, var(--fe-panel));
+  border: 1px solid var(--fe-color-border, var(--fe-border));
+  border-radius: var(--fe-card-radius, 18px);
+  padding: 26px 24px;
+  box-shadow: var(--fe-card-shadow, 0 6px 30px rgba(15, 23, 42, 0.06));
+}
+.fe-meeting-stack-action-soft {
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft));
+}
+.fe-meeting-stack-action-head { margin-bottom: 16px; }
+.fe-meeting-stack-action-eyebrow {
+  display: block; font-size: 0.75rem; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted)); margin-bottom: 4px;
+}
+.fe-meeting-stack-action h2 {
+  margin: 0; font-size: 1.25rem;
+  color: var(--fe-color-text, var(--fe-ink));
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.fe-meeting-stack-action h2 .icon {
+  width: 18px; height: 18px; color: var(--fe-color-brand, var(--fe-accent));
+}
+/* CTA modifier — adds icon arrow spacing on top of .fe-btn. Color, padding,
+   radius, weight, and decoration all come from .fe-btn / .fe-btn-primary /
+   .fe-btn-ghost which are wired to the design tokens. */
+.fe-meeting-stack-cta { gap: 10px; }
+.fe-meeting-stack-cta .icon { width: 18px; height: 18px; }
+.fe-meeting-stack-cta em { font-style: normal; opacity: 0.85; margin-left: 4px; }
+.fe-meeting-stack-creds {
+  margin: 18px 0 0; display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;
+}
+.fe-meeting-stack-creds > div { display: flex; flex-direction: column; gap: 4px; }
+.fe-meeting-stack-creds dt {
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted));
+}
+.fe-meeting-stack-creds dd { margin: 0; display: flex; align-items: center; gap: 8px; }
+.fe-meeting-stack-creds code {
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft));
+  padding: 6px 10px; border-radius: 8px;
+  font-size: 0.95rem; color: var(--fe-color-text, var(--fe-ink));
+  font-family: ui-monospace, monospace;
+}
+.fe-meeting-stack-prose {
+  background: var(--fe-color-surface, var(--fe-panel));
+  border: 1px solid var(--fe-color-border, var(--fe-border));
+  border-radius: var(--fe-card-radius, 18px);
+  padding: 28px; color: var(--fe-color-text, var(--fe-ink));
+  font-family: var(--tpl-body-font, var(--fe-font-body, inherit));
+  line-height: var(--fe-text-line-height, 1.7);
+  font-size: var(--tpl-body-size, var(--fe-text-size-base, 1rem));
+}
+.fe-meeting-stack-prose p { margin: 0 0 14px; }
+.fe-meeting-stack-prose p:last-child { margin-bottom: 0; }
+.fe-meeting-stack-schedule {
+  background: var(--fe-color-surface, var(--fe-panel));
+  border: 1px solid var(--fe-color-border, var(--fe-border));
+  border-radius: var(--fe-card-radius, 18px);
+  padding: 22px 24px;
+}
+.fe-meeting-stack-schedule h3 {
+  margin: 0 0 14px; font-size: 1rem;
+  color: var(--fe-color-text, var(--fe-ink));
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.fe-meeting-stack-schedule h3 .icon {
+  width: 16px; height: 16px; color: var(--fe-color-brand, var(--fe-accent));
+}
+.fe-meeting-stack-schedule ul {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column;
+}
+.fe-meeting-stack-schedule li {
+  display: grid; grid-template-columns: 110px 1fr auto; gap: 12px; align-items: baseline;
+  padding: 12px 0; border-top: 1px solid var(--fe-color-border, var(--fe-border));
+}
+.fe-meeting-stack-schedule li:first-child { border-top: none; }
+.fe-meeting-stack-schedule-day { font-weight: 700; color: var(--fe-color-text, var(--fe-ink)); }
+.fe-meeting-stack-schedule-time {
+  color: var(--fe-color-text, var(--fe-ink)); font-variant-numeric: tabular-nums;
+}
+.fe-meeting-stack-schedule-time em {
+  font-style: normal;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted)); font-size: 0.875rem;
+}
+.fe-meeting-stack-schedule-meta {
+  font-size: 0.8125rem; color: var(--fe-color-text-soft, var(--fe-ink-muted));
+}
+@media (max-width: 600px) {
+  .fe-meeting-stack-schedule li { grid-template-columns: 1fr; gap: 2px; }
+}
+html[data-theme="dark"] .fe-meeting-stack { background: #0b1026; }
+html[data-theme="dark"] .fe-meeting-stack-action,
+html[data-theme="dark"] .fe-meeting-stack-prose,
+html[data-theme="dark"] .fe-meeting-stack-schedule { background: #131a33; border-color: transparent; }
+html[data-theme="dark"] .fe-meeting-stack-action-soft { background: #1a2247; }
+html[data-theme="dark"] .fe-meeting-stack-hero-inner h1,
+html[data-theme="dark"] .fe-meeting-stack-action h2,
+html[data-theme="dark"] .fe-meeting-stack-prose,
+html[data-theme="dark"] .fe-meeting-stack-schedule h3,
+html[data-theme="dark"] .fe-meeting-stack-schedule-day,
+html[data-theme="dark"] .fe-meeting-stack-schedule-time { color: #f1f5f9; }
+html[data-theme="dark"] .fe-meeting-stack-creds code { background: #0b1026; color: #e2e8f0; }
+html[data-theme="dark"] .fe-meeting-stack-chip {
+  background: rgba(19, 26, 51, 0.85); color: #e2e8f0;
+  border-color: rgba(255,255,255,0.1);
+}
+
+/* ===========================================================================
+   Meeting detail — Magazine template
+   Editorial: serif headline, hairline rule, two-column grid + sticky sidebar.
+   =========================================================================== */
+.fe-meeting-mag {
+  background: var(--tpl-bg, var(--fe-color-surface, var(--fe-panel)));
+  padding: 56px 0 80px;
+}
+.fe-meeting-mag-inner { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+.fe-page .fe-meeting-mag-back,
+.frontend-body .fe-meeting-mag-back {
+  display: inline-block; color: var(--fe-color-text-soft, var(--fe-ink-muted));
+  text-decoration: none; font-size: 0.875rem; margin-bottom: 36px;
+}
+.fe-page .fe-meeting-mag-back:hover,
+.frontend-body .fe-meeting-mag-back:hover {
+  color: var(--fe-color-brand, var(--fe-accent)); text-decoration: none;
+}
+.fe-meeting-mag-head { margin-bottom: 40px; }
+.fe-meeting-mag-kicker {
+  display: inline-block; font-size: 0.75rem; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--fe-color-brand, var(--fe-accent)); margin-bottom: 14px;
+}
+.fe-meeting-mag-head h1 {
+  margin: 0;
+  font-family: var(--tpl-heading-font, var(--fe-font-display, 'Fraunces'), 'Fraunces', Georgia, serif);
+  font-size: var(--tpl-heading-size, clamp(2.25rem, 5.5vw, 4rem));
+  line-height: 1.05; font-weight: 600;
+  color: var(--fe-color-text, var(--fe-ink)); letter-spacing: -0.02em;
+}
+.fe-meeting-mag-rule {
+  margin-top: 28px; height: 1px;
+  background: var(--fe-color-text, var(--fe-ink)); opacity: 0.85;
+}
+.fe-meeting-mag-grid {
+  display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 56px;
+}
+@media (max-width: 800px) { .fe-meeting-mag-grid { grid-template-columns: 1fr; gap: 32px; } }
+.fe-meeting-mag-main { min-width: 0; }
+.fe-meeting-mag-alert {
+  display: flex; gap: 10px; padding: 14px 16px; border-radius: 8px;
+  background: rgba(245, 158, 11, 0.10); color: #78350f;
+  border-left: 3px solid #f97316;
+  margin-bottom: 24px; font-size: 0.9375rem;
+}
+.fe-meeting-mag-alert .icon { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 2px; }
+.fe-meeting-mag-prose {
+  color: var(--fe-color-text, var(--fe-ink));
+  font-family: var(--tpl-body-font, var(--fe-font-body, inherit));
+  font-size: var(--tpl-body-size, 1.0625rem);
+  line-height: var(--fe-text-line-height, 1.75);
+}
+.fe-meeting-mag-prose p { margin: 0 0 18px; }
+.fe-meeting-mag-prose p:first-child::first-letter {
+  font-family: var(--fe-font-display, 'Fraunces'), Georgia, serif;
+  font-size: 3.6rem; line-height: 0.85; float: left; padding: 6px 10px 0 0;
+  color: var(--fe-color-brand, var(--fe-accent)); font-weight: 600;
+}
+.fe-meeting-mag-empty { font-style: italic; }
+.fe-meeting-mag-side {
+  display: flex; flex-direction: column; gap: 18px;
+  position: sticky; top: calc(var(--fe-header-full-h, 80px) + 24px); align-self: start;
+}
+@media (max-width: 800px) { .fe-meeting-mag-side { position: static; } }
+.fe-meeting-mag-side-card {
+  padding: 18px 20px;
+  border: 1px solid var(--fe-color-border, var(--fe-border));
+  border-radius: var(--fe-card-radius, 4px);
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft));
+}
+.fe-meeting-mag-side-label {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted)); margin-bottom: 10px;
+}
+.fe-meeting-mag-side-label .icon { width: 14px; height: 14px; }
+.fe-meeting-mag-side-sched {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.fe-meeting-mag-side-sched li { display: flex; flex-direction: column; gap: 1px; }
+.fe-meeting-mag-side-day {
+  font-weight: 700; color: var(--fe-color-text, var(--fe-ink)); font-size: 0.95rem;
+}
+.fe-meeting-mag-side-time {
+  color: var(--fe-color-text, var(--fe-ink)); font-variant-numeric: tabular-nums;
+}
+.fe-meeting-mag-side-meta {
+  color: var(--fe-color-text-soft, var(--fe-ink-muted)); font-size: 0.8125rem;
+}
+.fe-meeting-mag-side-addr { margin: 0 0 10px; color: var(--fe-color-text, var(--fe-ink)); }
+/* Inline (non-button) link inside the sidebar — uses link tokens. */
+.fe-page .fe-meeting-mag-side-link,
+.frontend-body .fe-meeting-mag-side-link {
+  display: inline-flex; align-items: center; gap: 4px;
+  color: var(--fe-color-link, var(--fe-color-brand, var(--fe-accent)));
+  font-weight: 600; font-size: 0.9rem;
+}
+/* CTA modifier on top of .fe-btn (compact size suited to the side card). */
+.fe-meeting-mag-side-cta { margin-bottom: 12px; padding: 10px 14px; font-size: 0.9rem; }
+.fe-meeting-mag-side-creds {
+  margin: 0; display: grid; grid-template-columns: 70px 1fr; gap: 6px 10px; align-items: center;
+}
+.fe-meeting-mag-side-creds dt {
+  font-size: 0.75rem; font-weight: 700;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted));
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.fe-meeting-mag-side-creds dd { margin: 0; display: flex; align-items: center; gap: 4px;
+  font-size: 0.875rem; }
+.fe-meeting-mag-side-creds code {
+  background: var(--fe-color-surface, var(--fe-panel));
+  padding: 3px 7px; border-radius: 4px;
+  font-size: 0.8125rem; color: var(--fe-color-text, var(--fe-ink));
+  border: 1px solid var(--fe-color-border, var(--fe-border));
+}
+html[data-theme="dark"] .fe-meeting-mag { background: #0b1026; }
+html[data-theme="dark"] .fe-meeting-mag-head h1,
+html[data-theme="dark"] .fe-meeting-mag-prose,
+html[data-theme="dark"] .fe-meeting-mag-side-day,
+html[data-theme="dark"] .fe-meeting-mag-side-time,
+html[data-theme="dark"] .fe-meeting-mag-side-addr { color: #f1f5f9; }
+html[data-theme="dark"] .fe-meeting-mag-rule { background: #f1f5f9; opacity: 0.6; }
+html[data-theme="dark"] .fe-meeting-mag-side-card { background: #131a33; border-color: transparent; }
+html[data-theme="dark"] .fe-meeting-mag-side-creds code {
+  background: #0b1026; color: #e2e8f0; border-color: rgba(255,255,255,0.08);
+}
+
+/* ===========================================================================
+   Meeting detail — Minimal template
+   Typography-driven, lots of whitespace, no cards.
+   =========================================================================== */
+.fe-meeting-min {
+  background: var(--tpl-bg, var(--fe-color-surface, var(--fe-panel)));
+  padding: 80px 0 120px;
+}
+.fe-meeting-min-inner { max-width: 640px; margin: 0 auto; padding: 0 24px; }
+.fe-page .fe-meeting-min-back,
+.frontend-body .fe-meeting-min-back {
+  display: inline-block; color: var(--fe-color-text-soft, var(--fe-ink-muted));
+  text-decoration: none; font-size: 0.8125rem; letter-spacing: 0.04em;
+  margin-bottom: 60px;
+}
+.fe-page .fe-meeting-min-back:hover,
+.frontend-body .fe-meeting-min-back:hover {
+  color: var(--fe-color-brand, var(--fe-accent)); text-decoration: none;
+}
+.fe-meeting-min-head { margin-bottom: 36px; }
+.fe-meeting-min-eyebrow {
+  display: inline-block; font-size: 0.7rem; font-weight: 600;
+  letter-spacing: 0.32em; text-transform: uppercase;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted)); margin-bottom: 18px;
+}
+.fe-meeting-min-head h1 {
+  margin: 0;
+  font-family: var(--tpl-heading-font, var(--fe-font-display, 'Fraunces'), Georgia, serif);
+  font-size: var(--tpl-heading-size, clamp(2.25rem, 6vw, 3.75rem));
+  line-height: 1.05; font-weight: 400;
+  color: var(--fe-color-text, var(--fe-ink)); letter-spacing: -0.025em;
+}
+.fe-meeting-min-alert {
+  margin: 24px 0 0; padding: 12px 0;
+  border-top: 1px solid var(--fe-color-border, var(--fe-border));
+  border-bottom: 1px solid var(--fe-color-border, var(--fe-border));
+  color: #9a3412; font-size: 0.95rem;
+}
+.fe-meeting-min-desc {
+  margin: 36px 0 60px;
+  color: var(--fe-color-text, var(--fe-ink));
+  font-family: var(--tpl-body-font, var(--fe-font-body, inherit));
+  font-size: var(--tpl-body-size, 1.0625rem);
+  line-height: var(--fe-text-line-height, 1.75);
+}
+.fe-meeting-min-desc p { margin: 0 0 16px; }
+.fe-meeting-min-info {
+  margin: 0; display: grid; grid-template-columns: 90px 1fr;
+  gap: 24px 28px; align-items: baseline;
+}
+.fe-meeting-min-info dt {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted)); padding-top: 4px;
+}
+.fe-meeting-min-info dd {
+  margin: 0; color: var(--fe-color-text, var(--fe-ink));
+  font-size: 1rem; line-height: 1.6;
+}
+.fe-meeting-min-info dd ul {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.fe-meeting-min-info dd ul li {
+  display: flex; gap: 14px; flex-wrap: wrap; align-items: baseline;
+}
+.fe-meeting-min-info dd ul li > span:first-child { font-weight: 600; min-width: 90px; }
+.fe-meeting-min-info dd ul li .muted { font-size: 0.875rem; }
+.fe-page .fe-meeting-min-link,
+.frontend-body .fe-meeting-min-link {
+  color: var(--fe-color-link, var(--fe-color-brand, var(--fe-accent)));
+  font-weight: 500; margin-left: 8px;
+}
+.fe-meeting-min-link-strong { font-weight: 700; }
+.fe-meeting-min-cred {
+  margin-top: 8px; display: flex; align-items: center; gap: 8px;
+  font-size: 0.875rem;
+}
+.fe-meeting-min-cred code {
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft));
+  padding: 4px 8px; border-radius: 4px;
+  font-size: 0.875rem; color: var(--fe-color-text, var(--fe-ink));
+}
+@media (max-width: 600px) {
+  .fe-meeting-min-info { grid-template-columns: 1fr; gap: 8px 0; }
+  .fe-meeting-min-info dt { padding-top: 18px; }
+  .fe-meeting-min-info dt:first-child { padding-top: 0; }
+}
+html[data-theme="dark"] .fe-meeting-min { background: #0b1026; }
+html[data-theme="dark"] .fe-meeting-min-head h1,
+html[data-theme="dark"] .fe-meeting-min-desc,
+html[data-theme="dark"] .fe-meeting-min-info dd { color: #f1f5f9; }
+html[data-theme="dark"] .fe-meeting-min-cred code { background: #131a33; color: #e2e8f0; }
+
+/* ===========================================================================
+   Event detail — Poster template
+   Full-bleed featured image hero with darkened overlay + ticket-style card.
+   =========================================================================== */
+.fe-event-poster {
+  background: var(--tpl-bg, var(--fe-color-surface, var(--fe-panel)));
+  padding: 0 0 80px;
+}
+.fe-event-poster-hero {
+  position: relative; min-height: 360px; padding: 80px 0;
+  background-color: color-mix(in srgb,
+    var(--fe-color-brand, var(--fe-accent)) 20%, var(--fe-color-text, var(--fe-ink)));
+  background-size: cover; background-position: center;
+  color: #fff;
+}
+.fe-event-poster.has-cover .fe-event-poster-hero { min-height: 460px; }
+.fe-event-poster-hero-shade {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.35) 0%, rgba(15, 23, 42, 0.78) 100%);
+}
+.fe-event-poster-hero-inner {
+  position: relative; max-width: 880px; margin: 0 auto; padding: 0 24px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 18px;
+}
+.fe-page .fe-event-poster-back,
+.frontend-body .fe-event-poster-back {
+  display: inline-block; color: rgba(255,255,255,0.85);
+  text-decoration: none; font-size: 0.875rem;
+}
+.fe-page .fe-event-poster-back:hover,
+.frontend-body .fe-event-poster-back:hover { color: #fff; text-decoration: none; }
+.fe-event-poster-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.fe-event-poster-chips span {
+  padding: 5px 12px; border-radius: 999px;
+  background: rgba(255,255,255,0.18); backdrop-filter: blur(6px);
+  font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em;
+  border: 1px solid rgba(255,255,255,0.22);
+}
+.fe-event-poster-hero-inner h1 {
+  margin: 0;
+  font-family: var(--tpl-heading-font, var(--fe-font-display, 'Fraunces'), Georgia, serif);
+  font-size: var(--tpl-heading-size, clamp(2.25rem, 5.5vw, 4rem));
+  line-height: 1.05; font-weight: 600;
+  letter-spacing: -0.02em; max-width: 800px;
+}
+.fe-event-poster-summary {
+  margin: 0; font-size: 1.125rem; max-width: 700px;
+  color: rgba(255,255,255,0.92); line-height: 1.5;
+}
+.fe-event-poster-body {
+  max-width: 880px; margin: -50px auto 0; padding: 0 24px;
+  position: relative; z-index: 2;
+  display: flex; flex-direction: column; gap: 32px;
+}
+.fe-event-poster-ticket {
+  position: relative;
+  background: var(--fe-color-surface, var(--fe-panel));
+  border: 1px solid var(--fe-color-border, var(--fe-border));
+  border-radius: var(--fe-card-radius, 18px);
+  padding: 28px; display: grid; gap: 24px;
+  grid-template-columns: 120px 1fr; align-items: start;
+  box-shadow: var(--fe-card-shadow, 0 12px 50px rgba(15, 23, 42, 0.12));
+}
+.fe-event-poster-ticket-notch {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--fe-color-surface, var(--fe-panel));
+  border: 1px solid var(--fe-color-border, var(--fe-border));
+  box-shadow: inset 0 0 0 6px var(--fe-color-surface-alt, var(--fe-panel-soft));
+}
+.fe-event-poster-ticket-notch.left { left: -12px; }
+.fe-event-poster-ticket-notch.right { right: -12px; }
+.fe-event-poster-ticket-date {
+  border-right: 2px dashed var(--fe-color-border, var(--fe-border));
+  padding-right: 24px;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+}
+.fe-event-poster-ticket-mon {
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--fe-color-brand, var(--fe-accent));
+}
+.fe-event-poster-ticket-day {
+  font-family: var(--fe-font-display, 'Fraunces'), Georgia, serif;
+  font-size: 3.5rem; line-height: 1; font-weight: 600;
+  color: var(--fe-color-text, var(--fe-ink)); margin: 4px 0;
+}
+.fe-event-poster-ticket-yr {
+  font-size: 0.875rem; color: var(--fe-color-text-soft, var(--fe-ink-muted));
+}
+.fe-event-poster-ticket-info { display: flex; flex-direction: column; gap: 14px; }
+.fe-event-poster-ticket-info > div { display: flex; flex-direction: column; gap: 2px; }
+.fe-event-poster-ticket-label {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted));
+}
+.fe-event-poster-ticket-val {
+  color: var(--fe-color-text, var(--fe-ink)); font-size: 1rem; line-height: 1.5;
+}
+.fe-event-poster-ticket-actions {
+  grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--fe-color-border, var(--fe-border));
+}
+/* CTA modifier for the poster ticket — leans on .fe-btn for color/decoration. */
+.fe-event-poster-cta { gap: 8px; padding: 12px 20px; font-size: 0.9375rem; }
+.fe-event-poster-cta .icon { width: 16px; height: 16px; }
+.fe-event-poster-cta em { font-style: normal; opacity: 0.85; }
+.fe-event-poster-ticket-creds {
+  grid-column: 1 / -1; margin: 0; display: grid;
+  grid-template-columns: 110px 1fr; gap: 8px 14px; align-items: center;
+}
+.fe-event-poster-ticket-creds dt {
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted));
+}
+.fe-event-poster-ticket-creds dd { margin: 0; display: flex; align-items: center; gap: 6px; }
+.fe-event-poster-ticket-creds code {
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft));
+  padding: 4px 9px; border-radius: 6px;
+  font-size: 0.875rem; color: var(--fe-color-text, var(--fe-ink));
+}
+.fe-event-poster-prose {
+  color: var(--fe-color-text, var(--fe-ink));
+  font-family: var(--tpl-body-font, var(--fe-font-body, inherit));
+  font-size: var(--tpl-body-size, 1.0625rem);
+  line-height: var(--fe-text-line-height, 1.75);
+}
+.fe-event-poster-prose p { margin: 0 0 16px; }
+.fe-event-poster-contact {
+  border-top: 1px solid var(--fe-color-border, var(--fe-border)); padding-top: 24px;
+}
+.fe-event-poster-contact h3 {
+  margin: 0 0 14px; font-size: 0.9rem;
+  color: var(--fe-color-text, var(--fe-ink));
+  display: inline-flex; align-items: center; gap: 6px;
+  text-transform: uppercase; letter-spacing: 0.1em;
+}
+.fe-event-poster-contact h3 .icon {
+  width: 16px; height: 16px; color: var(--fe-color-brand, var(--fe-accent));
+}
+.fe-event-poster-contact ul {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.fe-event-poster-contact ul li {
+  display: grid; grid-template-columns: 80px 1fr; gap: 14px; align-items: baseline;
+}
+.fe-event-poster-contact ul li > span:first-child {
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted));
+}
+@media (max-width: 600px) {
+  .fe-event-poster-ticket { grid-template-columns: 1fr; padding: 22px; }
+  .fe-event-poster-ticket-date {
+    border-right: none;
+    border-bottom: 2px dashed var(--fe-color-border, var(--fe-border));
+    padding: 0 0 18px; flex-direction: row; gap: 10px; align-items: baseline;
+  }
+  .fe-event-poster-ticket-day { font-size: 2.5rem; margin: 0; }
+}
+html[data-theme="dark"] .fe-event-poster { background: #0b1026; }
+html[data-theme="dark"] .fe-event-poster-ticket { background: #131a33; border-color: transparent; }
+html[data-theme="dark"] .fe-event-poster-ticket-notch {
+  background: #0b1026; border-color: rgba(255,255,255,0.08);
+  box-shadow: inset 0 0 0 6px #131a33;
+}
+html[data-theme="dark"] .fe-event-poster-ticket-day,
+html[data-theme="dark"] .fe-event-poster-ticket-val,
+html[data-theme="dark"] .fe-event-poster-prose,
+html[data-theme="dark"] .fe-event-poster-contact h3 { color: #f1f5f9; }
+html[data-theme="dark"] .fe-event-poster-ticket-creds code { background: #0b1026; color: #e2e8f0; }
+
+/* ===========================================================================
+   Event detail — Timeline template
+   Big calendar-style date block on the left, content beside it.
+   =========================================================================== */
+.fe-event-time {
+  background: var(--tpl-bg, var(--fe-color-surface, var(--fe-panel)));
+  padding: 56px 0 100px;
+}
+.fe-event-time-inner { max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+.fe-page .fe-event-time-back,
+.frontend-body .fe-event-time-back {
+  display: inline-block; color: var(--fe-color-text-soft, var(--fe-ink-muted));
+  text-decoration: none; font-size: 0.875rem; margin-bottom: 32px;
+}
+.fe-page .fe-event-time-back:hover,
+.frontend-body .fe-event-time-back:hover {
+  color: var(--fe-color-brand, var(--fe-accent)); text-decoration: none;
+}
+.fe-event-time-row { display: grid; grid-template-columns: 180px 1fr; gap: 56px; align-items: start; }
+@media (max-width: 800px) { .fe-event-time-row { grid-template-columns: 1fr; gap: 24px; } }
+.fe-event-time-date {
+  position: sticky; top: calc(var(--fe-header-full-h, 80px) + 24px);
+  display: flex; flex-direction: column;
+  border-left: 4px solid var(--fe-color-brand, var(--fe-accent));
+  padding: 8px 0 8px 22px;
+}
+@media (max-width: 800px) {
+  .fe-event-time-date { position: static; flex-direction: row; gap: 12px; align-items: baseline; padding-left: 16px; }
+}
+.fe-event-time-mon {
+  font-size: 0.875rem; font-weight: 700; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--fe-color-brand, var(--fe-accent));
+  margin-bottom: 4px;
+}
+.fe-event-time-day {
+  font-family: var(--fe-font-display, 'Fraunces'), Georgia, serif;
+  font-size: clamp(4rem, 9vw, 6.5rem); line-height: 0.95; font-weight: 600;
+  color: var(--fe-color-text, var(--fe-ink)); letter-spacing: -0.04em;
+}
+.fe-event-time-dow {
+  font-size: 1rem; color: var(--fe-color-text-soft, var(--fe-ink-muted));
+  margin-top: 6px; font-weight: 500;
+}
+.fe-event-time-yr {
+  font-size: 0.875rem; color: var(--fe-color-text-soft, var(--fe-ink-muted));
+}
+.fe-event-time-main { min-width: 0; }
+.fe-event-time-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.fe-event-time-chips span {
+  padding: 4px 10px; border-radius: 6px;
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft));
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted));
+  border: 1px solid var(--fe-color-border, var(--fe-border));
+}
+.fe-event-time-chips span.online {
+  background: color-mix(in srgb, var(--fe-color-brand, var(--fe-accent)) 12%, transparent);
+  color: var(--fe-color-brand, var(--fe-accent)); border-color: transparent;
+}
+.fe-event-time-main h1 {
+  margin: 0 0 14px;
+  font-family: var(--tpl-heading-font, var(--fe-font-display, 'Fraunces'), Georgia, serif);
+  font-size: var(--tpl-heading-size, clamp(2rem, 4.5vw, 3rem));
+  line-height: 1.1; font-weight: 600;
+  color: var(--fe-color-text, var(--fe-ink)); letter-spacing: -0.02em;
+}
+.fe-event-time-summary {
+  margin: 0 0 20px; color: var(--fe-color-text-soft, var(--fe-ink-muted));
+  font-size: 1.0625rem; line-height: 1.55;
+}
+.fe-event-time-cover {
+  margin: 0 0 28px; border-radius: var(--fe-card-radius, 14px); overflow: hidden;
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft));
+}
+.fe-event-time-cover img { display: block; width: 100%; height: auto; }
+.fe-event-time-meta {
+  list-style: none; padding: 18px 0; margin: 0 0 24px;
+  display: flex; flex-direction: column; gap: 10px;
+  border-top: 1px solid var(--fe-color-border, var(--fe-border));
+  border-bottom: 1px solid var(--fe-color-border, var(--fe-border));
+}
+.fe-event-time-meta li {
+  display: flex; gap: 14px; align-items: baseline;
+  color: var(--fe-color-text, var(--fe-ink));
+  font-size: 0.9375rem; line-height: 1.5;
+}
+.fe-event-time-meta-icon { color: var(--fe-color-brand, var(--fe-accent)); flex: 0 0 auto; }
+.fe-event-time-meta-icon .icon { width: 18px; height: 18px; }
+.fe-page .fe-event-time-link,
+.frontend-body .fe-event-time-link {
+  color: var(--fe-color-link, var(--fe-color-brand, var(--fe-accent)));
+  font-weight: 500;
+}
+.fe-event-time-link-strong { font-weight: 700; }
+.fe-event-time-creds {
+  margin: 0 0 28px; display: grid; grid-template-columns: 110px 1fr;
+  gap: 6px 14px; align-items: center;
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft));
+  padding: 14px 18px; border-radius: var(--fe-card-radius, 10px);
+}
+.fe-event-time-creds dt {
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted));
+}
+.fe-event-time-creds dd { margin: 0; display: flex; align-items: center; gap: 6px; }
+.fe-event-time-creds code {
+  background: var(--fe-color-surface, var(--fe-panel));
+  padding: 3px 8px; border-radius: 4px;
+  font-size: 0.875rem; color: var(--fe-color-text, var(--fe-ink));
+  border: 1px solid var(--fe-color-border, var(--fe-border));
+}
+.fe-event-time-prose {
+  color: var(--fe-color-text, var(--fe-ink));
+  font-family: var(--tpl-body-font, var(--fe-font-body, inherit));
+  font-size: var(--tpl-body-size, var(--fe-text-size-base, 1rem));
+  line-height: var(--fe-text-line-height, 1.75);
+}
+.fe-event-time-prose p { margin: 0 0 16px; }
+.fe-event-time-contact {
+  margin-top: 28px;
+  border-top: 1px solid var(--fe-color-border, var(--fe-border));
+  padding-top: 18px;
+}
+.fe-event-time-contact h3 {
+  margin: 0 0 10px; font-size: 0.85rem;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted));
+  text-transform: uppercase; letter-spacing: 0.14em;
+}
+.fe-event-time-contact ul {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 4px;
+  color: var(--fe-color-text, var(--fe-ink));
+}
+html[data-theme="dark"] .fe-event-time { background: #0b1026; }
+html[data-theme="dark"] .fe-event-time-day,
+html[data-theme="dark"] .fe-event-time-main h1,
+html[data-theme="dark"] .fe-event-time-meta li,
+html[data-theme="dark"] .fe-event-time-prose,
+html[data-theme="dark"] .fe-event-time-contact ul { color: #f1f5f9; }
+html[data-theme="dark"] .fe-event-time-creds { background: #131a33; }
+html[data-theme="dark"] .fe-event-time-creds code {
+  background: #0b1026; color: #e2e8f0; border-color: rgba(255,255,255,0.08);
+}
+
+/* ===========================================================================
+   Event detail — Minimal template
+   Centered, no images, no chips. Typography-driven.
+   =========================================================================== */
+.fe-event-min {
+  background: var(--tpl-bg, var(--fe-color-surface, var(--fe-panel)));
+  padding: 80px 0 120px;
+}
+.fe-event-min-inner {
+  max-width: 640px; margin: 0 auto; padding: 0 24px; text-align: center;
+}
+.fe-page .fe-event-min-back,
+.frontend-body .fe-event-min-back {
+  display: inline-block; color: var(--fe-color-text-soft, var(--fe-ink-muted));
+  text-decoration: none; font-size: 0.8125rem; letter-spacing: 0.04em;
+  margin-bottom: 60px;
+}
+.fe-page .fe-event-min-back:hover,
+.frontend-body .fe-event-min-back:hover {
+  color: var(--fe-color-brand, var(--fe-accent)); text-decoration: none;
+}
+.fe-event-min-date {
+  margin: 0 0 22px; color: var(--fe-color-text-soft, var(--fe-ink-muted));
+  font-size: 0.875rem; letter-spacing: 0.04em; font-variant-numeric: tabular-nums;
+}
+.fe-event-min-date .dot { color: var(--fe-color-border, var(--fe-border)); margin: 0 6px; }
+.fe-event-min-head { margin-bottom: 36px; }
+.fe-event-min-head h1 {
+  margin: 0;
+  font-family: var(--tpl-heading-font, var(--fe-font-display, 'Fraunces'), Georgia, serif);
+  font-size: var(--tpl-heading-size, clamp(2.25rem, 6vw, 3.75rem));
+  line-height: 1.05; font-weight: 400;
+  color: var(--fe-color-text, var(--fe-ink)); letter-spacing: -0.025em;
+}
+.fe-event-min-summary {
+  margin: 22px 0 0; color: var(--fe-color-text-soft, var(--fe-ink-muted));
+  font-size: 1.0625rem; line-height: 1.55;
+}
+.fe-event-min-prose {
+  color: var(--fe-color-text, var(--fe-ink));
+  font-family: var(--tpl-body-font, var(--fe-font-body, inherit));
+  font-size: var(--tpl-body-size, var(--fe-text-size-base, 1rem));
+  line-height: var(--fe-text-line-height, 1.75);
+  text-align: left; margin: 0 0 60px;
+}
+.fe-event-min-prose p { margin: 0 0 16px; }
+.fe-event-min-info {
+  margin: 0; display: grid; grid-template-columns: 90px 1fr;
+  gap: 22px 28px; align-items: baseline; text-align: left;
+}
+.fe-event-min-info dt {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fe-color-text-soft, var(--fe-ink-muted)); padding-top: 4px;
+}
+.fe-event-min-info dd {
+  margin: 0; color: var(--fe-color-text, var(--fe-ink));
+  font-size: 1rem; line-height: 1.6;
+}
+.fe-page .fe-event-min-link,
+.frontend-body .fe-event-min-link {
+  color: var(--fe-color-link, var(--fe-color-brand, var(--fe-accent)));
+  font-weight: 500; margin-left: 8px;
+}
+.fe-event-min-link-strong {
+  font-weight: 700; margin-left: 0; display: inline-block; margin-bottom: 8px;
+}
+.fe-event-min-cred {
+  margin-top: 6px; display: flex; align-items: center; gap: 8px;
+  font-size: 0.875rem;
+}
+.fe-event-min-cred code {
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft));
+  padding: 4px 8px; border-radius: 4px;
+  font-size: 0.875rem; color: var(--fe-color-text, var(--fe-ink));
+}
+@media (max-width: 600px) {
+  .fe-event-min-info { grid-template-columns: 1fr; gap: 6px 0; }
+  .fe-event-min-info dt { padding-top: 16px; }
+  .fe-event-min-info dt:first-child { padding-top: 0; }
+}
+html[data-theme="dark"] .fe-event-min { background: #0b1026; }
+html[data-theme="dark"] .fe-event-min-head h1,
+html[data-theme="dark"] .fe-event-min-prose,
+html[data-theme="dark"] .fe-event-min-info dd { color: #f1f5f9; }
+html[data-theme="dark"] .fe-event-min-cred code { background: #131a33; color: #e2e8f0; }

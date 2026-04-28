@@ -51,8 +51,14 @@
           <textarea name="description" rows="3">{{ (meeting.description if meeting else '') or '' }}</textarea>
         </label>
 
-        <label>Alert Message <span class="muted smaller">(leave blank to hide)</span>
-          <textarea name="alert_message" rows="2" placeholder="Displayed prominently at the top of the meeting page.">{{ (meeting.alert_message if meeting else '') or '' }}</textarea>
+        <label>Backend Alert Message <span class="muted smaller">(leave blank to hide)</span>
+          <span class="muted small" style="display:block; margin: 2px 0 4px;">Only appears in the tspro backend — visible to logged-in admins on the meeting detail page.</span>
+          <textarea name="alert_message" rows="2" placeholder="Internal note for admins.">{{ (meeting.alert_message if meeting else '') or '' }}</textarea>
+        </label>
+
+        <label>Public Alert Message <span class="muted smaller">(leave blank to hide)</span>
+          <span class="muted small" style="display:block; margin: 2px 0 4px;">Displayed prominently on the public meeting detail page.</span>
+          <textarea name="public_alert_message" rows="2" placeholder="Notice for the public, e.g. cancellation, change of venue.">{{ (meeting.public_alert_message if meeting else '') or '' }}</textarea>
         </label>
 
         <label>Logo
@@ -149,6 +155,7 @@
           <legend>Libraries</legend>
           {% if all_libraries %}
           <div class="library-picker">
+            {% set _public_reading_ids = (meeting.public_readings|map(attribute='id')|list) if meeting else [] %}
             {% for lib in all_libraries %}
               {% set included = meeting and lib in meeting.libraries %}
               {% set mode = meeting.library_mode(lib) if included else 'all' %}
@@ -179,6 +186,18 @@
                     <p class="muted small">No files in this library yet.</p>
                     {% endfor %}
                   </div>
+                  {% if lib.readings.count() %}
+                  <div class="library-public-readings">
+                    <div class="library-public-readings-head muted smaller">Show on public meeting page:</div>
+                    {% for r in lib.readings %}
+                    <label class="reading-check reading-public-check">
+                      <input type="checkbox" name="library_public_readings_{{ lib.id }}" value="{{ r.id }}"
+                             {% if r.id in _public_reading_ids %}checked{% endif %}>
+                      <span>{{ r.title }}</span>
+                    </label>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
                 </div>
               </div>
             {% endfor %}
@@ -212,6 +231,13 @@
                 {% if f.original_filename %}<div class="muted smaller">{{ f.original_filename }}</div>{% endif %}
               </div>
               <div class="row-actions">
+                <label class="mode-toggle file-public-row-toggle"
+                       title="Show this {{ CATEGORY_LABELS[cat]|lower|trim('s') }} on the public meeting page">
+                  <input type="checkbox" data-file-public-toggle="{{ f.id }}" value="1"
+                         {% if f.public_visible %}checked{% endif %}>
+                  <span class="mode-track"><span class="mode-thumb"></span></span>
+                  <span class="muted smaller">Public</span>
+                </label>
                 <button type="button" class="btn btn-sm" data-file-add-toggle="{{ f_edit_id }}">Edit</button>
                 <form method="post" action="{{ url_for('main.file_delete', fid=f.id) }}" onsubmit="return confirm('Delete this file?');">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -241,6 +267,11 @@
                 <label>Or URL<input name="url" type="url" placeholder="https://..."
                        value="{{ f.url or '' }}"></label>
                 {% endif %}
+                <label class="mode-toggle file-public-toggle">
+                  <input type="checkbox" name="public_visible" value="1" {% if f.public_visible %}checked{% endif %}>
+                  <span class="mode-track"><span class="mode-thumb"></span></span>
+                  <span>Show on public meeting page</span>
+                </label>
                 <div class="form-actions">
                   <button type="button" class="btn btn-sm" data-file-add-cancel="{{ f_edit_id }}">Cancel</button>
                   <button type="submit" class="btn btn-sm btn-primary">Save</button>
@@ -267,6 +298,11 @@
             </div>
             <label>Or URL<input name="url" type="url" placeholder="https://..."></label>
             {% endif %}
+            <label class="mode-toggle file-public-toggle">
+              <input type="checkbox" name="public_visible" value="1">
+              <span class="mode-track"><span class="mode-thumb"></span></span>
+              <span>Show on public meeting page</span>
+            </label>
             <div class="form-actions">
               <button type="button" class="btn btn-sm" data-file-add-cancel="add-{{ cat }}">Cancel</button>
               <button type="submit" class="btn btn-sm btn-primary">Upload</button>

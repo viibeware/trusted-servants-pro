@@ -48,6 +48,10 @@
          class="fe-subnav-link {% if request.endpoint in ('main.frontend_navigation', 'main.frontend_nav_megamenu') %}active{% endif %}">
         {{ icon('layout-grid') }}<span>Navigation</span>
       </a>
+      <a href="{{ url_for('main.frontend_templates') }}"
+         class="fe-subnav-link {% if request.endpoint == 'main.frontend_templates' %}active{% endif %}">
+        {{ icon('copy') }}<span>Templates</span>
+      </a>
     </div>
 
     <div class="fe-subnav-group">

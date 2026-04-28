@@ -691,9 +691,20 @@ html[data-theme="dark"] .perm-badge-viewer { background: rgba(100, 116, 139, 0.2
 .post-chip-announcement { background: rgba(245, 158, 11, 0.15); color: #b45309; border-color: rgba(245, 158, 11, 0.4); }
 .post-chip-event        { background: rgba(11, 92, 255, 0.12);  color: #1d4ed8; border-color: rgba(11, 92, 255, 0.32); }
 .post-chip-online       { background: rgba(20, 184, 166, 0.12); color: #0f766e; border-color: rgba(20, 184, 166, 0.32); }
+.post-chip-draft        { background: rgba(100, 116, 139, 0.14); color: #475569; border-color: rgba(100, 116, 139, 0.34); }
 html[data-theme="dark"] .post-chip-announcement { background: rgba(245, 158, 11, 0.18); color: #fbbf24; border-color: rgba(245, 158, 11, 0.5); }
 html[data-theme="dark"] .post-chip-event        { background: rgba(11, 92, 255, 0.22);  color: #93c5fd; border-color: rgba(11, 92, 255, 0.45); }
 html[data-theme="dark"] .post-chip-online       { background: rgba(20, 184, 166, 0.20); color: #5eead4; border-color: rgba(20, 184, 166, 0.45); }
+html[data-theme="dark"] .post-chip-draft        { background: rgba(100, 116, 139, 0.22); color: #cbd5e1; border-color: rgba(100, 116, 139, 0.45); }
+/* Header-row variant of the chip — used in the edit page's top-actions
+   bar where the parent is a flex row. Switch to inline-flex with
+   centered alignment so the "Draft" text sits visually centered inside
+   the pill, and the pill aligns vertically with the adjacent buttons. */
+.post-chip-header {
+  display: inline-flex; align-items: center; justify-content: center;
+  vertical-align: middle; font-size: 0.7rem;
+  padding: 4px 10px; line-height: 1;
+}
 
 /* Type-tag pills inside the edit form — clickable cards with a checkbox. */
 .post-type-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1rem; }
@@ -2100,6 +2111,11 @@ html.login-fade-in body { animation: login-page-fade-in 650ms ease-out both; }
   border: 1px solid var(--border); background: var(--panel-2); }
 .meeting-logo { max-height: 48px; max-width: 48px; border-radius: 8px;
   margin-right: 10px; vertical-align: middle; }
+/* Backend meeting detail page — bigger 100px display, distinct from the
+   small inline thumbnails on the admin meeting list. */
+.meeting-header .meeting-logo {
+  max-height: 100px; max-width: 100px; margin-right: 0;
+}
 .reading-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 8px;
   border: 1px solid var(--border); margin-right: 12px; flex: 0 0 auto; }
 .reading-hero { max-width: 320px; max-height: 220px; border-radius: 10px;
@@ -2413,6 +2429,38 @@ body.embed .card:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom
   gap: 8px; cursor: pointer; padding: 2px 0; margin: 0; font-weight: 400; text-align: left;
   width: 100%; }
 .library-picker .reading-check input { accent-color: var(--brand); margin: 0; }
+/* Per-reading "Show on public meeting page" panel — appears below the
+   granular file-selection list, independent of selection mode. */
+.library-picker .library-public-readings {
+  margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--border);
+  border-radius: 8px; background: var(--panel-2);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.library-picker .library-public-readings-head {
+  font-weight: 600; margin-bottom: 4px;
+}
+
+/* "Show on public meeting page" toggle inside each file's edit form. */
+.file-add-form .file-public-toggle {
+  flex-direction: row; align-items: center; gap: 10px;
+  font-weight: 400; padding: 4px 0;
+}
+
+/* Compact "Public" toggle that sits in each file row alongside Edit/Delete.
+   Smaller track than the standard mode-toggle so it doesn't dominate the row. */
+.file-list .file-public-row-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: 0 6px 0 0;
+}
+.file-list .file-public-row-toggle .mode-track {
+  width: 28px; height: 16px;
+}
+.file-list .file-public-row-toggle .mode-thumb {
+  width: 12px; height: 12px;
+}
+.file-list .file-public-row-toggle input:checked + .mode-track .mode-thumb {
+  transform: translateX(12px);
+}
 
 /* Toggle switch for All files / Granular */
 .library-picker .mode-toggle { position: relative; display: inline-flex;
@@ -3255,3 +3303,227 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
   max-width: 100%;
 }
 .icon-picker-attribution { padding: 0 4px 4px; margin: 0; }
+
+/* ===========================================================================
+   Templates admin — card grid for picking reusable entity-detail templates
+   (Meeting Detail, Event Detail). Each card has a CSS-drawn thumbnail
+   that hints at the template's character.
+   =========================================================================== */
+.fe-tplgrid-section { margin-top: 16px; }
+.fe-tplgrid-intro { margin: 0; line-height: 1.55; }
+.fe-tplgrid-form { display: flex; flex-direction: column; gap: 16px; }
+.fe-tplgrid {
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+.fe-tplgrid-card {
+  position: relative; display: flex; flex-direction: column; gap: 10px;
+  padding: 14px; border: 2px solid var(--border); border-radius: 12px;
+  background: var(--panel); cursor: pointer;
+  transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+}
+.fe-tplgrid-card:hover {
+  border-color: var(--access); transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+.fe-tplgrid-card.active { border-color: var(--brand); background: var(--brand-soft); }
+.fe-tplgrid-card input[type="radio"] { position: absolute; width: 0; height: 0; opacity: 0; }
+.fe-tplgrid-info { display: flex; flex-direction: column; gap: 4px; }
+.fe-tplgrid-name {
+  display: flex; align-items: center; gap: 8px; font-weight: 600;
+  font-size: 0.95rem; color: var(--text);
+}
+.fe-tplgrid-badge {
+  display: none; padding: 1px 8px; border-radius: 999px;
+  background: var(--brand); color: #fff; font-size: 0.7rem; font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.fe-tplgrid-card.active .fe-tplgrid-badge { display: inline-flex; }
+.fe-tplgrid-desc { line-height: 1.5; }
+
+/* Thumbnail mockups — pure-CSS visual hints, ~140px tall. Each combination
+   of (kind + key) is rendered as small layered <span>s positioned to
+   suggest the template's structure without literally rendering the
+   template. */
+.fe-tplgrid-thumb {
+  position: relative; height: 140px; border-radius: 8px;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  border: 1px solid var(--border); overflow: hidden;
+}
+.fe-tplgrid-thumb > span {
+  position: absolute; background: #cbd5e1; border-radius: 2px;
+}
+.fe-tplgrid-thumb .t-bar { left: 8px; right: 8px; top: 6px; height: 5px; background: #e2e8f0; border-radius: 999px; }
+.fe-tplgrid-thumb .t-h { left: 16px; top: 18px; width: 60%; height: 11px; background: #475569; border-radius: 3px; }
+.fe-tplgrid-thumb .t-h-big { left: 50%; transform: translateX(-50%); top: 28px; width: 78%; height: 14px;
+  background: #1e293b; border-radius: 3px; }
+.fe-tplgrid-thumb .t-h-big.centered { left: 11%; transform: none; }
+.fe-tplgrid-thumb .t-rule { left: 16px; right: 16px; top: 36px; height: 1px; background: #94a3b8; border-radius: 0; }
+.fe-tplgrid-thumb .t-eyebrow { left: 16px; top: 14px; width: 30%; height: 4px; background: #94a3b8; }
+.fe-tplgrid-thumb .t-line { left: 16px; right: 16px; top: 50px; height: 5px; background: #cbd5e1; }
+.fe-tplgrid-thumb .t-line.short { width: 50%; right: auto; }
+.fe-tplgrid-thumb .t-line.centered { left: 50%; transform: translateX(-50%); width: 70%; }
+.fe-tplgrid-thumb .t-line.centered.short { width: 40%; }
+
+/* Classic — title bar + grid of 4 cards */
+.fe-tplgrid-thumb .t-grid {
+  position: absolute; left: 16px; right: 16px; bottom: 14px; height: 64px;
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 6px;
+  background: transparent;
+}
+.fe-tplgrid-thumb .t-grid > span { position: relative; background: #fff;
+  border: 1px solid #e2e8f0; border-radius: 4px; }
+
+/* Card stack — gradient hero block + big primary action below */
+.fe-tplgrid-thumb-meeting-card-stack { background: linear-gradient(180deg, #eef2ff 0%, #fdf4ff 100%); }
+.fe-tplgrid-thumb .t-hero {
+  left: 0; right: 0; top: 0; height: 50px; border-radius: 0;
+  background: linear-gradient(135deg, #818cf8 0%, #f472b6 100%);
+}
+.fe-tplgrid-thumb .t-action {
+  left: 16px; right: 16px; top: 60px; height: 36px; border-radius: 8px;
+  background: #fff; border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+.fe-tplgrid-thumb-meeting-card-stack .t-line { top: 108px; }
+.fe-tplgrid-thumb-meeting-card-stack .t-line.short { top: 120px; }
+
+/* Magazine — 2-col layout with sidebar */
+.fe-tplgrid-thumb .t-cols {
+  position: absolute; left: 16px; right: 16px; top: 50px; bottom: 12px;
+  display: grid; grid-template-columns: 1.6fr 1fr; gap: 8px; background: transparent;
+}
+.fe-tplgrid-thumb .t-col-main, .fe-tplgrid-thumb .t-col-side {
+  background: transparent; display: flex; flex-direction: column; gap: 4px;
+}
+.fe-tplgrid-thumb .t-col-main > span { background: #cbd5e1; height: 4px; border-radius: 2px;
+  position: relative; left: auto; right: auto; top: auto; }
+.fe-tplgrid-thumb .t-col-main > span.short { width: 50%; }
+.fe-tplgrid-thumb .t-col-side > span {
+  background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px;
+  height: 28px; position: relative; left: auto; right: auto; top: auto;
+}
+
+/* Minimal — eyebrow + big serif title + body */
+.fe-tplgrid-thumb-meeting-minimal,
+.fe-tplgrid-thumb-event-minimal { background: #fff; }
+.fe-tplgrid-thumb .t-list {
+  position: absolute; left: 50%; transform: translateX(-50%); top: 90px;
+  width: 70%; display: flex; flex-direction: column; gap: 4px;
+  background: transparent;
+}
+.fe-tplgrid-thumb .t-list > span {
+  position: relative; left: auto; top: auto; height: 4px; background: #cbd5e1;
+}
+
+/* Event — Classic: cover image + same grid */
+.fe-tplgrid-thumb .t-cover {
+  left: 8px; right: 8px; top: 8px; height: 36px; border-radius: 6px;
+  background: linear-gradient(135deg, #60a5fa 0%, #34d399 100%);
+}
+.fe-tplgrid-thumb-event-classic .t-h { top: 50px; }
+.fe-tplgrid-thumb-event-classic .t-grid { top: 70px; bottom: 10px; height: auto; }
+
+/* Event — Poster: full-bleed dark hero */
+.fe-tplgrid-thumb-event-poster { background: #1e293b; }
+.fe-tplgrid-thumb .t-poster-hero {
+  left: 0; right: 0; top: 0; bottom: 0; border-radius: 0;
+  background:
+    linear-gradient(180deg, rgba(15,23,42,0.2) 0%, rgba(15,23,42,0.7) 100%),
+    linear-gradient(135deg, #f97316 0%, #db2777 50%, #7c3aed 100%);
+}
+.fe-tplgrid-thumb .t-poster-overlay {
+  left: 12px; top: 14px; width: 70%; background: transparent;
+}
+.fe-tplgrid-thumb .t-poster-title {
+  position: relative; left: auto; top: auto; display: block;
+  width: 100%; height: 10px; background: #fff; border-radius: 2px;
+}
+.fe-tplgrid-thumb .t-ticket {
+  left: 12px; right: 12px; bottom: 10px; height: 56px; border-radius: 6px;
+  background: #fff; border: 1px solid #e2e8f0;
+  display: grid; grid-template-columns: 36px 1fr; align-items: center;
+  padding: 0 8px; gap: 6px;
+}
+.fe-tplgrid-thumb .t-ticket-date {
+  position: relative; left: auto; top: auto; height: 36px; width: 36px;
+  background: #f1f5f9; border-radius: 4px; border: 1px dashed #cbd5e1;
+}
+.fe-tplgrid-thumb .t-ticket-info {
+  position: relative; left: auto; top: auto; background: transparent;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.fe-tplgrid-thumb .t-ticket-info > span {
+  position: relative; left: auto; top: auto; height: 4px; background: #cbd5e1;
+}
+
+/* Event — Timeline: huge date block on left */
+.fe-tplgrid-thumb .t-time-row {
+  left: 0; right: 0; top: 0; bottom: 0; padding: 12px;
+  display: grid; grid-template-columns: 50px 1fr; gap: 12px;
+  background: transparent; border-radius: 0;
+}
+.fe-tplgrid-thumb .t-time-date {
+  position: relative; left: auto; top: auto; background: transparent;
+  border-left: 3px solid #6366f1; padding-left: 6px;
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+}
+.fe-tplgrid-thumb .t-time-date .m {
+  position: relative; left: auto; top: auto; width: 26px; height: 4px; background: #6366f1;
+}
+.fe-tplgrid-thumb .t-time-date .d {
+  position: relative; left: auto; top: auto; width: 32px; height: 28px;
+  background: #1e293b; border-radius: 3px;
+}
+.fe-tplgrid-thumb .t-time-main {
+  position: relative; left: auto; top: auto; background: transparent;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.fe-tplgrid-thumb .t-time-main .t-h {
+  position: relative; left: auto; top: auto; width: 80%; height: 8px;
+  background: #475569; margin-bottom: 4px;
+}
+.fe-tplgrid-thumb .t-time-main > span {
+  position: relative; left: auto; top: auto; height: 4px; background: #cbd5e1;
+}
+.fe-tplgrid-thumb .t-time-main > span.short { width: 60%; }
+
+/* Event — Minimal: thin date line, centered title */
+.fe-tplgrid-thumb .t-date-line {
+  left: 50%; transform: translateX(-50%); top: 14px; width: 60%; height: 3px;
+  background: #94a3b8; border-radius: 2px;
+}
+
+@media (max-width: 600px) {
+  .fe-tplgrid { grid-template-columns: 1fr; }
+}
+
+/* Customize panel — per-template appearance overrides (bg, fonts, sizes)
+   for the currently-active template in each section. */
+.fe-tplgrid-customize {
+  margin-top: 18px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+.fe-tplgrid-customize summary {
+  cursor: pointer; padding: 6px 0;
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  list-style: none;
+}
+.fe-tplgrid-customize summary::-webkit-details-marker { display: none; }
+.fe-tplgrid-customize summary::before {
+  content: "▸"; color: var(--muted); font-size: 0.8rem;
+  display: inline-block; transition: transform 140ms ease;
+  margin-right: 2px;
+}
+.fe-tplgrid-customize[open] summary::before { transform: rotate(90deg); }
+.fe-tplgrid-customize-title { font-weight: 600; color: var(--text); }
+.fe-tplgrid-customize-form { margin-top: 14px; }
+.fe-tplgrid-customize-grid {
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.fe-tplgrid-customize-grid .fieldset {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.fe-tplgrid-bg-toggle { display: flex; align-items: center; gap: 8px; }

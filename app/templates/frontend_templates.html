@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% from "_frontend_template_picker.html" import template_picker %}
+{% set _active_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
+{% block heading %}Templates{% endblock %}
+{% block heading_help %}Pick a reusable template for each content type. The choice applies to every meeting (or every event) page on the public site — saves you styling each one individually.{% endblock %}
+{% block top_actions %}
+{{ template_picker(frontend_themes, _active_theme,
+                    "frontend_theme",
+                    url_for('main.frontend_theme_save'),
+                    "site-theme-modal", "homepage", "Site theme", label="Theme") }}
+<a class="btn" href="{{ url_for('frontend.index') }}" target="_blank" rel="noopener">View frontend ↗</a>
+{% endblock %}
+{% block content %}
+<div class="fe-admin-layout">
+  {% include "_frontend_subnav.html" %}
+  <div class="fe-admin-main">
+
+{% macro tpl_thumb(kind, key) %}
+  <div class="fe-tplgrid-thumb fe-tplgrid-thumb-{{ kind }} fe-tplgrid-thumb-{{ kind }}-{{ key|replace('_','-') }}" aria-hidden="true">
+    {% if kind == 'meeting' and key == 'classic' %}
+      <span class="t-bar"></span>
+      <span class="t-h"></span>
+      <span class="t-grid">
+        <span></span><span></span><span></span><span></span>
+      </span>
+    {% elif kind == 'meeting' and key == 'card_stack' %}
+      <span class="t-hero"></span>
+      <span class="t-action"></span>
+      <span class="t-line"></span>
+      <span class="t-line short"></span>
+    {% elif kind == 'meeting' and key == 'magazine' %}
+      <span class="t-h"></span>
+      <span class="t-rule"></span>
+      <span class="t-cols">
+        <span class="t-col-main">
+          <span></span><span></span><span></span><span class="short"></span>
+        </span>
+        <span class="t-col-side">
+          <span></span><span></span>
+        </span>
+      </span>
+    {% elif kind == 'meeting' and key == 'minimal' %}
+      <span class="t-eyebrow"></span>
+      <span class="t-h-big"></span>
+      <span class="t-line"></span>
+      <span class="t-line short"></span>
+      <span class="t-list">
+        <span></span><span></span><span></span>
+      </span>
+    {% elif kind == 'event' and key == 'classic' %}
+      <span class="t-cover"></span>
+      <span class="t-h"></span>
+      <span class="t-grid">
+        <span></span><span></span><span></span><span></span>
+      </span>
+    {% elif kind == 'event' and key == 'poster' %}
+      <span class="t-poster-hero"></span>
+      <span class="t-poster-overlay">
+        <span class="t-poster-title"></span>
+      </span>
+      <span class="t-ticket">
+        <span class="t-ticket-date"></span>
+        <span class="t-ticket-info">
+          <span></span><span></span>
+        </span>
+      </span>
+    {% elif kind == 'event' and key == 'timeline' %}
+      <span class="t-time-row">
+        <span class="t-time-date">
+          <span class="m"></span>
+          <span class="d"></span>
+        </span>
+        <span class="t-time-main">
+          <span class="t-h"></span>
+          <span></span><span></span><span class="short"></span>
+        </span>
+      </span>
+    {% elif kind == 'event' and key == 'minimal' %}
+      <span class="t-date-line"></span>
+      <span class="t-h-big centered"></span>
+      <span class="t-line centered"></span>
+      <span class="t-line centered short"></span>
+      <span class="t-line centered"></span>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{% macro tpl_section(title, blurb, kind, templates, active_key, action_url, settings) %}
+{% set _active_name = '' %}
+{% for t in templates if t.key == active_key %}{% set _active_name = t.name %}{% endfor %}
+<section class="card fe-tplgrid-section">
+  <div class="card-head">
+    <h2>{{ title }}</h2>
+    <span class="muted smaller">{{ blurb }}</span>
+  </div>
+  <form class="form fe-tplgrid-form" method="post" action="{{ action_url }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="fe-tplgrid">
+      {% for t in templates %}
+      <label class="fe-tplgrid-card{% if active_key == t.key %} active{% endif %}">
+        <input type="radio" name="frontend_{{ kind }}_template" value="{{ t.key }}"
+               {% if active_key == t.key %}checked{% endif %}>
+        {{ tpl_thumb(kind, t.key) }}
+        <div class="fe-tplgrid-info">
+          <div class="fe-tplgrid-name">
+            {{ t.name }}
+            <span class="fe-tplgrid-badge">Active</span>
+          </div>
+          <div class="fe-tplgrid-desc muted small">{{ t.description }}</div>
+        </div>
+      </label>
+      {% endfor %}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary">Save {{ title }}</button>
+    </div>
+  </form>
+
+  <details class="fe-tplgrid-customize" {% if settings.bg or settings.heading_font or settings.body_font or settings.heading_size or settings.body_size %}open{% endif %}>
+    <summary>
+      <span class="fe-tplgrid-customize-title">Customize "{{ _active_name }}"</span>
+      <span class="muted small">Background, fonts, and sizes for this template only — applies to every {{ kind }} page.</span>
+    </summary>
+    <form class="form fe-tplgrid-customize-form" method="post"
+          action="{{ url_for('main.frontend_template_settings_save', kind=kind, key=active_key) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="fe-tplgrid-customize-grid">
+        <fieldset class="fieldset">
+          <legend>Background</legend>
+          <label class="check fe-tplgrid-bg-toggle">
+            <input type="checkbox" name="bg_enabled" value="1"
+                   {% if settings.bg %}checked{% endif %}
+                   data-tpl-bg-toggle>
+            <span>Override page background color</span>
+          </label>
+          <label>Color
+            <input type="color" name="bg" value="{{ settings.bg or '#ffffff' }}"
+                   data-tpl-bg-input
+                   {% if not settings.bg %}disabled{% endif %}>
+          </label>
+          <p class="muted small">When off, falls through to the global Design page surface color.</p>
+        </fieldset>
+
+        <fieldset class="fieldset">
+          <legend>Fonts</legend>
+          <label>Heading font
+            <select name="heading_font">
+              <option value="">— Theme default —</option>
+              {% for f in font_options %}
+              <option value="{{ f.key }}" {% if settings.heading_font == f.key %}selected{% endif %}>{{ f.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Body font
+            <select name="body_font">
+              <option value="">— Theme default —</option>
+              {% for f in font_options %}
+              <option value="{{ f.key }}" {% if settings.body_font == f.key %}selected{% endif %}>{{ f.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <p class="muted small">Manage fonts on the <a href="{{ url_for('main.frontend_fonts_icons') }}">Fonts &amp; Icons</a> page.</p>
+        </fieldset>
+
+        <fieldset class="fieldset">
+          <legend>Sizes</legend>
+          {% set _h_default = 2.0 %}
+          {% set _b_default = 1.0 %}
+          <label class="check fe-tplgrid-bg-toggle">
+            <input type="checkbox" name="heading_size_enabled" value="1"
+                   {% if settings.heading_size %}checked{% endif %}
+                   data-tpl-size-toggle="heading">
+            <span>Override heading size</span>
+          </label>
+          <label>Heading size
+            <span class="muted smaller">(0.5–4.0 rem)</span>
+            <div class="login-fx-speed-row">
+              <input type="range" name="heading_size" min="0.5" max="4.0" step="0.1"
+                     value="{{ '%.1f' % (settings.heading_size or _h_default) }}"
+                     data-tpl-size-slider="heading"
+                     {% if not settings.heading_size %}disabled{% endif %}>
+              <output data-tpl-size-output="heading">{{ '%.1f' % (settings.heading_size or _h_default) }}rem</output>
+            </div>
+          </label>
+          <label class="check fe-tplgrid-bg-toggle">
+            <input type="checkbox" name="body_size_enabled" value="1"
+                   {% if settings.body_size %}checked{% endif %}
+                   data-tpl-size-toggle="body">
+            <span>Override body text size</span>
+          </label>
+          <label>Body text size
+            <span class="muted smaller">(0.5–4.0 rem)</span>
+            <div class="login-fx-speed-row">
+              <input type="range" name="body_size" min="0.5" max="4.0" step="0.1"
+                     value="{{ '%.1f' % (settings.body_size or _b_default) }}"
+                     data-tpl-size-slider="body"
+                     {% if not settings.body_size %}disabled{% endif %}>
+              <output data-tpl-size-output="body">{{ '%.1f' % (settings.body_size or _b_default) }}rem</output>
+            </div>
+          </label>
+          <p class="muted small">Off → template uses its own responsive default size. When on, the value is the desktop target — narrow viewports auto-scale it down so headings don't overflow on phones.</p>
+        </fieldset>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary">Save customizations</button>
+      </div>
+    </form>
+  </details>
+</section>
+{% endmacro %}
+
+<section class="card">
+  <div class="card-head">
+    <h2>Reusable templates</h2>
+    <span class="muted smaller">Each picker applies to every page of that content type — no need to set it per meeting or per event.</span>
+  </div>
+  <p class="muted small fe-tplgrid-intro">
+    Templates here are different from <a href="{{ url_for('main.frontend_homepage') }}">Homepage</a> layouts:
+    <b>layouts</b> control the block sequence of <em>one specific page</em> (the homepage); <b>templates</b> on this page control how every page of a content type (meetings, events) is presented.
+  </p>
+</section>
+
+{{ tpl_section(
+     "Meeting detail",
+     "Used for every meeting page (e.g. /meeting/wednesday-night-online).",
+     "meeting",
+     meeting_templates,
+     (site.frontend_meeting_template if site else 'classic') or 'classic',
+     url_for('main.frontend_meeting_template_save'),
+     meeting_active_settings) }}
+
+{{ tpl_section(
+     "Event detail",
+     "Used for every event page (e.g. /event/spring-roundup-2026).",
+     "event",
+     event_templates,
+     (site.frontend_event_template if site else 'classic') or 'classic',
+     url_for('main.frontend_event_template_save'),
+     event_active_settings) }}
+
+  </div>
+</div>
+
+<script>
+  // Auto-mark a card as active when its radio is selected — purely visual;
+  // form still needs Save to commit. Keeps the picker feedback instant.
+  document.querySelectorAll('.fe-tplgrid-form').forEach(form => {
+    form.querySelectorAll('input[type=radio]').forEach(r => {
+      r.addEventListener('change', () => {
+        form.querySelectorAll('.fe-tplgrid-card').forEach(c => c.classList.remove('active'));
+        const card = r.closest('.fe-tplgrid-card');
+        if (card) card.classList.add('active');
+      });
+    });
+  });
+
+  // Customize-panel: BG-override toggle enables/disables the color input.
+  document.querySelectorAll('[data-tpl-bg-toggle]').forEach(toggle => {
+    const input = toggle.closest('fieldset').querySelector('[data-tpl-bg-input]');
+    const sync = () => { if (input) input.disabled = !toggle.checked; };
+    toggle.addEventListener('change', sync);
+    sync();
+  });
+
+  // Customize-panel: live rem label for size sliders.
+  document.querySelectorAll('[data-tpl-size-slider]').forEach(slider => {
+    const role = slider.dataset.tplSizeSlider;
+    const out = slider.closest('label').querySelector(`[data-tpl-size-output="${role}"]`);
+    const fmt = () => parseFloat(slider.value).toFixed(1) + 'rem';
+    const sync = () => { if (out) out.textContent = fmt(); };
+    slider.addEventListener('input', sync);
+    sync();
+  });
+
+  // Customize-panel: each size's "Override default" toggle enables/disables
+  // its slider. When unchecked the override is dropped on save.
+  document.querySelectorAll('[data-tpl-size-toggle]').forEach(toggle => {
+    const role = toggle.dataset.tplSizeToggle;
+    const form = toggle.closest('form');
+    const slider = form && form.querySelector(`[data-tpl-size-slider="${role}"]`);
+    const sync = () => { if (slider) slider.disabled = !toggle.checked; };
+    toggle.addEventListener('change', sync);
+    sync();
+  });
+</script>
+{% endblock %}

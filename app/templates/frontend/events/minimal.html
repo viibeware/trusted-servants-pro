@@ -1,0 +1,81 @@
+{% extends "frontend/base.html" %}
+{% block title %}{{ event.title }} · {{ frontend_title }}{% endblock %}
+{% block content %}
+<section class="fe-event-min" id="event" style="{{ tpl_style or '' }}">
+  <div class="fe-container fe-event-min-inner">
+    <a class="fe-event-min-back" href="{{ url_for('frontend.index') }}#events">← back</a>
+
+    {% if event.event_starts_at %}
+    <p class="fe-event-min-date">
+      {{ event.event_starts_at.strftime('%A, %B %-d, %Y') }}
+      <span class="dot">·</span>
+      {{ event.event_starts_at.strftime('%-I:%M %p') }}
+      {%- if event.event_ends_at %} – {{ event.event_ends_at.strftime('%-I:%M %p') }}{% endif %}
+    </p>
+    {% endif %}
+
+    <header class="fe-event-min-head">
+      <h1>{{ event.title }}</h1>
+      {% if event.summary %}<p class="fe-event-min-summary">{{ event.summary }}</p>{% endif %}
+    </header>
+
+    {% if event.body %}
+    <article class="fe-event-min-prose">
+      {{ event.body|markdown }}
+    </article>
+    {% endif %}
+
+    <dl class="fe-event-min-info">
+      {% if not event.is_online and (event.location_name or event.location_address) %}
+      <dt>Where</dt>
+      <dd>
+        {% if event.location_name %}{{ event.location_name }}{% endif %}
+        {% if event.location_name and event.location_address %}<br>{% endif %}
+        {% if event.location_address %}<span class="muted">{{ event.location_address }}</span>{% endif %}
+        {% set _maps = event.google_maps_url or ("https://www.google.com/maps/search/?api=1&query=" ~ ((event.location_address or event.location_name)|urlencode)) %}
+        <a class="fe-event-min-link" href="{{ _maps }}" target="_blank" rel="noopener">map →</a>
+      </dd>
+      {% endif %}
+
+      {% if event.is_online and event.zoom_url %}
+      <dt>Zoom</dt>
+      <dd>
+        <a class="fe-event-min-link fe-event-min-link-strong" href="{{ event.zoom_url }}" target="_blank" rel="noopener">Join the meeting →</a>
+        {% if event.zoom_meeting_id %}
+        <div class="fe-event-min-cred">
+          <span class="muted">ID</span>
+          <code>{{ event.zoom_meeting_id }}</code>
+          <button type="button" class="fe-copy-btn" data-copy="{{ event.zoom_meeting_id }}" title="Copy">{{ icon('copy') }}</button>
+        </div>
+        {% endif %}
+        {% if event.zoom_passcode %}
+        <div class="fe-event-min-cred">
+          <span class="muted">Passcode</span>
+          <code>{{ event.zoom_passcode }}</code>
+          <button type="button" class="fe-copy-btn" data-copy="{{ event.zoom_passcode }}" title="Copy">{{ icon('copy') }}</button>
+        </div>
+        {% endif %}
+      </dd>
+      {% endif %}
+
+      {% if event.website_url %}
+      <dt>Website</dt>
+      <dd>
+        <a class="fe-event-min-link" href="{{ event.website_url }}" target="_blank" rel="noopener">{{ event.website_label or event.website_url }} →</a>
+      </dd>
+      {% endif %}
+
+      {% if event.contact_name or event.contact_phone or event.contact_email %}
+      <dt>Contact</dt>
+      <dd>
+        {% if event.contact_name %}{{ event.contact_name }}<br>{% endif %}
+        {% if event.contact_phone %}<a href="tel:{{ event.contact_phone }}">{{ event.contact_phone }}</a><br>{% endif %}
+        {% if event.contact_email %}<a href="mailto:{{ event.contact_email }}">{{ event.contact_email }}</a>{% endif %}
+      </dd>
+      {% endif %}
+    </dl>
+  </div>
+</section>
+
+{% include "frontend/events/_copy_script.html" %}
+{% endblock %}

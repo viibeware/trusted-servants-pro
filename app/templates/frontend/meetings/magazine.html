@@ -1,0 +1,108 @@
+{% extends "frontend/base.html" %}
+{% block title %}{{ meeting.name }} · {{ frontend_title }}{% endblock %}
+{% block content %}
+<section class="fe-meeting-mag" id="meeting" style="{{ tpl_style or '' }}">
+  <div class="fe-container fe-meeting-mag-inner">
+    <a class="fe-meeting-mag-back" href="{{ url_for('frontend.index') }}#meetings">← Back to meetings</a>
+
+    {% if meeting.logo_filename %}
+    <div class="fe-meeting-logo-wrap">
+      <img class="fe-meeting-logo" src="{{ url_for('public.public_meeting_logo', mid=meeting.id) }}" alt="">
+    </div>
+    {% endif %}
+
+    <header class="fe-meeting-mag-head">
+      <span class="fe-meeting-mag-kicker">
+        {% if meeting.meeting_type == 'in_person' %}In Person Meeting
+        {% elif meeting.meeting_type == 'online' %}Online Meeting
+        {% else %}Hybrid Meeting{% endif %}
+      </span>
+      <h1>{{ meeting.name }}</h1>
+      <div class="fe-meeting-mag-rule" aria-hidden="true"></div>
+    </header>
+
+    <div class="fe-meeting-mag-grid">
+      <div class="fe-meeting-mag-main">
+        {% if meeting.public_alert_message %}
+        <div class="fe-meeting-mag-alert" role="status">
+          {{ icon('alert-triangle') }}
+          <span>{{ meeting.public_alert_message }}</span>
+        </div>
+        {% endif %}
+
+        {% if meeting.description %}
+        <article class="fe-meeting-mag-prose">
+          {{ meeting.description|markdown }}
+        </article>
+        {% else %}
+        <p class="fe-meeting-mag-empty muted">No description has been added yet for this meeting.</p>
+        {% endif %}
+      </div>
+
+      <aside class="fe-meeting-mag-side">
+        {% if meeting.schedules %}
+        <section class="fe-meeting-mag-side-card">
+          <span class="fe-meeting-mag-side-label">{{ icon('calendar') }} Schedule</span>
+          <ul class="fe-meeting-mag-side-sched">
+            {% for s in meeting.schedules %}
+            <li>
+              <span class="fe-meeting-mag-side-day">{{ s.day_name }}</span>
+              <span class="fe-meeting-mag-side-time">
+                {{ s.start_time|fmt12h }}{% if s.end_time %}–{{ s.end_time|fmt12h }}{% endif %}
+              </span>
+              {% if s.duration_minutes %}<span class="fe-meeting-mag-side-meta">{{ s.duration_minutes }} minutes</span>{% endif %}
+              {% if s.opens_time %}<span class="fe-meeting-mag-side-meta">Opens {{ s.opens_time|fmt12h }}</span>{% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </section>
+        {% endif %}
+
+        {% if meeting.meeting_type in ('in_person', 'hybrid') and meeting.location %}
+        <section class="fe-meeting-mag-side-card">
+          <span class="fe-meeting-mag-side-label">{{ icon('map-pin') }} Location</span>
+          <p class="fe-meeting-mag-side-addr">{{ meeting.location }}</p>
+          {% set _maps = "https://www.google.com/maps/search/?api=1&query=" ~ (meeting.location|urlencode) %}
+          <a class="fe-meeting-mag-side-link" href="{{ _maps }}" target="_blank" rel="noopener">
+            View map <span aria-hidden="true">→</span>
+          </a>
+        </section>
+        {% endif %}
+
+        {% if meeting.meeting_type in ('online', 'hybrid') and (meeting.zoom_link or meeting.zoom_meeting_id) %}
+        <section class="fe-meeting-mag-side-card fe-meeting-mag-side-zoom">
+          <span class="fe-meeting-mag-side-label">{{ icon('video') }} Zoom</span>
+          {% if meeting.zoom_link %}
+          <a class="fe-btn fe-btn-primary fe-meeting-mag-side-cta" href="{{ meeting.zoom_link }}" target="_blank" rel="noopener">
+            Join meeting <span aria-hidden="true">↗</span>
+          </a>
+          {% endif %}
+          <dl class="fe-meeting-mag-side-creds">
+            {% if meeting.zoom_meeting_id %}
+            <dt>ID</dt>
+            <dd><code>{{ meeting.zoom_meeting_id }}</code>
+              <button type="button" class="fe-copy-btn" data-copy="{{ meeting.zoom_meeting_id }}" title="Copy">{{ icon('copy') }}</button>
+            </dd>
+            {% endif %}
+            {% if meeting.zoom_passcode %}
+            <dt>Passcode</dt>
+            <dd><code>{{ meeting.zoom_passcode }}</code>
+              <button type="button" class="fe-copy-btn" data-copy="{{ meeting.zoom_passcode }}" title="Copy">{{ icon('copy') }}</button>
+            </dd>
+            {% endif %}
+            {% if meeting.zoom_opens_time %}
+            <dt>Opens</dt>
+            <dd>{{ meeting.zoom_opens_time|fmt12h }}</dd>
+            {% endif %}
+          </dl>
+        </section>
+        {% endif %}
+
+        {% include "frontend/meetings/_resources.html" %}
+      </aside>
+    </div>
+  </div>
+</section>
+
+{% include "frontend/meetings/_copy_script.html" %}
+{% endblock %}

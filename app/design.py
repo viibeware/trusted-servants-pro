@@ -69,6 +69,10 @@ THEME_DEFAULTS = {
         "color_nav_link_hover":    "#0b5cff",
         "color_megamenu_link":       "#ffffff",
         "color_megamenu_link_hover": "#ffffff",
+        "color_btn_primary_bg":     "#0b5cff",
+        "color_btn_primary_text":   "#ffffff",
+        "color_btn_secondary_bg":   "#f8fafc",
+        "color_btn_secondary_text": "#0f172a",
 
         "section_gap":        "lg",
         "container_max_px":   1160,
@@ -104,6 +108,10 @@ THEME_DEFAULTS = {
         "color_nav_link_hover":    "#0b5cff",
         "color_megamenu_link":       "#ffffff",
         "color_megamenu_link_hover": "#ffffff",
+        "color_btn_primary_bg":     "#0b5cff",
+        "color_btn_primary_text":   "#ffffff",
+        "color_btn_secondary_bg":   "#f4f7fb",
+        "color_btn_secondary_text": "#1e293b",
 
         "section_gap":        "lg",
         "container_max_px":   1200,
@@ -165,6 +173,14 @@ DESIGN_FIELDS = [
      "group": "Layout", "label": "Card shadow"},
 
     # ----- Buttons -----
+    {"key": "color_btn_primary_bg",     "kind": "color",
+     "group": "Buttons", "label": "Primary — background"},
+    {"key": "color_btn_primary_text",   "kind": "color",
+     "group": "Buttons", "label": "Primary — text"},
+    {"key": "color_btn_secondary_bg",   "kind": "color",
+     "group": "Buttons", "label": "Secondary — background"},
+    {"key": "color_btn_secondary_text", "kind": "color",
+     "group": "Buttons", "label": "Secondary — text"},
     {"key": "btn_radius",         "kind": "scale", "scale": "radius",
      "group": "Buttons", "label": "Radius"},
     {"key": "btn_padding_x",      "kind": "scale", "scale": "spacing",
@@ -334,7 +350,9 @@ def design_css_vars(site):
                 "color_border", "color_text", "color_text_soft",
                 "color_link", "color_link_hover",
                 "color_nav_link", "color_nav_link_hover",
-                "color_megamenu_link", "color_megamenu_link_hover"):
+                "color_megamenu_link", "color_megamenu_link_hover",
+                "color_btn_primary_bg", "color_btn_primary_text",
+                "color_btn_secondary_bg", "color_btn_secondary_text"):
         parts.append("--fe-{}: {};".format(key.replace("_", "-"), chosen[key]))
 
     # Auto-derived dark-mode variants for chrome links that sit on dark

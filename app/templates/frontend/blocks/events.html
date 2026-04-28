@@ -1,8 +1,8 @@
 {# Upcoming events block — stacked rows sourced from Post rows where
-   is_event = True. Settings come from block_content._events; the
-   resolved list comes from events_list (server-side, see
-   blocks.filtered_events). Past events drop off automatically — the
-   helper filters anything whose end-time is already past. #}
+   is_event = True. Each row is rendered as a horizontally-laid-out card
+   (matching the Today's Meetings card visual treatment) with a
+   "View Event" pill on the right that links to the public event detail
+   page. Past events drop off automatically — see blocks.filtered_events. #}
 {% set _es = (block_content.get('_events', {}) if block_content else {}) %}
 {% set _heading = _es.heading or 'Upcoming Events' %}
 {% set _intro = _es.intro or '' %}
@@ -29,6 +29,7 @@
       {%- set _start = ev.event_starts_at -%}
       {%- set _end = ev.event_ends_at -%}
       {%- set _has_image = _show_image and ev.featured_image_filename -%}
+      {%- set _detail_url = url_for('frontend.event_detail', slug=ev.title|slugify) -%}
       <li class="fe-event-row" style="--fe-event-i: {{ loop.index0 }};">
         {% if _start %}
         <div class="fe-event-date" aria-label="Event date">
@@ -39,9 +40,7 @@
         {% endif %}
 
         {% if _has_image %}
-        <a class="fe-event-thumb"
-           {% if ev.website_url %}href="{{ ev.website_url }}" target="_blank" rel="noopener"{% endif %}
-           tabindex="-1" aria-hidden="true">
+        <a class="fe-event-thumb" href="{{ _detail_url }}" tabindex="-1" aria-hidden="true">
           <img src="{{ url_for('public.post_featured_image', pid=ev.id) }}"
                alt="" loading="lazy">
         </a>
@@ -49,9 +48,7 @@
 
         <div class="fe-event-body">
           <h3 class="fe-event-title">
-            {% if ev.website_url %}
-            <a href="{{ ev.website_url }}" target="_blank" rel="noopener">{{ ev.title }}</a>
-            {% else %}{{ ev.title }}{% endif %}
+            <a href="{{ _detail_url }}">{{ ev.title }}</a>
           </h3>
           <div class="fe-event-attrs">
             {% if _start %}
@@ -79,12 +76,10 @@
           {% endif %}
         </div>
 
-        {% if ev.website_url %}
-        <a class="fe-event-cta" href="{{ ev.website_url }}" target="_blank" rel="noopener">
-          <span class="fe-event-cta-label">{{ ev.website_label or 'Learn more' }}</span>
+        <a class="fe-event-cta" href="{{ _detail_url }}">
+          <span class="fe-event-cta-label">View Event</span>
           <span class="fe-event-cta-arrow" aria-hidden="true">→</span>
         </a>
-        {% endif %}
       </li>
       {% endfor %}
     </ol>

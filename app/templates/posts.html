@@ -12,8 +12,10 @@
          href="{{ url_for('main.posts', show=show, kind='events') }}">Events</a>
     </div>
     <div class="view-toggle">
-      <a class="btn btn-sm {% if show != 'archived' %}active{% endif %}"
+      <a class="btn btn-sm {% if show == 'active' or show not in ('archived', 'drafts') %}active{% endif %}"
          href="{{ url_for('main.posts', show='active', kind=kind) }}">Active</a>
+      <a class="btn btn-sm {% if show == 'drafts' %}active{% endif %}"
+         href="{{ url_for('main.posts', show='drafts', kind=kind) }}">Drafts</a>
       <a class="btn btn-sm {% if show == 'archived' %}active{% endif %}"
          href="{{ url_for('main.posts', show='archived', kind=kind) }}">Archived</a>
     </div>
@@ -49,6 +51,7 @@
           {% if p.summary %}<div class="muted small posts-summary">{{ p.summary[:140] }}{% if p.summary|length > 140 %}…{% endif %}</div>{% endif %}
         </td>
         <td class="hide-sm">
+          {% if p.is_draft %}<span class="post-chip post-chip-draft">Draft</span>{% endif %}
           {% if p.is_announcement %}<span class="post-chip post-chip-announcement">Announcement</span>{% endif %}
           {% if p.is_event %}<span class="post-chip post-chip-event">Event</span>{% endif %}
         </td>
@@ -68,6 +71,21 @@
         <td class="posts-td-actions">
           <div class="row-actions">
             <a class="btn btn-sm" href="{{ url_for('main.post_edit', pid=p.id) }}">Edit</a>
+            {% if p.is_draft %}
+            <form method="post" action="{{ url_for('main.post_publish', pid=p.id) }}" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-primary" title="Publish this draft">Publish</button>
+            </form>
+            {% elif not p.is_archived %}
+            <form method="post" action="{{ url_for('main.post_unpublish', pid=p.id) }}" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm" title="Move to Drafts">Move to Drafts</button>
+            </form>
+            {% endif %}
+            <form method="post" action="{{ url_for('main.post_duplicate', pid=p.id) }}" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm" title="Make a copy">Duplicate</button>
+            </form>
             {% if p.is_archived %}
               <form method="post" action="{{ url_for('main.post_unarchive', pid=p.id) }}" style="display:inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -95,6 +113,7 @@
 <section class="card">
   <p class="muted">
     {% if show == 'archived' %}Nothing archived.
+    {% elif show == 'drafts' %}No drafts. Duplicate an active post to start one.
     {% else %}Nothing here yet — click <b>+ New</b> above to create an announcement or event.{% endif %}
   </p>
 </section>

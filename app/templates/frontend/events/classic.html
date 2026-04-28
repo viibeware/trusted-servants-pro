@@ -1,0 +1,124 @@
+{% extends "frontend/base.html" %}
+{% block title %}{{ event.title }} · {{ frontend_title }}{% endblock %}
+{% block content %}
+<section class="fe-section fe-event-detail fe-event-classic" id="event"
+         style="{{ tpl_style or '' }}">
+  <div class="fe-container fe-event-detail-inner">
+    <a class="fe-event-detail-back" href="{{ url_for('frontend.index') }}#events">← Back to events</a>
+
+    {% if event.featured_image_filename %}
+    <div class="fe-event-detail-cover">
+      <img src="{{ url_for('public.post_featured_image', pid=event.id) }}"
+           alt="" loading="lazy">
+    </div>
+    {% endif %}
+
+    <header class="fe-event-detail-head">
+      <div class="fe-event-detail-chips">
+        {% if event.is_event %}
+        <span class="fe-meeting-type fe-meeting-type-online">Event</span>
+        {% endif %}
+        {% if event.is_announcement %}
+        <span class="fe-meeting-type fe-meeting-type-hybrid">Announcement</span>
+        {% endif %}
+        {% if event.is_online %}
+        <span class="fe-meeting-type fe-meeting-type-in_person">Online</span>
+        {% endif %}
+      </div>
+      <h1>{{ event.title }}</h1>
+      {% if event.summary %}<p class="fe-event-detail-summary">{{ event.summary }}</p>{% endif %}
+    </header>
+
+    {% if event.body %}
+    <div class="fe-event-detail-desc">
+      {{ event.body|markdown }}
+    </div>
+    {% endif %}
+
+    <div class="fe-event-detail-grid">
+      {% if event.event_starts_at %}
+      <section class="fe-event-detail-card">
+        <h3>{{ icon('calendar') }} When</h3>
+        <p class="fe-event-detail-when">
+          <span class="fe-event-detail-day">{{ event.event_starts_at.strftime('%A, %B %-d, %Y') }}</span>
+          <span class="fe-event-detail-time">
+            {{ event.event_starts_at.strftime('%-I:%M %p') }}
+            {%- if event.event_ends_at %} – {{ event.event_ends_at.strftime('%-I:%M %p') }}{% endif %}
+          </span>
+        </p>
+      </section>
+      {% endif %}
+
+      {% if not event.is_online and (event.location_name or event.location_address) %}
+      <section class="fe-event-detail-card">
+        <h3>{{ icon('map-pin') }} Location</h3>
+        {% if event.location_name %}
+        <p class="fe-event-detail-location-name">{{ event.location_name }}</p>
+        {% endif %}
+        {% if event.location_address %}
+        <p class="fe-event-detail-location">{{ event.location_address }}</p>
+        {% endif %}
+        {% set _maps = event.google_maps_url or ("https://www.google.com/maps/search/?api=1&query=" ~ ((event.location_address or event.location_name)|urlencode)) %}
+        <a class="fe-btn fe-btn-ghost" href="{{ _maps }}" target="_blank" rel="noopener">Open in Maps ↗</a>
+      </section>
+      {% endif %}
+
+      {% if event.is_online and (event.zoom_url or event.zoom_meeting_id) %}
+      <section class="fe-event-detail-card fe-event-detail-zoom">
+        <h3>{{ icon('video') }} Zoom</h3>
+        {% if event.zoom_url %}
+        <a class="fe-btn fe-btn-primary" href="{{ event.zoom_url }}" target="_blank" rel="noopener">Join via Zoom ↗</a>
+        {% endif %}
+        <dl class="fe-event-detail-creds">
+          {% if event.zoom_meeting_id %}
+          <dt>Meeting ID</dt>
+          <dd>
+            <code>{{ event.zoom_meeting_id }}</code>
+            <button type="button" class="fe-copy-btn" data-copy="{{ event.zoom_meeting_id }}" title="Copy">{{ icon('copy') }}</button>
+          </dd>
+          {% endif %}
+          {% if event.zoom_passcode %}
+          <dt>Passcode</dt>
+          <dd>
+            <code>{{ event.zoom_passcode }}</code>
+            <button type="button" class="fe-copy-btn" data-copy="{{ event.zoom_passcode }}" title="Copy">{{ icon('copy') }}</button>
+          </dd>
+          {% endif %}
+        </dl>
+      </section>
+      {% endif %}
+
+      {% if event.website_url %}
+      <section class="fe-event-detail-card">
+        <h3>{{ icon('external-link') }} Event website</h3>
+        <a class="fe-btn fe-btn-primary" href="{{ event.website_url }}" target="_blank" rel="noopener">
+          {{ event.website_label or 'Visit event website' }} ↗
+        </a>
+      </section>
+      {% endif %}
+
+      {% if event.contact_name or event.contact_phone or event.contact_email %}
+      <section class="fe-event-detail-card">
+        <h3>{{ icon('user') }} Contact</h3>
+        <dl class="fe-event-detail-creds">
+          {% if event.contact_name %}
+          <dt>Name</dt>
+          <dd>{{ event.contact_name }}</dd>
+          {% endif %}
+          {% if event.contact_phone %}
+          <dt>Phone</dt>
+          <dd><a href="tel:{{ event.contact_phone }}">{{ event.contact_phone }}</a></dd>
+          {% endif %}
+          {% if event.contact_email %}
+          <dt>Email</dt>
+          <dd><a href="mailto:{{ event.contact_email }}">{{ event.contact_email }}</a></dd>
+          {% endif %}
+        </dl>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{% include "frontend/events/_copy_script.html" %}
+{% endblock %}

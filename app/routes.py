@@ -436,6 +436,7 @@ def _apply_library_selections(m, form):
     m.library_assocs = []
     db.session.flush()
     selected_readings = []
+    public_readings = []
     for lid in ids:
         lib = db.session.get(Library, lid)
         if not lib:
@@ -451,13 +452,24 @@ def _apply_library_selections(m, form):
                     Reading.query.filter(Reading.id.in_(rids),
                                          Reading.library_id == lid).all()
                 )
+        # Per-library, per-reading public-frontend visibility (independent of
+        # the granular-mode selection above — admins may want to surface a
+        # reading on the public page even if the meeting is in "all" mode).
+        prids = form.getlist(f"library_public_readings_{lid}", type=int)
+        if prids:
+            public_readings.extend(
+                Reading.query.filter(Reading.id.in_(prids),
+                                     Reading.library_id == lid).all()
+            )
     m.selected_readings = selected_readings
+    m.public_readings = public_readings
 
 
 def _apply_meeting_form(m, form, schedules, files=None):
     m.name = form["name"].strip()
     m.description = form.get("description", "").strip()
     m.alert_message = form.get("alert_message", "").strip() or None
+    m.public_alert_message = form.get("public_alert_message", "").strip() or None
     mtype = form.get("meeting_type", "in_person")
     if mtype not in MEETING_TYPES:
         mtype = "in_person"
@@ -1316,6 +1328,7 @@ _FRONTEND_SETTING_KEYS = (
     "frontend_header_padding_pct", "frontend_header_height",
     "frontend_header_template", "frontend_footer_template",
     "frontend_homepage_template", "frontend_megamenu_template",
+    "frontend_meeting_template", "frontend_event_template",
     # Mega menu styling
     "frontend_mega_bg_color", "frontend_mega_text_color",
     "frontend_mega_radius_bl", "frontend_mega_radius_br",
@@ -3161,6 +3174,114 @@ def frontend_homepage_template_save():
     return redirect(url_for("main.frontend_homepage"))
 
 
+# ---------------------------------------------------------------------------
+# Templates admin — single page that hosts pickers for every reusable
+# entity-detail template (Meeting Detail, Event Detail, and any future
+# content types). Different from layouts: a layout is a block sequence
+# bound to a specific page slug, while a template here applies to every
+# page rendered for a content type.
+# ---------------------------------------------------------------------------
+@bp.route("/frontend/templates")
+@frontend_editor_required
+def frontend_templates():
+    from .frontend import MEETING_TEMPLATES, EVENT_TEMPLATES, template_settings
+    from .fonts import all_fonts
+    s = _get_site_setting()
+    meeting_key = (s.frontend_meeting_template if s else None) or "classic"
+    event_key = (s.frontend_event_template if s else None) or "classic"
+    return render_template("frontend_templates.html", site=s,
+                           meeting_templates=MEETING_TEMPLATES,
+                           event_templates=EVENT_TEMPLATES,
+                           meeting_active_settings=template_settings(s, "meeting", meeting_key),
+                           event_active_settings=template_settings(s, "event", event_key),
+                           font_options=all_fonts())
+
+
+_TEMPLATE_KINDS = ("meeting", "event")
+
+
+@bp.route("/frontend/template-settings/<kind>/<key>", methods=["POST"])
+@frontend_editor_required
+def frontend_template_settings_save(kind, key):
+    """Persist per-template appearance overrides (background, font choices,
+    size scales) into SiteSetting.frontend_template_settings_json. Empty or
+    default values are stripped so the template falls through to the site's
+    design tokens."""
+    import json as _json
+    import re as _re
+    from .frontend import MEETING_TEMPLATES, EVENT_TEMPLATES
+    from .fonts import font_by_key
+    if kind not in _TEMPLATE_KINDS:
+        abort(404)
+    catalog = MEETING_TEMPLATES if kind == "meeting" else EVENT_TEMPLATES
+    if key not in {t["key"] for t in catalog}:
+        abort(404)
+    s = _get_site_setting()
+    raw = (s.frontend_template_settings_json or "").strip()
+    try:
+        data = _json.loads(raw) if raw else {}
+        if not isinstance(data, dict):
+            data = {}
+    except (ValueError, TypeError):
+        data = {}
+    bucket = data.setdefault(kind, {})
+    leaf = {}
+    bg = (request.form.get("bg") or "").strip()
+    if _re.match(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$", bg) and request.form.get("bg_enabled") == "1":
+        leaf["bg"] = bg
+    for fkey in ("heading_font", "body_font"):
+        v = (request.form.get(fkey) or "").strip()
+        if v and font_by_key(v):
+            leaf[fkey] = v
+    for skey in ("heading_size", "body_size"):
+        # Each size has an accompanying "<key>_enabled" checkbox: skip when
+        # absent so leaving "Use template default" off clears the override.
+        if request.form.get(f"{skey}_enabled") != "1":
+            continue
+        try:
+            v = float(request.form.get(skey) or "0")
+            if 0.5 <= v <= 4.0:
+                leaf[skey] = round(v, 1)
+        except ValueError:
+            pass
+    if leaf:
+        bucket[key] = leaf
+    else:
+        bucket.pop(key, None)
+    if not bucket:
+        data.pop(kind, None)
+    s.frontend_template_settings_json = _json.dumps(data) if data else None
+    db.session.commit()
+    flash(f"{kind.capitalize()} template settings saved", "success")
+    return redirect(url_for("main.frontend_templates"))
+
+
+@bp.route("/frontend/meeting-template", methods=["POST"])
+@frontend_editor_required
+def frontend_meeting_template_save():
+    from .frontend import MEETING_TEMPLATES
+    s = _get_site_setting()
+    key = (request.form.get("frontend_meeting_template") or "").strip()
+    if key in {t["key"] for t in MEETING_TEMPLATES}:
+        s.frontend_meeting_template = key
+        db.session.commit()
+        flash(f"Meeting template set to {key}", "success")
+    return redirect(url_for("main.frontend_templates"))
+
+
+@bp.route("/frontend/event-template", methods=["POST"])
+@frontend_editor_required
+def frontend_event_template_save():
+    from .frontend import EVENT_TEMPLATES
+    s = _get_site_setting()
+    key = (request.form.get("frontend_event_template") or "").strip()
+    if key in {t["key"] for t in EVENT_TEMPLATES}:
+        s.frontend_event_template = key
+        db.session.commit()
+        flash(f"Event template set to {key}", "success")
+    return redirect(url_for("main.frontend_templates"))
+
+
 _CUSTOM_LAYOUT_BLOCK_TYPES = {
     "hero", "quick_links", "meetings", "events", "about", "contact",
     "features", "cta", "stats", "testimonials", "faq", "split",
@@ -3415,6 +3536,7 @@ def file_new(mid):
             category=category,
             title=request.form["title"].strip(),
             description=request.form.get("description", "").strip(),
+            public_visible=(request.form.get("public_visible") == "1"),
         )
         if category in ("external_links", "videos"):
             f.url = request.form.get("url", "").strip()
@@ -3444,6 +3566,7 @@ def file_edit(fid):
         f.title = request.form["title"].strip()
         f.description = request.form.get("description", "").strip()
         f.url = request.form.get("url", "").strip() or None
+        f.public_visible = (request.form.get("public_visible") == "1")
         if f.category in ("readings", "scripts"):
             f.body = request.form.get("body", "").strip()
         _apply_file_upload(f, request.files.get("file"), request.form.get("media_id"))
@@ -3451,6 +3574,18 @@ def file_edit(fid):
         flash("File updated", "success")
         return redirect(url_for("main.meeting_detail", mid=f.meeting_id) + f"#{f.category}")
     return render_template("file_form.html", meeting=f.meeting, category=f.category, file=f)
+
+
+@bp.route("/files/<int:fid>/public-toggle", methods=["POST"])
+@editor_required
+def file_public_toggle(fid):
+    """Inline toggle for ``MeetingFile.public_visible`` from the meeting
+    edit modal's file list. Reads ``public_visible=1|0`` from form data
+    and returns JSON so the row can flip without closing the modal."""
+    f = db.session.get(MeetingFile, fid) or abort(404)
+    f.public_visible = (request.form.get("public_visible") == "1")
+    db.session.commit()
+    return jsonify({"ok": True, "public_visible": f.public_visible})
 
 
 @bp.route("/meetings/<int:mid>/files/reorder", methods=["POST"])
@@ -3925,7 +4060,8 @@ def _cleanup_retired_asset(stored):
     refs = (MeetingFile.query.filter_by(stored_filename=stored).count()
             + Reading.query.filter_by(stored_filename=stored).count()
             + Reading.query.filter_by(thumbnail_filename=stored).count()
-            + Meeting.query.filter_by(logo_filename=stored).count())
+            + Meeting.query.filter_by(logo_filename=stored).count()
+            + Post.query.filter_by(featured_image_filename=stored).count())
     if refs > 0:
         return
     _delete_upload(stored)
@@ -4454,11 +4590,16 @@ def _fmt_post_dt(dt):
 
 
 def _auto_archive_events():
-    """Archive any non-archived event whose end (or start, if no end)
-    is before today. Idempotent — safe to call on every list view."""
+    """Archive any active event whose end (or start, if no end) is
+    before today. Drafts are skipped — admins can sit on a draft
+    indefinitely without it disappearing into the archive. Idempotent
+    — safe to call on every list view."""
     today = datetime.utcnow().date()
     cutoff = datetime.combine(today, datetime.min.time())  # midnight today
-    q = Post.query.filter(Post.is_archived.is_(False), Post.is_event.is_(True))
+    q = Post.query.filter(
+        Post.is_archived.is_(False), Post.is_draft.is_(False),
+        Post.is_event.is_(True),
+    )
     changed = False
     for p in q.all():
         # Cutoff = the start of today; an event whose end was BEFORE
@@ -4482,8 +4623,10 @@ def posts():
     q = Post.query
     if show == "archived":
         q = q.filter(Post.is_archived.is_(True))
-    else:
-        q = q.filter(Post.is_archived.is_(False))
+    elif show == "drafts":
+        q = q.filter(Post.is_draft.is_(True), Post.is_archived.is_(False))
+    else:  # active
+        q = q.filter(Post.is_archived.is_(False), Post.is_draft.is_(False))
     if kind == "events":
         q = q.filter(Post.is_event.is_(True))
     elif kind == "announcements":
@@ -4567,11 +4710,50 @@ def post_save():
         if old and old != stored:
             _cleanup_retired_asset(old)
 
+    # Draft/publish state — submit-button name="action" carries the
+    # admin's intent. Values: "draft" (force is_draft=True), "publish"
+    # (force is_draft=False), or absent (preserve current state for
+    # edits; default to active for new posts).
+    action = (request.form.get("action") or "").strip()
+    if action == "draft":
+        post.is_draft = True
+    elif action == "publish":
+        post.is_draft = False
+    elif creating:
+        post.is_draft = False  # default: new posts are active
+
     if creating:
         db.session.add(post)
     db.session.commit()
-    flash(("Post created" if creating else "Post saved"), "success")
+    if creating:
+        flash(("Draft saved: " + post.title) if post.is_draft else ("Published: " + post.title), "success")
+        return redirect(url_for("main.posts", show=("drafts" if post.is_draft else "active")))
+    flash("Post saved", "success")
     return redirect(url_for("main.post_edit", pid=post.id))
+
+
+@bp.route("/posts/<int:pid>/publish", methods=["POST"])
+@login_required
+def post_publish(pid):
+    """Transition a draft to active. No-op if already published."""
+    _require_posts_enabled()
+    post = db.session.get(Post, pid) or abort(404)
+    post.is_draft = False
+    db.session.commit()
+    flash("Published", "success")
+    return redirect(request.referrer or url_for("main.posts"))
+
+
+@bp.route("/posts/<int:pid>/unpublish", methods=["POST"])
+@login_required
+def post_unpublish(pid):
+    """Move a published post back to drafts. No-op if already a draft."""
+    _require_posts_enabled()
+    post = db.session.get(Post, pid) or abort(404)
+    post.is_draft = True
+    db.session.commit()
+    flash("Moved to drafts", "success")
+    return redirect(request.referrer or url_for("main.posts", show="drafts"))
 
 
 @bp.route("/posts/<int:pid>/archive", methods=["POST"])
@@ -4601,12 +4783,61 @@ def post_unarchive(pid):
 def post_delete(pid):
     _require_posts_enabled()
     post = db.session.get(Post, pid) or abort(404)
-    if post.featured_image_filename:
-        _cleanup_retired_asset(post.featured_image_filename)
+    # Clear the featured-image reference BEFORE the cleanup check so the
+    # post being deleted doesn't count itself as a referrer. If another
+    # post (e.g. one created by Duplicate) still points at the same
+    # stored filename, the helper sees it and keeps the file.
+    old_image = post.featured_image_filename
+    post.featured_image_filename = None
+    if old_image:
+        _cleanup_retired_asset(old_image)
     db.session.delete(post)
     db.session.commit()
     flash("Post deleted", "success")
     return redirect(url_for("main.posts"))
+
+
+@bp.route("/posts/<int:pid>/duplicate", methods=["POST"])
+@login_required
+def post_duplicate(pid):
+    """Clone a post into a Draft. Title gets a "(copy)" suffix; the
+    duplicate is always un-archived AND a draft so the admin can re-
+    tune dates and click Publish when ready, without the copy showing
+    up on the public site or in the active list. The featured-image
+    filename is shared (uploads are content-addressed, so two rows
+    pointing at the same stored file is fine and the cleanup helper
+    sees the reference)."""
+    _require_posts_enabled()
+    src = db.session.get(Post, pid) or abort(404)
+    copy = Post(
+        title=(src.title or "Untitled")[:240] + " (copy)",
+        summary=src.summary,
+        body=src.body,
+        featured_image_filename=src.featured_image_filename,
+        is_announcement=src.is_announcement,
+        is_event=src.is_event,
+        event_starts_at=src.event_starts_at,
+        event_ends_at=src.event_ends_at,
+        is_online=src.is_online,
+        location_name=src.location_name,
+        location_address=src.location_address,
+        google_maps_url=src.google_maps_url,
+        website_url=src.website_url,
+        website_label=src.website_label,
+        zoom_meeting_id=src.zoom_meeting_id,
+        zoom_passcode=src.zoom_passcode,
+        zoom_url=src.zoom_url,
+        contact_name=src.contact_name,
+        contact_phone=src.contact_phone,
+        contact_email=src.contact_email,
+        is_draft=True,
+        is_archived=False,
+        created_by=getattr(current_user, "id", None),
+    )
+    db.session.add(copy)
+    db.session.commit()
+    flash(f"Draft created: {copy.title}", "success")
+    return redirect(url_for("main.posts", show="drafts"))
 
 
 @public_bp.route("/post-image/<int:pid>")
@@ -4617,3 +4848,15 @@ def post_featured_image(pid):
     if not p or not p.featured_image_filename:
         abort(404)
     return send_from_directory(current_app.config["UPLOAD_FOLDER"], p.featured_image_filename)
+
+
+@public_bp.route("/meeting-logo/<int:mid>")
+def public_meeting_logo(mid):
+    """Serve a meeting's uploaded logo to anonymous visitors so the public
+    meeting detail page can show it. Mirrors post_featured_image."""
+    m = db.session.get(Meeting, mid)
+    if not m or not m.logo_filename:
+        abort(404)
+    return send_from_directory(current_app.config["UPLOAD_FOLDER"], m.logo_filename)
+
+
