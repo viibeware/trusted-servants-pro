@@ -2452,6 +2452,54 @@ body.embed .card:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom
   display: inline-flex; align-items: center; gap: 6px;
   margin: 0 6px 0 0;
 }
+/* Disabled state for the "Public" toggle when the user lacks the
+   admin / frontend-editor permission. The track + thumb stay visible
+   but read as muted; the cursor turns into not-allowed and the title
+   attribute provides the tooltip. */
+.mode-toggle.is-disabled,
+.mode-toggle.is-disabled * { cursor: not-allowed; }
+.mode-toggle.is-disabled { opacity: 0.55; }
+.mode-toggle.is-disabled .mode-track { background: var(--border); }
+
+/* URL change history timeline shown under the slug input on the
+   meeting + post edit screens. Collapsed by default; admins click to
+   expand and audit which old paths still 301-redirect to the entity. */
+.slug-history {
+  margin: 12px 0 4px; padding: 10px 14px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel-2);
+}
+.slug-history > summary {
+  cursor: pointer; padding: 4px 0; list-style: none;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-weight: 600; font-size: 0.875rem;
+}
+.slug-history > summary::-webkit-details-marker { display: none; }
+.slug-history > summary::before {
+  content: "▸"; color: var(--muted); font-size: 0.75rem;
+  transition: transform 140ms ease;
+}
+.slug-history[open] > summary::before { transform: rotate(90deg); }
+.slug-history > summary .icon { width: 14px; height: 14px; color: var(--muted); }
+.slug-history > p { margin: 8px 0 6px; }
+.slug-history-list {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.slug-history-list li {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 0; border-top: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+.slug-history-list li:first-child { border-top: none; }
+.slug-history-when { min-width: 90px; font-variant-numeric: tabular-nums; }
+.slug-history-old, .slug-history-new {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem; padding: 2px 6px; border-radius: 4px;
+  background: var(--panel); border: 1px solid var(--border);
+}
+.slug-history-old { text-decoration: line-through; color: var(--muted); }
+.slug-history-arrow { font-size: 0.95rem; }
 .file-list .file-public-row-toggle .mode-track {
   width: 28px; height: 16px;
 }

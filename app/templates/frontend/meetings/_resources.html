@@ -1,7 +1,7 @@
 {# Files (public_visible) + readings (public_readings) for a meeting,
    shown after the Zoom/Location info on every meeting template. Empty
    block render-collapses naturally — no wrapper is emitted. #}
-{% set _meeting_slug = (meeting.name | slugify) if (meeting.name | slugify) else 'meeting' %}
+{% set _meeting_slug = meeting.public_slug %}
 {% set _public_files = meeting.public_files() %}
 {% set _public_readings = meeting.public_readings %}
 {% if _public_files or _public_readings %}

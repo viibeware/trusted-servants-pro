@@ -465,11 +465,48 @@ def _apply_library_selections(m, form):
     m.public_readings = public_readings
 
 
+def _normalize_slug(value):
+    """Lowercase, replace any non-alphanumeric run with a single hyphen,
+    strip leading/trailing hyphens, cap at 200 chars. Returns None for
+    blank/empty input so callers can store NULL and let
+    ``Meeting.public_slug`` / ``Post.public_slug`` fall back to the
+    title-derived default."""
+    import re as _re
+    if not value:
+        return None
+    s = _re.sub(r"[^a-z0-9]+", "-", str(value).lower()).strip("-")
+    return (s[:200] or None)
+
+
+def _record_slug_change(entity_type, entity_id, old_slug, new_slug):
+    """Append a row to ``EntitySlugHistory`` capturing the before/after
+    public slugs for an entity. Caller is responsible for skipping when
+    they're equal."""
+    from .models import EntitySlugHistory
+    db.session.add(EntitySlugHistory(
+        entity_type=entity_type,
+        entity_id=entity_id,
+        old_slug=old_slug,
+        new_slug=new_slug,
+        changed_by=getattr(current_user, "id", None) if hasattr(current_user, "id") else None,
+    ))
+
+
 def _apply_meeting_form(m, form, schedules, files=None):
+    # Capture the previous effective slug *before* mutating name/slug so
+    # the history row can record the URL the public site used to serve.
+    _prev_public_slug = m.public_slug if m.id else None
+
     m.name = form["name"].strip()
     m.description = form.get("description", "").strip()
     m.alert_message = form.get("alert_message", "").strip() or None
     m.public_alert_message = form.get("public_alert_message", "").strip() or None
+
+    # Slug edits are gated to admins + frontend editors. Non-editors'
+    # form submissions can't change the slug, even by hand-crafting a
+    # POST — we silently ignore the field for them.
+    if current_user.is_authenticated and current_user.can_edit_frontend():
+        m.slug = _normalize_slug(form.get("slug"))
     mtype = form.get("meeting_type", "in_person")
     if mtype not in MEETING_TYPES:
         mtype = "in_person"
@@ -513,6 +550,14 @@ def _apply_meeting_form(m, form, schedules, files=None):
             meeting=m, day_of_week=e["day"], start_time=e["start_time"],
             duration_minutes=e["duration"], opens_time=e.get("opens_time"),
             zoom_account_id=e["zoom_account_id"]))
+
+    # Slug-change history. Only meaningful for existing meetings — new
+    # ones have no "previous URL" to redirect from. Captures any change
+    # to the effective public slug, whether it came from the explicit
+    # ``slug`` field flipping or from the meeting being renamed (which
+    # changes the auto-derived slug).
+    if _prev_public_slug and _prev_public_slug != m.public_slug:
+        _record_slug_change("meeting", m.id, _prev_public_slug, m.public_slug)
 
 
 @bp.route("/meetings/new", methods=["POST"])
@@ -3543,12 +3588,16 @@ def file_new(mid):
     if category not in FILE_CATEGORIES:
         category = "documents"
     if request.method == "POST":
+        # public_visible is gated to admins + frontend editors. For other
+        # users we ignore whatever the form says and force False on create.
+        _public = (request.form.get("public_visible") == "1"
+                   and current_user.can_edit_frontend())
         f = MeetingFile(
             meeting_id=m.id,
             category=category,
             title=request.form["title"].strip(),
             description=request.form.get("description", "").strip(),
-            public_visible=(request.form.get("public_visible") == "1"),
+            public_visible=_public,
         )
         if category in ("external_links", "videos"):
             f.url = request.form.get("url", "").strip()
@@ -3578,7 +3627,11 @@ def file_edit(fid):
         f.title = request.form["title"].strip()
         f.description = request.form.get("description", "").strip()
         f.url = request.form.get("url", "").strip() or None
-        f.public_visible = (request.form.get("public_visible") == "1")
+        # Only admins + frontend editors may flip the public_visible flag —
+        # other users' toggle in the UI is disabled, but we also enforce
+        # server-side so a hand-crafted POST can't sneak through.
+        if current_user.can_edit_frontend():
+            f.public_visible = (request.form.get("public_visible") == "1")
         if f.category in ("readings", "scripts"):
             f.body = request.form.get("body", "").strip()
         _apply_file_upload(f, request.files.get("file"), request.form.get("media_id"))
@@ -3593,7 +3646,14 @@ def file_edit(fid):
 def file_public_toggle(fid):
     """Inline toggle for ``MeetingFile.public_visible`` from the meeting
     edit modal's file list. Reads ``public_visible=1|0`` from form data
-    and returns JSON so the row can flip without closing the modal."""
+    and returns JSON so the row can flip without closing the modal.
+
+    Public visibility is gated to admins + frontend editors. Regular
+    editors can land on this endpoint (the file list is shown to them)
+    but can't actually flip the flag — return 403 instead of silently
+    succeeding so the UI rolls back."""
+    if not current_user.can_edit_frontend():
+        abort(403)
     f = db.session.get(MeetingFile, fid) or abort(404)
     f.public_visible = (request.form.get("public_visible") == "1")
     db.session.commit()
@@ -4679,11 +4739,20 @@ def post_save():
         post = Post(created_by=getattr(current_user, "id", None))
         creating = True
 
+    # Capture the previous public slug before mutating title/slug — same
+    # rationale as in _apply_meeting_form.
+    _prev_public_slug = post.public_slug if not creating else None
+
     title = (request.form.get("title") or "").strip()[:255]
     if not title:
         flash("Title is required", "danger")
         return redirect(request.referrer or url_for("main.post_new"))
     post.title = title
+
+    # Slug edits are gated to admins + frontend editors; all other users'
+    # slug field is silently ignored.
+    if current_user.is_authenticated and current_user.can_edit_frontend():
+        post.slug = _normalize_slug(request.form.get("slug"))
     post.summary = (request.form.get("summary") or "").strip() or None
     post.body = (request.form.get("body") or "").strip() or None
 
@@ -4736,6 +4805,10 @@ def post_save():
 
     if creating:
         db.session.add(post)
+    else:
+        # Log a redirect row whenever the public slug changed.
+        if _prev_public_slug and _prev_public_slug != post.public_slug:
+            _record_slug_change("post", post.id, _prev_public_slug, post.public_slug)
     db.session.commit()
     if creating:
         flash(("Draft saved: " + post.title) if post.is_draft else ("Published: " + post.title), "success")

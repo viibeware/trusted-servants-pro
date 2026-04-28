@@ -90,6 +90,26 @@
              value="{{ (_p.title if _p else '') or '' }}"
              placeholder="Spring serenity workshop">
     </label>
+    {% set _can_edit_url = current_user.is_authenticated and current_user.can_edit_frontend() %}
+    <label>Public URL slug
+      <span class="muted small" style="display:block; margin: 2px 0 4px;">
+        The URL path on the public site, e.g. <code>/event/spring-serenity-workshop</code>.
+        Leave blank to derive automatically from the title. Lowercase letters, numbers, and hyphens only.
+        {% if not _can_edit_url %}
+          <em>Only admins and frontend editors can change this.</em>
+        {% endif %}
+      </span>
+      <input type="text" name="slug"
+             value="{{ (_p.slug if (_p and _p.slug) else '') or '' }}"
+             placeholder="{{ _p.public_slug if _p else 'auto-derived from title' }}"
+             pattern="[a-z0-9-]*" maxlength="200"
+             {% if not _can_edit_url %}disabled aria-disabled="true"
+               title="Only admins and frontend editors can change the public URL"{% endif %}>
+    </label>
+    {% if _p %}
+    {% set post = _p %}
+    {% include "_slug_history.html" %}
+    {% endif %}
     <label>Summary <span class="muted small">(short blurb shown in lists and link previews)</span>
       <textarea name="summary" rows="2"
                 placeholder="One or two sentences — what is this and why does it matter?">{{ (_p.summary if _p else '') or '' }}</textarea>

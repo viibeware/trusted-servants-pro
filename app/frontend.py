@@ -417,8 +417,22 @@ def meeting_detail(slug):
                   .filter(Meeting.archived_at.is_(None))
                   .order_by(Meeting.id)
                   .all())
-    m = next((mt for mt in candidates if slugify(mt.name) == slug), None)
+    # First-pass match against the entity's *current* effective slug.
+    m = next((mt for mt in candidates if mt.public_slug == slug), None)
     if m is None:
+        # Stale URL — look up the slug-change history and 301-redirect to
+        # the current canonical slug if we can match it. Pinned to active
+        # (non-archived) meetings only.
+        from .models import EntitySlugHistory
+        hist = (EntitySlugHistory.query
+                .filter_by(entity_type="meeting", old_slug=slug)
+                .order_by(EntitySlugHistory.changed_at.desc())
+                .first())
+        if hist:
+            target = next((mt for mt in candidates if mt.id == hist.entity_id), None)
+            if target:
+                return redirect(url_for("frontend.meeting_detail",
+                                        slug=target.public_slug), code=301)
         abort(404)
     ctx = _frontend_context(site)
     tpl = _template_meta(MEETING_TEMPLATES,
@@ -447,8 +461,21 @@ def meeting_resource(slug, resource):
                   .filter(Meeting.archived_at.is_(None))
                   .order_by(Meeting.id)
                   .all())
-    m = next((mt for mt in candidates if slugify(mt.name) == slug), None)
+    m = next((mt for mt in candidates if mt.public_slug == slug), None)
     if m is None:
+        # Old slug — redirect to the current /meeting/<new>/<resource> URL
+        # so bookmarked file links keep working after a slug rename.
+        from .models import EntitySlugHistory
+        hist = (EntitySlugHistory.query
+                .filter_by(entity_type="meeting", old_slug=slug)
+                .order_by(EntitySlugHistory.changed_at.desc())
+                .first())
+        if hist:
+            target = next((mt for mt in candidates if mt.id == hist.entity_id), None)
+            if target:
+                return redirect(url_for("frontend.meeting_resource",
+                                        slug=target.public_slug,
+                                        resource=resource), code=301)
         abort(404)
 
     # Files first, then readings — first match by url_slug wins.
@@ -526,8 +553,18 @@ def event_detail(slug):
                           Post.is_draft.is_(False))
                   .order_by(Post.id)
                   .all())
-    ev = next((p for p in candidates if slugify(p.title) == slug), None)
+    ev = next((p for p in candidates if p.public_slug == slug), None)
     if ev is None:
+        from .models import EntitySlugHistory
+        hist = (EntitySlugHistory.query
+                .filter_by(entity_type="post", old_slug=slug)
+                .order_by(EntitySlugHistory.changed_at.desc())
+                .first())
+        if hist:
+            target = next((p for p in candidates if p.id == hist.entity_id), None)
+            if target:
+                return redirect(url_for("frontend.event_detail",
+                                        slug=target.public_slug), code=301)
         abort(404)
     ctx = _frontend_context(site)
     tpl = _template_meta(EVENT_TEMPLATES,

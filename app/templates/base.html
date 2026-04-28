@@ -864,6 +864,17 @@
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
             <li>
+              <div class="u-name">1.7.4</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Editable public URL slug</b> — meetings and posts (announcements / events) get a new <code>slug</code> column on top of their existing title. The Public URL slug field on the meeting edit modal and the post edit page lets admins and frontend editors override the auto-derived slug; other users see the field disabled with a tooltip explaining why. Empty value falls through to <code>slugify(title)</code> via a new <code>public_slug</code> property, so legacy data needs no migration.</li>
+                <li><b>Auto-redirect on slug change</b> — new <code>EntitySlugHistory</code> table appends a row whenever the public slug changes, whether from an explicit slug edit or a rename that flips the auto-derived value. <code>/meeting/&lt;slug&gt;</code>, <code>/event/&lt;slug&gt;</code>, and <code>/meeting/&lt;slug&gt;/&lt;resource&gt;</code> now look up the entity by its current <code>public_slug</code> first, fall back to the history table on miss, and 301-redirect to the canonical URL — so old links stay alive forever and bookmarked file URLs survive a meeting rename.</li>
+                <li><b>URL change history timeline</b> — new <code>_slug_history.html</code> partial rendered under the slug input on both edit screens, listing every previous slug along with the date and the user who made the change. Each row shows the old URL struck through, the current URL it now redirects to, and a stable count of active redirects. Backed by a new <code>slug_history_rows(kind, entity_id)</code> Jinja global.</li>
+                <li><b>File public-visibility gated to admins + frontend editors</b> — the Public toggle on each file row, inside the inline edit form, and on the Add-new form is disabled (with a "Only admins and frontend editors can change public visibility" tooltip) for regular editors and viewers. Server-side enforcement: the toggle endpoint returns 403 for non-frontend-editors; <code>file_edit</code> and <code>file_new</code> ignore the <code>public_visible</code> field unless the user can edit the frontend, so hand-crafted POSTs can't bypass it. The toggle hides entirely when the Web Frontend module is disabled in Settings.</li>
+                <li><b>404 page moved to Structure</b> — the <i>404 page</i> link in the Web Frontend admin sidebar moved out of <i>Content</i> and into <i>Structure</i>, sitting beneath <i>Templates</i> next to the other site-wide chrome controls.</li>
+              </ul>
+            </li>
+            <li>
               <div class="u-name">1.7.3</div>
               <div class="muted smaller">April 2026</div>
               <ul>

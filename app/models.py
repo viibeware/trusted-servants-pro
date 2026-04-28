@@ -72,6 +72,11 @@ class User(UserMixin, db.Model):
 class Meeting(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
+    # Explicit URL slug for the public detail page. When NULL the public
+    # site falls back to slugify(name). Editing this is gated to admins +
+    # frontend editors. Changes are logged to EntitySlugHistory so old
+    # links 301-redirect to the current slug.
+    slug = db.Column(db.String(255))
     description = db.Column(db.Text)
     alert_message = db.Column(db.Text)         # admin-only — shown on the backend meeting list / detail page
     public_alert_message = db.Column(db.Text)  # rendered on the public meeting detail page
@@ -112,6 +117,14 @@ class Meeting(db.Model):
                           .order_by(MeetingFile.category,
                                     MeetingFile.position,
                                     MeetingFile.id).all())
+
+    @property
+    def public_slug(self):
+        """Effective public-frontend slug. Explicit ``slug`` wins; otherwise
+        derive from the meeting name. Both branches feed through the same
+        ``slugify`` so '/MEETING/' URLs and stored slugs always normalise."""
+        from .colors import slugify
+        return slugify(self.slug) if self.slug else slugify(self.name)
 
     def library_mode(self, library):
         for a in self.library_assocs:
@@ -643,6 +656,10 @@ class Post(db.Model):
     __tablename__ = "post"
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
+    # Explicit URL slug for /event/<slug>. NULL → slugify(title). Editing
+    # gated to admins + frontend editors; history tracked in
+    # EntitySlugHistory so renames don't break existing links.
+    slug = db.Column(db.String(255))
     summary = db.Column(db.Text)        # short blurb shown in lists / link previews
     body = db.Column(db.Text)           # full content (markdown supported)
     featured_image_filename = db.Column(db.String(500))
@@ -686,6 +703,13 @@ class Post(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"))
 
+    @property
+    def public_slug(self):
+        """Same shape as ``Meeting.public_slug`` — explicit slug if set,
+        slugified title otherwise."""
+        from .colors import slugify
+        return slugify(self.slug) if self.slug else slugify(self.title)
+
 
 class CustomFont(db.Model):
     """Admin-added font available alongside the vendored Inter/Fraunces in the
@@ -714,6 +738,34 @@ class CustomFont(db.Model):
     size_bytes = db.Column(db.Integer, default=0)
     uploaded_by = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EntitySlugHistory(db.Model):
+    """Append-only log of public-frontend slug changes for meetings and
+    posts. Each row says: at ``changed_at``, the entity (``entity_type``,
+    ``entity_id``) had its public-facing slug switch from ``old_slug`` to
+    ``new_slug``. Drives both the visible history timeline in the admin
+    edit screens and the request-time fallback that 301-redirects old
+    URLs to the entity's current slug.
+
+    No FK to meeting/post: cleanup-on-delete is handled explicitly in the
+    delete handlers so the redirect log can also be retained when an
+    entity is archived but kept around. ``entity_type`` is one of
+    ``"meeting"`` | ``"post"``."""
+    __tablename__ = "entity_slug_history"
+    id = db.Column(db.Integer, primary_key=True)
+    entity_type = db.Column(db.String(16), nullable=False)
+    entity_id = db.Column(db.Integer, nullable=False)
+    old_slug = db.Column(db.String(255), nullable=False)
+    new_slug = db.Column(db.String(255), nullable=False)
+    changed_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    changed_by = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"))
+    __table_args__ = (
+        db.Index("ix_entity_slug_history_lookup", "entity_type", "old_slug"),
+        db.Index("ix_entity_slug_history_entity", "entity_type", "entity_id"),
+    )
+
+    user = db.relationship("User", foreign_keys=[changed_by])
 
 
 class LoginFailure(db.Model):

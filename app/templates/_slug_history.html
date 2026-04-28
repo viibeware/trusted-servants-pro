@@ -1,0 +1,34 @@
+{# Timeline of public-URL slug changes for a Meeting or Post.
+   Caller sets:
+     entity_type — "meeting" | "post"
+     entity_id   — int
+     current_slug — the entity's effective public_slug
+   Includer must have already imported this in a context where
+   EntitySlugHistory is queryable (i.e. inside a route's render context). #}
+{% set _slug_kind = 'meeting' if meeting is defined and meeting else 'post' %}
+{% set _slug_entity_id = (meeting.id if _slug_kind == 'meeting' else post.id) %}
+{% set _slug_current = (meeting.public_slug if _slug_kind == 'meeting' else post.public_slug) %}
+{% set _slug_history_rows = slug_history_rows(_slug_kind, _slug_entity_id) %}
+{% if _slug_history_rows %}
+<details class="slug-history">
+  <summary>
+    {{ icon('clock') }}
+    URL change history
+    <span class="muted smaller">({{ _slug_history_rows|length }} redirect{% if _slug_history_rows|length != 1 %}s{% endif %} active)</span>
+  </summary>
+  <p class="muted small">Old links to this {{ _slug_kind }} 301-redirect to the current URL automatically. The list below shows every previous slug visitors might still have bookmarked.</p>
+  <ul class="slug-history-list">
+    {% for h in _slug_history_rows %}
+    <li>
+      <span class="slug-history-when muted smaller" title="{{ h.changed_at.isoformat() }}Z">
+        {{ h.changed_at.strftime('%b %-d, %Y') }}
+      </span>
+      <code class="slug-history-old">/{{ 'meeting' if _slug_kind == 'meeting' else 'event' }}/{{ h.old_slug }}</code>
+      <span class="slug-history-arrow muted" aria-hidden="true">→</span>
+      <code class="slug-history-new">/{{ 'meeting' if _slug_kind == 'meeting' else 'event' }}/{{ _slug_current }}</code>
+      {% if h.user %}<span class="slug-history-by muted smaller">by {{ h.user.username }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</details>
+{% endif %}

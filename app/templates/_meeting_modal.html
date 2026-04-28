@@ -15,6 +15,27 @@
           <input name="name" required value="{{ meeting.name if meeting else '' }}">
         </label>
 
+        {% set _can_edit_url = current_user.is_authenticated and current_user.can_edit_frontend() %}
+        <label>Public URL slug
+          <span class="muted small" style="display:block; margin: 2px 0 4px;">
+            The URL path on the public site, e.g. <code>/meeting/wednesday-night-online</code>.
+            Leave blank to derive automatically from the name. Lowercase letters, numbers, and hyphens only.
+            {% if not _can_edit_url %}
+              <em>Only admins and frontend editors can change this.</em>
+            {% endif %}
+          </span>
+          <input name="slug" type="text"
+                 value="{{ meeting.slug if (meeting and meeting.slug) else '' }}"
+                 placeholder="{{ meeting.public_slug if meeting else 'auto-derived from name' }}"
+                 pattern="[a-z0-9-]*" maxlength="200"
+                 {% if not _can_edit_url %}disabled aria-disabled="true"
+                   title="Only admins and frontend editors can change the public URL"{% endif %}>
+        </label>
+
+        {% if meeting %}
+        {% include "_slug_history.html" %}
+        {% endif %}
+
         {% set mtype = meeting.meeting_type if meeting else 'in_person' %}
         <fieldset class="fieldset">
           <legend>Meeting Type</legend>
@@ -231,13 +252,18 @@
                 {% if f.original_filename %}<div class="muted smaller">{{ f.original_filename }}</div>{% endif %}
               </div>
               <div class="row-actions">
-                <label class="mode-toggle file-public-row-toggle"
-                       title="Show this {{ CATEGORY_LABELS[cat]|lower|trim('s') }} on the public meeting page">
+                {% set _module_on = site and site.frontend_module_enabled %}
+                {% set _can_public = current_user.is_authenticated and current_user.can_edit_frontend() %}
+                {% if _module_on %}
+                <label class="mode-toggle file-public-row-toggle{% if not _can_public %} is-disabled{% endif %}"
+                       title="{{ 'Show this ' + (CATEGORY_LABELS[cat]|lower|trim('s')) + ' on the public meeting page' if _can_public else 'Only admins and frontend editors can change public visibility' }}">
                   <input type="checkbox" data-file-public-toggle="{{ f.id }}" value="1"
-                         {% if f.public_visible %}checked{% endif %}>
+                         {% if f.public_visible %}checked{% endif %}
+                         {% if not _can_public %}disabled aria-disabled="true"{% endif %}>
                   <span class="mode-track"><span class="mode-thumb"></span></span>
                   <span class="muted smaller">Public</span>
                 </label>
+                {% endif %}
                 <button type="button" class="btn btn-sm" data-file-add-toggle="{{ f_edit_id }}">Edit</button>
                 <form method="post" action="{{ url_for('main.file_delete', fid=f.id) }}" onsubmit="return confirm('Delete this file?');">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -267,11 +293,15 @@
                 <label>Or URL<input name="url" type="url" placeholder="https://..."
                        value="{{ f.url or '' }}"></label>
                 {% endif %}
-                <label class="mode-toggle file-public-toggle">
-                  <input type="checkbox" name="public_visible" value="1" {% if f.public_visible %}checked{% endif %}>
+                {% if _module_on %}
+                <label class="mode-toggle file-public-toggle{% if not _can_public %} is-disabled{% endif %}"
+                       {% if not _can_public %}title="Only admins and frontend editors can change public visibility"{% endif %}>
+                  <input type="checkbox" name="public_visible" value="1" {% if f.public_visible %}checked{% endif %}
+                         {% if not _can_public %}disabled aria-disabled="true"{% endif %}>
                   <span class="mode-track"><span class="mode-thumb"></span></span>
                   <span>Show on public meeting page</span>
                 </label>
+                {% endif %}
                 <div class="form-actions">
                   <button type="button" class="btn btn-sm" data-file-add-cancel="{{ f_edit_id }}">Cancel</button>
                   <button type="submit" class="btn btn-sm btn-primary">Save</button>
@@ -298,11 +328,16 @@
             </div>
             <label>Or URL<input name="url" type="url" placeholder="https://..."></label>
             {% endif %}
-            <label class="mode-toggle file-public-toggle">
-              <input type="checkbox" name="public_visible" value="1">
+            {% if site and site.frontend_module_enabled %}
+            {% set _can_public_new = current_user.is_authenticated and current_user.can_edit_frontend() %}
+            <label class="mode-toggle file-public-toggle{% if not _can_public_new %} is-disabled{% endif %}"
+                   {% if not _can_public_new %}title="Only admins and frontend editors can change public visibility"{% endif %}>
+              <input type="checkbox" name="public_visible" value="1"
+                     {% if not _can_public_new %}disabled aria-disabled="true"{% endif %}>
               <span class="mode-track"><span class="mode-thumb"></span></span>
               <span>Show on public meeting page</span>
             </label>
+            {% endif %}
             <div class="form-actions">
               <button type="button" class="btn btn-sm" data-file-add-cancel="add-{{ cat }}">Cancel</button>
               <button type="submit" class="btn btn-sm btn-primary">Upload</button>

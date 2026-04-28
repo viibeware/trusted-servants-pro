@@ -52,6 +52,10 @@
          class="fe-subnav-link {% if request.endpoint == 'main.frontend_templates' %}active{% endif %}">
         {{ icon('copy') }}<span>Templates</span>
       </a>
+      <a href="{{ url_for('main.frontend_404') }}"
+         class="fe-subnav-link {% if request.endpoint == 'main.frontend_404' %}active{% endif %}">
+        {{ icon('alert-circle') }}<span>404 page</span>
+      </a>
     </div>
 
     <div class="fe-subnav-group">
@@ -63,10 +67,6 @@
       <a href="{{ url_for('main.frontend_pages') }}"
          class="fe-subnav-link {% if request.endpoint == 'main.frontend_pages' %}active{% endif %}">
         {{ icon('file-text') }}<span>Pages</span>
-      </a>
-      <a href="{{ url_for('main.frontend_404') }}"
-         class="fe-subnav-link {% if request.endpoint == 'main.frontend_404' %}active{% endif %}">
-        {{ icon('alert-circle') }}<span>404 page</span>
       </a>
     </div>
   </nav>

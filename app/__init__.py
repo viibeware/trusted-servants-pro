@@ -272,6 +272,19 @@ def create_app():
     app.jinja_env.globals["app_version"] = _app_version
     app.jinja_env.globals["app_build_id"] = _app_build_id
 
+    # Slug-change history rows for a given (kind, entity_id) pair, ordered
+    # newest-first. Used by the URL-history timeline rendered on the
+    # meeting and post edit screens.
+    def _slug_history_rows(kind, entity_id):
+        from .models import EntitySlugHistory
+        if not entity_id:
+            return []
+        return (EntitySlugHistory.query
+                .filter_by(entity_type=kind, entity_id=entity_id)
+                .order_by(EntitySlugHistory.changed_at.desc())
+                .all())
+    app.jinja_env.globals["slug_history_rows"] = _slug_history_rows
+
     # Make THEMES available to every template so the global theme picker
     # in the Web Frontend admin top bar always has its option list without
     # threading it through every render_template call.
@@ -435,6 +448,7 @@ def _migrate_sqlite(app):
                          ("zoom_link", "VARCHAR(1000)"),
                          ("alert_message", "TEXT"),
                          ("public_alert_message", "TEXT"),
+                         ("slug", "VARCHAR(255)"),
                          ("archived_at", "DATETIME"),
                          ("show_otp", "BOOLEAN NOT NULL DEFAULT 1")):
             add("meeting", col, ddl)
@@ -613,7 +627,8 @@ def _migrate_sqlite(app):
             add("frontend_nav_item", col, ddl)
         for col, ddl in (("asset_files_json", "TEXT"),):
             add("custom_font", col, ddl)
-        for col, ddl in (("is_draft", "BOOLEAN NOT NULL DEFAULT 0"),):
+        for col, ddl in (("is_draft", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("slug", "VARCHAR(255)")):
             add("post", col, ddl)
         for col, ddl in (("kind", "VARCHAR(16) NOT NULL DEFAULT 'link'"),
                          ("button_style", "VARCHAR(16) NOT NULL DEFAULT 'pill'"),
