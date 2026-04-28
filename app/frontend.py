@@ -401,7 +401,7 @@ def index():
                            hero_buttons=hero_buttons, **ctx)
 
 
-@bp.route("/meeting/<slug>")
+@bp.route("/meetings/<slug>")
 def meeting_detail(slug):
     """Public meeting detail page — name, description, alert, full
     schedule, location, and Zoom credentials. The slug is the meeting's
@@ -441,16 +441,34 @@ def meeting_detail(slug):
     return render_template(tpl["partial"], meeting=m, tpl_style=tpl_style, **ctx)
 
 
-@bp.route("/meeting/<slug>/<path:resource>")
+@bp.route("/meeting/<slug>", endpoint="meeting_detail_legacy")
+def meeting_detail_legacy(slug):
+    """Back-compat: 1.7.4 and earlier served meeting detail at
+    ``/meeting/<slug>`` (singular). 301-redirect to the canonical
+    plural-form URL so existing bookmarks keep working."""
+    return redirect(url_for("frontend.meeting_detail", slug=slug), code=301)
+
+
+@bp.route("/meeting/<slug>/<path:resource>", endpoint="meeting_resource_legacy")
+def meeting_resource_legacy(slug, resource):
+    """Back-compat alias for the singular pre-1.7.5 file URLs."""
+    return redirect(url_for("frontend.meeting_resource",
+                            slug=slug, resource=resource), code=301)
+
+
+@bp.route("/meetings/<slug>/<path:resource>")
 def meeting_resource(slug, resource):
     """Resolve a public file or reading attached to a meeting via its
-    pretty URL — e.g. ``/meeting/daily-zoom-round-up/opening-statement.pdf``.
+    pretty URL — e.g. ``/meetings/daily-zoom-round-up/opening-statement.pdf``.
 
     The route looks up the meeting by slug first (same logic as
     ``meeting_detail``), then matches ``resource`` against the meeting's
     public files (``MeetingFile.public_visible=True``) and any
     ``meeting.public_readings`` by their respective ``url_slug`` properties.
-    Files take precedence over readings on slug collision."""
+    Files take precedence over readings on slug collision.
+
+    The legacy singular-form ``/meeting/<slug>/<resource>`` URL is wired
+    elsewhere as a 301-redirect alias so old bookmarks survive."""
     from flask import send_from_directory, current_app
     from .colors import slugify
     site = _site()
@@ -463,7 +481,7 @@ def meeting_resource(slug, resource):
                   .all())
     m = next((mt for mt in candidates if mt.public_slug == slug), None)
     if m is None:
-        # Old slug — redirect to the current /meeting/<new>/<resource> URL
+        # Old slug — redirect to the current /meetings/<new>/<resource> URL
         # so bookmarked file links keep working after a slug rename.
         from .models import EntitySlugHistory
         hist = (EntitySlugHistory.query

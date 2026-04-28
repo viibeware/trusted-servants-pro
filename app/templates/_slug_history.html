@@ -23,9 +23,10 @@
       <span class="slug-history-when muted smaller" title="{{ h.changed_at.isoformat() }}Z">
         {{ h.changed_at.strftime('%b %-d, %Y') }}
       </span>
-      <code class="slug-history-old">/{{ 'meeting' if _slug_kind == 'meeting' else 'event' }}/{{ h.old_slug }}</code>
+      {% set _slug_path = 'meetings' if _slug_kind == 'meeting' else 'event' %}
+      <code class="slug-history-old">/{{ _slug_path }}/{{ h.old_slug }}</code>
       <span class="slug-history-arrow muted" aria-hidden="true">→</span>
-      <code class="slug-history-new">/{{ 'meeting' if _slug_kind == 'meeting' else 'event' }}/{{ _slug_current }}</code>
+      <code class="slug-history-new">/{{ _slug_path }}/{{ _slug_current }}</code>
       {% if h.user %}<span class="slug-history-by muted smaller">by {{ h.user.username }}</span>{% endif %}
     </li>
     {% endfor %}

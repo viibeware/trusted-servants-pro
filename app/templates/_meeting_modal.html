@@ -15,25 +15,23 @@
           <input name="name" required value="{{ meeting.name if meeting else '' }}">
         </label>
 
-        {% set _can_edit_url = current_user.is_authenticated and current_user.can_edit_frontend() %}
-        <label>Public URL slug
+        {% if current_user.is_authenticated and current_user.can_edit_frontend() %}
+        <label>Public URL
           <span class="muted small" style="display:block; margin: 2px 0 4px;">
-            The URL path on the public site, e.g. <code>/meeting/wednesday-night-online</code>.
-            Leave blank to derive automatically from the name. Lowercase letters, numbers, and hyphens only.
-            {% if not _can_edit_url %}
-              <em>Only admins and frontend editors can change this.</em>
-            {% endif %}
+            Only the slug after <code>/meetings/</code> is editable. Leave blank to derive automatically from the name. Lowercase letters, numbers, and hyphens only.
           </span>
-          <input name="slug" type="text"
-                 value="{{ meeting.slug if (meeting and meeting.slug) else '' }}"
-                 placeholder="{{ meeting.public_slug if meeting else 'auto-derived from name' }}"
-                 pattern="[a-z0-9-]*" maxlength="200"
-                 {% if not _can_edit_url %}disabled aria-disabled="true"
-                   title="Only admins and frontend editors can change the public URL"{% endif %}>
+          <div class="slug-input-row">
+            <span class="slug-input-prefix" aria-hidden="true">/meetings/</span>
+            <input name="slug" type="text" class="slug-input-field"
+                   value="{{ meeting.slug if (meeting and meeting.slug) else '' }}"
+                   placeholder="{{ meeting.public_slug if meeting else 'auto-derived from name' }}"
+                   pattern="[a-z0-9-]*" maxlength="200">
+          </div>
         </label>
 
         {% if meeting %}
         {% include "_slug_history.html" %}
+        {% endif %}
         {% endif %}
 
         {% set mtype = meeting.meeting_type if meeting else 'in_person' %}
@@ -73,8 +71,8 @@
         </label>
 
         <label>Backend Alert Message <span class="muted smaller">(leave blank to hide)</span>
-          <span class="muted small" style="display:block; margin: 2px 0 4px;">Only appears in the tspro backend — visible to logged-in admins on the meeting detail page.</span>
-          <textarea name="alert_message" rows="2" placeholder="Internal note for admins.">{{ (meeting.alert_message if meeting else '') or '' }}</textarea>
+          <span class="muted small" style="display:block; margin: 2px 0 4px;">Only appears in the tspro backend — visible to logged-in users on the meeting detail page.</span>
+          <textarea name="alert_message" rows="2" placeholder="Internal note for users.">{{ (meeting.alert_message if meeting else '') or '' }}</textarea>
         </label>
 
         <label>Public Alert Message <span class="muted smaller">(leave blank to hide)</span>

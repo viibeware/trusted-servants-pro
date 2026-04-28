@@ -46,7 +46,7 @@
               {% endif %}
               <h3>
                 <a class="fe-meeting-card-link"
-                   href="{{ url_for('frontend.meeting_detail', slug=m.name|slugify) }}">{{ m.name }}</a>
+                   href="{{ url_for('frontend.meeting_detail', slug=m.public_slug) }}">{{ m.name }}</a>
               </h3>
               {% if _show_sched and m.schedules %}
               <ul class="fe-meeting-sched">

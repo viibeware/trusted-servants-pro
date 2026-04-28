@@ -2461,6 +2461,31 @@ body.embed .card:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom
 .mode-toggle.is-disabled { opacity: 0.55; }
 .mode-toggle.is-disabled .mode-track { background: var(--border); }
 
+/* "/meetings/" static prefix sitting flush against the slug input —
+   visually communicates that only the trailing slug is editable. */
+.slug-input-row {
+  display: flex; align-items: stretch; width: 100%;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--panel); overflow: hidden;
+  transition: border-color 140ms ease;
+}
+.slug-input-row:focus-within { border-color: var(--brand); }
+.slug-input-prefix {
+  display: inline-flex; align-items: center;
+  padding: 0 10px;
+  background: var(--panel-2); color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875rem;
+  border-right: 1px solid var(--border);
+  user-select: none;
+}
+.slug-input-row > .slug-input-field {
+  flex: 1 1 auto; min-width: 0;
+  border: none; outline: none; background: transparent;
+  padding: 6px 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875rem; color: var(--text);
+}
+
 /* URL change history timeline shown under the slug input on the
    meeting + post edit screens. Collapsed by default; admins click to
    expand and audit which old paths still 301-redirect to the entity. */
