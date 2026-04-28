@@ -21,7 +21,7 @@
 {% if site.og_description %}<meta name="description" content="{{ site.og_description }}">{% endif %}
 {% endif %}
 <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
-<link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/apple-touch-icon_tspro.png') }}">
+<link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/apple-touch-icon_tspro.png', v=app_build_id) }}">
 <script>
   (function(){
     var t = null;
@@ -868,6 +868,7 @@
               <div class="muted smaller">April 2026</div>
               <ul>
                 <li><b>Root URL behaves sensibly when the public frontend is off</b> — visiting the bare domain (e.g. <code>https://ts.dccma.com</code>) used to render a 404 for signed-in non-editor users when the Web Frontend module was disabled, and bounced them to the login screen they'd already passed through when only public visibility was off. Both surfaces now redirect any signed-in visitor to the <code>/tspro/</code> dashboard instead. Anonymous visitors still get the login screen; admins / frontend editors still see the preview render when the module is on but visibility is off.</li>
+                <li><b>Apple touch icons now cache-bust on artwork updates</b> — the <code>&lt;link rel="apple-touch-icon"&gt;</code> URLs on the admin, public frontend, and setup-wizard templates now carry the same <code>?v={{ app_build_id }}</code> query string the CSS/JS cache-bust uses. iOS aggressively caches apple-touch-icons by URL, so swapping the file under the same name left re-adds to home screen showing the old icon. With the build hash on the URL, every artwork update produces a brand-new URL and iOS fetches the fresh icon.</li>
               </ul>
             </li>
             <li>

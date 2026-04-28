@@ -28,7 +28,7 @@
 {% else %}
 <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
 {% endif %}
-<link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/apple-touch-icon_dccma.png') }}">
+<link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/apple-touch-icon_dccma.png', v=app_build_id) }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=app_build_id) }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/frontend.css', v=app_build_id) }}">
 {# Admin-added custom fonts. Both upload and google sources are served
