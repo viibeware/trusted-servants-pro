@@ -864,6 +864,13 @@
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
             <li>
+              <div class="u-name">1.7.3</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Root URL behaves sensibly when the public frontend is off</b> — visiting the bare domain (e.g. <code>https://ts.dccma.com</code>) used to render a 404 for signed-in non-editor users when the Web Frontend module was disabled, and bounced them to the login screen they'd already passed through when only public visibility was off. Both surfaces now redirect any signed-in visitor to the <code>/tspro/</code> dashboard instead. Anonymous visitors still get the login screen; admins / frontend editors still see the preview render when the module is on but visibility is off.</li>
+              </ul>
+            </li>
+            <li>
               <div class="u-name">1.7.2</div>
               <div class="muted smaller">April 2026</div>
               <ul>

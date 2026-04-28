@@ -363,22 +363,23 @@ def _frontend_gate(site):
     response (redirect / 404) when the visitor isn't allowed to see the
     public frontend.
 
-    Module disabled:
-      - unauthenticated visitor → /tspro login (so they can sign in
-        and find the admin)
-      - authenticated visitor   → /tspro 404 page (they're already in
-        and a redirect-loop to login would be confusing)
-    Module on but frontend_enabled off (admin preview mode):
-      - non-editors get the same redirect-to-login treatment.
+    Module disabled OR frontend_enabled off:
+      - signed-in visitors → /tspro dashboard (they're already in;
+        bouncing them to login or showing 404 is confusing).
+      - anonymous visitors → /tspro login.
+    Module on but frontend_enabled off and the visitor IS a frontend
+    editor → fall through to render the preview-mode frontend.
     """
-    from flask import render_template
     if not site or not site.frontend_module_enabled:
         if current_user.is_authenticated:
-            return render_template("404.html"), 404
+            return redirect(url_for("main.index"))
         return redirect(url_for("auth.login"))
     if not site.frontend_enabled:
-        if not (current_user.is_authenticated and current_user.can_edit_frontend()):
-            return redirect(url_for("auth.login"))
+        if current_user.is_authenticated and current_user.can_edit_frontend():
+            return None  # admin/editor preview
+        if current_user.is_authenticated:
+            return redirect(url_for("main.index"))
+        return redirect(url_for("auth.login"))
     return None
 
 
