@@ -1466,6 +1466,140 @@ def data_snapshot_download(name):
                                mimetype="application/x-sqlite3")
 
 
+@bp.route("/settings/wp-import-posts", methods=["POST"])
+@admin_required
+def data_wp_import_posts():
+    """Import a WP All Export "Posts" CSV into a Library as Readings.
+
+    The export ships one row per post; we filter by category, take the
+    title, and download the post's primary attachment (when the export
+    populated ``Attachment URL``) into uploads. The resulting Reading
+    holds the post title and links to the freshly-stored file.
+
+    Use case: pulling the legacy "Intergroup Minutes" archive from
+    DCCMA's WP into the new portal without manually re-uploading each
+    monthly minutes document."""
+    import csv as _csv
+    import io
+    import requests
+
+    f = request.files.get("csv")
+    if not f or not f.filename:
+        flash("Please choose a CSV file to import.", "danger")
+        return redirect(request.referrer or url_for("main.index"))
+
+    library_name = (request.form.get("library_name") or "").strip()[:200]
+    category_filter = (request.form.get("category_filter") or "").strip()
+    if not library_name or not category_filter:
+        flash("Library name and category filter are both required.", "danger")
+        return redirect(request.referrer or url_for("main.index"))
+
+    # Decode CSV (handle BOM)
+    try:
+        raw = f.read().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            raw = f.read().decode("latin-1")
+        except UnicodeDecodeError:
+            flash("Could not decode the CSV — expected UTF-8.", "danger")
+            return redirect(request.referrer or url_for("main.index"))
+    reader = _csv.DictReader(io.StringIO(raw))
+
+    # Find or create the destination library.
+    lib = Library.query.filter_by(name=library_name).first()
+    if not lib:
+        lib = Library(name=library_name)
+        db.session.add(lib)
+        db.session.flush()
+
+    existing_titles = {r.title.strip() for r in lib.readings}
+    next_position = (db.session.query(db.func.max(Reading.position))
+                     .filter_by(library_id=lib.id).scalar() or 0) + 1
+
+    imported = 0
+    skipped_no_url = 0
+    skipped_dup = 0
+    download_failed = 0
+
+    for row in reader:
+        cats = (row.get("Categories") or "").strip()
+        if category_filter.lower() not in cats.lower():
+            continue
+        title = (row.get("Title") or "").strip()
+        if not title:
+            continue
+        if title in existing_titles:
+            skipped_dup += 1
+            continue
+        url = (row.get("Attachment URL") or "").strip()
+        original_name = (row.get("Attachment Filename") or "").strip()
+        stored = None
+        original = None
+        if url:
+            try:
+                resp = requests.get(url, timeout=30, stream=True,
+                                    headers={"User-Agent": "tspro-wp-importer/1.0"})
+                resp.raise_for_status()
+                data = resp.content
+            except Exception:
+                download_failed += 1
+                continue
+            # Pick a sensible original filename. Prefer the WP-supplied
+            # one; fall back to the URL's basename.
+            if not original_name:
+                from urllib.parse import urlparse, unquote
+                original_name = unquote(os.path.basename(urlparse(url).path)) or "minutes"
+            ext = os.path.splitext(original_name)[1].lower()
+            if ext in BLOCKED_UPLOAD_EXTENSIONS:
+                download_failed += 1
+                continue
+            # Dedup by content hash via the existing MediaItem table.
+            h = hashlib.sha256(data).hexdigest()
+            media = MediaItem.query.filter_by(content_hash=h).first()
+            if media:
+                stored = media.stored_filename
+                original = media.original_filename
+            else:
+                stored = f"{uuid.uuid4().hex}{ext}"
+                with open(os.path.join(current_app.config["UPLOAD_FOLDER"], stored), "wb") as out:
+                    out.write(data)
+                m = MediaItem(stored_filename=stored,
+                              original_filename=secure_filename(original_name),
+                              content_hash=h, size_bytes=len(data),
+                              mime_type=resp.headers.get("Content-Type"),
+                              uploaded_by=getattr(current_user, "id", None))
+                db.session.add(m)
+                db.session.flush()
+                original = m.original_filename
+        else:
+            skipped_no_url += 1
+            continue
+
+        r = Reading(
+            library_id=lib.id,
+            title=title,
+            stored_filename=stored,
+            original_filename=original,
+            position=next_position,
+        )
+        db.session.add(r)
+        existing_titles.add(title)
+        next_position += 1
+        imported += 1
+
+    db.session.commit()
+
+    parts = [f"Imported {imported} reading{'s' if imported != 1 else ''} into '{lib.name}'."]
+    if skipped_dup:
+        parts.append(f"{skipped_dup} skipped (title already in library).")
+    if skipped_no_url:
+        parts.append(f"{skipped_no_url} skipped (no Attachment URL in CSV).")
+    if download_failed:
+        parts.append(f"{download_failed} skipped (download failed or unsupported file type).")
+    flash(" ".join(parts), "success" if imported else "info")
+    return redirect(request.referrer or url_for("main.library_detail", lid=lib.id))
+
+
 @bp.route("/settings/db-snapshot-now", methods=["POST"])
 @admin_required
 def data_snapshot_now():

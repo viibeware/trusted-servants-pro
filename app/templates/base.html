@@ -781,6 +781,46 @@
           </div>
         </div>
 
+        <hr class="settings-rule">
+
+        {# ── WordPress posts importer ───────────────────────────── #}
+        <div class="u-name">WordPress posts → Library</div>
+        <p class="muted small">
+          Import a WP All Export <i>Posts</i> CSV. Rows whose <code>Categories</code>
+          column contains the filter string are pulled into the named library
+          as Readings — one Reading per post, with the post's <code>Attachment URL</code>
+          downloaded and stored locally. Duplicate titles already in the library
+          are skipped. The library is created if it doesn't already exist.
+        </p>
+        <p class="muted small">
+          Typical use: importing <i>Intergroup Minutes</i> from DCCMA's WordPress
+          into the matching library on a fresh install.
+        </p>
+        <form class="form" method="post"
+              action="{{ url_for('main.data_wp_import_posts') }}"
+              enctype="multipart/form-data" data-no-ajax="1">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="data-grid">
+            <div class="data-col">
+              <label>CSV file
+                <input type="file" name="csv" accept=".csv,text/csv" required>
+              </label>
+            </div>
+            <div class="data-col">
+              <label>Destination library
+                <input type="text" name="library_name" value="Intergroup Minutes" required>
+              </label>
+              <label>Category filter
+                <span class="muted smaller">Match if the row's <code>Categories</code> column contains this text (case-insensitive).</span>
+                <input type="text" name="category_filter" value="Intergroup Minutes" required>
+              </label>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary">Import posts</button>
+          </div>
+        </form>
+
         {# ── Daily SQLite snapshots ────────────────────────────── #}
         <hr class="settings-sep">
         <div class="data-col data-snapshots">
@@ -863,6 +903,13 @@
 
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
+            <li>
+              <div class="u-name">1.7.5</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>WordPress posts → Library importer</b> — new card in Settings → Data accepts a WP All Export <i>Posts</i> CSV, filters rows by category (default: <i>Intergroup Minutes</i>), and bulk-imports each matching post as a Reading in a named Library (created on the fly if it doesn't exist). Each post's <code>Attachment URL</code> is downloaded into <code>UPLOAD_FOLDER</code>, deduped via the existing <code>MediaItem.content_hash</code> table, and linked to the new Reading along with the WP-supplied title and original filename. Re-runs are idempotent: posts whose title already exists in the library are skipped, and identical file bytes hit the MediaItem dedup path. Reports a per-bucket summary (imported / dup-title skipped / no-attachment skipped / download-failed) so you can tell which of the 22 monthly minutes pulled cleanly and which need a manual upload.</li>
+              </ul>
+            </li>
             <li>
               <div class="u-name">1.7.4</div>
               <div class="muted smaller">April 2026</div>
