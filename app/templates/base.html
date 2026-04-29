@@ -470,55 +470,93 @@
           <span class="perm-badge {{ _badge_cls }}">{{ _role_label }}</span>
         </div>
 
-        {# can_yes / can_no helper macros render a green-check or
-           red-x bullet so the access list is scannable at a glance. #}
-        {% macro can_yes(text) %}<li class="ya-yes"><span class="ya-icon">✓</span><span>{{ text|safe }}</span></li>{% endmacro %}
-        {% macro can_no(text)  %}<li class="ya-no"><span class="ya-icon">✕</span><span>{{ text|safe }}</span></li>{% endmacro %}
+        {# Permission matrix — comparison table across every role. The
+           Admin column is shown only to admins (non-admin viewers
+           don't need the row aimed at people who outrank them). The
+           current user's column is highlighted so "what can I do?"
+           reads at a glance, and rows where the Editor role is
+           restricted to its own uploads are flagged with a footnote
+           marker. Cell values: 'yes' / 'no' / 'partial'. #}
+        {% set _matrix_roles = (['admin'] if current_user.is_admin() else []) + ['editor', 'frontend_editor', 'intergroup_member', 'viewer'] %}
+        {% set _matrix = [
+            ('View meetings, libraries, files, calendar',
+             {'admin':'yes','editor':'yes','frontend_editor':'yes','intergroup_member':'yes','viewer':'yes'}),
+            ('Customize dashboard widgets and order',
+             {'admin':'yes','editor':'yes','frontend_editor':'yes','intergroup_member':'yes','viewer':'yes'}),
+            ('Create / edit meetings, locations, schedules, Zoom accounts',
+             {'admin':'yes','editor':'yes','frontend_editor':'yes','intergroup_member':'yes','viewer':'no'}),
+            ('Create regular libraries; upload files to libraries',
+             {'admin':'yes','editor':'yes','frontend_editor':'yes','intergroup_member':'yes','viewer':'no'}),
+            ('Upload, edit, delete files attached to meetings (any uploader)',
+             {'admin':'yes','editor':'yes','frontend_editor':'yes','intergroup_member':'yes','viewer':'no'}),
+            ('Edit / rename library files (any uploader)',
+             {'admin':'yes','editor':'partial','frontend_editor':'yes','intergroup_member':'yes','viewer':'no'}),
+            ('Delete library files (any uploader)',
+             {'admin':'yes','editor':'partial','frontend_editor':'no','intergroup_member':'yes','viewer':'no'}),
+            ('Bulk-edit categories / bulk-delete files',
+             {'admin':'yes','editor':'partial','frontend_editor':'no','intergroup_member':'yes','viewer':'no'}),
+            ('Edit Intergroup-flagged libraries',
+             {'admin':'yes','editor':'no','frontend_editor':'no','intergroup_member':'yes','viewer':'no'}),
+            ('Create new Intergroup libraries',
+             {'admin':'yes','editor':'no','frontend_editor':'no','intergroup_member':'no','viewer':'no'}),
+            ('View the Intergroup Email Accounts page',
+             {'admin':'yes','editor':'no','frontend_editor':'no','intergroup_member':'yes','viewer':'no'}),
+            ('Edit the Intergroup Email Accounts list',
+             {'admin':'yes','editor':'no','frontend_editor':'no','intergroup_member':'no','viewer':'no'}),
+            ('Edit the Web Frontend (theme, header, nav, footer)',
+             {'admin':'yes','editor':'no','frontend_editor':'yes','intergroup_member':'no','viewer':'no'}),
+            ('Manage users, modules, email, security, data',
+             {'admin':'yes','editor':'no','frontend_editor':'no','intergroup_member':'no','viewer':'no'}),
+        ] %}
+        {% set _badge_for = {
+          'admin': 'perm-badge-admin',
+          'editor': 'perm-badge-editor',
+          'frontend_editor': 'perm-badge-fe',
+          'intergroup_member': 'perm-badge-ig',
+          'viewer': 'perm-badge-viewer',
+        } %}
 
-        <div class="u-name">What you can do</div>
-        <ul class="your-access-list">
-          {% if _role == 'admin' %}
-          {{ can_yes("Manage users, access requests, modules, and site settings") }}
-          {{ can_yes("Create, edit, and delete meetings, locations, schedules, and Zoom accounts") }}
-          {{ can_yes("Create, edit, reorder, and delete libraries and the readings inside them <i>(any uploader)</i>") }}
-          {{ can_yes("Edit the Web Frontend module — header, footer, homepage, navigation, theme tokens") }}
-          {{ can_yes("Edit the Intergroup Documents and Intergroup Minutes libraries") }}
-          {{ can_yes("Read and edit the Intergroup Email Accounts page") }}
-          {{ can_yes("Import / export the full data archive") }}
-          {% elif _role == 'intergroup_member' %}
-          {{ can_yes("Create, edit, and reorder meetings, locations, schedules, Zoom accounts") }}
-          {{ can_yes("Create, edit, reorder, and delete library files <i>(any uploader)</i>") }}
-          {{ can_yes("Edit access to Intergroup-specific libraries") }}
-          {{ can_yes("View the Intergroup Email Accounts page") }}
-          {{ can_yes("Customize your dashboard widgets and order") }}
-          {{ can_no("Reach Settings, Users, the Web Frontend module, or any admin-only area") }}
-          {{ can_no("Edit the Intergroup Email Accounts list itself <i>(admin-only)</i>") }}
-          {{ can_no("Delete a library or the entire portal's data") }}
-          {% elif _role == 'frontend_editor' %}
-          {{ can_yes("Create, edit, and reorder meetings, locations, schedules, Zoom accounts") }}
-          {{ can_yes("Create, edit, and reorder libraries and the readings inside them") }}
-          {{ can_yes("Edit the Web Frontend module — header, footer, navigation, mega menus, alert bars, theme/design tokens") }}
-          {{ can_yes("Toggle public visibility of the Web Frontend") }}
-          {{ can_yes("Customize your dashboard widgets and order") }}
-          {{ can_no("<b>Delete library files</b> — regardless of who uploaded them") }}
-          {{ can_no("Edit the Intergroup Documents or Intergroup Minutes libraries <i>(admin / Intergroup Member only)</i>") }}
-          {{ can_no("Reach Settings, Users, or the Intergroup Email Accounts page") }}
-          {% elif _role == 'editor' %}
-          {{ can_yes("Create, edit, and reorder meetings, locations, schedules, Zoom accounts") }}
-          {{ can_yes("Create, edit, and reorder libraries and readings/files inside them") }}
-          {{ can_yes("Upload media; manage file attachments on meetings") }}
-          {{ can_yes("Customize your dashboard widgets and order") }}
-          {{ can_no("Delete library files except those whose creator was an Editor / Frontend Editor / Intergroup Member <i>(admin-created files are protected)</i>") }}
-          {{ can_no("Edit the Intergroup Documents or Intergroup Minutes libraries") }}
-          {{ can_no("Reach Settings, Users, the Web Frontend module, or the Intergroup Email Accounts page") }}
-          {% else %}
-          {{ can_yes("View meetings, libraries, readings, and uploaded files") }}
-          {{ can_yes("View Zoom accounts and the calendar") }}
-          {{ can_yes("Customize your dashboard widgets and order") }}
-          {{ can_no("Edit, upload, or delete anything") }}
-          {{ can_no("Reach admin areas (Settings, Users, Web Frontend, Email Accounts)") }}
-          {% endif %}
-        </ul>
+        <div class="u-name">Permission matrix</div>
+        <p class="muted small">Each role's capabilities at a glance. Your row is highlighted.</p>
+        <div class="access-matrix-wrap">
+          <table class="access-matrix">
+            <thead>
+              <tr>
+                <th class="access-matrix-cap">Capability</th>
+                {% for r in _matrix_roles %}
+                <th class="access-matrix-role {% if r == _role %}is-current{% endif %}">
+                  <span class="perm-badge {{ _badge_for[r] }}">{{ _role_label if r == _role else {
+                    'admin':'Admin','editor':'Editor','frontend_editor':'Frontend Editor',
+                    'intergroup_member':'Intergroup Member','viewer':'Viewer'}[r] }}</span>
+                </th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for cap, cells in _matrix %}
+              <tr>
+                <td class="access-matrix-cap">{{ cap }}</td>
+                {% for r in _matrix_roles %}
+                {% set v = cells[r] %}
+                <td class="access-matrix-cell access-cell-{{ v }} {% if r == _role %}is-current{% endif %}"
+                    aria-label="{% if v == 'yes' %}Yes{% elif v == 'partial' %}Partial — own uploads only{% else %}No{% endif %}">
+                  {% if v == 'yes' %}<span class="access-mark">✓</span>
+                  {% elif v == 'partial' %}<span class="access-mark">✓</span><sup class="access-foot-mark">*</sup>
+                  {% else %}<span class="access-mark access-mark-no">—</span>{% endif %}
+                </td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="access-matrix-footnote muted smaller">
+          <sup>*</sup> Applies to <b>library</b> files only — Editors can rename, edit, or
+          delete a library file only when its uploader was an editor-tier user (Editor /
+          Frontend Editor / Intergroup Member). Admin-uploaded and legacy library files are
+          protected; an admin must change them. Files attached to meetings are unaffected
+          and editable by every editor-tier role regardless of uploader.
+        </p>
 
         <hr class="settings-sep">
         <div class="u-name">Need a different role?</div>
@@ -1029,6 +1067,18 @@
 
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
+            <li>
+              <div class="u-name">1.7.15</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Editors can only rename / edit library files they uploaded</b> — <code>User.can_edit_reading(reading)</code> was repurposed from a thin alias of <code>can_edit_library</code> into a per-row content-edit gate that mirrors <code>can_delete_reading</code>: Editors may only modify readings whose creator was an editor-tier user (Editor / Frontend Editor / Intergroup Member); admin-uploaded and legacy library files are protected. Admins, Intergroup Members, and Frontend Editors keep their broader edit authority. The route enforces the gate server-side and the per-row Edit button + modal markup is hidden client-side for rows the user can't edit. <b>Restriction is library-only</b> — files attached to meetings remain editable by every editor-tier role regardless of uploader.</li>
+                <li><b>Your Access tab redesigned as a comparison matrix</b> — the role-specific bulleted list was replaced with an elegant comparison table whose columns are roles and rows are capabilities. Cells use ✓ / ✓<sup>*</sup> / — for yes / partial / no. The viewer's own column gets a brand-tinted background so "what can I do?" reads at a glance, and rows where the Editor role is restricted to its own uploads are flagged with a footnote marker. The footnote spells out that the restriction is library-only and meeting attachments are unaffected.</li>
+                <li><b>Admin column hidden from non-admin matrix viewers</b> — the matrix's role columns are <code>['editor', 'frontend_editor', 'intergroup_member', 'viewer']</code> by default; the Admin column is prepended only when <code>current_user.is_admin()</code>. Non-admins don't need the row aimed at users who outrank them, so they see four columns; admins see all five. Implemented as a single Jinja set expression to avoid the well-known <code>{% set %}</code>-inside-<code>{% if %}</code> scoping issue.</li>
+                <li><b>Server widget hidden for Editor and Viewer roles</b> — the dashboard's Server Stats column on the role widget is now visible only to admin / frontend_editor / intergroup_member. Editors and Viewers see the Your role panel alone, full-card-width via the existing <code>server-metrics-role-only</code> styling. A single <code>_has_server</code> flag set at the top of <code>index.html</code> drives the widget gate, the role-only-styling class, and the dashboard customize toggle's label so they can't drift.</li>
+                <li><b>Your Access section scrolls as a whole, not just the table</b> — the matrix table wrapper had <code>overflow-x: auto</code>, which makes it a CSS scroll container on both axes. As a flex child of the column-flex pane its <code>min-height</code> defaulted to 0 (the spec rule for scroll containers), so the flex layout shrunk the wrapper to fit and the wrapper's <i>inner</i> overflow took the scroll — locking scroll inside the table and chopping the "Permission matrix" / "Need a different role?" headings above and below. Setting <code>flex-shrink: 0</code> on <code>.access-matrix-wrap</code> keeps it at its natural content height; the pane's own <code>overflow-y: auto</code> then handles whole-section scroll.</li>
+                <li><b>Role widget copy polish</b> — Intergroup Member and Frontend Editor dashboard widgets now read "Inherits Editor role permissions" (the directional <i>"below"</i> hint was confusing when bullets reorder). The Intergroup Member's "May delete any library file" line widened to "May edit or delete any library file" to reflect the per-row authority. The Editor widget split its library and meeting authority into separate bullets so the new restriction is unambiguous: edit/delete is library-restricted to editor-tier-uploaded rows, while meeting attachments stay editable for any uploader. The Editor welcome-email line and the users-panel role-description card pick up the same wording.</li>
+              </ul>
+            </li>
             <li>
               <div class="u-name">1.7.14</div>
               <div class="muted smaller">April 2026</div>

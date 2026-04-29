@@ -56,7 +56,7 @@ ROLE_PERMISSIONS = {
         "Customize your own dashboard widgets and order.",
     ],
     "editor": _EDITOR_BASE + [
-        "Library-file deletion: only readings whose creator was an editor-tier user. Admin-created and legacy files are protected.",
+        "Library files: may rename, edit, or delete only those whose uploader was an editor-tier user (Editor / Frontend Editor / Intergroup Member). Admin-uploaded and legacy library files are protected; this restriction does not apply to files attached to meetings.",
         "Cannot reach Settings, Users, the Web Frontend module, or the Intergroup Email Accounts page.",
         "Cannot edit the Intergroup Documents or Intergroup Minutes libraries (admin / Intergroup-Member only).",
     ],

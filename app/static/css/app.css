@@ -2936,6 +2936,60 @@ html[data-theme="dark"] .your-access-list .ya-no .ya-icon {
   border-color: rgba(220, 38, 38, 0.45);
 }
 
+/* Permission matrix on the Your Access tab. Wrapping div allows
+   horizontal scroll on narrow viewports; the table itself uses
+   sticky-ish column widths so capability text wraps before the
+   role columns shrink. The viewer's own column is highlighted with
+   a brand-tinted background so the answer to "what can I do?" is
+   the first thing the eye lands on. */
+.access-matrix-wrap {
+  margin: 8px 0 0; overflow-x: auto;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--panel-2);
+  /* Don't let the column-flex pane shrink the wrapper below its
+     natural content height — when overflow-x is set the wrap becomes
+     a scroll container, whose min-height defaults to 0 in flex
+     layouts, so without this flex-shrink: 0 the table consumes the
+     whole pane and its inner overflow takes the scroll, hiding the
+     "Permission matrix" / "Need a different role?" headings. */
+  flex-shrink: 0;
+}
+.access-matrix {
+  width: 100%; border-collapse: collapse; font-size: 0.875rem;
+}
+.access-matrix th, .access-matrix td {
+  padding: 10px 12px; text-align: center; vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+}
+.access-matrix tbody tr:last-child td { border-bottom: 0; }
+.access-matrix th.access-matrix-cap,
+.access-matrix td.access-matrix-cap {
+  text-align: left; min-width: 220px; max-width: 360px;
+  font-weight: 500; color: var(--text);
+}
+.access-matrix thead th { font-weight: 600; background: var(--panel); }
+.access-matrix thead th.access-matrix-cap {
+  font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.75rem;
+}
+.access-matrix .perm-badge { font-size: 0.6875rem; padding: 2px 8px; }
+.access-matrix .access-matrix-role { white-space: nowrap; }
+/* Highlight the viewer's own role column so they can scan their row
+   without re-reading the header. Subtle brand tint, not a hard fill,
+   so the column doesn't dominate the page. */
+.access-matrix .is-current { background: var(--brand-soft); }
+html[data-theme="dark"] .access-matrix .is-current { background: rgba(11, 92, 255, 0.10); }
+.access-matrix .access-mark { font-weight: 700; font-size: 1rem; line-height: 1;
+  display: inline-block; }
+.access-matrix .access-cell-yes .access-mark { color: #16a34a; }
+.access-matrix .access-cell-partial .access-mark { color: #ca8a04; }
+.access-matrix .access-cell-no .access-mark { color: var(--muted); font-weight: 500; }
+.access-matrix .access-foot-mark { color: #ca8a04; font-size: 0.6875rem; margin-left: 1px; }
+html[data-theme="dark"] .access-matrix .access-cell-yes .access-mark { color: #4ade80; }
+html[data-theme="dark"] .access-matrix .access-cell-partial .access-mark { color: #facc15; }
+html[data-theme="dark"] .access-matrix .access-foot-mark { color: #facc15; }
+.access-matrix-footnote { margin: 8px 4px 0; line-height: 1.45; }
+
 /* Access Requests Active / Archived view tabs in the card head. Sit
    to the right of the Requests heading, switch between the two views
    via plain page navigation (no JS). Active tab carries the brand

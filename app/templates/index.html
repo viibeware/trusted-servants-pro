@@ -6,6 +6,11 @@
 {% endblock %}
 {% block content %}
 {% set can_reorder = true %}
+{# Operator-tier roles see the Server Stats column on the role widget;
+   editors and viewers see only the role panel. Centralised here so
+   the widget gate, the role-only styling class, and the dashboard
+   customize toggle's label all read from one source. #}
+{% set _has_server = current_user.role in ('admin', 'frontend_editor', 'intergroup_member') %}
 <div class="dash-grid"
      {% if can_reorder %}data-dashboard-reorder data-order-url="{{ url_for('main.dashboard_order_save') }}"{% endif %}>
 {% for widget_key in dashboard_order %}
@@ -13,7 +18,11 @@
   {% if widget_key == 'server-metrics' and current_user.dash_show_server_metrics %}
   <div class="dash-widget dash-widget-wide" data-widget-key="server-metrics" {% if can_reorder %}draggable="true"{% endif %}>
     {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
-    <section class="card server-metrics{% if not current_user.can_edit() %} server-metrics-role-only{% endif %}" id="server-metrics-widget" data-endpoint="{{ url_for('main.api_server_metrics') }}">
+    {# Role-only styling applies to viewers AND editors — both see the
+       role panel without the server metrics column. The right column
+       (CPU / memory / disk / network) is reserved for the operator
+       roles whose ``_has_server`` flag is set at the top of this file. #}
+    <section class="card server-metrics{% if not _has_server %} server-metrics-role-only{% endif %}" id="server-metrics-widget" data-endpoint="{{ url_for('main.api_server_metrics') }}">
       <div class="server-metrics-body">
         <div class="role-panel">
           <div class="role-panel-label">Your role</div>
@@ -28,21 +37,21 @@
             <li>Edit all content: meetings, libraries, the Web Frontend, and Intergroup Email Accounts</li>
             <li>Configure site settings, security &amp; data import/export</li>
             {% elif current_user.role == 'intergroup_member' %}
-            <li>Inherits every Editor permission below</li>
+            <li>Inherits Editor role permissions</li>
             <li>Edit access to Intergroup-specific libraries</li>
             <li>Create &amp; edit meetings, libraries, readings, files</li>
-            <li>May delete any library file regardless of uploader</li>
+            <li>May edit or delete any library file regardless of uploader</li>
             <li>Upload &amp; manage media; view Zoom accounts</li>
             {% elif current_user.role == 'frontend_editor' %}
-            <li>Inherits every Editor permission below</li>
+            <li>Inherits Editor role permissions</li>
             <li>Edit the Web Frontend module: header, footer, homepage, navigation, mega menus, alert bars, theme &amp; design tokens</li>
             <li>Toggle public visibility of the Web Frontend</li>
             <li>Create &amp; edit meetings, libraries, readings, files</li>
             {% elif current_user.role == 'editor' %}
             <li>Create, edit &amp; reorder meetings, locations, schedules, Zoom accounts</li>
-            <li>Create, edit &amp; reorder libraries and the readings inside them</li>
-            <li>May delete library files only if the creator was an editor-tier user</li>
-            <li>Upload media and manage file attachments on meetings</li>
+            <li>Create &amp; reorder libraries; upload files into them</li>
+            <li>May edit or delete <b>library</b> files only when the uploader was an editor-tier user</li>
+            <li>Upload, edit &amp; delete files attached to meetings (any uploader)</li>
             {% else %}
             <li>Read-only access across the portal</li>
             <li>View meetings, libraries, readings &amp; uploaded files</li>
@@ -52,7 +61,11 @@
             <li class="role-caps-link"><a href="#" data-open-modal="settings-modal" data-settings-tab="your-access">See full access details →</a></li>
           </ul>
         </div>
-        {% if current_user.can_edit() %}
+        {# Server widget is shown to admins, frontend editors, and
+           intergroup members only. Editors and viewers see the Your
+           role panel alone — they don't operate the server, so the
+           live CPU / memory / disk metrics aren't relevant to them. #}
+        {% if _has_server %}
         <div class="server-metrics-column">
           <div class="card-head">
             <h2>Server</h2>
@@ -218,8 +231,8 @@
             ('dash_show_meetings', 'Recent Meetings', 'List of the most recent meetings.'),
             ('dash_show_libraries', 'Libraries', 'List of libraries with file counts.'),
             ('dash_show_files', 'Recent Files', 'Most recently uploaded files from the file browser.'),
-            ('dash_show_server_metrics', 'Your Role' + (' and Server Stats' if current_user.can_edit() else ''),
-              'Your account role and capabilities' + (' alongside CPU, memory, load average, uptime, and host OS.' if current_user.can_edit() else '.')),
+            ('dash_show_server_metrics', 'Your Role' + (' and Server Stats' if _has_server else ''),
+              'Your account role and capabilities' + (' alongside CPU, memory, load average, uptime, and host OS.' if _has_server else '.')),
           ] %}
           <li class="special-page-row">
             <div class="special-page-info">

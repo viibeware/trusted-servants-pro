@@ -4361,6 +4361,12 @@ def reading_edit(rid):
     deny = _require_can_edit_library(r.library)
     if deny is not None:
         return deny
+    if not current_user.can_edit_reading(r):
+        # Editor-tier per-row gate: editors can only modify readings
+        # they (or another editor-tier user) uploaded. Admin-uploaded
+        # and legacy (creator-unknown) rows are protected.
+        flash("You can only edit files uploaded by you or another editor-tier user.", "danger")
+        return redirect(_library_browse_url(r.library))
     if request.method == "POST":
         cats = _resolve_reading_categories(r.library, request.form)
         # Forms that render the category picker emit a hidden

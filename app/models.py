@@ -108,9 +108,24 @@ class User(UserMixin, db.Model):
         return self.can_edit()
 
     def can_edit_reading(self, reading):
-        """Same gate as ``can_edit_library`` but resolved through the
-        reading's parent library."""
-        return self.can_edit_library(reading.library if reading is not None else None)
+        """Per-reading gate for renaming / editing an existing reading
+        (title change, file replacement, body / URL / thumbnail swap,
+        inline category re-tag). Editors are restricted to readings
+        whose creator was an editor-tier user — mirrors
+        ``can_delete_reading`` so a single rule covers both rename and
+        delete authority. Admin / intergroup_member / frontend_editor
+        follow the broader ``can_edit_library`` gate; viewers fail at
+        that gate."""
+        if reading is None:
+            return False
+        if not self.can_edit_library(reading.library):
+            return False
+        if self.role == "editor":
+            creator = reading.creator
+            if creator is None:
+                return False
+            return creator.role in ("editor", "frontend_editor", "intergroup_member")
+        return True
 
     def can_use_editor_tools(self):
         """Generic gate for utility endpoints used during editing

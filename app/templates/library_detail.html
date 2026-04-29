@@ -157,16 +157,17 @@
         {% elif r.url %}
         <button type="button" class="btn btn-sm btn-copy" data-copy-url="{{ r.url }}">Copy Link</button>
         {% endif %}
-      {% if can_edit %}
+        {% if can_edit and current_user.can_edit_reading(r) %}
         <button type="button" class="btn btn-sm" data-open-modal="{{ edit_id }}-modal">Edit</button>
-        {% if current_user.can_delete_reading(r) %}
+        {% endif %}
+        {% if can_edit and current_user.can_delete_reading(r) %}
         <form method="post" action="{{ url_for('main.reading_delete', rid=r.id) }}" onsubmit="return confirm('Delete this file?');">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>
         </form>
         {% endif %}
-      {% endif %}
       </div>
+      {% if can_edit and current_user.can_edit_reading(r) %}
       {% set _default_mode = 'paste' if (r.body and not r.stored_filename) else 'upload' %}
       <div class="modal" id="{{ edit_id }}-modal" aria-hidden="true">
         <div class="modal-backdrop" data-close></div>
@@ -256,6 +257,7 @@
           </form>
         </div>
       </div>
+      {% endif %}
     </li>
     {% endfor %}
   </ul>
