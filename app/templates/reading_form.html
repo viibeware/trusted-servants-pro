@@ -37,6 +37,27 @@
     <textarea name="body" rows="10">{{ reading.body if reading else '' }}</textarea>
   </label>
 
+  {% if library.is_intergroup %}
+  <fieldset class="fieldset">
+    <legend>Categories <span class="muted small">{% if library.categories_required %}(at least one required){% else %}(optional){% endif %}</span></legend>
+    <input type="hidden" name="category_picker" value="1">
+    {% if library.categories %}
+    {% set _selected = (reading.categories | map(attribute='id') | list) if reading else [] %}
+    <div class="ig-cat-picker">
+      {% for c in library.categories %}
+      <label class="check ig-cat-check">
+        <input type="checkbox" name="category_ids" value="{{ c.id }}"
+               {% if c.id in _selected %}checked{% endif %}>
+        <span>{{ c.name }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted small">No categories defined yet — add some via the library Edit modal before uploading.</p>
+    {% endif %}
+  </fieldset>
+  {% endif %}
+
   <div class="form-actions">
     <a href="{{ url_for('main.library_detail', lid=library.id) }}" class="btn">Cancel</a>
     <button class="btn btn-primary">{{ "Save" if reading else "Add" }}</button>

@@ -330,7 +330,7 @@
           <p class="muted small">Canonical URL used in outbound emails and any other absolute link this portal sends out. Without this set, links fall back to whatever <code>Host</code> header the request carried — which is usually a Docker bridge IP for portals behind a reverse proxy. Save this once and every welcome email / access-request notification picks up the right hostname.</p>
           <label>Site URL
             <input name="site_url" type="url" value="{{ (site.site_url if site else '') or '' }}"
-                   placeholder="https://ts.example.com">
+                   placeholder="example.com">
           </label>
           <p class="muted smaller" style="margin-top:6px;">
             Tip: omit the trailing slash. Bare domains (<code>example.com</code>) are auto-prefixed with <code>https://</code>.
@@ -1029,6 +1029,21 @@
 
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
+            <li>
+              <div class="u-name">1.7.13</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Admin-managed Intergroup libraries</b> — Intergroup-restriction is no longer hardcoded to two canonical names. New <code>Library.is_intergroup</code> column flags any library as Intergroup-gated; the permission check (<code>User.can_edit_library</code>) and the libraries-list filter both key on the column instead of the old <code>INTERGROUP_LIBRARY_NAMES</code> tuple. Migration backfills the flag for existing <i>Intergroup Documents</i> / <i>Intergroup Minutes</i> rows so upgraded installs keep working without intervention. Toggling the flag on an existing library is admin-only and surfaces from the library-edit modal.</li>
+                <li><b>Dedicated "+ Add Library" entry under the Intergroup sidebar section</b> — admins create new Intergroup libraries from the sidebar's Intergroup subsection, not the main Libraries page. New <code>/tspro/intergroup/libraries/new</code> route is <code>@admin_required</code> and force-flags the row <code>is_intergroup=True</code>. Pinned to the bottom of the section regardless of manual sort order.</li>
+                <li><b>Per-library categories</b> — Intergroup libraries now carry an admin-managed list of categories (new <code>library_category</code> + <code>reading_categories</code> tables). The library-edit modal exposes an editable rows + remove + "+ Add Category" UI; reorder via row order, dedup is case-insensitive on save. Cascade-delete unbinds tags from readings when a category is removed.</li>
+                <li><b>Required-vs-optional category tagging</b> — new toggle switch on the library-edit modal flips <code>Library.categories_required</code>. When on, uploads must pick at least one category (server-side gate fires in <code>reading_new</code> / <code>reading_edit</code>); when off, the picker still renders but submission is permitted with zero tags. Picker legend reads "(at least one required)" or "(optional)" per the toggle.</li>
+                <li><b>Live search, sort, and category filter on Intergroup library pages</b> — toolbar above the file list adds a debounced search input (matches title + filename + tag names), a sort selector (Custom / Name asc/desc / Date added / File type), and a category-filter pill row. All client-side over server-rendered rows that carry <code>data-name</code> / <code>data-date</code> / <code>data-type</code> / <code>data-search</code> / <code>data-categories</code> attributes — no extra round-trips. Drag-reorder is suppressed on Intergroup libraries since the toolbar's sort overrides positional order.</li>
+                <li><b>Canonical slug URLs at <code>/tspro/intergroup/&lt;slug&gt;</code></b> — Intergroup libraries resolve at human-readable slug URLs derived live from <code>library.name</code>, so renaming a library moves its canonical URL automatically (no slug column, no history table). The id-based <code>/tspro/libraries/&lt;id&gt;</code> route 301-redirects to the slug URL for Intergroup rows so all internal <code>url_for('main.library_detail', lid=...)</code> callsites keep working unchanged. Sidebar emits the canonical slug URL directly to skip the redirect hop.</li>
+                <li><b>Sidebar active-state fix</b> — the main "Libraries" link no longer falsely lights up while inside an Intergroup library. The sidebar's <code>contains:</code> matcher gained negative tokens (e.g. <code>contains:librar|reading|!intergroup</code>): match if any positive token is in the endpoint AND no negative token is. Only the Libraries entry needed the new exclusion; everything else is unaffected.</li>
+                <li><b>Per-row Edit popup modal</b> — clicking <i>Edit</i> on a library file row now opens a clean popup modal instead of expanding inline as an accordion. Same form, same inline-save behavior, same row update on success — the success path now closes the host modal (<code>form.closest(".modal")</code>) instead of toggling a <code>collapsed</code> class. Legacy callers without a host modal (the meeting modal's per-file forms) still get the old accordion close.</li>
+                <li><b>Three-zone sidebar layout</b> — brand and footer are pinned (<code>flex: 0 0 auto</code>); the middle nav scrolls when its content overflows (<code>flex: 1 1 auto; min-height: 0; overflow-y: auto</code>) so a long nav list doesn't push the user-chip / theme / sign-out / version footer below the viewport. Previously this was only applied at the mobile breakpoint; now it applies at every viewport width. Scrollbar is hidden via <code>scrollbar-width: none</code> + <code>::-webkit-scrollbar { display: none }</code> for a clean column.</li>
+              </ul>
+            </li>
             <li>
               <div class="u-name">1.7.12</div>
               <div class="muted smaller">April 2026</div>

@@ -1202,8 +1202,19 @@
         } else if (removeFile && subtitle) {
           subtitle.remove();
         }
-        // Collapse the accordion
-        form.classList.add("collapsed");
+        // Close the host modal if the form lives inside one (per-row
+        // edit forms on the library detail page now open as popups
+        // rather than inline accordions). Falls back to the legacy
+        // ``collapsed`` toggle for callers still using the accordion
+        // pattern (e.g. the meeting modal's per-file edit forms).
+        const hostModal = form.closest(".modal");
+        if (hostModal) {
+          hostModal.classList.remove("open");
+          hostModal.setAttribute("aria-hidden", "true");
+          document.body.style.overflow = "";
+        } else {
+          form.classList.add("collapsed");
+        }
         // Show an inline success message in the row that auto-fades
         let msg = li.querySelector(".inline-save-msg");
         if (!msg) {
@@ -2861,5 +2872,142 @@
   // Re-serialize on every input event in case the admin uses keyboard
   // reordering in a future iteration; harmless either way.
   form.addEventListener("submit", serialize);
+})();
+
+// Intergroup library page controls: live search, category filter, sort.
+// All client-side over the rows the server already rendered. Each <li>
+// inside [data-ig-list] carries data-name / data-date / data-type /
+// data-search / data-categories that we read here.
+(function () {
+  document.querySelectorAll("[data-ig-library]").forEach(scope => {
+    const list = scope.querySelector("[data-ig-list]");
+    if (!list) return;
+    const search = scope.querySelector("[data-ig-search]");
+    const sort = scope.querySelector("[data-ig-sort]");
+    const filterBtns = Array.from(scope.querySelectorAll("[data-ig-filter]"));
+    const empty = scope.querySelector("[data-ig-empty]");
+    const rows = Array.from(list.children).filter(el => el.tagName === "LI");
+    const originalOrder = rows.slice();
+    let activeFilter = "all";
+    let activeQuery = "";
+
+    function applySort(mode) {
+      let sorted;
+      if (mode === "manual") {
+        sorted = originalOrder.slice();
+      } else if (mode === "name-asc") {
+        sorted = rows.slice().sort((a, b) =>
+          (a.dataset.name || "").localeCompare(b.dataset.name || ""));
+      } else if (mode === "name-desc") {
+        sorted = rows.slice().sort((a, b) =>
+          (b.dataset.name || "").localeCompare(a.dataset.name || ""));
+      } else if (mode === "date-desc") {
+        sorted = rows.slice().sort((a, b) =>
+          (b.dataset.date || "").localeCompare(a.dataset.date || ""));
+      } else if (mode === "date-asc") {
+        sorted = rows.slice().sort((a, b) =>
+          (a.dataset.date || "").localeCompare(b.dataset.date || ""));
+      } else if (mode === "type-asc") {
+        sorted = rows.slice().sort((a, b) => {
+          const ta = (a.dataset.type || "").localeCompare(b.dataset.type || "");
+          return ta !== 0 ? ta : (a.dataset.name || "").localeCompare(b.dataset.name || "");
+        });
+      } else {
+        sorted = originalOrder.slice();
+      }
+      // Reattach in the new order — appendChild moves existing nodes,
+      // it doesn't clone them, so event handlers on the rows survive.
+      sorted.forEach(li => list.appendChild(li));
+    }
+
+    function applyFilterAndSearch() {
+      const q = activeQuery.trim().toLowerCase();
+      let visible = 0;
+      rows.forEach(li => {
+        let show = true;
+        if (activeFilter !== "all") {
+          const ids = (li.dataset.categories || "")
+            .split(",").filter(Boolean);
+          show = ids.includes(activeFilter);
+        }
+        if (show && q) {
+          show = (li.dataset.search || "").includes(q);
+        }
+        li.hidden = !show;
+        if (show) visible++;
+      });
+      if (empty) empty.hidden = visible !== 0;
+    }
+
+    if (sort) {
+      sort.addEventListener("change", () => {
+        applySort(sort.value);
+      });
+      applySort(sort.value);
+    }
+
+    filterBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        filterBtns.forEach(b => b.classList.toggle(
+          "chip-active", b === btn));
+        activeFilter = btn.dataset.igFilter || "all";
+        applyFilterAndSearch();
+      });
+    });
+
+    if (search) {
+      let t;
+      search.addEventListener("input", () => {
+        clearTimeout(t);
+        t = setTimeout(() => {
+          activeQuery = search.value;
+          applyFilterAndSearch();
+        }, 80);
+      });
+    }
+
+    applyFilterAndSearch();
+  });
+})();
+
+// Intergroup category editor inside the library-edit modal: row
+// add/remove. New rows are cloned from a hidden template element so
+// the markup stays in the Jinja template.
+(function () {
+  document.querySelectorAll("[data-ig-cat-editor]").forEach(editor => {
+    const rows = editor.querySelector("[data-ig-cat-rows]");
+    const tmpl = editor.querySelector("[data-ig-cat-template]");
+    const addBtn = editor.querySelector("[data-ig-cat-add]");
+    if (!rows || !tmpl || !addBtn) return;
+    // Native <template> stores parsed children inside .content (a
+    // DocumentFragment) where they're inert — required fields inside
+    // it don't block form submit. Fall back to direct querySelector
+    // for older bespoke setups that wrap the proto in a plain div.
+    const source = tmpl.content || tmpl;
+    const protoRow = source.querySelector("[data-ig-cat-row]");
+    if (!protoRow) return;
+
+    function bindRemove(row) {
+      const rm = row.querySelector("[data-ig-cat-remove]");
+      if (!rm) return;
+      rm.addEventListener("click", () => row.remove());
+    }
+
+    rows.querySelectorAll("[data-ig-cat-row]").forEach(bindRemove);
+
+    addBtn.addEventListener("click", () => {
+      const fresh = protoRow.cloneNode(true);
+      // Defensive clear — the template ships with empty values, but
+      // cloneNode preserves whatever live state the source happens to
+      // hold (older HTML editors sometimes prefill text inputs).
+      fresh.querySelectorAll("input").forEach(i => {
+        if (i.type === "hidden" || i.type === "text") i.value = "";
+      });
+      rows.appendChild(fresh);
+      bindRemove(fresh);
+      const text = fresh.querySelector("input[type='text']");
+      if (text) text.focus();
+    });
+  });
 })();
 

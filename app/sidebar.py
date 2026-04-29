@@ -25,7 +25,7 @@ import json
 _MAIN_CATALOG = [
     {"key": "dashboard",      "label": "Dashboard",            "endpoint": "main.index",          "active_kind": "exact"},
     {"key": "meetings",       "label": "Meetings",             "endpoint": "main.meetings",       "active_kind": "contains:meeting"},
-    {"key": "libraries",      "label": "Libraries",            "endpoint": "main.libraries",      "active_kind": "contains:librar|reading"},
+    {"key": "libraries",      "label": "Libraries",            "endpoint": "main.libraries",      "active_kind": "contains:librar|reading|!intergroup"},
     {"key": "media",          "label": "File Browser",         "endpoint": "main.media_list",     "active_kind": "contains:media"},
     {"key": "zoom_accounts",  "label": "Zoom Accounts",        "endpoint": "main.zoom_accounts",  "active_kind": "contains:zoom_account"},
     # The four module-gated items below carry their own ``required_role``
@@ -42,18 +42,13 @@ _ADMIN_CATALOG = [
     {"key": "access_requests", "label": "Access Requests",        "endpoint": "main.access_requests",  "active_kind": "contains:access_request"},
 ]
 
-# Items that live inside the "Intergroup" sidebar subsection when the
-# umbrella module is on. Each entry has the same shape as a Main item
-# but the visibility predicate is per-key — Email gates on the existing
-# ``intergroup_enabled`` page-level toggle, Minutes/Documents gate on
-# their library existing in the database.
+# Static (non-library) items that live inside the "Intergroup" sidebar
+# subsection when the umbrella module is on. Library entries are
+# discovered dynamically from ``Library.is_intergroup`` so admins can
+# add new Intergroup libraries without code changes.
 _INTERGROUP_CATALOG = [
-    {"key": "ig_email",     "label": "Email",     "endpoint": "main.intergroup",
+    {"key": "ig_email", "label": "Email", "endpoint": "main.intergroup",
      "active_kind": "exact"},
-    {"key": "ig_minutes",   "label": "Minutes",   "library_name": "Intergroup Minutes",
-     "active_kind": "library"},
-    {"key": "ig_documents", "label": "Documents", "library_name": "Intergroup Documents",
-     "active_kind": "library"},
 ]
 
 # Module-gated items whose section placement (Main vs Admin) follows
@@ -129,16 +124,31 @@ def _label_for(key, site, default):
 
 
 def _active_for(active_kind, current_endpoint):
+    """Resolve whether a sidebar item should render as active for the
+    given Flask endpoint. Supported active_kind values:
+
+      ``exact``          — sentinel; the item manages active state via
+                           other logic (currently used by intergroup,
+                           zoom_tech, ig_email, etc).
+      ``prefix:<x>``     — matches when endpoint starts with ``<x>``.
+      ``contains:a|b|!c`` — matches when endpoint contains ``a`` or
+                            ``b`` and does NOT contain ``c``. The
+                            negation form keeps the Libraries link from
+                            lighting up while we're inside an
+                            Intergroup library (whose endpoint contains
+                            "library" but should be a separate row)."""
     ep = current_endpoint or ""
     if active_kind == "exact":
-        return ep == active_kind  # never matches; used as a sentinel
+        return False
     if active_kind.startswith("prefix:"):
         return ep.startswith(active_kind[len("prefix:"):])
     if active_kind.startswith("contains:"):
-        for token in active_kind[len("contains:"):].split("|"):
-            if token and token in ep:
-                return True
-        return False
+        tokens = [t for t in active_kind[len("contains:"):].split("|") if t]
+        negative = [t[1:] for t in tokens if t.startswith("!") and len(t) > 1]
+        positive = [t for t in tokens if not t.startswith("!")]
+        if any(n in ep for n in negative):
+            return False
+        return any(p in ep for p in positive)
     return False
 
 
@@ -186,16 +196,21 @@ def _build_intergroup_items(site, user, current_endpoint, url_for):
         return []
     if not user_meets_role(user, site.intergroup_module_required_role):
         return []
-    # Pull the *current* library id from the active request so we can
-    # mark only the matching Minutes/Documents row as active. Without
-    # this both rows compared to the same endpoint and lit up together.
+    # Pull the *current* library identity from the active request so we
+    # can mark only the matching row as active. Intergroup libraries
+    # resolve via slug at /tspro/intergroup/<slug>; non-IG hits land at
+    # /tspro/libraries/<id> (and 301-redirect to the slug URL for IG).
     current_lid = None
+    current_slug = None
     try:
-        if (current_endpoint or "") == "main.library_detail":
+        ep = current_endpoint or ""
+        if ep == "main.library_detail":
             current_lid = (request.view_args or {}).get("lid")
+        elif ep == "main.intergroup_library_detail":
+            current_slug = (request.view_args or {}).get("slug")
     except RuntimeError:
-        # No active request context (test harness); leave as None.
         current_lid = None
+        current_slug = None
     items = []
     # Email Accounts — hard-gated to admins + intergroup_members. The
     # per-module role setting under Settings → Modules no longer controls
@@ -210,19 +225,21 @@ def _build_intergroup_items(site, user, current_endpoint, url_for):
             "active": (current_endpoint or "") == ep,
             "target": None,
         })
-    # Library shortcuts — resolved by name.
+    # Library shortcuts — every Library row flagged ``is_intergroup``
+    # surfaces here, in alphabetical order. Admins add new entries via
+    # the "+ Add Library" link below. Hrefs resolve to the canonical
+    # slug URL so the address bar shows the human-readable path.
     from .models import Library
-    for entry in _INTERGROUP_CATALOG:
-        if "library_name" not in entry:
-            continue
-        lib = Library.query.filter_by(name=entry["library_name"]).first()
-        if not lib:
-            continue
+    from .colors import slugify
+    libs = Library.query.filter(Library.is_intergroup == True)\
+        .order_by(Library.name).all()  # noqa: E712
+    for lib in libs:
+        slug = slugify(lib.name)
         items.append({
-            "key": entry["key"],
-            "label": entry["label"],
-            "href": url_for("main.library_detail", lid=lib.id),
-            "active": current_lid == lib.id,
+            "key": f"ig_lib_{lib.id}",
+            "label": lib.name,
+            "href": url_for("main.intergroup_library_detail", slug=slug),
+            "active": (current_slug == slug) or (current_lid == lib.id),
             "target": None,
         })
     # Apply manual reorder for the intergroup subsection if the admin
@@ -248,6 +265,20 @@ def _build_intergroup_items(site, user, current_endpoint, url_for):
                 if it["key"] not in seen:
                     ordered.append(it)
             items = ordered
+    # Pin the admin-only "+ Add Library" action to the bottom of the
+    # subsection regardless of sort mode — it's a creation entry point,
+    # not a content row, so it shouldn't shuffle with the libraries
+    # above it. Appending after any reorder logic keeps it sticky.
+    if user.is_admin() and items is not None:
+        ep = "main.intergroup_library_new"
+        items.append({
+            "key": "ig_add_library",
+            "label": "+ Add Library",
+            "href": url_for(ep),
+            "active": (current_endpoint or "") == ep,
+            "target": None,
+            "is_action": True,
+        })
     return items
 
 
@@ -401,16 +432,14 @@ def admin_reorder_catalog(site):
             continue
         admin_items.append({"key": it["key"], "label": it["label"]})
     if umbrella_on:
-        # Intergroup section's items are fixed (Email Accounts +
-        # Minutes / Documents library shortcuts). Surface them in the
-        # reorder UI as static rows so the admin sees what the section
-        # contains — we don't currently support reordering inside it.
+        # Intergroup section: Email Accounts (static) plus one row per
+        # Intergroup-flagged library. Surfaced here for visibility in
+        # the reorder UI; reordering inside the section is not yet
+        # supported.
         from .models import Library
         if site and site.intergroup_enabled:
             intergroup_items.append({"key": "ig_email", "label": "Email Accounts"})
-        for entry in _INTERGROUP_CATALOG:
-            if "library_name" not in entry:
-                continue
-            if Library.query.filter_by(name=entry["library_name"]).first():
-                intergroup_items.append({"key": entry["key"], "label": entry["label"]})
+        for lib in Library.query.filter(Library.is_intergroup == True)\
+                .order_by(Library.name).all():  # noqa: E712
+            intergroup_items.append({"key": f"ig_lib_{lib.id}", "label": lib.name})
     return {"main": main_items, "intergroup": intergroup_items, "admin": admin_items}

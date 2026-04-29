@@ -11,10 +11,10 @@ from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 from .models import (db, User, Meeting, MeetingFile, MeetingSchedule, MeetingLibrary, CustomIcon, CustomFont, CustomLayout, FrontendHeroButton,
                      Post, ZoomAccount, ZoomOtpEmail, Location, Library, Reading,
-                     MediaItem, NavLink, SiteSetting, IntergroupAccount,
-                     AccessRequest, FrontendNavItem, FrontendNavColumn,
-                     FrontendNavLink, FILE_CATEGORIES, DAYS_OF_WEEK,
-                     INTERGROUP_LIBRARY_NAMES)
+                     LibraryCategory, MediaItem, NavLink, SiteSetting,
+                     IntergroupAccount, AccessRequest, FrontendNavItem,
+                     FrontendNavColumn, FrontendNavLink, FILE_CATEGORIES,
+                     DAYS_OF_WEEK, INTERGROUP_LIBRARY_NAMES)
 
 INTERGROUP_DEFAULT_ACCOUNTS = [
     ('Chair', 'chair@dccma.com'),
@@ -164,8 +164,7 @@ def inject_globals():
         otp = None
     return {"CATEGORY_LABELS": CATEGORY_LABELS, "FILE_CATEGORIES": FILE_CATEGORIES,
             "DAYS_OF_WEEK": DAYS_OF_WEEK, "site": site, "nav_links": nav_links,
-            "pending_access_count": pending_access_count, "otp": otp,
-            "INTERGROUP_LIBRARY_NAMES": INTERGROUP_LIBRARY_NAMES}
+            "pending_access_count": pending_access_count, "otp": otp}
 
 
 DASHBOARD_WIDGET_KEYS = ("server-metrics", "meetings", "libraries", "files", "access-requests")
@@ -1922,9 +1921,17 @@ def intergroup_module_toggle():
     enabling = request.form.get("intergroup_module_enabled") == "1"
     s.intergroup_module_enabled = enabling
     if enabling:
-        for name in ("Intergroup Minutes", "Intergroup Documents"):
-            if not Library.query.filter_by(name=name).first():
-                db.session.add(Library(name=name))
+        # Seed the two default Intergroup libraries flagged so the
+        # permission gate (now keyed on ``is_intergroup``) and the
+        # sidebar discovery query both pick them up immediately.
+        for name in INTERGROUP_LIBRARY_NAMES:
+            existing = Library.query.filter_by(name=name).first()
+            if existing is None:
+                db.session.add(Library(name=name, is_intergroup=True))
+            elif not existing.is_intergroup:
+                # Pre-existing rows that pre-date the column should
+                # still resolve as Intergroup — backfill them here too.
+                existing.is_intergroup = True
     db.session.commit()
     flash("Intergroup module " + ("enabled" if s.intergroup_module_enabled else "disabled"), "success")
     return redirect(request.referrer or url_for("main.index"))
@@ -3963,9 +3970,9 @@ def libraries():
     # rather than the generic libraries list, so we exclude them here
     # to keep the list focused on regular meeting / fellowship content.
     # Direct deep-link access (/libraries/<id>) still works for editors.
-    items = Library.query.filter(
-        ~Library.name.in_(INTERGROUP_LIBRARY_NAMES)
-    ).all()
+    # Hide Intergroup-flagged libraries — they're surfaced in the
+    # dedicated Intergroup sidebar subsection instead.
+    items = Library.query.filter(Library.is_intergroup == False).all()  # noqa: E712
     if sort == "files":
         items.sort(key=lambda l: (l.readings.count(), l.name.lower()))
     else:
@@ -3984,6 +3991,10 @@ def libraries():
 @bp.route("/libraries/new", methods=["GET", "POST"])
 @editor_required
 def library_new():
+    """Regular library creation — never produces an Intergroup library.
+    Promotion into the Intergroup subsection happens through the
+    dedicated admin-only ``intergroup_library_new`` route below, or by
+    flipping the ``is_intergroup`` toggle in the library-edit modal."""
     if request.method == "POST":
         lib = Library(
             name=request.form["name"].strip(),
@@ -3997,10 +4008,57 @@ def library_new():
     return render_template("library_form.html", library=None)
 
 
+@bp.route("/intergroup/libraries/new", methods=["GET", "POST"])
+@admin_required
+def intergroup_library_new():
+    """Admin-only entry point for creating an Intergroup library. The
+    new row is force-flagged ``is_intergroup=True`` so it lands in the
+    restricted Intergroup sidebar subsection straight away. Surfaced
+    via the "+ Add Library" link under the Intergroup section."""
+    if request.method == "POST":
+        lib = Library(
+            name=request.form["name"].strip(),
+            description=request.form.get("description", "").strip(),
+            alert_message=request.form.get("alert_message", "").strip() or None,
+            is_intergroup=True,
+        )
+        db.session.add(lib)
+        db.session.commit()
+        flash("Intergroup library created", "success")
+        return redirect(url_for("main.library_detail", lid=lib.id))
+    return render_template("library_form.html", library=None, intergroup_create=True)
+
+
 @bp.route("/libraries/<int:lid>")
 @login_required
 def library_detail(lid):
     lib = db.session.get(Library, lid) or abort(404)
+    # Intergroup libraries have a canonical slug-based URL under
+    # /tspro/intergroup/<slug>. Redirect id-based hits there so the
+    # browser address bar shows the human-readable URL even when the
+    # request originated from an internal url_for(main.library_detail).
+    if lib.is_intergroup:
+        from .colors import slugify
+        return redirect(url_for("main.intergroup_library_detail",
+                                slug=slugify(lib.name)), code=301)
+    return render_template("library_detail.html", library=lib)
+
+
+@bp.route("/intergroup/<slug>")
+@login_required
+def intergroup_library_detail(slug):
+    """Slug-based detail URL for Intergroup libraries — the slug is
+    derived live from ``Library.name`` so renaming a library
+    automatically moves its canonical URL. Non-Intergroup libraries
+    keep the id-based URL; only ``is_intergroup=True`` rows resolve
+    here. Stale slugs after a rename 404 (no slug-history table for
+    libraries today)."""
+    from .colors import slugify
+    target = (slug or "").lower()
+    libs = Library.query.filter(Library.is_intergroup == True).all()  # noqa: E712
+    lib = next((l for l in libs if slugify(l.name) == target), None)
+    if lib is None:
+        abort(404)
     return render_template("library_detail.html", library=lib)
 
 
@@ -4012,11 +4070,11 @@ def library_edit(lid):
     if deny is not None:
         return deny
     if request.method == "POST":
-        # Don't let an intergroup_member rename one of the protected
-        # libraries out from under itself — renaming would change which
-        # libraries the role still controls. Admins are unrestricted.
+        # Renaming an Intergroup library is admin-only — non-admins
+        # could otherwise rename the row to escape the gate it sits
+        # behind. The is_intergroup flag itself is admin-only too.
         new_name = request.form["name"].strip()
-        if (lib.name in INTERGROUP_LIBRARY_NAMES
+        if (lib.is_intergroup
                 and new_name != lib.name
                 and not current_user.is_admin()):
             flash("Only admins can rename Intergroup libraries", "danger")
@@ -4024,10 +4082,67 @@ def library_edit(lid):
         lib.name = new_name
         lib.description = request.form.get("description", "").strip()
         lib.alert_message = request.form.get("alert_message", "").strip() or None
+        # Admin-only: respect the checkbox when the form rendered it
+        # (signalled by ``is_intergroup_present``). The hidden marker
+        # lets us distinguish "admin unchecked the box" from "non-admin
+        # form didn't render the field at all".
+        if current_user.is_admin() and request.form.get("is_intergroup_present") == "1":
+            lib.is_intergroup = request.form.get("is_intergroup") == "1"
+        # Categories management is admin-only and limited to Intergroup
+        # libraries — the form only renders the picker under both
+        # conditions, but we re-check here so a hand-crafted POST
+        # can't sneak categories onto a non-Intergroup library.
+        if (current_user.is_admin() and lib.is_intergroup
+                and request.form.get("category_picker") == "1"):
+            _apply_library_categories(lib, request.form)
+            lib.categories_required = (
+                request.form.get("categories_required") == "1")
         db.session.commit()
         flash("Library updated", "success")
         return redirect(url_for("main.library_detail", lid=lib.id))
     return render_template("library_form.html", library=lib)
+
+
+def _apply_library_categories(lib, form):
+    """Replace ``lib``'s category list from index-aligned arrays in
+    ``form``:
+
+      ``category_id[]``   — existing row id, or empty for a new row
+      ``category_name[]`` — display name; empty rows are dropped
+
+    Order of submission becomes the new ``position``. Removed
+    categories (existing ids absent from the submitted list) are
+    deleted; the cascade unbinds their ``reading_categories`` rows so
+    affected readings keep existing but lose that tag. Caller commits."""
+    raw_ids = form.getlist("category_id")
+    raw_names = form.getlist("category_name")
+    existing = {c.id: c for c in lib.categories}
+    submitted_ids = set()
+    seen_names = set()
+    for pos, (rid, raw_name) in enumerate(zip(raw_ids, raw_names)):
+        name = (raw_name or "").strip()[:120]
+        if not name:
+            continue
+        # De-duplicate within the submission itself; case-insensitive
+        # compare so "General" and "general" don't both land.
+        key = name.lower()
+        if key in seen_names:
+            continue
+        seen_names.add(key)
+        try:
+            cat_id = int(rid) if rid else None
+        except ValueError:
+            cat_id = None
+        cat = existing.get(cat_id) if cat_id is not None else None
+        if cat is None:
+            db.session.add(LibraryCategory(library_id=lib.id, name=name, position=pos))
+        else:
+            cat.name = name
+            cat.position = pos
+            submitted_ids.add(cat_id)
+    for cat_id, cat in existing.items():
+        if cat_id not in submitted_ids:
+            db.session.delete(cat)
 
 
 @bp.route("/libraries/<int:lid>/delete", methods=["POST"])
@@ -4038,6 +4153,20 @@ def library_delete(lid):
     db.session.commit()
     flash("Library deleted", "success")
     return redirect(url_for("main.libraries"))
+
+
+def _resolve_reading_categories(library, form):
+    """Read ``category_ids`` from the form and return the matching
+    ``LibraryCategory`` rows scoped to ``library``. Silently drops any
+    id that doesn't belong to this library so a tampered POST can't
+    cross-link a reading to another library's tags."""
+    raw_ids = form.getlist("category_ids", type=int)
+    if not raw_ids:
+        return []
+    return LibraryCategory.query.filter(
+        LibraryCategory.library_id == library.id,
+        LibraryCategory.id.in_(raw_ids),
+    ).all()
 
 
 def _apply_reading_form(r, form, files):
@@ -4082,9 +4211,23 @@ def reading_new(lid):
     if deny is not None:
         return deny
     if request.method == "POST":
+        cats = _resolve_reading_categories(lib, request.form)
+        picker_present = request.form.get("category_picker") == "1"
+        # Intergroup libraries with the categories-required toggle on
+        # must have at least one category per upload so the filter UI on
+        # the detail page always has something to group on. When the
+        # toggle is off, categories are still selectable but optional.
+        if lib.is_intergroup and lib.categories_required and not cats:
+            if not lib.categories:
+                flash("Add at least one category to this Intergroup library before uploading.", "danger")
+            else:
+                flash("Pick at least one category for this upload.", "danger")
+            return redirect(url_for("main.library_detail", lid=lib.id))
         r = Reading(library_id=lib.id, title=request.form["title"].strip(),
                     created_by=current_user.id)
         _apply_reading_form(r, request.form, request.files)
+        if picker_present:
+            r.categories = cats
         db.session.add(r)
         db.session.commit()
         flash("Item added to library", "success")
@@ -4214,7 +4357,20 @@ def reading_edit(rid):
     if deny is not None:
         return deny
     if request.method == "POST":
+        cats = _resolve_reading_categories(r.library, request.form)
+        # Forms that render the category picker emit a hidden
+        # ``category_picker=1`` marker so we can tell "user submitted
+        # zero selected" (an error on Intergroup libraries) apart from
+        # "form didn't include the picker at all" (legacy / partial
+        # save paths — leave existing categories alone).
+        picker_present = request.form.get("category_picker") == "1"
+        if (r.library.is_intergroup and r.library.categories_required
+                and picker_present and not cats):
+            flash("Pick at least one category for this upload.", "danger")
+            return redirect(url_for("main.library_detail", lid=r.library_id))
         _apply_reading_form(r, request.form, request.files)
+        if picker_present:
+            r.categories = cats
         db.session.commit()
         flash("Item updated", "success")
         return redirect(url_for("main.library_detail", lid=r.library_id))

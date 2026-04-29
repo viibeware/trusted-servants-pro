@@ -15,7 +15,7 @@
     <a href="{{ it.href }}"
        {% if it.target %}target="{{ it.target }}" rel="noopener"{% endif %}
        {% if it.is_external %}data-nav-custom{% endif %}
-       class="{% if it.active %}active{% endif %}">
+       class="{% if it.active %}active{% endif %}{% if it.is_action %} sidebar-action{% endif %}">
       {{ it.label }}{% if it.is_external %} ↗{% endif %}
       {%- if it.key == 'access_requests' and pending_access_count %}<span class="nav-badge">{{ pending_access_count }}</span>{% endif -%}
       {%- if it.key == 'web_frontend' and site and not site.frontend_enabled %} <span class="nav-badge nav-badge-muted" title="Public access is off — only signed-in admins and frontend editors can preview">Off</span>{% endif -%}

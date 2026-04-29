@@ -182,7 +182,20 @@ p { margin: .25rem 0; }
   display: flex; flex-direction: column;
   padding: 18px 14px;
   position: sticky; top: 0; height: 100vh;
+  /* Three-zone layout: brand stays pinned at top, the nav middle
+     scrolls when its content overflows, and the footer is pinned at
+     the bottom. flex-shrink: 0 on brand + footer keeps them out of
+     the squeeze; min-height: 0 on the scrolling nav lets the flex
+     child shrink below its intrinsic content height (without it
+     overflow-y has nothing to clip against). */
 }
+.sidebar > .brand { flex: 0 0 auto; }
+/* Hide the scrollbar visually but keep the scroll functionality. The
+   sidebar's middle still scrolls via mouse wheel / trackpad / keyboard;
+   we just suppress the gutter so the nav reads as a clean column. */
+.sidebar > nav { flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  scrollbar-width: none; -ms-overflow-style: none; }
+.sidebar > nav::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .brand { display: flex; gap: 12px; align-items: flex-start; padding: 4px 6px 18px; }
 .brand-mark {
   width: 36px; height: 36px; border-radius: 10px;
@@ -216,6 +229,11 @@ p { margin: .25rem 0; }
 .sidebar nav a.sidebar-child { padding-left: 28px; font-size: 0.9125rem; color: var(--muted); }
 .sidebar nav a.sidebar-child:hover { color: var(--text); }
 .sidebar nav a.sidebar-child.active { color: var(--access); }
+/* Action rows (e.g. "+ Add Library" under the Intergroup subsection)
+   sit at the bottom of their section as creation entry points. They're
+   visually de-emphasised so they don't compete with content rows above. */
+.sidebar nav a.sidebar-action { color: var(--muted); font-size: 0.875rem; font-weight: 500; }
+.sidebar nav a.sidebar-action:hover { color: var(--text); }
 
 /* Bulletproof: [hidden] should always hide, even on flex/grid children. */
 [data-header-panel][hidden] { display: none !important; }
@@ -1346,7 +1364,7 @@ body.has-fe-save-bar .fe-admin-main .form-actions { display: none; }
   text-transform: uppercase; letter-spacing: 0.06em;
   color: var(--muted); padding: 0 8px 4px;
 }
-.sidebar-footer { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--border);
+.sidebar-footer { flex: 0 0 auto; padding-top: 14px; border-top: 1px solid var(--border);
   /* The footer lives inside the fixed-width sidebar; ensure long content
      (extra-long usernames in particular) can't push the footer past the
      sidebar edge or escape into the main content column. */
@@ -1748,7 +1766,66 @@ label.content-mode-switch {
 
 .tags { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
 .tag { background: var(--brand-soft); color: var(--brand); padding: 3px 10px; border-radius: 999px; font-size: 0.7188rem; font-weight: 600; }
-.chip { background: var(--panel-2); border: 1px solid var(--border); padding: 3px 10px; border-radius: 999px; font-size: 0.75rem; color: var(--text); font-weight: 400; }
+.chip { background: var(--panel-2); border: 1px solid var(--border); padding: 3px 10px; border-radius: 999px; font-size: 0.75rem; color: var(--text); font-weight: 400; cursor: pointer; }
+button.chip { font-family: inherit; }
+.chip:hover { border-color: var(--brand); color: var(--brand); }
+.chip-active, .chip-active:hover { background: var(--brand); border-color: var(--brand); color: var(--bg); }
+/* Intergroup library detail toolbar: search + sort + category filter
+   pills sit above the file list. Wraps on narrow screens. */
+.ig-lib-toolbar {
+  display: flex; flex-wrap: wrap; gap: 12px 16px;
+  align-items: center; padding: 6px 12px 14px;
+}
+.ig-lib-search { flex: 1 1 240px; min-width: 220px; }
+.ig-lib-search input[type="search"] {
+  width: 100%; padding: 8px 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
+}
+.ig-lib-sort { display: flex; align-items: center; }
+.ig-lib-sort label { display: inline-flex; gap: 8px; align-items: center; }
+.ig-lib-sort select {
+  padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--panel-2); color: var(--text);
+}
+.ig-lib-filter { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 100%; }
+.ig-lib-filter .chip { font-weight: 500; }
+.ig-lib-empty { padding: 12px 14px; }
+.ig-cat-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.ig-cat-chip {
+  background: var(--brand-soft); color: var(--brand);
+  padding: 1px 8px; border-radius: 999px;
+  font-size: 0.6875rem; font-weight: 600;
+}
+/* Category picker on the upload / edit modals: each checkbox sits on
+   its own line, left-aligned. Specificity bumps (.ig-cat-picker
+   .ig-cat-check) deliberately beat .form label's column direction and
+   .form input's text-input restyle, both of which would otherwise
+   stack each checkbox over its label and inflate the box itself. */
+.ig-cat-picker { display: flex; flex-direction: column; gap: 4px; }
+.ig-cat-picker .ig-cat-check {
+  flex-direction: row; align-items: center; gap: 10px;
+  padding: 6px 10px; margin: 0;
+  font-size: 0.9375rem; font-weight: 500;
+  background: transparent; border: 1px solid transparent;
+  border-radius: 8px;
+  align-self: flex-start;
+}
+.ig-cat-picker .ig-cat-check:hover { background: var(--panel-2); }
+.ig-cat-picker .ig-cat-check input[type="checkbox"] {
+  width: 16px; height: 16px;
+  padding: 0; margin: 0; flex: 0 0 auto;
+  accent-color: var(--brand);
+  background: transparent; border: 0;
+}
+.ig-cat-picker .ig-cat-check span { line-height: 1.2; }
+/* Toggle switch in the categories editor: small top/bottom margin so
+   it has breathing room above the editable rows. */
+.ig-cat-required-toggle { margin: 4px 0 12px; }
+/* Category editor inside the library-edit modal: each row is a name
+   input + remove button laid side-by-side. */
+.ig-cat-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.ig-cat-row { display: flex; gap: 6px; align-items: center; }
+.ig-cat-row input[type="text"] { flex: 1; }
 .meta-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
 
 .btn {
@@ -3070,14 +3147,8 @@ h5.block-heading { font-size: 0.875rem; font-weight: 600; margin: 12px 0 4px; }
     transform: translateX(-100%); transition: transform .2s ease; z-index: 30;
     overflow: hidden;
   }
-  /* Pin brand and footer; let the nav scroll in between so the footer
-     (user chip, theme/help/sign-out, version) stays on screen. */
-  .sidebar .brand { flex: 0 0 auto; }
-  .sidebar nav { flex: 1 1 auto; overflow-y: auto; min-height: 0;
-    scrollbar-width: thin; }
-  .sidebar nav::-webkit-scrollbar { width: 6px; }
-  .sidebar nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-  .sidebar-footer { flex: 0 0 auto; }
+  /* Layout/scroll behavior is set in the base .sidebar rules above and
+     applies at every viewport width; nothing extra needed here. */
   .sidebar.open { transform: translateX(0); }
   .menu-btn { display: grid; place-items: center; }
   .grid-2 { grid-template-columns: 1fr; }

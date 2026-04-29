@@ -8,10 +8,11 @@ db = SQLAlchemy()
 
 ROLES = ("admin", "editor", "frontend_editor", "intergroup_member", "viewer")
 
-# Library names whose edit permissions are restricted to admins and the
-# `intergroup_member` role — regular editors and frontend_editors are
-# specifically excluded. Used by `User.can_edit_library` and the route
-# handlers that gate library/reading writes.
+# Seed names for the two default Intergroup libraries that are auto-
+# created when the umbrella module is first enabled. Membership in this
+# tuple is no longer the gate — that's now ``Library.is_intergroup`` —
+# but the names are still used by the migration backfill (to flag
+# pre-existing rows on upgrade) and by the module-toggle seeder.
 INTERGROUP_LIBRARY_NAMES = ("Intergroup Documents", "Intergroup Minutes")
 FILE_CATEGORIES = ("documents", "scripts", "external_links", "videos", "images")
 DAYS_OF_WEEK = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
@@ -31,6 +32,17 @@ meeting_reading_public = db.Table(
     "meeting_reading_public",
     db.Column("meeting_id", db.Integer, db.ForeignKey("meeting.id", ondelete="CASCADE"), primary_key=True),
     db.Column("reading_id", db.Integer, db.ForeignKey("reading.id", ondelete="CASCADE"), primary_key=True),
+)
+
+# Many-to-many link between a Reading and the LibraryCategory rows it's
+# tagged with. Currently only used for Intergroup libraries — admins
+# define an arbitrary list of categories per library and uploads must
+# pick at least one — but the table is general so non-Intergroup
+# libraries can opt in later without a schema change.
+reading_categories = db.Table(
+    "reading_categories",
+    db.Column("reading_id", db.Integer, db.ForeignKey("reading.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("category_id", db.Integer, db.ForeignKey("library_category.id", ondelete="CASCADE"), primary_key=True),
 )
 
 
@@ -87,11 +99,11 @@ class User(UserMixin, db.Model):
         return self.role in ("admin", "intergroup_member")
 
     def can_edit_library(self, library):
-        """Effective edit permission for a single ``Library``. Restricted
-        Intergroup libraries are gated to admins + intergroup_members
+        """Effective edit permission for a single ``Library``. Libraries
+        flagged ``is_intergroup`` are gated to admins + intergroup_members
         only; every other library uses the broad editor gate (which
         includes intergroup_members, since they inherit Editor)."""
-        if library is not None and library.name in INTERGROUP_LIBRARY_NAMES:
+        if library is not None and getattr(library, "is_intergroup", False):
             return self.can_edit_intergroup_libraries()
         return self.can_edit()
 
@@ -565,6 +577,17 @@ class Library(db.Model):
     name = db.Column(db.String(200), nullable=False, unique=True)
     description = db.Column(db.Text)
     alert_message = db.Column(db.Text)
+    # Marks the library as Intergroup-restricted: edit access is limited
+    # to admins + the ``intergroup_member`` role, the row is hidden from
+    # the generic /libraries list, and it appears in the Intergroup
+    # sidebar subsection. Toggling this flag is admin-only.
+    is_intergroup = db.Column(db.Boolean, nullable=False, default=False)
+    # When True, uploads to this library must pick at least one
+    # ``LibraryCategory``; when False, categories are still selectable
+    # but optional. Surfaced on the library-edit modal as a toggle. Only
+    # consulted on Intergroup libraries today, but the column is kept
+    # general so non-Intergroup libraries can opt in later.
+    categories_required = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     readings = db.relationship("Reading", backref="library", cascade="all, delete-orphan",
@@ -573,6 +596,31 @@ class Library(db.Model):
                                      cascade="all, delete-orphan")
     meetings = association_proxy("meeting_assocs", "meeting",
                                  creator=lambda m: MeetingLibrary(meeting=m))
+    categories = db.relationship("LibraryCategory", back_populates="library",
+                                 cascade="all, delete-orphan",
+                                 order_by="LibraryCategory.position, LibraryCategory.id")
+
+
+class LibraryCategory(db.Model):
+    """Per-library tag definition. Admins manage the list on Intergroup
+    libraries via the library-edit modal; uploads in those libraries
+    must pick at least one category. Categories are scoped to a single
+    library (no cross-library reuse) so renames don't ripple."""
+    __tablename__ = "library_category"
+    id = db.Column(db.Integer, primary_key=True)
+    library_id = db.Column(db.Integer, db.ForeignKey("library.id", ondelete="CASCADE"),
+                           nullable=False, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    position = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    library = db.relationship("Library", back_populates="categories")
+    readings = db.relationship("Reading", secondary=reading_categories,
+                               back_populates="categories")
+
+    __table_args__ = (
+        db.UniqueConstraint("library_id", "name", name="uq_library_category_name"),
+    )
 
 
 class AccessRequest(db.Model):
@@ -629,6 +677,9 @@ class Reading(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     creator = db.relationship("User", foreign_keys=[created_by])
+    categories = db.relationship("LibraryCategory", secondary=reading_categories,
+                                 back_populates="readings",
+                                 order_by="LibraryCategory.position, LibraryCategory.id")
 
     @property
     def url_slug(self):

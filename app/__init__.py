@@ -452,8 +452,21 @@ def _migrate_sqlite(app):
                          ("archived_at", "DATETIME"),
                          ("show_otp", "BOOLEAN NOT NULL DEFAULT 1")):
             add("meeting", col, ddl)
-        for col, ddl in (("alert_message", "TEXT"),):
+        for col, ddl in (("alert_message", "TEXT"),
+                         ("is_intergroup", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("categories_required", "BOOLEAN NOT NULL DEFAULT 1")):
             add("library", col, ddl)
+        # On the boot that first added is_intergroup, flag the two
+        # pre-existing default Intergroup libraries so the permission
+        # gate (now keyed on the column) keeps working for upgraded
+        # installs that already had those rows.
+        if ("library", "is_intergroup") in newly_added:
+            from .models import INTERGROUP_LIBRARY_NAMES
+            placeholders = ",".join(f":n{i}" for i in range(len(INTERGROUP_LIBRARY_NAMES)))
+            params = {f"n{i}": n for i, n in enumerate(INTERGROUP_LIBRARY_NAMES)}
+            conn.execute(text(
+                f"UPDATE library SET is_intergroup = 1 WHERE name IN ({placeholders})"
+            ), params)
         for col, ddl in (("mode", "VARCHAR(16) NOT NULL DEFAULT 'all'"),):
             add("meeting_libraries", col, ddl)
         for col, ddl in (("position", "INTEGER NOT NULL DEFAULT 0"),

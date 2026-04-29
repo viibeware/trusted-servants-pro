@@ -1,8 +1,16 @@
 {% extends "base.html" %}
-{% block heading %}{{ "Edit Library" if library else "New Library" }}{% endblock %}
+{% block heading %}
+  {%- if library -%}Edit Library
+  {%- elif intergroup_create -%}New Intergroup Library
+  {%- else -%}New Library
+  {%- endif -%}
+{% endblock %}
 {% block content %}
 <form method="post" class="form card">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if intergroup_create %}
+  <p class="muted small">Creates a library flagged as Intergroup: hidden from the main Libraries list, restricted to admins and the Intergroup Member role, and surfaced in the Intergroup sidebar subsection.</p>
+  {% endif %}
   <label>Name<input name="name" required value="{{ library.name if library else '' }}"></label>
   <label>Description<textarea name="description" rows="4">{{ library.description if library else '' }}</textarea></label>
   <div class="form-actions">
