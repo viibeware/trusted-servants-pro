@@ -118,6 +118,18 @@ class User(UserMixin, db.Model):
         role that has editor tools also passes the broad editor gate."""
         return self.can_edit()
 
+    def can_bulk_edit_categories(self, reading):
+        """Per-reading gate for the multi-select bulk-edit-categories
+        action on the library detail page. Mirrors
+        ``can_delete_reading`` exactly: if the user is allowed to
+        destroy a reading, they're allowed to mass-tag it. This
+        intentionally pulls frontend_editors out of the bulk surface
+        too — they can edit individual readings but per the
+        role-permission spec they have no authority over library-file
+        deletion, and we want a single 'destructive enough' authority
+        to gate both bulk operations."""
+        return self.can_delete_reading(reading)
+
     def can_delete_reading(self, reading):
         """Per-reading deletion gate.
 

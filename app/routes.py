@@ -4088,11 +4088,11 @@ def library_edit(lid):
         # form didn't render the field at all".
         if current_user.is_admin() and request.form.get("is_intergroup_present") == "1":
             lib.is_intergroup = request.form.get("is_intergroup") == "1"
-        # Categories management is admin-only and limited to Intergroup
-        # libraries — the form only renders the picker under both
-        # conditions, but we re-check here so a hand-crafted POST
-        # can't sneak categories onto a non-Intergroup library.
-        if (current_user.is_admin() and lib.is_intergroup
+        # Categories management is admin-only on every library — the
+        # form renders the editor for admins, the re-check here keeps
+        # a tampered POST from sneaking categories onto a library if
+        # the role check happens to be bypassable client-side.
+        if (current_user.is_admin()
                 and request.form.get("category_picker") == "1"):
             _apply_library_categories(lib, request.form)
             lib.categories_required = (
@@ -4375,6 +4375,141 @@ def reading_edit(rid):
         flash("Item updated", "success")
         return redirect(url_for("main.library_detail", lid=r.library_id))
     return render_template("reading_form.html", library=r.library, reading=r)
+
+
+def _library_browse_url(lib):
+    """Canonical detail URL for a library — slug-based for Intergroup
+    rows so the redirect lands at the human-readable URL, id-based for
+    everything else. Used by routes that flash + redirect after a
+    write operation."""
+    if lib.is_intergroup:
+        from .colors import slugify
+        return url_for("main.intergroup_library_detail", slug=slugify(lib.name))
+    return url_for("main.library_detail", lid=lib.id)
+
+
+@bp.route("/libraries/<int:lid>/readings/bulk-categories", methods=["POST"])
+@login_required
+def library_readings_bulk_categories(lid):
+    """Apply a category change to a multi-select set of readings.
+
+    Form fields:
+      ``reading_ids``  — repeated; ids of selected readings
+      ``category_ids`` — repeated; categories to add/remove/replace with
+      ``action``       — ``add`` | ``remove`` | ``replace``
+
+    Per-row authorization mirrors ``User.can_bulk_edit_categories``:
+    rows the user couldn't delete are silently skipped, with a flash
+    summary reporting both the applied + skipped counts so the user
+    knows when their edit was scoped down. Categories from another
+    library (a tampered POST) are silently dropped at the query layer
+    via the ``library_id`` filter."""
+    lib = db.session.get(Library, lid) or abort(404)
+    deny = _require_can_edit_library(lib)
+    if deny is not None:
+        return deny
+    action = request.form.get("action") or "add"
+    if action not in ("add", "remove", "replace"):
+        action = "add"
+    rids = set(request.form.getlist("reading_ids", type=int))
+    cat_ids = set(request.form.getlist("category_ids", type=int))
+    if not rids:
+        flash("Pick at least one file to edit.", "danger")
+        return redirect(_library_browse_url(lib))
+    cats = []
+    if cat_ids:
+        cats = LibraryCategory.query.filter(
+            LibraryCategory.library_id == lib.id,
+            LibraryCategory.id.in_(cat_ids),
+        ).all()
+    # Block "Replace with empty" on libraries that require categories —
+    # otherwise this single click would silently strip every selected
+    # row of its tags, violating the upload-time invariant.
+    if (action == "replace" and not cats and lib.categories_required
+            and lib.is_intergroup):
+        flash("This library requires at least one category — pick one before replacing.", "danger")
+        return redirect(_library_browse_url(lib))
+    readings = Reading.query.filter(
+        Reading.library_id == lib.id,
+        Reading.id.in_(rids),
+    ).all()
+    applied = 0
+    skipped = 0
+    for r in readings:
+        if not current_user.can_bulk_edit_categories(r):
+            skipped += 1
+            continue
+        if action == "add":
+            existing = {c.id for c in r.categories}
+            for c in cats:
+                if c.id not in existing:
+                    r.categories.append(c)
+        elif action == "remove":
+            r.categories = [c for c in r.categories if c.id not in cat_ids]
+        else:  # replace
+            r.categories = list(cats)
+        applied += 1
+    db.session.commit()
+    if applied:
+        word = "file" if applied == 1 else "files"
+        msg = f"Categories updated on {applied} {word}"
+        if skipped:
+            msg += f" ({skipped} skipped — not your uploads)"
+        flash(msg, "success")
+    elif skipped:
+        flash(f"None of the {skipped} selected files are yours to edit.", "warning")
+    else:
+        flash("No matching files found.", "warning")
+    return redirect(_library_browse_url(lib))
+
+
+@bp.route("/libraries/<int:lid>/readings/bulk-delete", methods=["POST"])
+@login_required
+def library_readings_bulk_delete(lid):
+    """Delete a multi-select set of readings. Per-row authorization
+    mirrors ``User.can_delete_reading`` (Editors can only delete rows
+    whose creator was an editor-tier user; admin/intergroup_member
+    free-and-clear within a library they can edit; frontend_editor
+    and viewer can't delete at all). Stored files + thumbnails are
+    cleaned up via ``_delete_upload`` before the DB row is removed.
+    Skipped rows are silently filtered with a flash summary so the
+    user sees when authorization scoped their action down."""
+    lib = db.session.get(Library, lid) or abort(404)
+    deny = _require_can_edit_library(lib)
+    if deny is not None:
+        return deny
+    rids = set(request.form.getlist("reading_ids", type=int))
+    if not rids:
+        flash("Pick at least one file to delete.", "danger")
+        return redirect(_library_browse_url(lib))
+    readings = Reading.query.filter(
+        Reading.library_id == lib.id,
+        Reading.id.in_(rids),
+    ).all()
+    deleted = 0
+    skipped = 0
+    for r in readings:
+        if not current_user.can_delete_reading(r):
+            skipped += 1
+            continue
+        if r.stored_filename:
+            _delete_upload(r.stored_filename)
+        if r.thumbnail_filename:
+            _delete_upload(r.thumbnail_filename)
+        db.session.delete(r)
+        deleted += 1
+    db.session.commit()
+    if deleted:
+        word = "file" if deleted == 1 else "files"
+        msg = f"Deleted {deleted} {word}"
+        if skipped:
+            msg += f" ({skipped} skipped — not your uploads)"
+        flash(msg, "success")
+    elif skipped:
+        flash(f"None of the {skipped} selected files are yours to delete.", "warning")
+    else:
+        flash("No matching files found.", "warning")
+    return redirect(_library_browse_url(lib))
 
 
 @bp.route("/libraries/<int:lid>/readings/reorder", methods=["POST"])

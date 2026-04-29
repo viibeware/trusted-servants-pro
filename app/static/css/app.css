@@ -1821,6 +1821,38 @@ button.chip { font-family: inherit; }
 /* Toggle switch in the categories editor: small top/bottom margin so
    it has breathing room above the editable rows. */
 .ig-cat-required-toggle { margin: 4px 0 12px; }
+
+/* Multi-select bulk-action bar above the file list. Sits inline with
+   the section so it visually anchors to the rows below; the action
+   buttons cluster on the right. Left padding (6px) matches the
+   checkbox position on each row beneath it (li padding-left 2px +
+   label padding-left 4px = 6px) so the bar's "Select all" checkbox
+   sits in the same column as the per-row checkboxes. */
+.lib-bulk-bar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 8px 14px 8px 6px; border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.lib-bulk-bar-actions { margin-left: auto; display: inline-flex; gap: 8px; }
+/* Hide the action buttons entirely until at least one row is checked
+   — they're enabled-disabled by the JS based on the selection count,
+   so disabled === "nothing selected yet" === "don't show". */
+.lib-bulk-bar-actions > [data-bulk-action][disabled],
+.lib-bulk-bar-actions > [data-bulk-delete][disabled] { display: none; }
+.lib-bulk-select-all { display: inline-flex; align-items: center; gap: 8px;
+  font-size: 0.875rem; font-weight: 500; cursor: pointer; }
+.lib-bulk-select-all input[type="checkbox"] {
+  width: 16px; height: 16px; accent-color: var(--brand); margin: 0;
+}
+/* Per-row checkbox slot. Sits to the left of the drag handle / file
+   icon so the row reads "select | drag | type | name | actions". */
+.file-list .lib-row-select {
+  display: inline-flex; align-items: center; padding: 0 4px;
+  cursor: pointer;
+}
+.file-list .lib-row-select input[type="checkbox"] {
+  width: 16px; height: 16px; accent-color: var(--brand); margin: 0;
+}
 /* Category editor inside the library-edit modal: each row is a name
    input + remove button laid side-by-side. */
 .ig-cat-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }

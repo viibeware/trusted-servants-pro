@@ -2970,6 +2970,117 @@
   });
 })();
 
+// Library file multi-select bar: per-row checkboxes + select-all +
+// count + bulk-edit-categories modal trigger. Only renders when the
+// user has edit authority and at least one row is bulk-editable.
+// Per-row authorization (which checkboxes get rendered) is decided
+// server-side in the Jinja template so we don't have to mirror the
+// ``can_bulk_edit_categories`` rule here.
+(function () {
+  const bar = document.querySelector("[data-bulk-bar]");
+  if (!bar) return;
+  const list = document.querySelector("[data-ig-list]") ||
+               document.querySelector(".file-list");
+  if (!list) return;
+  const selectAll = bar.querySelector("[data-bulk-select-all]");
+  const countEl = bar.querySelector("[data-bulk-count]");
+  const actionBtn = bar.querySelector("[data-bulk-action]");
+  const deleteBtn = bar.querySelector("[data-bulk-delete]");
+  const modal = document.querySelector("[data-bulk-modal]");
+  const modalCount = modal && modal.querySelector("[data-bulk-modal-count]");
+  const modalIdSink = modal && modal.querySelector("[data-bulk-modal-ids]");
+
+  // Hide the bar entirely if no row carries a checkbox — happens for
+  // editors viewing a library where every reading was admin-uploaded.
+  const checkboxes = () => Array.from(
+    list.querySelectorAll("input[data-bulk-select]"));
+
+  if (checkboxes().length === 0) {
+    bar.hidden = true;
+    return;
+  }
+
+  function selected() {
+    return checkboxes().filter(cb => cb.checked && !cb.disabled);
+  }
+
+  function refresh() {
+    const sel = selected();
+    const all = checkboxes();
+    if (countEl) {
+      countEl.textContent = sel.length === 1
+        ? "1 selected"
+        : sel.length + " selected";
+    }
+    if (actionBtn) actionBtn.disabled = sel.length === 0;
+    if (deleteBtn) deleteBtn.disabled = sel.length === 0;
+    if (selectAll) {
+      selectAll.checked = sel.length > 0 && sel.length === all.length;
+      selectAll.indeterminate = sel.length > 0 && sel.length < all.length;
+    }
+  }
+
+  list.addEventListener("change", e => {
+    if (e.target.matches("input[data-bulk-select]")) refresh();
+  });
+
+  if (selectAll) {
+    selectAll.addEventListener("change", () => {
+      checkboxes().forEach(cb => { cb.checked = selectAll.checked; });
+      refresh();
+    });
+  }
+
+  // When the user opens the bulk-edit modal, snapshot the selected
+  // ids into hidden inputs inside the form — saves us from having to
+  // collect them at submit time. The modal's open/close lifecycle
+  // is owned by the standard data-open-modal handler.
+  if (actionBtn && modal && modalIdSink) {
+    actionBtn.addEventListener("click", () => {
+      const ids = selected().map(cb => cb.value);
+      modalIdSink.innerHTML = ids
+        .map(id => '<input type="hidden" name="reading_ids" value="' +
+             id.replace(/"/g, "&quot;") + '">')
+        .join("");
+      if (modalCount) modalCount.textContent = String(ids.length);
+    });
+  }
+
+  // Bulk delete: confirm with a count, then submit a synthetic POST
+  // form. Per-row authorization is re-enforced server-side, so the
+  // user can't sneak unauthorized ids through even if they tampered
+  // with the DOM. Uses the page's CSRF meta token so the auto-attach
+  // header logic still finds it.
+  if (deleteBtn) {
+    deleteBtn.addEventListener("click", () => {
+      const ids = selected().map(cb => cb.value);
+      if (!ids.length) return;
+      const word = ids.length === 1 ? "file" : "files";
+      if (!confirm(
+        "Delete " + ids.length + " " + word + "? This can't be undone."
+      )) return;
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = deleteBtn.dataset.bulkDeleteUrl;
+      const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+      if (csrfMeta) {
+        const t = document.createElement("input");
+        t.type = "hidden"; t.name = "csrf_token"; t.value = csrfMeta.content;
+        form.appendChild(t);
+      }
+      ids.forEach(id => {
+        const i = document.createElement("input");
+        i.type = "hidden"; i.name = "reading_ids"; i.value = id;
+        form.appendChild(i);
+      });
+      document.body.appendChild(form);
+      form.submit();
+    });
+  }
+
+  refresh();
+})();
+
 // Intergroup category editor inside the library-edit modal: row
 // add/remove. New rows are cloned from a hidden template element so
 // the markup stays in the Jinja template.

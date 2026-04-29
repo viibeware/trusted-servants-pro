@@ -74,6 +74,34 @@
   </div>
   <p class="ig-lib-empty muted small" data-ig-empty hidden>No files match your search or filter.</p>
   {% endif %}
+  {% if can_edit and rs %}
+  {# Multi-select bulk-action bar — shown to anyone with library edit
+     authority. The action button only enables once at least one
+     bulk-editable row is checked; per-row checkboxes only render on
+     rows where ``can_bulk_edit_categories`` returns True (which
+     mirrors the per-reading deletion gate), so editors with limited
+     deletion authority literally can't multi-select rows that aren't
+     theirs. The "Edit categories" modal trigger is gated on the
+     library actually having categories defined. #}
+  <div class="lib-bulk-bar" data-bulk-bar>
+    <label class="lib-bulk-select-all">
+      <input type="checkbox" data-bulk-select-all aria-label="Select all">
+      <span>Select all</span>
+    </label>
+    <span class="muted smaller" data-bulk-count>0 selected</span>
+    <div class="lib-bulk-bar-actions">
+    {% if library.categories %}
+    <button type="button" class="btn btn-sm btn-primary"
+            data-open-modal="library-bulk-categories-modal"
+            data-bulk-action disabled>Edit categories</button>
+    {% endif %}
+    <button type="button" class="btn btn-sm btn-danger"
+            data-bulk-delete
+            data-bulk-delete-url="{{ url_for('main.library_readings_bulk_delete', lid=library.id) }}"
+            disabled>Delete</button>
+    </div>
+  </div>
+  {% endif %}
   {% if rs %}
   {# Drag-reorder is disabled on Intergroup libraries: the toolbar's
      sort selector overrides positional ordering, so leaving rows
@@ -96,6 +124,11 @@
         data-search="{{ r.title|lower }}{% if r.original_filename %} {{ r.original_filename|lower }}{% endif %}{% for c in r.categories %} {{ c.name|lower }}{% endfor %}"
         data-categories="{% for cid in _cat_ids %}{{ cid }}{% if not loop.last %},{% endif %}{% endfor %}"
         {% if can_edit and not is_ig %}draggable="true"{% endif %}>
+      {% if can_edit and current_user.can_bulk_edit_categories(r) %}
+      <label class="lib-row-select" aria-label="Select for bulk edit">
+        <input type="checkbox" data-bulk-select value="{{ r.id }}">
+      </label>
+      {% endif %}
       {% if can_edit and not is_ig %}<span class="drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
       {% if r.thumbnail_filename %}
       <img class="reading-thumb" src="{{ url_for('main.reading_thumbnail', rid=r.id) }}" alt="">
@@ -199,9 +232,9 @@
                 {% endif %}
                 <input type="file" name="thumbnail" accept="image/*">
               </fieldset>
-              {% if is_ig and library.categories %}
+              {% if library.categories %}
               <fieldset class="fieldset">
-                <legend>Categories <span class="muted small">{% if library.categories_required %}(at least one required){% else %}(optional){% endif %}</span></legend>
+                <legend>Categories <span class="muted small">{% if library.is_intergroup and library.categories_required %}(at least one required){% else %}(optional){% endif %}</span></legend>
                 <input type="hidden" name="category_picker" value="1">
                 <div class="ig-cat-picker">
                   {% set _selected = _cat_ids %}
@@ -286,9 +319,9 @@
           <input name="url" type="url" placeholder="https://..."></label>
         <label>Thumbnail <span class="muted small">(optional)</span>
           <input type="file" name="thumbnail" accept="image/*"></label>
-        {% if is_ig %}
+        {% if library.categories or is_ig %}
         <fieldset class="fieldset">
-          <legend>Categories <span class="muted small">{% if library.categories_required %}(at least one required){% else %}(optional){% endif %}</span></legend>
+          <legend>Categories <span class="muted small">{% if is_ig and library.categories_required %}(at least one required){% else %}(optional){% endif %}</span></legend>
           <input type="hidden" name="category_picker" value="1">
           {% if library.categories %}
           <div class="ig-cat-picker">
@@ -308,6 +341,61 @@
       <div class="modal-foot">
         <button type="button" class="btn" data-close>Cancel</button>
         <button type="submit" class="btn btn-primary">Upload</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if can_edit and library.categories %}
+{# Bulk-edit-categories modal — opened from the multi-select action
+   bar above the file list. The JS that drives [data-bulk-action]
+   populates the hidden ``reading_ids`` inputs (and the ``data-bulk-
+   modal-count`` text) with the current multi-select set just before
+   open. Per-row authorization is re-enforced server-side, so any id
+   the user couldn't bulk-edit is silently filtered out. #}
+<div class="modal" id="library-bulk-categories-modal" aria-hidden="true" data-bulk-modal>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form method="post" action="{{ url_for('main.library_readings_bulk_categories', lid=library.id) }}" class="form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-head">
+        <h2>Edit Categories</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted">Apply to <span data-bulk-modal-count>0</span> selected file(s).</p>
+        <fieldset class="fieldset">
+          <legend>What do you want to do?</legend>
+          <label class="check ig-cat-check">
+            <input type="radio" name="action" value="add" checked>
+            <span>Add the selected categories (keep existing tags)</span>
+          </label>
+          <label class="check ig-cat-check">
+            <input type="radio" name="action" value="remove">
+            <span>Remove the selected categories</span>
+          </label>
+          <label class="check ig-cat-check">
+            <input type="radio" name="action" value="replace">
+            <span>Replace existing tags with the selected categories</span>
+          </label>
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend>Categories</legend>
+          <div class="ig-cat-picker">
+            {% for c in library.categories %}
+            <label class="check ig-cat-check">
+              <input type="checkbox" name="category_ids" value="{{ c.id }}">
+              <span>{{ c.name }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+        <div data-bulk-modal-ids></div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Apply</button>
       </div>
     </form>
   </div>
@@ -359,7 +447,7 @@
           <span class="muted smaller">— restrict edits to admins and the Intergroup Member role and surface this library in the Intergroup sidebar subsection.</span>
         </label>
         {% endif %}
-        {% if current_user.is_admin() and library.is_intergroup %}
+        {% if current_user.is_admin() %}
         <fieldset class="fieldset" data-ig-cat-editor>
           <legend>Categories <span class="muted smaller">(define the tags uploaders pick from)</span></legend>
           <input type="hidden" name="category_picker" value="1">
