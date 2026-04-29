@@ -466,6 +466,30 @@
       showSettingsToast._h = setTimeout(() => t.classList.remove("show"), 2200);
     }
 
+    // Shared AJAX submit for any settings-modal form. Returns a promise
+    // that resolves with the parsed JSON body (if any) on success and
+    // rejects on HTTP/network failure. Always dispatches `settings:saved`
+    // on success so downstream listeners (sidebar refresh) fire whether
+    // the form was committed via Enter, the per-form submit handler, or
+    // the batched save bar.
+    async function submitSettingsForm(f) {
+      const r = await fetch(f.action, {
+        method: (f.method || "POST").toUpperCase(),
+        body: new FormData(f),
+        headers: { "X-Requested-With": "fetch" },
+        credentials: "same-origin",
+        redirect: "follow",
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      let data = null;
+      const ct = r.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        try { data = await r.json(); } catch (_) {}
+      }
+      f.dispatchEvent(new CustomEvent("settings:saved", { bubbles: true, detail: data }));
+      return data;
+    }
+
     settingsModal.querySelectorAll("form").forEach(f => {
       if (f.closest(".settings-frame")) return;
       if (f.dataset.noAjax === "1") return;
@@ -474,21 +498,8 @@
         const btn = f.querySelector('button[type="submit"], button:not([type])');
         const orig = btn ? btn.textContent : null;
         if (btn){ btn.disabled = true; btn.textContent = "Saving…"; }
-        fetch(f.action, {
-          method: (f.method || "POST").toUpperCase(),
-          body: new FormData(f),
-          headers: { "X-Requested-With": "fetch" },
-          credentials: "same-origin",
-          redirect: "follow",
-        }).then(async r => {
-          if (!r.ok) throw new Error("HTTP " + r.status);
-          let data = null;
-          const ct = r.headers.get("content-type") || "";
-          if (ct.includes("application/json")) {
-            try { data = await r.json(); } catch (_) {}
-          }
+        submitSettingsForm(f).then(() => {
           showSettingsToast("Saved");
-          f.dispatchEvent(new CustomEvent("settings:saved", { bubbles: true, detail: data }));
           if (f.dataset.reloadOnSave === "1") {
             // Brief delay so the "Saved" toast is visible before the reload.
             setTimeout(() => window.location.reload(), 400);
@@ -550,6 +561,88 @@
           }) : Promise.resolve(),
       ]).catch(() => {}).finally(() => { _sidebarRefreshing = false; });
     });
+
+    // ── Settings save bar ────────────────────────────────────────────
+    // One yellow bar pinned to the bottom-left of the modal panel that
+    // batches saves across every tracked top-level form. Shows when any
+    // tracked form becomes dirty; click commits each dirty form via the
+    // shared AJAX path. Per-form save buttons are hidden so the bar is
+    // the canonical commit affordance — auto-submit toggles (modules
+    // pane, role pickers) keep their existing on-change behavior since
+    // they never had a save button to replace.
+    const sbBar = document.getElementById("settings-save-bar");
+    const sbBtn = document.getElementById("settings-save-bar-btn");
+    if (sbBar && sbBtn) {
+      const sbMsg = sbBar.querySelector(".fe-save-bar-msg");
+      const sbDirty = new Set();
+
+      function sbTrackable(form) {
+        if (form.closest(".settings-frame")) return false;
+        if (form.dataset.noAjax === "1") return false;
+        if (form.dataset.savebarSkip === "1") return false;
+        if (form.querySelector('[onchange*="this.form."]')) return false;
+        // Require an explicit primary save button — that's what the bar
+        // replaces. Forms without one (e.g. the "Send Test" email action
+        // which uses `.btn`, not `.btn-primary`) keep their own button.
+        return !!form.querySelector("button.btn-primary");
+      }
+
+      function sbShow() {
+        sbBar.hidden = false;
+        sbBar.classList.remove("is-leaving");
+        sbMsg.textContent = sbDirty.size > 1
+          ? "Unsaved changes (" + sbDirty.size + " sections)"
+          : "Unsaved changes";
+        sbBtn.disabled = false;
+        sbBtn.textContent = "Save";
+      }
+      function sbHideAfterSave() {
+        sbMsg.textContent = "Saved";
+        sbBar.classList.add("is-leaving");
+        setTimeout(() => {
+          sbBar.hidden = true;
+          sbBar.classList.remove("is-leaving");
+          sbDirty.clear();
+        }, 320);
+      }
+
+      settingsModal.querySelectorAll("form").forEach(f => {
+        if (!sbTrackable(f)) return;
+        // Hide the form's primary save button (and its wrapper, if any)
+        // so the bar becomes the only commit path. Wrappers handled:
+        // .form-actions (most forms), .branding-save-row (logo form).
+        // Bare buttons (e.g. inside .sidebar-order-head) hide themselves.
+        f.querySelectorAll("button.btn-primary").forEach(b => {
+          const wrap = b.closest(".form-actions, .branding-save-row");
+          (wrap || b).classList.add("savebar-hidden");
+        });
+        const onChange = () => { sbDirty.add(f); sbShow(); };
+        f.addEventListener("input", onChange);
+        f.addEventListener("change", onChange);
+      });
+
+      sbBtn.addEventListener("click", async () => {
+        if (!sbDirty.size) { sbBar.hidden = true; return; }
+        sbBtn.disabled = true;
+        sbBtn.textContent = "Saving…";
+        sbMsg.textContent = "Saving…";
+        const forms = [...sbDirty];
+        const failures = [];
+        for (const f of forms) {
+          try { await submitSettingsForm(f); }
+          catch (err) { failures.push(err); }
+        }
+        if (!failures.length) {
+          sbHideAfterSave();
+        } else {
+          sbBtn.disabled = false;
+          sbBtn.textContent = "Save";
+          sbMsg.textContent = failures.length === 1
+            ? "Save failed — try again"
+            : "Some changes failed — try again";
+        }
+      });
+    }
   }
 
   // Library picker in meeting modal: toggle expansion and granular readings
@@ -2602,21 +2695,39 @@
   });
 
   // Helpers ----------------------------------------------------------
+  // Seed pass writes the canonical JSON shape into the hidden input
+  // without dispatching an event, so the settings modal's save bar
+  // doesn't latch dirty before any user interaction. Subsequent calls
+  // (after dragstart/dragover/drop) DO dispatch when the value moves.
+  let _seeded = false;
   function serialize() {
     const sections = [...sectionList.querySelectorAll(":scope > .sidebar-order-section")]
       .map(sec => sec.getAttribute("data-section-key"));
     const out = { sections };
-    ["main", "admin"].forEach(scope => {
+    ["main", "intergroup", "admin"].forEach(scope => {
       const ul = sectionList.querySelector('[data-section-items="' + scope + '"]');
       if (!ul) return;
       out[scope] = [...ul.querySelectorAll(':scope > .sidebar-order-item')]
         .map(li => li.getAttribute("data-item-key"));
     });
-    orderInput.value = JSON.stringify(out);
+    const next = JSON.stringify(out);
+    if (orderInput.value !== next) {
+      orderInput.value = next;
+      // Programmatic value writes don't fire input/change — dispatch one
+      // so the settings modal's save bar picks up the new dirty state.
+      // Skipped on the initial seed: the rendered hidden value rarely
+      // matches what serialize() rebuilds from the DOM (different key
+      // ordering / missing keys), so dispatching on the seed would
+      // make the bar appear the moment the modal opens.
+      if (_seeded) {
+        orderInput.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
   }
   // Seed once on load so the hidden input is in sync with the rendered
   // list even before the admin drags anything.
   serialize();
+  _seeded = true;
 
   // Generic drag-drop wiring for sections + items. Browsers won't let
   // you mix two scopes by default; here `dragging` carries the active

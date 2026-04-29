@@ -511,7 +511,11 @@ p { margin: .25rem 0; }
 
 .perm-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .perm-row {
-  display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 14px;
+  /* Role column auto-sizes to the widest pill across all rows so longer
+     labels (e.g. "Intergroup member") don't overflow into the blurb
+     column. minmax keeps a 140px floor so short labels still align. */
+  display: grid; grid-template-columns: minmax(140px, max-content) minmax(0, 1fr);
+  gap: 14px;
   align-items: start; padding: 10px 12px;
   border: 1px solid var(--border); border-radius: 10px;
   background: var(--panel-2);
@@ -531,10 +535,12 @@ p { margin: .25rem 0; }
 .perm-badge-admin  { background: rgba(220, 38, 38, 0.10);  color: #b91c1c; border-color: rgba(220, 38, 38, 0.32); }
 .perm-badge-editor { background: rgba(11, 92, 255, 0.10);  color: #1d4ed8; border-color: rgba(11, 92, 255, 0.32); }
 .perm-badge-fe     { background: rgba(20, 184, 166, 0.10); color: #0f766e; border-color: rgba(20, 184, 166, 0.32); }
+.perm-badge-ig     { background: rgba(168, 85, 247, 0.10); color: #7e22ce; border-color: rgba(168, 85, 247, 0.32); }
 .perm-badge-viewer { background: rgba(100, 116, 139, 0.12); color: #475569; border-color: rgba(100, 116, 139, 0.32); }
 html[data-theme="dark"] .perm-badge-admin  { background: rgba(220, 38, 38, 0.20);  color: #fca5a5; border-color: rgba(220, 38, 38, 0.45); }
 html[data-theme="dark"] .perm-badge-editor { background: rgba(11, 92, 255, 0.22);  color: #93c5fd; border-color: rgba(11, 92, 255, 0.45); }
 html[data-theme="dark"] .perm-badge-fe     { background: rgba(20, 184, 166, 0.20); color: #5eead4; border-color: rgba(20, 184, 166, 0.45); }
+html[data-theme="dark"] .perm-badge-ig     { background: rgba(168, 85, 247, 0.20); color: #d8b4fe; border-color: rgba(168, 85, 247, 0.45); }
 html[data-theme="dark"] .perm-badge-viewer { background: rgba(100, 116, 139, 0.22); color: #cbd5e1; border-color: rgba(100, 116, 139, 0.45); }
 
 
@@ -2627,6 +2633,24 @@ body.embed .card:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom
   border: 1px solid var(--border); border-radius: 8px; background: var(--panel); cursor: pointer; }
 .login-appearance-form #login-fx-random { margin-left: auto; }
 
+/* Save bar variant pinned to the bottom-left of the settings modal panel.
+   Reuses the .fe-save-bar yellow styling/animation but anchors to the
+   modal-panel (which is `position: relative; overflow: hidden`) instead of
+   the viewport. Width fits content so the bar doesn't span the full modal. */
+.settings-save-bar {
+  position: absolute; left: 20px; bottom: 20px;
+  width: auto; max-width: calc(100% - 40px);
+  z-index: 11;
+}
+@media (max-width: 900px) {
+  .settings-save-bar {
+    left: 12px; right: 12px; bottom: 12px; width: auto; max-width: none;
+  }
+}
+/* JS marks the per-form save buttons (and their wrappers) with this class
+   once the bar is wired so the bar becomes the only commit path. */
+#settings-modal .savebar-hidden { display: none !important; }
+
 .settings-toast { position: absolute; bottom: 20px; right: 20px; left: auto; transform: translateY(12px);
   min-width: 240px; max-width: 360px; padding: 12px 14px 12px 42px; border-radius: 10px;
   font-size: 0.875rem; font-weight: 500; line-height: 1.35; text-align: left;
@@ -2739,6 +2763,63 @@ body.embed .card:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom
 .special-page-info p { margin: 0; }
 .special-page-toggle-form { margin: 0; display: flex; align-items: center; gap: 8px;
   flex-shrink: 0; }
+
+/* Nested sub-rows for module sub-features (e.g. the Intergroup module's
+   Email Accounts toggle). The parent row keeps its existing flex layout;
+   the nested <ul> drops onto its own line via flex: 0 0 100% and is
+   indented to read as a child. Sub-rows reuse the same flex layout as
+   the top-level rows but with a softer background and a small connector
+   on the left so the parent-child relationship reads at a glance. */
+.special-page-row-with-children { align-items: flex-start; }
+.special-page-subrows {
+  list-style: none; margin: 12px 0 0 0; padding: 0;
+  flex: 0 0 100%; min-width: 0;
+  display: flex; flex-direction: column; gap: 8px;
+  padding-left: 1.75rem; position: relative;
+}
+.special-page-subrows::before {
+  content: ""; position: absolute;
+  left: 0.6rem; top: 0; bottom: 0.5rem;
+  border-left: 2px solid var(--border);
+  border-bottom-left-radius: 8px;
+}
+.special-page-subrow {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel-2, var(--panel));
+  flex-wrap: wrap; position: relative;
+}
+.special-page-subrow::before {
+  content: ""; position: absolute;
+  left: -1.15rem; top: 50%; width: 1.15rem;
+  border-top: 2px solid var(--border);
+}
+.special-page-subrow .u-name { font-size: 0.95rem; display: flex;
+  align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Inline "Admin-only" / permissions chip rendered next to a sub-row's
+   title. Carries the same red palette as the perm-badge-admin pill but
+   smaller, and surfaces a native-tooltip on hover via title=. */
+.perm-info-badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 0.625rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; line-height: 1.4;
+  border: 1px solid rgba(220, 38, 38, 0.32);
+  background: rgba(220, 38, 38, 0.10); color: #b91c1c;
+  cursor: help; white-space: nowrap;
+}
+.perm-info-badge:focus-visible {
+  outline: 2px solid var(--access); outline-offset: 1px;
+}
+html[data-theme="dark"] .perm-info-badge {
+  background: rgba(220, 38, 38, 0.20); color: #fca5a5;
+  border-color: rgba(220, 38, 38, 0.45);
+}
+@media (max-width: 720px) {
+  .special-page-subrows { padding-left: 1.25rem; }
+  .special-page-subrow::before { left: -0.65rem; width: 0.65rem; }
+}
 /* Block rendering (public view) */
 .block-section { margin: 28px 0; }
 .block-section-title { margin: 0 0 12px; font-size: 1rem; font-weight: 700;

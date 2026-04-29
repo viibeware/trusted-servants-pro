@@ -469,6 +469,8 @@ def _migrate_sqlite(app):
                          ("footer_logo_url", "VARCHAR(1000)"),
                          ("footer_logo_width", "INTEGER"),
                          ("intergroup_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("intergroup_module_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("intergroup_module_required_role", "VARCHAR(32) NOT NULL DEFAULT 'viewer'"),
                          ("ig_intro", "TEXT"),
                          ("ig_webmail_url", "VARCHAR(1000)"),
                          ("ig_incoming_host", "VARCHAR(255)"),

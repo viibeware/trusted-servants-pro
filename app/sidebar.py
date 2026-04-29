@@ -42,6 +42,20 @@ _ADMIN_CATALOG = [
     {"key": "access_requests", "label": "Access Requests",        "endpoint": "main.access_requests",  "active_kind": "contains:access_request"},
 ]
 
+# Items that live inside the "Intergroup" sidebar subsection when the
+# umbrella module is on. Each entry has the same shape as a Main item
+# but the visibility predicate is per-key — Email gates on the existing
+# ``intergroup_enabled`` page-level toggle, Minutes/Documents gate on
+# their library existing in the database.
+_INTERGROUP_CATALOG = [
+    {"key": "ig_email",     "label": "Email",     "endpoint": "main.intergroup",
+     "active_kind": "exact"},
+    {"key": "ig_minutes",   "label": "Minutes",   "library_name": "Intergroup Minutes",
+     "active_kind": "library"},
+    {"key": "ig_documents", "label": "Documents", "library_name": "Intergroup Documents",
+     "active_kind": "library"},
+]
+
 # Module-gated items whose section placement (Main vs Admin) follows
 # their required_role: admin → Admin section, otherwise → Main.
 # Maps item key → SiteSetting attribute that holds the required role.
@@ -76,6 +90,11 @@ def _is_visible(key, site, user):
     if key == "media":          return True
     if key == "zoom_accounts":  return True
     if key == "intergroup":
+        # When the umbrella Intergroup module is on, the standalone
+        # Intergroup link is hidden — the Email entry inside the
+        # Intergroup subsection covers the same destination.
+        if site and site.intergroup_module_enabled:
+            return False
         return bool(site and site.intergroup_enabled
                     and user_meets_role(user, site.intergroup_required_role))
     if key == "zoom_tech":
@@ -145,6 +164,85 @@ def _ordered_keys(stored, catalog_keys, sort_mode, label_lookup):
     keys.sort(key=lambda k: (label_lookup.get(k) or "").lower(),
               reverse=(sort_mode == "auto-desc"))
     return pinned + keys
+
+
+def _build_intergroup_items(site, user, current_endpoint, url_for):
+    """Resolve the items that go inside the new "Intergroup" subsection.
+    Empty list when the umbrella module is off, the user lacks the
+    section's required role, or none of the three items resolve to a
+    visible link. ``Email Accounts`` honors the existing per-page
+    intergroup toggle; ``Minutes`` / ``Documents`` resolve via library
+    lookup by name and are skipped when the corresponding library
+    doesn't exist in the database."""
+    from flask import request
+    from .permissions import user_meets_role
+    if not user or not user.is_authenticated:
+        return []
+    if not (site and site.intergroup_module_enabled):
+        return []
+    if not user_meets_role(user, site.intergroup_module_required_role):
+        return []
+    # Pull the *current* library id from the active request so we can
+    # mark only the matching Minutes/Documents row as active. Without
+    # this both rows compared to the same endpoint and lit up together.
+    current_lid = None
+    try:
+        if (current_endpoint or "") == "main.library_detail":
+            current_lid = (request.view_args or {}).get("lid")
+    except RuntimeError:
+        # No active request context (test harness); leave as None.
+        current_lid = None
+    items = []
+    # Email Accounts — only when the Intergroup Email page itself is
+    # enabled and the user meets that page's role gate.
+    if site.intergroup_enabled and user_meets_role(user, site.intergroup_required_role):
+        ep = "main.intergroup"
+        items.append({
+            "key": "ig_email",
+            "label": "Email Accounts",
+            "href": url_for(ep),
+            "active": (current_endpoint or "") == ep,
+            "target": None,
+        })
+    # Library shortcuts — resolved by name.
+    from .models import Library
+    for entry in _INTERGROUP_CATALOG:
+        if "library_name" not in entry:
+            continue
+        lib = Library.query.filter_by(name=entry["library_name"]).first()
+        if not lib:
+            continue
+        items.append({
+            "key": entry["key"],
+            "label": entry["label"],
+            "href": url_for("main.library_detail", lid=lib.id),
+            "active": current_lid == lib.id,
+            "target": None,
+        })
+    # Apply manual reorder for the intergroup subsection if the admin
+    # set one. Saved order wins; any item that isn't yet in the saved
+    # list is appended in catalog order so newly-enabled items show up.
+    mode = (site.sidebar_sort_mode if site else None) or "auto-asc"
+    if mode == "manual" and items:
+        try:
+            stored = json.loads(site.sidebar_order_json) if site.sidebar_order_json else {}
+        except (ValueError, TypeError):
+            stored = {}
+        saved = stored.get("intergroup")
+        if isinstance(saved, list) and saved:
+            by_key = {it["key"]: it for it in items}
+            seen = set()
+            ordered = []
+            for k in saved:
+                it = by_key.get(k)
+                if it and k not in seen:
+                    seen.add(k)
+                    ordered.append(it)
+            for it in items:
+                if it["key"] not in seen:
+                    ordered.append(it)
+            items = ordered
+    return items
 
 
 def build_sidebar(site, user, current_endpoint, nav_links, url_for):
@@ -220,18 +318,39 @@ def build_sidebar(site, user, current_endpoint, nav_links, url_for):
             "target": None,
         })
 
+    intergroup_items = _build_intergroup_items(site, user, current_endpoint, url_for)
     sections = [
-        ("main",     None,       main_items),
-        ("external", "External", external_items),
-        ("admin",    "Admin",    admin_items),
+        ("main",       None,         main_items),
+        ("intergroup", "Intergroup", intergroup_items),
+        ("external",   "External",   external_items),
+        ("admin",      "Admin",      admin_items),
     ]
     sections_by_key = {s[0]: s for s in sections}
     if mode == "manual" and stored.get("sections"):
         seen = set()
-        order = [k for k in stored["sections"] if k in sections_by_key and not (k in seen or seen.add(k))]
-        for k in ("main", "external", "admin"):
-            if k not in seen:
-                order.append(k)
+        explicit = [k for k in stored["sections"]
+                    if k in sections_by_key and not (k in seen or seen.add(k))]
+        # Default placement for sections the user hasn't explicitly
+        # ordered. New sections (e.g. intergroup, added in 1.7.6) won't
+        # be in pre-existing saved orders; we slot each missing section
+        # in at its *canonical position relative to the explicit keys*.
+        # Concretely, walk the canonical order; for each missing key,
+        # insert it just before the first explicit key whose canonical
+        # index is higher. This keeps a saved [main, external, admin]
+        # order rendering [main, intergroup, external, admin] without
+        # bumping admin off the bottom.
+        canonical = ("main", "intergroup", "external", "admin")
+        canonical_idx = {k: i for i, k in enumerate(canonical)}
+        missing = [k for k in canonical if k not in seen]
+        order = list(explicit)
+        for k in missing:
+            ki = canonical_idx[k]
+            insert_at = len(order)
+            for j, ek in enumerate(order):
+                if canonical_idx.get(ek, -1) > ki:
+                    insert_at = j
+                    break
+            order.insert(insert_at, k)
         sections = [sections_by_key[k] for k in order]
     # External should only render if there's at least one link AND
     # the user can see admin-area entries OR the user's role permits it.
@@ -255,8 +374,16 @@ def admin_reorder_catalog(site):
 
     main_items = []
     admin_items = []
+    intergroup_items = []
+    umbrella_on = bool(site and site.intergroup_module_enabled)
     for it in _MAIN_CATALOG:
         if it["key"] in PINNED_KEYS:
+            continue
+        # The standalone "intergroup" Main-catalog item is hidden in the
+        # live sidebar when the umbrella module is on; mirror that here
+        # so the reorder UI doesn't surface a phantom Main row that
+        # never actually renders.
+        if it["key"] == "intergroup" and umbrella_on:
             continue
         entry = {"key": it["key"], "label": _label_for(it["key"], site, it["label"]) or it["key"]}
         if _section_for(it["key"]) == "admin":
@@ -267,4 +394,17 @@ def admin_reorder_catalog(site):
         if it["key"] in PINNED_KEYS:
             continue
         admin_items.append({"key": it["key"], "label": it["label"]})
-    return {"main": main_items, "admin": admin_items}
+    if umbrella_on:
+        # Intergroup section's items are fixed (Email Accounts +
+        # Minutes / Documents library shortcuts). Surface them in the
+        # reorder UI as static rows so the admin sees what the section
+        # contains — we don't currently support reordering inside it.
+        from .models import Library
+        if site and site.intergroup_enabled:
+            intergroup_items.append({"key": "ig_email", "label": "Email Accounts"})
+        for entry in _INTERGROUP_CATALOG:
+            if "library_name" not in entry:
+                continue
+            if Library.query.filter_by(name=entry["library_name"]).first():
+                intergroup_items.append({"key": entry["key"], "label": entry["label"]})
+    return {"main": main_items, "intergroup": intergroup_items, "admin": admin_items}

@@ -6,7 +6,13 @@ from sqlalchemy.ext.associationproxy import association_proxy
 
 db = SQLAlchemy()
 
-ROLES = ("admin", "editor", "frontend_editor", "viewer")
+ROLES = ("admin", "editor", "frontend_editor", "intergroup_member", "viewer")
+
+# Library names whose edit permissions are restricted to admins and the
+# `intergroup_member` role — regular editors and frontend_editors are
+# specifically excluded. Used by `User.can_edit_library` and the route
+# handlers that gate library/reading writes.
+INTERGROUP_LIBRARY_NAMES = ("Intergroup Documents", "Intergroup Minutes")
 FILE_CATEGORIES = ("documents", "scripts", "external_links", "videos", "images")
 DAYS_OF_WEEK = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
@@ -43,7 +49,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(64), unique=True, nullable=False, index=True)
     email = db.Column(db.String(255), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(16), nullable=False, default="viewer")
+    role = db.Column(db.String(32), nullable=False, default="viewer")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     dash_show_stats = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_intergroup = db.Column(db.Boolean, nullable=False, default=True)
@@ -57,13 +63,44 @@ class User(UserMixin, db.Model):
     last_seen_at = db.Column(db.DateTime)
 
     def can_edit(self):
-        return self.role in ("admin", "editor", "frontend_editor")
+        """Broad editor gate: meetings, files, libraries, etc. Intergroup
+        members inherit every Editor permission AND additionally pass
+        the per-library Intergroup gate below."""
+        return self.role in ("admin", "editor", "frontend_editor", "intergroup_member")
 
     def can_edit_frontend(self):
         """Authorized to edit the Web Frontend module and preview it while
         the public toggle is off. Includes admins and the dedicated
         frontend_editor role; regular editors are excluded."""
         return self.role in ("admin", "frontend_editor")
+
+    def can_edit_intergroup_libraries(self):
+        """True for admins and the dedicated `intergroup_member` role.
+        Used by per-library edit gates on the Intergroup Documents and
+        Intergroup Minutes libraries — regular editors and frontend
+        editors are deliberately excluded so those libraries can be
+        delegated to a narrow set of trusted servants."""
+        return self.role in ("admin", "intergroup_member")
+
+    def can_edit_library(self, library):
+        """Effective edit permission for a single ``Library``. Restricted
+        Intergroup libraries are gated to admins + intergroup_members
+        only; every other library uses the broad editor gate (which
+        includes intergroup_members, since they inherit Editor)."""
+        if library is not None and library.name in INTERGROUP_LIBRARY_NAMES:
+            return self.can_edit_intergroup_libraries()
+        return self.can_edit()
+
+    def can_edit_reading(self, reading):
+        """Same gate as ``can_edit_library`` but resolved through the
+        reading's parent library."""
+        return self.can_edit_library(reading.library if reading is not None else None)
+
+    def can_use_editor_tools(self):
+        """Generic gate for utility endpoints used during editing
+        (markdown preview, etc.). Aliased to ``can_edit`` since every
+        role that has editor tools also passes the broad editor gate."""
+        return self.can_edit()
 
     def is_admin(self):
         return self.role == "admin"
@@ -199,6 +236,12 @@ class SiteSetting(db.Model):
     footer_logo_url = db.Column(db.String(1000))
     footer_logo_width = db.Column(db.Integer, default=32)
     intergroup_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    # Umbrella "Intergroup" module: when on, the sidebar gets an Intergroup
+    # subsection that surfaces the Intergroup Email page plus shortcuts to
+    # the Intergroup Minutes and Intergroup Documents libraries. Independent
+    # of ``intergroup_enabled`` (which still gates the Email page itself).
+    intergroup_module_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    intergroup_module_required_role = db.Column(db.String(32), nullable=False, default="viewer")
     ig_intro = db.Column(db.Text)
     ig_webmail_url = db.Column(db.String(1000))
     ig_incoming_host = db.Column(db.String(255))

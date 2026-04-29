@@ -16,7 +16,7 @@
       <label>Password<input name="password" type="password" required></label>
       <label>Role
         <select name="role">
-          {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+          {% for r in roles %}<option value="{{ r }}">{{ role_labels[r] if role_labels and r in role_labels else r }}</option>{% endfor %}
         </select>
       </label>
       <div class="form-actions"><button class="btn btn-primary">Create</button></div>
@@ -53,6 +53,14 @@
           <div class="muted small">Inherits Editor permissions <b>plus</b> the entire Web Frontend module — header, footer, navigation, mega menus, alert bars, homepage content, theme/design tokens, and the public-visibility toggle.</div>
         </div>
       </li>
+      <li class="perm-row perm-row-ig">
+        <div class="perm-role">
+          <span class="perm-badge perm-badge-ig">Intergroup member</span>
+        </div>
+        <div class="perm-blurb">
+          <div class="muted small">Inherits every <b>Editor</b> permission (meetings, libraries, readings, uploads), <b>plus</b> exclusive edit access to the <i>Intergroup Documents</i> and <i>Intergroup Minutes</i> libraries — which regular Editors and Frontend Editors cannot touch. Cannot reach Settings, Users, the Web Frontend module, or the Intergroup Email Accounts page (admin-only). Library / reading deletion remains admin-only across the board.</div>
+        </div>
+      </li>
       <li class="perm-row perm-row-viewer">
         <div class="perm-role">
           <span class="perm-badge perm-badge-viewer">Viewer</span>
@@ -85,7 +93,7 @@
       <td data-label="Email"><input name="email" type="email" value="{{ u.email or '' }}" required></td>
       <td data-label="Role">
         <select name="role">
-          {% for r in roles %}<option value="{{ r }}" {% if u.role==r %}selected{% endif %}>{{ r }}</option>{% endfor %}
+          {% for r in roles %}<option value="{{ r }}" {% if u.role==r %}selected{% endif %}>{{ role_labels[r] if role_labels and r in role_labels else r }}</option>{% endfor %}
         </select>
       </td>
       <td data-label="Reset password"><input name="password" type="password" placeholder="(unchanged)"></td>

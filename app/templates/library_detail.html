@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block heading %}{{ library.name }}{% endblock %}
 {% block top_actions %}
-  {% if current_user.can_edit() %}
+  {% if current_user.can_edit_library(library) %}
   <button type="button" class="btn btn-primary" data-open-modal="add-library-file-modal">+ Add File</button>
   <button type="button" class="btn btn-primary" data-open-modal="library-edit-modal">Edit</button>
   {% endif %}
@@ -27,7 +27,7 @@
 {% endwith %}
 
 {% set rs = library.readings.all() %}
-{% set can_edit = current_user.can_edit() %}
+{% set can_edit = current_user.can_edit_library(library) %}
 <section class="card">
   <div class="card-head"><h2>Files</h2></div>
   {% if rs %}

@@ -13,7 +13,8 @@ from .models import (db, User, Meeting, MeetingFile, MeetingSchedule, MeetingLib
                      Post, ZoomAccount, ZoomOtpEmail, Location, Library, Reading,
                      MediaItem, NavLink, SiteSetting, IntergroupAccount,
                      AccessRequest, FrontendNavItem, FrontendNavColumn,
-                     FrontendNavLink, FILE_CATEGORIES, DAYS_OF_WEEK)
+                     FrontendNavLink, FILE_CATEGORIES, DAYS_OF_WEEK,
+                     INTERGROUP_LIBRARY_NAMES)
 
 INTERGROUP_DEFAULT_ACCOUNTS = [
     ('Chair', 'chair@dccma.com'),
@@ -124,6 +125,20 @@ def frontend_editor_required(f):
             return redirect(request.referrer or url_for("main.index"))
         return f(*args, **kwargs)
     return wrapper
+
+
+def _require_can_edit_library(library):
+    """Inline gate used by library/reading edit handlers. Routes that
+    accept a library or reading-by-id call this after the lookup so the
+    permission check can consult the library's name. Restricted
+    Intergroup libraries are limited to admins + ``intergroup_member``;
+    everything else uses the broad editor gate."""
+    if not current_user.is_authenticated:
+        return redirect(url_for("auth.login"))
+    if not current_user.can_edit_library(library):
+        flash("You don't have permission to edit this library", "danger")
+        return redirect(request.referrer or url_for("main.index"))
+    return None
 
 
 @bp.app_context_processor
@@ -1099,12 +1114,14 @@ def sidebar_save():
         except (ValueError, TypeError):
             payload = {}
         from .sidebar import PINNED_KEYS as _PINNED  # noqa: WPS437
-        valid_section_keys = {"main", "external", "admin"}
+        valid_section_keys = {"main", "intergroup", "external", "admin"}
         # Pinned keys (Dashboard) are excluded from validation so they
         # can't be saved into the manual order — they're always rendered
         # first by the helper regardless of stored JSON.
         valid_main = {it["key"] for it in _MAIN_CATALOG if it["key"] not in _PINNED}
         valid_admin = {it["key"] for it in _ADMIN_CATALOG if it["key"] not in _PINNED}
+        from .sidebar import _INTERGROUP_CATALOG  # noqa: WPS437
+        valid_intergroup = {it["key"] for it in _INTERGROUP_CATALOG}
         clean = {}
         sec = payload.get("sections")
         if isinstance(sec, list):
@@ -1112,6 +1129,9 @@ def sidebar_save():
         m = payload.get("main")
         if isinstance(m, list):
             clean["main"] = [k for k in m if isinstance(k, str) and k in valid_main]
+        ig = payload.get("intergroup")
+        if isinstance(ig, list):
+            clean["intergroup"] = [k for k in ig if isinstance(k, str) and k in valid_intergroup]
         a = payload.get("admin")
         if isinstance(a, list):
             clean["admin"] = [k for k in a if isinstance(k, str) and k in valid_admin]
@@ -1160,10 +1180,11 @@ def module_role_save():
     module = (request.form.get("module") or "").strip()
     role = (request.form.get("required_role") or "").strip().lower()
     columns = {
-        "intergroup":      "intergroup_required_role",
-        "zoom_tech":       "zoom_tech_required_role",
-        "posts":           "posts_required_role",
-        "frontend_module": "frontend_module_required_role",
+        "intergroup":        "intergroup_required_role",
+        "intergroup_module": "intergroup_module_required_role",
+        "zoom_tech":         "zoom_tech_required_role",
+        "posts":             "posts_required_role",
+        "frontend_module":   "frontend_module_required_role",
     }
     col = columns.get(module)
     if col and role in ROLE_TIER_KEYS:
@@ -1833,6 +1854,30 @@ def intergroup_toggle():
     s.intergroup_enabled = request.form.get("intergroup_enabled") == "1"
     db.session.commit()
     flash("Intergroup page " + ("enabled" if s.intergroup_enabled else "disabled"), "success")
+    return redirect(request.referrer or url_for("main.index"))
+
+
+@bp.route("/settings/intergroup-module-toggle", methods=["POST"])
+@admin_required
+def intergroup_module_toggle():
+    """Flip the umbrella Intergroup module on/off. Independent of
+    ``intergroup_enabled`` (the page-level toggle for the Email page);
+    this controls whether the Intergroup *subsection* of the sidebar
+    appears at all.
+
+    Side effect on enable: ensure the two libraries the section links to
+    (``Intergroup Minutes`` and ``Intergroup Documents``) exist, so the
+    sidebar's sub-entries show up immediately. Existing libraries with
+    those names are left alone."""
+    s = _get_site_setting()
+    enabling = request.form.get("intergroup_module_enabled") == "1"
+    s.intergroup_module_enabled = enabling
+    if enabling:
+        for name in ("Intergroup Minutes", "Intergroup Documents"):
+            if not Library.query.filter_by(name=name).first():
+                db.session.add(Library(name=name))
+    db.session.commit()
+    flash("Intergroup module " + ("enabled" if s.intergroup_module_enabled else "disabled"), "success")
     return redirect(request.referrer or url_for("main.index"))
 
 
@@ -3903,11 +3948,23 @@ def library_detail(lid):
 
 
 @bp.route("/libraries/<int:lid>/edit", methods=["GET", "POST"])
-@editor_required
+@login_required
 def library_edit(lid):
     lib = db.session.get(Library, lid) or abort(404)
+    deny = _require_can_edit_library(lib)
+    if deny is not None:
+        return deny
     if request.method == "POST":
-        lib.name = request.form["name"].strip()
+        # Don't let an intergroup_member rename one of the protected
+        # libraries out from under itself — renaming would change which
+        # libraries the role still controls. Admins are unrestricted.
+        new_name = request.form["name"].strip()
+        if (lib.name in INTERGROUP_LIBRARY_NAMES
+                and new_name != lib.name
+                and not current_user.is_admin()):
+            flash("Only admins can rename Intergroup libraries", "danger")
+            return redirect(url_for("main.library_detail", lid=lib.id))
+        lib.name = new_name
         lib.description = request.form.get("description", "").strip()
         lib.alert_message = request.form.get("alert_message", "").strip() or None
         db.session.commit()
@@ -3961,9 +4018,12 @@ def _apply_reading_form(r, form, files):
 
 
 @bp.route("/libraries/<int:lid>/readings/new", methods=["GET", "POST"])
-@editor_required
+@login_required
 def reading_new(lid):
     lib = db.session.get(Library, lid) or abort(404)
+    deny = _require_can_edit_library(lib)
+    if deny is not None:
+        return deny
     if request.method == "POST":
         r = Reading(library_id=lib.id, title=request.form["title"].strip())
         _apply_reading_form(r, request.form, request.files)
@@ -4066,9 +4126,11 @@ th, td {{ border: 1px solid #bbb; padding: .3em .6em; }}
 
 
 @bp.route("/markdown-preview", methods=["POST"])
-@editor_required
+@login_required
 def markdown_preview():
     """Render a markdown snippet to bleached HTML for the editor preview."""
+    if not current_user.can_use_editor_tools():
+        return jsonify(error="forbidden"), 403
     from flask import render_template_string
     body = request.form.get("body") or request.get_json(silent=True, force=False) or {}
     if isinstance(body, dict):
@@ -4087,9 +4149,12 @@ def reading_thumbnail(rid):
 
 
 @bp.route("/readings/<int:rid>/edit", methods=["GET", "POST"])
-@editor_required
+@login_required
 def reading_edit(rid):
     r = db.session.get(Reading, rid) or abort(404)
+    deny = _require_can_edit_library(r.library)
+    if deny is not None:
+        return deny
     if request.method == "POST":
         _apply_reading_form(r, request.form, request.files)
         db.session.commit()
@@ -4099,9 +4164,11 @@ def reading_edit(rid):
 
 
 @bp.route("/libraries/<int:lid>/readings/reorder", methods=["POST"])
-@editor_required
+@login_required
 def library_readings_reorder(lid):
     lib = db.session.get(Library, lid) or abort(404)
+    if not current_user.can_edit_library(lib):
+        return jsonify({"error": "forbidden"}), 403
     data = request.get_json(silent=True) or {}
     ids = data.get("order") or []
     if not isinstance(ids, list):

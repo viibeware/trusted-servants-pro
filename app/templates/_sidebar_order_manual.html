@@ -4,10 +4,11 @@
    reflects the current dynamic section placement of module-gated items. #}
 {% set _side_order = (site.sidebar_order_json or '{}') | from_json %}
 {% set _side_catalog = sidebar_reorder_catalog(site) %}
-<p class="muted smaller">Drag the ⋮⋮ handles to reorder. Sections move as whole groups; items inside Main and Admin reorder individually.</p>
-{% set _section_keys = (_side_order.sections if _side_order.sections else ['main','external','admin']) %}
+<p class="muted smaller">Drag the ⋮⋮ handles to reorder. Sections move as whole groups; items inside Main, Intergroup, and Admin reorder individually. Admin defaults to the bottom of the sidebar — drag it elsewhere to override.</p>
+{% set _default_sections = ['main','intergroup','external','admin'] %}
+{% set _section_keys = (_side_order.sections if _side_order.sections else _default_sections) %}
 {% set _seen = [] %}
-{% set _all_sections = _section_keys + ['main','external','admin'] %}
+{% set _all_sections = _section_keys + _default_sections %}
 <div class="sidebar-order-sections" data-sidebar-section-list>
   {% for sk in _all_sections %}
     {% if sk not in _seen %}{% set _ = _seen.append(sk) %}
@@ -15,10 +16,39 @@
       <div class="sidebar-order-section-head">
         <span class="sidebar-order-handle" aria-hidden="true">⋮⋮</span>
         <span class="sidebar-order-section-name">
-          {% if sk == 'main' %}Main{% elif sk == 'external' %}External links{% else %}Admin{% endif %}
+          {% if sk == 'main' %}Main
+          {% elif sk == 'intergroup' %}Intergroup
+          {% elif sk == 'external' %}External links
+          {% else %}Admin{% endif %}
         </span>
       </div>
-      {% if sk in ('main', 'admin') %}
+      {% if sk == 'intergroup' %}
+        {# Intergroup section items (Email Accounts, Minutes, Documents) —
+           individually draggable in manual mode, same wiring as Main /
+           Admin. Saved order in `_side_order.intergroup` wins; any item
+           the catalog returns that isn't yet in the saved order is
+           appended at the end so newly-enabled items don't disappear. #}
+        {% set _ig_items = (_side_catalog.intergroup or []) %}
+        {% if _ig_items %}
+        {% set _ig_saved = _side_order.get('intergroup') or [] %}
+        {% set _ig_by_key = {} %}
+        {% for c in _ig_items %}{% set _ = _ig_by_key.update({c.key: c}) %}{% endfor %}
+        {% set _ig_seen = [] %}
+        {% set _ig_final = _ig_saved + (_ig_items | map(attribute='key') | list) %}
+        <ul class="sidebar-order-items" data-section-items="intergroup">
+          {% for k in _ig_final %}
+            {% if k in _ig_by_key and k not in _ig_seen %}{% set _ = _ig_seen.append(k) %}
+            <li class="sidebar-order-item" data-item-key="{{ k }}" draggable="true">
+              <span class="sidebar-order-handle" aria-hidden="true">⋮⋮</span>
+              <span class="sidebar-order-item-name">{{ _ig_by_key[k].label }}</span>
+            </li>
+            {% endif %}
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted smaller sidebar-extlink-empty">Module disabled — turn it on under Modules to populate.</p>
+        {% endif %}
+      {% elif sk in ('main', 'admin') %}
         {% set _saved = _side_order.get(sk) or [] %}
         {% set _cat = _side_catalog[sk] %}
         {% set _by_key = {} %}

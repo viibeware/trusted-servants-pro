@@ -537,22 +537,47 @@
         </form>
         {% endmacro %}
         <ul class="special-pages-list">
-          <li class="special-page-row">
+          {% set _ig_perm_tooltip = "Editing Intergroup Documents and Minutes is gated to admins and the Intergroup Member role. Editing Email Accounts (this entry) is admin-only — Intergroup Members and editors cannot reach it." %}
+          <li class="special-page-row special-page-row-with-children">
             <div class="special-page-info">
-              <div class="u-name">{{ site.ig_page_title or 'Intergroup' }}</div>
-              <p class="muted small">Show or hide the {{ site.ig_page_title or 'Intergroup' }} page from the dashboard and sidebar.</p>
+              <div class="u-name">Intergroup module</div>
+              <p class="muted small">Show or hide the <b>Intergroup</b> sidebar subsection. When on, the section surfaces the {{ site.ig_page_title or 'Intergroup' }} Email page (toggled separately below) plus shortcuts to the <i>Intergroup Minutes</i> and <i>Intergroup Documents</i> libraries (when those libraries exist). Editing Documents &amp; Minutes is gated to admins and the new <b>Intergroup Member</b> role; Email Accounts stays admin-only.</p>
             </div>
-            {{ module_role_picker('intergroup', site.intergroup_required_role if site else 'viewer') }}
-            <form method="post" action="{{ url_for('main.intergroup_toggle') }}" class="special-page-toggle-form" data-refresh-sidebar="1">
+            {{ module_role_picker('intergroup_module', site.intergroup_module_required_role if site else 'viewer') }}
+            <form method="post" action="{{ url_for('main.intergroup_module_toggle') }}" class="special-page-toggle-form" data-refresh-sidebar="1">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <label class="mode-toggle" title="Enable {{ site.ig_page_title or 'Intergroup' }} page">
-                <input type="checkbox" name="intergroup_enabled" value="1"
+              <label class="mode-toggle" title="Enable Intergroup module">
+                <input type="checkbox" name="intergroup_module_enabled" value="1"
                        onchange="this.form.submit()"
-                       {% if site and site.intergroup_enabled %}checked{% endif %}>
+                       {% if site and site.intergroup_module_enabled %}checked{% endif %}>
                 <span class="mode-track"><span class="mode-thumb"></span></span>
               </label>
               <noscript><button class="btn btn-sm btn-primary">Save</button></noscript>
             </form>
+            <ul class="special-page-subrows">
+              <li class="special-page-subrow" title="{{ _ig_perm_tooltip }}">
+                <div class="special-page-info">
+                  <div class="u-name">
+                    {{ site.ig_page_title or 'Intergroup' }} Email Accounts
+                    <span class="perm-info-badge" tabindex="0"
+                          title="{{ _ig_perm_tooltip }}"
+                          aria-label="{{ _ig_perm_tooltip }}">Admin-only</span>
+                  </div>
+                  <p class="muted small">Show or hide the Email Accounts entry inside the Intergroup subsection. Turn this off to keep Minutes &amp; Documents visible while hiding the Email page. <b>Editing the email accounts list itself is admin-only</b> — Intergroup Members and regular editors can't reach it.</p>
+                </div>
+                {{ module_role_picker('intergroup', site.intergroup_required_role if site else 'viewer') }}
+                <form method="post" action="{{ url_for('main.intergroup_toggle') }}" class="special-page-toggle-form" data-refresh-sidebar="1">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <label class="mode-toggle" title="Enable {{ site.ig_page_title or 'Intergroup' }} Email Accounts">
+                    <input type="checkbox" name="intergroup_enabled" value="1"
+                           onchange="this.form.submit()"
+                           {% if site and site.intergroup_enabled %}checked{% endif %}>
+                    <span class="mode-track"><span class="mode-thumb"></span></span>
+                  </label>
+                  <noscript><button class="btn btn-sm btn-primary">Save</button></noscript>
+                </form>
+              </li>
+            </ul>
           </li>
           <li class="special-page-row">
             <div class="special-page-info">
@@ -904,6 +929,20 @@
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
             <li>
+              <div class="u-name">1.7.6</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Settings modal uses one yellow save bar</b> — every per-form <i>Save</i> button across the Appearance, Sidebar, Email, and Security tabs is hidden in favor of a single yellow bar pinned to the bottom-left of the modal panel. Any change to any tracked form (text inputs, file pickers, sliders, color swatches, drag-drop reorder) shows the bar with "Unsaved changes (N sections)" and one click POSTs every dirty form sequentially via the same AJAX path the per-form buttons used. Auto-submitting toggles in the Modules tab keep their existing on-change behavior since they never had a save button to replace; the email <i>Send Test</i> action and Data import/export forms are deliberately excluded so single-shot operations stay one-click.</li>
+                <li><b>Sidebar drag-drop wires into the save bar</b> — the manual sidebar reorder writes into a hidden <code>sidebar_order_json</code> input directly, so programmatic <code>.value =</code> assignments don't fire <code>input</code>/<code>change</code> events. <code>serialize()</code> now dispatches a bubbling <code>change</code> only when the JSON actually moves, which both lights up the save bar after a real drop and avoids false positives when a drag is cancelled mid-flight. The initial seed pass is suppressed so the bar doesn't latch dirty the moment the modal opens.</li>
+                <li><b>Intergroup subsection items reorder individually</b> — Email Accounts, Minutes, and Documents inside the Sidebar tab's <i>Intergroup</i> group are now first-class draggable rows alongside the section's parent drag handle. Saved order persists in <code>sidebar_order_json.intergroup</code> with append-fallback for newly-enabled items, and <code>_build_intergroup_items</code> applies the saved order to the live sidebar in manual mode. The previous static "we don't currently support reordering inside it" rows are gone, along with the dead <code>.sidebar-order-item-static</code> CSS.</li>
+                <li><b>Email Accounts nested under the Intergroup module row</b> — Settings → Modules now visually nests the <i>Email Accounts</i> sub-toggle inside the <i>Intergroup module</i> row using a new <code>.special-page-subrows</code> connector layer (vertical line + horizontal tee). Functionality is unchanged: turning Email Accounts off keeps Minutes &amp; Documents visible while hiding only the Email entry; turning the parent module off still falls back to the standalone Email link in Main per existing sidebar logic.</li>
+                <li><b>New <code>intergroup_member</code> role</b> — a fifth role sitting alongside admin / editor / frontend_editor / viewer. Inherits every Editor permission (meetings, libraries, readings, uploads), <b>plus</b> exclusive edit access to the <i>Intergroup Documents</i> and <i>Intergroup Minutes</i> libraries. Regular Editors and Frontend Editors are now blocked from those two libraries — the per-library gate routes them through <code>can_edit_intergroup_libraries</code> (admin + intergroup_member only). Library renaming is additionally locked to admins for the protected libraries so an Intergroup Member can't rename one out of its gate. Library / reading deletion remains admin-only across the board.</li>
+                <li><b>Email Accounts page stays admin-only</b> — the Intergroup Email Accounts editor (<code>/intergroup/edit</code>) is unchanged at <code>@admin_required</code>; surfaced in the Modules tab via a red "Admin-only" pill and a tooltip on the Email Accounts sub-row that explains the gating: Documents/Minutes editable by admins + Intergroup Members; Email Accounts admin-only.</li>
+                <li><b>Users panel shows the new role</b> — the <i>Roles &amp; permissions</i> explainer card grew a fifth row with a purple "Intergroup member" pill and a description of what the role can / can't do. The role <code>&lt;select&gt;</code> options now render through a friendly label map (<i>Intergroup member</i>, <i>Frontend editor</i>, etc.) instead of raw underscored keys. The role-column track auto-sizes via <code>minmax(140px, max-content)</code> so the longer pill doesn't overlap the description column.</li>
+                <li><b>Per-library edit gates plumbed end-to-end</b> — <code>library_edit</code>, <code>reading_new</code>, <code>reading_edit</code>, and <code>library_readings_reorder</code> moved off <code>@editor_required</code> to <code>@login_required</code> + an inline <code>_require_can_edit_library</code> check that consults the library's name. <code>library_detail.html</code> swaps its <code>can_edit</code> flag from <code>can_edit()</code> to <code>can_edit_library(library)</code> so the Edit / Add buttons hide for users who can't edit the specific library being viewed. <code>markdown_preview</code> gates on <code>can_use_editor_tools</code> so Intergroup Members get inline preview while editing readings.</li>
+              </ul>
+            </li>
+            <li>
               <div class="u-name">1.7.5</div>
               <div class="muted smaller">April 2026</div>
               <ul>
@@ -1241,6 +1280,13 @@
           </ul>
         </div>
       </div>
+    </div>
+    {# Yellow save bar — JS shows it whenever any tracked form inside the
+       settings modal becomes dirty. Click commits all dirty forms via the
+       same AJAX path the per-form save buttons used to use. #}
+    <div class="fe-save-bar settings-save-bar" id="settings-save-bar" hidden>
+      <span class="fe-save-bar-msg">Unsaved changes</span>
+      <button type="button" class="btn fe-save-bar-btn" id="settings-save-bar-btn">Save</button>
     </div>
   </div>
 </div>

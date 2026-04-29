@@ -11,10 +11,11 @@ explicitly rather than computed.
 # Display label + ordering for the dropdown. Insertion order is the
 # rendered order; first item is the "broadest" tier.
 ROLE_TIERS = [
-    ("viewer",          "All signed-in users"),
-    ("editor",          "Editors and admins"),
-    ("frontend_editor", "Frontend editors and admins"),
-    ("admin",           "Admins only"),
+    ("viewer",            "All signed-in users"),
+    ("editor",            "Editors and admins"),
+    ("frontend_editor",   "Frontend editors and admins"),
+    ("intergroup_member", "Intergroup members and admins"),
+    ("admin",             "Admins only"),
 ]
 ROLE_TIER_KEYS = {k for k, _ in ROLE_TIERS}
 
@@ -32,6 +33,8 @@ def user_meets_role(user, required):
         return role in ("admin", "editor")
     if required == "frontend_editor":
         return role in ("admin", "frontend_editor")
+    if required == "intergroup_member":
+        return role in ("admin", "intergroup_member")
     if required == "admin":
         return role == "admin"
     # Unknown requirement → fail closed.

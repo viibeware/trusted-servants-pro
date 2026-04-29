@@ -10,6 +10,17 @@ from .crypto import decrypt
 
 bp = Blueprint("auth", __name__, url_prefix="/tspro/auth")
 
+# Friendly labels for the user-facing role <select> options. Keys map 1-1
+# to the strings stored in ``User.role`` (see models.ROLES); raw keys still
+# serve as a fallback when an unknown role appears.
+ROLE_LABELS = {
+    "admin":             "Admin",
+    "editor":            "Editor",
+    "frontend_editor":   "Frontend editor",
+    "intergroup_member": "Intergroup member",
+    "viewer":            "Viewer",
+}
+
 TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
 # DB-backed login rate limiter. Rows persist across gunicorn workers and
@@ -221,7 +232,7 @@ def users():
         for u in user_list if user_is_locked(u.username)
     }
     return render_template("users.html", users=user_list, roles=ROLES,
-                           lockouts=lockouts)
+                           role_labels=ROLE_LABELS, lockouts=lockouts)
 
 
 @bp.route("/users/<int:uid>/unlock", methods=["POST"])
