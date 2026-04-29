@@ -1167,8 +1167,13 @@ def sidebar_save():
         # first by the helper regardless of stored JSON.
         valid_main = {it["key"] for it in _MAIN_CATALOG if it["key"] not in _PINNED}
         valid_admin = {it["key"] for it in _ADMIN_CATALOG if it["key"] not in _PINNED}
-        from .sidebar import _INTERGROUP_CATALOG  # noqa: WPS437
-        valid_intergroup = {it["key"] for it in _INTERGROUP_CATALOG}
+        # Intergroup keys are *dynamic* — the section's content includes
+        # ``ig_email`` plus one ``ig_lib_<id>`` per Intergroup-flagged
+        # library. Resolve the valid set from the live reorder catalog
+        # so admin-added libraries don't get stripped out at save time.
+        from .sidebar import admin_reorder_catalog  # noqa: WPS437
+        valid_intergroup = {it["key"] for it
+                            in admin_reorder_catalog(s).get("intergroup", [])}
         clean = {}
         sec = payload.get("sections")
         if isinstance(sec, list):
