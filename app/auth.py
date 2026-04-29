@@ -255,6 +255,7 @@ def users_create():
     username = request.form["username"].strip()
     email = request.form["email"].strip()
     password = request.form["password"]
+    phone = (request.form.get("phone") or "").strip() or None
     role = request.form.get("role", "viewer")
     if role not in ROLES:
         role = "viewer"
@@ -264,7 +265,7 @@ def users_create():
     ).first():
         flash("Username or email already exists", "danger")
         return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
-    u = User(username=username, email=email,
+    u = User(username=username, email=email, phone=phone,
              password_hash=generate_password_hash(password), role=role)
     db.session.add(u)
     db.session.commit()
@@ -297,6 +298,12 @@ def users_update(uid):
     new_pw = request.form.get("password", "").strip()
     if new_pw:
         u.password_hash = generate_password_hash(new_pw)
+    # Phone is optional and editable on every user-row save. The form
+    # always submits the field (possibly blank), so a missing key here
+    # is treated as "no change" rather than "clear" — an admin can clear
+    # by submitting the field empty since "" → None below.
+    if "phone" in request.form:
+        u.phone = (request.form.get("phone") or "").strip() or None
     db.session.commit()
     flash("User updated", "success")
     return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))

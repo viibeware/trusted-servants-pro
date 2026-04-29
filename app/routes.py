@@ -4644,15 +4644,20 @@ def request_access_submit():
 @bp.route("/access-requests")
 @admin_required
 def access_requests():
-    import json
     items = AccessRequest.query.order_by(AccessRequest.status.asc(),
                                          AccessRequest.created_at.desc()).all()
-    for r in items:
-        try:
-            r.roles = json.loads(r.roles_json or "[]")
-        except (ValueError, TypeError):
-            r.roles = []
-    return render_template("access_requests.html", items=items)
+    # Roles are exposed via the read-only ``AccessRequest.roles`` property
+    # — the loop that previously mutated each instance with the parsed
+    # list is gone. ``no-store`` on the response defeats any stale-HTML
+    # render the browser might cache (the modal-driven Create User flow
+    # navigates away and back, which on some browsers can re-paint a
+    # cached version of this list with stale row content).
+    resp = current_app.make_response(
+        render_template("access_requests.html", items=items)
+    )
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
 
 
 @bp.route("/access-requests/<int:rid>/handled", methods=["POST"])

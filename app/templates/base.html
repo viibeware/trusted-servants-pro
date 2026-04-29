@@ -929,6 +929,15 @@
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
             <li>
+              <div class="u-name">1.7.8</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>User phone numbers</b> — new optional <code>phone</code> column on <code>User</code>. The Create User form on Settings → Users grew a Phone field, and every row in the All Users table grew a Phone column with an inline editor. <code>users_create</code> persists the field on creation and <code>users_update</code> writes it back when the row's form is submitted (blank empties it). Migration adds the column to existing databases.</li>
+                <li><b>Access request → Create User auto-fills phone</b> — the per-row Create User button on Access Requests now carries <code>data-phone</code> in addition to <code>data-email</code>. The JS that opens the Settings modal forwards the phone via a <code>prefill_phone</code> query param into the iframe; the Users template reads it and seeds the new Phone field on the Create User form. The submitted access-request row's phone now flows straight into the user record without retyping.</li>
+                <li><b>Access requests page hardened against stale-render bugs</b> — the route now sends <code>Cache-Control: no-store</code> + <code>Pragma: no-cache</code>, so a browser can't paint a cached version of the list after the admin has gone through the Settings modal's Create User flow. The view loop also stopped mutating each <code>AccessRequest</code> SQLAlchemy instance with a parsed <code>roles</code> attribute — replaced by a read-only <code>AccessRequest.roles</code> property — so the rendering path can't write to the model. Together these close off the path to a previously-reported visual rename of an unrelated request row.</li>
+              </ul>
+            </li>
+            <li>
               <div class="u-name">1.7.7</div>
               <div class="muted smaller">April 2026</div>
               <ul>

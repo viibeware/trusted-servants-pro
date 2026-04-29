@@ -623,7 +623,8 @@ def _migrate_sqlite(app):
                          ("dash_show_online_users", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_access_requests", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_order_json", "TEXT"),
-                         ("last_seen_at", "DATETIME")):
+                         ("last_seen_at", "DATETIME"),
+                         ("phone", "VARCHAR(64)")):
             add("user", col, ddl)
         for col, ddl in (("open_in_new_tab", "BOOLEAN NOT NULL DEFAULT 0"),):
             add("frontend_nav_item", col, ddl)

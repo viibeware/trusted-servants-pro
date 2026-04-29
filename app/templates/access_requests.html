@@ -40,7 +40,9 @@
         <td class="nowrap">
           <button type="button" class="btn btn-sm btn-primary"
                   data-create-user-from-request
-                  data-email="{{ r.email }}">Create User</button>
+                  data-email="{{ r.email }}"
+                  data-name="{{ r.name }}"
+                  data-phone="{{ r.phone or '' }}">Create User</button>
           <form method="post" action="{{ url_for('main.access_request_handled', rid=r.id) }}" style="display:inline">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm">{% if r.status == 'pending' %}Mark Handled{% else %}Reopen{% endif %}</button>

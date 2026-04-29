@@ -50,6 +50,10 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(255), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(32), nullable=False, default="viewer")
+    # Optional contact number captured at user creation. Prefilled from
+    # the matching access-request row when the admin clicks Create User
+    # from the Access Requests page; editable on the Users panel later.
+    phone = db.Column(db.String(64))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     dash_show_stats = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_intergroup = db.Column(db.Boolean, nullable=False, default=True)
@@ -544,6 +548,22 @@ class AccessRequest(db.Model):
     status = db.Column(db.String(16), nullable=False, default="pending")  # pending|handled
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     handled_at = db.Column(db.DateTime)
+
+    @property
+    def roles(self):
+        """Decoded list of role labels for template rendering. Pure
+        read-only property so the rendering path can't accidentally
+        mutate the SQLAlchemy instance — earlier code assigned
+        ``r.roles = json.loads(...)`` inside the view loop, which is
+        functionally fine but conceptually fragile. A property keeps
+        the decode in one place and makes the row immutable to the
+        rendering layer."""
+        import json as _json
+        try:
+            data = _json.loads(self.roles_json or "[]")
+        except (ValueError, TypeError):
+            return []
+        return data if isinstance(data, list) else []
 
 
 class Reading(db.Model):

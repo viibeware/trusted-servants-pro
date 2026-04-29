@@ -369,11 +369,15 @@
   })();
 
   // Access Requests → Create User: open Settings → Users with the iframe
-  // reloaded against a ?prefill=<email> query param so the Create User form
-  // arrives pre-populated.
+  // reloaded against query params so the Create User form arrives
+  // pre-populated. Email seeds username + email; name and phone are
+  // forwarded so the admin doesn't have to retype anything from the
+  // request row they just clicked.
   document.querySelectorAll("[data-create-user-from-request]").forEach(btn => {
     btn.addEventListener("click", () => {
       const email = btn.dataset.email || "";
+      const name = btn.dataset.name || "";
+      const phone = btn.dataset.phone || "";
       const modal = document.getElementById("settings-modal");
       if (!modal) return;
       openModal("settings-modal");
@@ -383,8 +387,13 @@
       const iframe = pane && pane.querySelector("iframe.settings-frame");
       if (iframe) {
         const base = iframe.dataset.src || "";
+        const params = new URLSearchParams();
+        if (email) params.set("prefill", email);
+        if (name)  params.set("prefill_name", name);
+        if (phone) params.set("prefill_phone", phone);
+        params.set("_", Date.now().toString());
         const sep = base.includes("?") ? "&" : "?";
-        iframe.src = base + sep + "prefill=" + encodeURIComponent(email) + "&_=" + Date.now();
+        iframe.src = base + sep + params.toString();
       }
     });
   });
