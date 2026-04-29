@@ -43,10 +43,12 @@
             <li>May edit or delete any library file regardless of uploader</li>
             <li>Upload &amp; manage media; view Zoom accounts</li>
             {% elif current_user.role == 'frontend_editor' %}
-            <li>Inherits Editor role permissions</li>
+            <li>Inherits Editor role permissions (including the library-file edit/delete restriction)</li>
             <li>Edit the Web Frontend module: header, footer, homepage, navigation, mega menus, alert bars, theme &amp; design tokens</li>
             <li>Toggle public visibility of the Web Frontend</li>
-            <li>Create &amp; edit meetings, libraries, readings, files</li>
+            <li>Create &amp; reorder meetings, libraries, readings; upload files</li>
+            <li>May edit or delete <b>library</b> files only when the uploader was an editor-tier user</li>
+            <li>Upload, edit &amp; delete files attached to meetings (any uploader)</li>
             {% elif current_user.role == 'editor' %}
             <li>Create, edit &amp; reorder meetings, locations, schedules, Zoom accounts</li>
             <li>Create &amp; reorder libraries; upload files into them</li>

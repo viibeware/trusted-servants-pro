@@ -490,11 +490,11 @@
             ('Upload, edit, delete files attached to meetings (any uploader)',
              {'admin':'yes','editor':'yes','frontend_editor':'yes','intergroup_member':'yes','viewer':'no'}),
             ('Edit / rename library files (any uploader)',
-             {'admin':'yes','editor':'partial','frontend_editor':'yes','intergroup_member':'yes','viewer':'no'}),
+             {'admin':'yes','editor':'partial','frontend_editor':'partial','intergroup_member':'yes','viewer':'no'}),
             ('Delete library files (any uploader)',
-             {'admin':'yes','editor':'partial','frontend_editor':'no','intergroup_member':'yes','viewer':'no'}),
+             {'admin':'yes','editor':'partial','frontend_editor':'partial','intergroup_member':'yes','viewer':'no'}),
             ('Bulk-edit categories / bulk-delete files',
-             {'admin':'yes','editor':'partial','frontend_editor':'no','intergroup_member':'yes','viewer':'no'}),
+             {'admin':'yes','editor':'partial','frontend_editor':'partial','intergroup_member':'yes','viewer':'no'}),
             ('Edit Intergroup-flagged libraries',
              {'admin':'yes','editor':'no','frontend_editor':'no','intergroup_member':'yes','viewer':'no'}),
             ('Create new Intergroup libraries',
@@ -551,11 +551,12 @@
           </table>
         </div>
         <p class="access-matrix-footnote muted smaller">
-          <sup>*</sup> Applies to <b>library</b> files only — Editors can rename, edit, or
-          delete a library file only when its uploader was an editor-tier user (Editor /
-          Frontend Editor / Intergroup Member). Admin-uploaded and legacy library files are
-          protected; an admin must change them. Files attached to meetings are unaffected
-          and editable by every editor-tier role regardless of uploader.
+          <sup>*</sup> Applies to <b>library</b> files only — Editors and Frontend Editors
+          can rename, edit, or delete a library file only when its uploader was an
+          editor-tier user (Editor / Frontend Editor / Intergroup Member). Admin-uploaded
+          and legacy library files are protected; an admin must change them. Files
+          attached to meetings are unaffected and editable by every editor-tier role
+          regardless of uploader.
         </p>
 
         <hr class="settings-sep">
@@ -1071,7 +1072,7 @@
               <div class="u-name">1.7.15</div>
               <div class="muted smaller">April 2026</div>
               <ul>
-                <li><b>Editors can only rename / edit library files they uploaded</b> — <code>User.can_edit_reading(reading)</code> was repurposed from a thin alias of <code>can_edit_library</code> into a per-row content-edit gate that mirrors <code>can_delete_reading</code>: Editors may only modify readings whose creator was an editor-tier user (Editor / Frontend Editor / Intergroup Member); admin-uploaded and legacy library files are protected. Admins, Intergroup Members, and Frontend Editors keep their broader edit authority. The route enforces the gate server-side and the per-row Edit button + modal markup is hidden client-side for rows the user can't edit. <b>Restriction is library-only</b> — files attached to meetings remain editable by every editor-tier role regardless of uploader.</li>
+                <li><b>Editors and Frontend Editors are restricted to editor-tier-uploaded library files</b> for rename / edit AND delete — <code>User.can_edit_reading(reading)</code> was repurposed from a thin alias of <code>can_edit_library</code> into a per-row content-edit gate, and both <code>can_edit_reading</code> and <code>can_delete_reading</code> now apply the same editor-tier-creator rule to Editors AND Frontend Editors. Frontend Editors used to have unrestricted edit on any library file but no delete authority at all; they now mirror Editor exactly on the library-file matrix (rename, edit, delete, bulk-edit, bulk-delete) so the role reads as a clean "Editor + Web Frontend module" delta. Admin-uploaded and legacy library files are protected for both roles. Admins and Intergroup Members keep their broader authority. <b>Restriction is library-only</b> — files attached to meetings remain editable and deletable by every editor-tier role regardless of uploader.</li>
                 <li><b>Your Access tab redesigned as a comparison matrix</b> — the role-specific bulleted list was replaced with an elegant comparison table whose columns are roles and rows are capabilities. Cells use ✓ / ✓<sup>*</sup> / — for yes / partial / no. The viewer's own column gets a brand-tinted background so "what can I do?" reads at a glance, and rows where the Editor role is restricted to its own uploads are flagged with a footnote marker. The footnote spells out that the restriction is library-only and meeting attachments are unaffected.</li>
                 <li><b>Admin column hidden from non-admin matrix viewers</b> — the matrix's role columns are <code>['editor', 'frontend_editor', 'intergroup_member', 'viewer']</code> by default; the Admin column is prepended only when <code>current_user.is_admin()</code>. Non-admins don't need the row aimed at users who outrank them, so they see four columns; admins see all five. Implemented as a single Jinja set expression to avoid the well-known {% raw %}<code>{% set %}</code>-inside-<code>{% if %}</code>{% endraw %} scoping issue.</li>
                 <li><b>Server widget hidden for Editor and Viewer roles</b> — the dashboard's Server Stats column on the role widget is now visible only to admin / frontend_editor / intergroup_member. Editors and Viewers see the Your role panel alone, full-card-width via the existing <code>server-metrics-role-only</code> styling. A single <code>_has_server</code> flag set at the top of <code>index.html</code> drives the widget gate, the role-only-styling class, and the dashboard customize toggle's label so they can't drift.</li>

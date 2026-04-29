@@ -63,7 +63,7 @@ ROLE_PERMISSIONS = {
     "frontend_editor": _EDITOR_BASE + [
         "Edit the Web Frontend module: header, footer, homepage builder, navigation, mega menus, alert bars, theme/design tokens.",
         "Toggle public visibility of the Web Frontend.",
-        "Cannot delete library files regardless of uploader.",
+        "Library files: may rename, edit, or delete only those whose uploader was an editor-tier user (Editor / Frontend Editor / Intergroup Member). Admin-uploaded and legacy library files are protected; this restriction does not apply to files attached to meetings.",
         "Cannot reach Settings, Users, or the Intergroup Email Accounts page.",
         "Cannot edit the Intergroup Documents or Intergroup Minutes libraries.",
     ],

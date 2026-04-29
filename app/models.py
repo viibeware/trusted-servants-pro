@@ -110,17 +110,17 @@ class User(UserMixin, db.Model):
     def can_edit_reading(self, reading):
         """Per-reading gate for renaming / editing an existing reading
         (title change, file replacement, body / URL / thumbnail swap,
-        inline category re-tag). Editors are restricted to readings
-        whose creator was an editor-tier user — mirrors
-        ``can_delete_reading`` so a single rule covers both rename and
-        delete authority. Admin / intergroup_member / frontend_editor
-        follow the broader ``can_edit_library`` gate; viewers fail at
-        that gate."""
+        inline category re-tag). Editors AND Frontend Editors are
+        restricted to readings whose creator was an editor-tier user
+        — mirrors ``can_delete_reading`` so a single rule covers both
+        rename and delete authority. Admin / intergroup_member follow
+        the broader ``can_edit_library`` gate; viewers fail at that
+        gate."""
         if reading is None:
             return False
         if not self.can_edit_library(reading.library):
             return False
-        if self.role == "editor":
+        if self.role in ("editor", "frontend_editor"):
             creator = reading.creator
             if creator is None:
                 return False
@@ -152,14 +152,13 @@ class User(UserMixin, db.Model):
         - Intergroup members: any reading inside a library they can edit
           (they have exclusive edit on Intergroup Documents/Minutes; for
           everything else they inherit the broad editor gate).
-        - Editors: only readings whose creator was an editor-tier user
-          (editor / frontend_editor / intergroup_member). Admin-created
-          and legacy (creator=None) readings are protected — an admin
-          must remove those. This stops a regular editor from purging
+        - Editors and Frontend Editors: only readings whose creator was
+          an editor-tier user (editor / frontend_editor /
+          intergroup_member). Admin-created and legacy (creator=None)
+          readings are protected — an admin must remove those. This
+          stops a regular editor or frontend editor from purging
           authoritative content the admin maintains.
-        - Frontend editors and viewers: never. Frontend editors inherit
-          Editor for everything else but library-file deletion is held
-          back per the role-permission spec.
+        - Viewers: never.
 
         ``reading`` is the ``Reading`` row about to be deleted; ``None``
         is treated as a no-op deny."""
@@ -169,12 +168,12 @@ class User(UserMixin, db.Model):
             return True
         if self.role == "intergroup_member":
             return self.can_edit_library(reading.library)
-        if self.role == "editor":
+        if self.role in ("editor", "frontend_editor"):
             creator = reading.creator
             if creator is None:
                 return False
             return creator.role in ("editor", "frontend_editor", "intergroup_member")
-        # frontend_editor + viewer fall through to deny.
+        # viewer falls through to deny.
         return False
 
     def is_admin(self):
