@@ -106,6 +106,38 @@ class User(UserMixin, db.Model):
         role that has editor tools also passes the broad editor gate."""
         return self.can_edit()
 
+    def can_delete_reading(self, reading):
+        """Per-reading deletion gate.
+
+        - Admins: any reading.
+        - Intergroup members: any reading inside a library they can edit
+          (they have exclusive edit on Intergroup Documents/Minutes; for
+          everything else they inherit the broad editor gate).
+        - Editors: only readings whose creator was an editor-tier user
+          (editor / frontend_editor / intergroup_member). Admin-created
+          and legacy (creator=None) readings are protected — an admin
+          must remove those. This stops a regular editor from purging
+          authoritative content the admin maintains.
+        - Frontend editors and viewers: never. Frontend editors inherit
+          Editor for everything else but library-file deletion is held
+          back per the role-permission spec.
+
+        ``reading`` is the ``Reading`` row about to be deleted; ``None``
+        is treated as a no-op deny."""
+        if reading is None:
+            return False
+        if self.role == "admin":
+            return True
+        if self.role == "intergroup_member":
+            return self.can_edit_library(reading.library)
+        if self.role == "editor":
+            creator = reading.creator
+            if creator is None:
+                return False
+            return creator.role in ("editor", "frontend_editor", "intergroup_member")
+        # frontend_editor + viewer fall through to deny.
+        return False
+
     def is_admin(self):
         return self.role == "admin"
 
@@ -239,6 +271,12 @@ class SiteSetting(db.Model):
     footer_logo_filename = db.Column(db.String(500))
     footer_logo_url = db.Column(db.String(1000))
     footer_logo_width = db.Column(db.Integer, default=32)
+    # Canonical public URL for this portal. Used by emails and any other
+    # outbound message that needs an absolute link — without this set,
+    # `url_for(..., _external=True)` falls back to whatever Host header
+    # the request carried (often a Docker bridge IP). Stored without a
+    # trailing slash; helpers in app/routes.py normalize before use.
+    site_url = db.Column(db.String(255))
     intergroup_enabled = db.Column(db.Boolean, nullable=False, default=False)
     # Umbrella "Intergroup" module: when on, the sidebar gets an Intergroup
     # subsection that surfaces the Intergroup Email page plus shortcuts to
@@ -582,7 +620,15 @@ class Reading(db.Model):
     original_filename = db.Column(db.String(500))
     thumbnail_filename = db.Column(db.String(500))
     position = db.Column(db.Integer, nullable=False, default=0)
+    # User who created the reading. Drives the per-reading deletion gate
+    # for the Editor role (Editors may only delete readings whose creator
+    # was an editor-tier user — admin-created content is protected).
+    # Nullable so legacy rows survive the migration; legacy readings are
+    # treated as admin-created (uneditable to non-admins) by the gate.
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    creator = db.relationship("User", foreign_keys=[created_by])
 
     @property
     def url_slug(self):

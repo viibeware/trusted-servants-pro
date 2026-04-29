@@ -120,6 +120,7 @@
     </div>
     <div class="settings-tabs" role="tablist">
       <button type="button" class="settings-tab active" data-tab="appearance">Appearance</button>
+      <button type="button" class="settings-tab" data-tab="your-access">Your Access</button>
       {% if current_user.is_admin() %}
       <button type="button" class="settings-tab" data-tab="users">Users</button>
       <button type="button" class="settings-tab" data-tab="locations">Meeting Locations</button>
@@ -323,6 +324,19 @@
           </div>
           <div class="form-actions"><button class="btn btn-primary">Save Open Graph</button></div>
         </form>
+        <form class="form appearance-site-url-form" method="post" action="{{ url_for('main.site_url_save') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="u-name">Public Domain</div>
+          <p class="muted small">Canonical URL used in outbound emails and any other absolute link this portal sends out. Without this set, links fall back to whatever <code>Host</code> header the request carried — which is usually a Docker bridge IP for portals behind a reverse proxy. Save this once and every welcome email / access-request notification picks up the right hostname.</p>
+          <label>Site URL
+            <input name="site_url" type="url" value="{{ (site.site_url if site else '') or '' }}"
+                   placeholder="https://ts.example.com">
+          </label>
+          <p class="muted smaller" style="margin-top:6px;">
+            Tip: omit the trailing slash. Bare domains (<code>example.com</code>) are auto-prefixed with <code>https://</code>.
+          </p>
+          <div class="form-actions"><button class="btn btn-primary">Save Domain</button></div>
+        </form>
         </div>
         <script>
         (function(){
@@ -426,6 +440,92 @@
         })();
         </script>
         {% endif %}
+      </div>
+      {# Your Access — visible to every signed-in user. Single source
+         of truth for "what can I do here?" The matrix below is keyed
+         on current_user.role and mirrors the gates in app/models.py
+         (User.can_*) plus the sidebar visibility rules. Intergroup
+         deletion notes match User.can_delete_reading. #}
+      <div class="settings-pane" data-pane="your-access">
+        {% set _role = current_user.role %}
+        {% set _role_label = {
+          'admin': 'Admin',
+          'editor': 'Editor',
+          'frontend_editor': 'Frontend Editor',
+          'intergroup_member': 'Intergroup Member',
+          'viewer': 'Viewer',
+        }.get(_role, _role|capitalize) %}
+        {% set _badge_cls = {
+          'admin': 'perm-badge-admin',
+          'editor': 'perm-badge-editor',
+          'frontend_editor': 'perm-badge-fe',
+          'intergroup_member': 'perm-badge-ig',
+          'viewer': 'perm-badge-viewer',
+        }.get(_role, 'perm-badge-viewer') %}
+        <div class="your-access-head">
+          <div>
+            <div class="u-name">Signed in as <b>{{ current_user.username }}</b></div>
+            <p class="muted small">{{ current_user.email or '' }}</p>
+          </div>
+          <span class="perm-badge {{ _badge_cls }}">{{ _role_label }}</span>
+        </div>
+
+        {# can_yes / can_no helper macros render a green-check or
+           red-x bullet so the access list is scannable at a glance. #}
+        {% macro can_yes(text) %}<li class="ya-yes"><span class="ya-icon">✓</span><span>{{ text|safe }}</span></li>{% endmacro %}
+        {% macro can_no(text)  %}<li class="ya-no"><span class="ya-icon">✕</span><span>{{ text|safe }}</span></li>{% endmacro %}
+
+        <div class="u-name">What you can do</div>
+        <ul class="your-access-list">
+          {% if _role == 'admin' %}
+          {{ can_yes("Manage users, access requests, modules, and site settings") }}
+          {{ can_yes("Create, edit, and delete meetings, locations, schedules, and Zoom accounts") }}
+          {{ can_yes("Create, edit, reorder, and delete libraries and the readings inside them <i>(any uploader)</i>") }}
+          {{ can_yes("Edit the Web Frontend module — header, footer, homepage, navigation, theme tokens") }}
+          {{ can_yes("Edit the Intergroup Documents and Intergroup Minutes libraries") }}
+          {{ can_yes("Read and edit the Intergroup Email Accounts page") }}
+          {{ can_yes("Import / export the full data archive") }}
+          {% elif _role == 'intergroup_member' %}
+          {{ can_yes("Create, edit, and reorder meetings, locations, schedules, Zoom accounts") }}
+          {{ can_yes("Create, edit, reorder, and delete library files <i>(any uploader)</i>") }}
+          {{ can_yes("Edit access to Intergroup-specific libraries") }}
+          {{ can_yes("View the Intergroup Email Accounts page") }}
+          {{ can_yes("Customize your dashboard widgets and order") }}
+          {{ can_no("Reach Settings, Users, the Web Frontend module, or any admin-only area") }}
+          {{ can_no("Edit the Intergroup Email Accounts list itself <i>(admin-only)</i>") }}
+          {{ can_no("Delete a library or the entire portal's data") }}
+          {% elif _role == 'frontend_editor' %}
+          {{ can_yes("Create, edit, and reorder meetings, locations, schedules, Zoom accounts") }}
+          {{ can_yes("Create, edit, and reorder libraries and the readings inside them") }}
+          {{ can_yes("Edit the Web Frontend module — header, footer, navigation, mega menus, alert bars, theme/design tokens") }}
+          {{ can_yes("Toggle public visibility of the Web Frontend") }}
+          {{ can_yes("Customize your dashboard widgets and order") }}
+          {{ can_no("<b>Delete library files</b> — regardless of who uploaded them") }}
+          {{ can_no("Edit the Intergroup Documents or Intergroup Minutes libraries <i>(admin / Intergroup Member only)</i>") }}
+          {{ can_no("Reach Settings, Users, or the Intergroup Email Accounts page") }}
+          {% elif _role == 'editor' %}
+          {{ can_yes("Create, edit, and reorder meetings, locations, schedules, Zoom accounts") }}
+          {{ can_yes("Create, edit, and reorder libraries and readings/files inside them") }}
+          {{ can_yes("Upload media; manage file attachments on meetings") }}
+          {{ can_yes("Customize your dashboard widgets and order") }}
+          {{ can_no("Delete library files except those whose creator was an Editor / Frontend Editor / Intergroup Member <i>(admin-created files are protected)</i>") }}
+          {{ can_no("Edit the Intergroup Documents or Intergroup Minutes libraries") }}
+          {{ can_no("Reach Settings, Users, the Web Frontend module, or the Intergroup Email Accounts page") }}
+          {% else %}
+          {{ can_yes("View meetings, libraries, readings, and uploaded files") }}
+          {{ can_yes("View Zoom accounts and the calendar") }}
+          {{ can_yes("Customize your dashboard widgets and order") }}
+          {{ can_no("Edit, upload, or delete anything") }}
+          {{ can_no("Reach admin areas (Settings, Users, Web Frontend, Email Accounts)") }}
+          {% endif %}
+        </ul>
+
+        <hr class="settings-sep">
+        <div class="u-name">Need a different role?</div>
+        <p class="muted small">
+          Role assignments are managed by an admin. If your access needs to change, contact a portal admin via the
+          <a href="#" data-open-modal="pic-help-modal">Need Help?</a> popup.
+        </p>
       </div>
       {% if current_user.is_admin() %}
       <div class="settings-pane" data-pane="users">
@@ -929,6 +1029,21 @@
 
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
+            <li>
+              <div class="u-name">1.7.12</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Per-reading deletion gate</b> — library file deletion is no longer a flat <code>@admin_required</code>. The new <code>User.can_delete_reading(reading)</code> matrix: Admins can delete any reading; Intergroup Members can delete any reading inside a library they can edit; Editors may delete only readings whose creator was an editor-tier user (editor / frontend_editor / intergroup_member) — admin-created and legacy (creator-unknown) files are protected; Frontend Editors and Viewers cannot delete library files regardless of uploader. The route enforces the gate server-side and the per-row Delete button on the library detail page hides for users who can't delete that specific reading.</li>
+                <li><b>Reading creator tracked</b> — new <code>created_by</code> column on <code>Reading</code> (FK to <code>User</code>, nullable). Set on every fresh reading via the <i>Add File</i> form and on every WordPress-importer row to the admin who ran the import. Migration adds the column to existing databases; pre-existing readings have <code>created_by = NULL</code> and are treated as admin-protected by the deletion gate.</li>
+                <li><b>"Your Access" tab in the Settings modal</b> — every signed-in user (regardless of role) gets a new tab that surfaces their username, role pill, and a green-check / red-× matrix of every action they can and can't perform. The matrix branches per role (admin / editor / frontend_editor / intergroup_member / viewer) and matches the gates in <code>User.can_*</code> exactly, including the per-reading deletion rule. Admins still get the rest of the tabs (Users, Modules, Email, Security, Data); non-admins now have a clear, in-app reference instead of having to ask why a button isn't showing up.</li>
+                <li><b>Dashboard role widget shows positive capabilities only</b> — every "Cannot…" line was stripped from the <i>Your role</i> panel inside the Server Stats card. The widget now lists only what each role <i>can</i> do, with a small "See full access details →" link at the bottom that opens the Settings modal directly to the Your Access tab where the full can / cannot matrix lives. Generic <code>data-settings-tab="&lt;key&gt;"</code> attribute on any <code>data-open-modal="settings-modal"</code> trigger works the same way.</li>
+                <li><b>Intergroup libraries hidden from the Libraries list</b> — <i>Intergroup Documents</i> and <i>Intergroup Minutes</i> are reached via the dedicated Intergroup subsection in the sidebar, so they no longer clutter the generic <code>/libraries</code> table or grid view. Direct deep-links (<code>/libraries/&lt;id&gt;</code>) still work for editors who have access. Filter is a SQL <code>NOT IN</code> on the canonical names imported from <code>INTERGROUP_LIBRARY_NAMES</code>.</li>
+                <li><b>Public Domain setting under Appearance</b> — new <i>Site URL</i> field in the right column of Settings → Appearance, alongside Open Graph. When set, every absolute URL this portal sends out (welcome emails, etc.) builds against this hostname instead of falling back to the request's <code>Host</code> header — which is usually a Docker bridge IP behind a reverse proxy and made the welcome email body show internal addresses. Bare domains (<code>example.com</code>) auto-prefix with <code>https://</code>; trailing slashes are stripped on save. Persisted on a new <code>SiteSetting.site_url</code> column with an additive migration.</li>
+                <li><b>Welcome email uses canonical URL + lists every capability</b> — the welcome email's "Sign in at" line uses the new <code>_public_url_for</code> helper, which prefers <code>SiteSetting.site_url</code> over the request-context external URL builder. The role-capabilities section is now self-contained per role (no more "Inherits every Editor capability above" abbreviation) — Frontend Editors and Intergroup Members see the full editor-tier list expanded plus their role-specific additions, so the recipient can read one bullet list and know exactly what their account unlocks.</li>
+                <li><b>Save bar width holds steady through commit</b> — clicking the yellow Save inside the Settings modal used to make the bar shrink leftward as the message moved "Unsaved changes (N sections)" → "Saving…" → "Saved" before fading out. The bar now snapshots its pixel width on click and pins it for the entire commit cycle, releasing the override only when fully hidden so the next dirty cycle re-measures fresh.</li>
+                <li><b>Role description copy polish</b> — the "Exclusive" callout for Intergroup Members was reworded to "Edit access to Intergroup-specific libraries" across the Your Access tab and dashboard role widget. Users-panel <i>Roles &amp; permissions</i> card now spells out the per-reading deletion rule per role: Frontend Editors get an explicit "cannot delete library files" callout; Editors get the editor-tier-only restriction; Intergroup Members get an "any uploader" callout.</li>
+              </ul>
+            </li>
             <li>
               <div class="u-name">1.7.10</div>
               <div class="muted smaller">April 2026</div>

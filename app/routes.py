@@ -991,6 +991,46 @@ def site_branding_save():
     return redirect(request.referrer or url_for("main.index"))
 
 
+@bp.route("/site-url", methods=["POST"])
+@admin_required
+def site_url_save():
+    """Persist the canonical public URL used by outbound messages
+    (welcome emails, access-request notifications, etc.). Stored
+    without a trailing slash. Saving an empty string clears the
+    override and falls back to the request's Host header."""
+    s = _get_site_setting()
+    raw = (request.form.get("site_url") or "").strip()
+    if raw:
+        # Tolerate users pasting "example.com" without a scheme — assume
+        # https since http portals would just redirect anyway.
+        if not raw.lower().startswith(("http://", "https://")):
+            raw = "https://" + raw
+        raw = raw.rstrip("/")
+    s.site_url = raw or None
+    db.session.commit()
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify(ok=True, site_url=s.site_url or "")
+    flash("Site URL saved", "success")
+    return redirect(request.referrer or url_for("main.index"))
+
+
+def _public_url_for(endpoint, **values):
+    """Build an absolute URL using the admin-configured site_url when
+    set, falling back to Flask's request-context external URL builder
+    when no override is present. Used by outbound emails so links
+    don't surface internal IPs / Docker hostnames."""
+    s = _get_site_setting()
+    base = (getattr(s, "site_url", None) or "").rstrip("/")
+    if base:
+        # Build the path against an arbitrary external host first so
+        # url_for emits the full path including the application root,
+        # then splice in the configured host. The request's base URL is
+        # discarded.
+        path = url_for(endpoint, **values)
+        return base + path
+    return url_for(endpoint, _external=True, **values)
+
+
 @bp.route("/intergroup")
 @login_required
 def intergroup():
@@ -1610,6 +1650,7 @@ def data_wp_import_posts():
             stored_filename=stored,
             original_filename=original,
             position=next_position,
+            created_by=current_user.id,
         )
         db.session.add(r)
         existing_titles.add(title)
@@ -3916,7 +3957,15 @@ def libraries():
     view = request.args.get("view") or request.cookies.get("view-libraries") or "table"
     sort = request.args.get("sort") or request.cookies.get("view-libraries-sort") or "name"
     direction = request.args.get("dir") or request.cookies.get("view-libraries-dir") or "asc"
-    items = Library.query.all()
+    # Intergroup Documents and Intergroup Minutes are surfaced via the
+    # Intergroup subsection in the sidebar (Email Accounts + Minutes +
+    # Documents). They're managed through their dedicated entry points
+    # rather than the generic libraries list, so we exclude them here
+    # to keep the list focused on regular meeting / fellowship content.
+    # Direct deep-link access (/libraries/<id>) still works for editors.
+    items = Library.query.filter(
+        ~Library.name.in_(INTERGROUP_LIBRARY_NAMES)
+    ).all()
     if sort == "files":
         items.sort(key=lambda l: (l.readings.count(), l.name.lower()))
     else:
@@ -4033,7 +4082,8 @@ def reading_new(lid):
     if deny is not None:
         return deny
     if request.method == "POST":
-        r = Reading(library_id=lib.id, title=request.form["title"].strip())
+        r = Reading(library_id=lib.id, title=request.form["title"].strip(),
+                    created_by=current_user.id)
         _apply_reading_form(r, request.form, request.files)
         db.session.add(r)
         db.session.commit()
@@ -4195,9 +4245,13 @@ def library_readings_reorder(lid):
 
 
 @bp.route("/readings/<int:rid>/delete", methods=["POST"])
-@admin_required
+@login_required
 def reading_delete(rid):
     r = db.session.get(Reading, rid) or abort(404)
+    if not current_user.can_delete_reading(r):
+        flash("You don't have permission to delete this file", "danger")
+        return redirect(request.referrer
+                        or url_for("main.library_detail", lid=r.library_id))
     lid = r.library_id
     if r.stored_filename:
         _delete_upload(r.stored_filename)

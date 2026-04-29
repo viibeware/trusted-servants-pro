@@ -164,7 +164,22 @@
     document.body.style.overflow = "";
   }
   document.querySelectorAll("[data-open-modal]").forEach(el => {
-    el.addEventListener("click", () => openModal(el.dataset.openModal));
+    el.addEventListener("click", (e) => {
+      // Allow data-settings-tab="<key>" alongside data-open-modal to
+      // deep-link a specific tab inside the settings modal — e.g. the
+      // dashboard role widget links to its full Your Access view.
+      const targetId = el.dataset.openModal;
+      const tab = el.dataset.settingsTab;
+      if (tab && targetId === "settings-modal" && el.tagName === "A") {
+        e.preventDefault();
+      }
+      openModal(targetId);
+      if (tab && targetId === "settings-modal") {
+        const modal = document.getElementById("settings-modal");
+        const tabBtn = modal && modal.querySelector('.settings-tab[data-tab="' + tab + '"]');
+        if (tabBtn) tabBtn.click();
+      }
+    });
   });
 
   // Upload / Paste content mode toggle on reading forms.
@@ -654,6 +669,7 @@
         setTimeout(() => {
           sbBar.hidden = true;
           sbBar.classList.remove("is-leaving");
+          sbBar.style.width = "";  // release the locked width set on click
           sbDirty.clear();
         }, 320);
       }
@@ -675,6 +691,11 @@
 
       sbBtn.addEventListener("click", async () => {
         if (!sbDirty.size) { sbBar.hidden = true; return; }
+        // Pin the bar's current pixel width before changing the message
+        // so it doesn't shrink leftward as text moves "Unsaved changes
+        // (N sections)" → "Saving…" → "Saved". Width is released in
+        // sbHideAfterSave so the next dirty cycle re-measures.
+        sbBar.style.width = sbBar.offsetWidth + "px";
         sbBtn.disabled = true;
         sbBtn.textContent = "Saving…";
         sbMsg.textContent = "Saving…";

@@ -19,6 +19,9 @@
           <div class="role-panel-label">Your role</div>
           <div class="role-panel-name">{{ current_user.role.replace('_', ' ')|capitalize }}</div>
           <ul class="role-caps">
+            {# Positive capabilities only — restrictions ("Cannot …")
+               live in Settings → Your Access so the dashboard widget
+               stays focused on what the user can do. #}
             {% if current_user.is_admin() %}
             <li>Full access to every feature in the portal</li>
             <li>Manage users, access requests &amp; modules</li>
@@ -26,28 +29,27 @@
             <li>Configure site settings, security &amp; data import/export</li>
             {% elif current_user.role == 'intergroup_member' %}
             <li>Inherits every Editor permission below</li>
-            <li><b>Exclusive</b> edit access to Intergroup Documents &amp; Intergroup Minutes libraries (Editors / Frontend Editors are blocked)</li>
+            <li>Edit access to Intergroup-specific libraries</li>
             <li>Create &amp; edit meetings, libraries, readings, files</li>
+            <li>May delete any library file regardless of uploader</li>
             <li>Upload &amp; manage media; view Zoom accounts</li>
-            <li>Cannot reach Settings, Users, Web Frontend, or Email Accounts</li>
             {% elif current_user.role == 'frontend_editor' %}
             <li>Inherits every Editor permission below</li>
             <li>Edit the Web Frontend module: header, footer, homepage, navigation, mega menus, alert bars, theme &amp; design tokens</li>
             <li>Toggle public visibility of the Web Frontend</li>
             <li>Create &amp; edit meetings, libraries, readings, files</li>
-            <li>Cannot edit Intergroup Documents/Minutes or Email Accounts</li>
             {% elif current_user.role == 'editor' %}
             <li>Create, edit &amp; reorder meetings, locations, schedules, Zoom accounts</li>
             <li>Create, edit &amp; reorder libraries and the readings inside them</li>
+            <li>May delete library files only if the creator was an editor-tier user</li>
             <li>Upload media and manage file attachments on meetings</li>
-            <li>Cannot reach Settings, Users, or the Web Frontend module</li>
-            <li>Cannot edit Intergroup Documents/Minutes (admin / Intergroup Member only)</li>
             {% else %}
             <li>Read-only access across the portal</li>
             <li>View meetings, libraries, readings &amp; uploaded files</li>
             <li>View Zoom accounts &amp; the calendar</li>
             <li>Customize your dashboard widgets &amp; their order</li>
             {% endif %}
+            <li class="role-caps-link"><a href="#" data-open-modal="settings-modal" data-settings-tab="your-access">See full access details →</a></li>
           </ul>
         </div>
         {% if current_user.can_edit() %}

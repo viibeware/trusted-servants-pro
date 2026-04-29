@@ -74,7 +74,7 @@
         {% endif %}
       {% if can_edit %}
         <button type="button" class="btn btn-sm" data-file-add-toggle="{{ edit_id }}">Edit</button>
-        {% if current_user.is_admin() %}
+        {% if current_user.can_delete_reading(r) %}
         <form method="post" action="{{ url_for('main.reading_delete', rid=r.id) }}" onsubmit="return confirm('Delete this file?');">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>

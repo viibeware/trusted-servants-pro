@@ -1547,6 +1547,13 @@ a.card.meeting-card { font-weight: 500; }
 .role-caps { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .role-caps li { position: relative; padding-left: 18px; font-size: 0.8125rem; line-height: 1.35; color: var(--text); }
 .role-caps li::before { content: "✓"; position: absolute; left: 0; top: 0; color: var(--brand); font-weight: 700; }
+/* Footer "See full access details" link — render without the green
+   check so it reads as a separate affordance from the capability
+   bullets, with a small top-margin to detach it visually. */
+.role-caps li.role-caps-link { padding-left: 0; margin-top: 6px; font-size: 0.75rem; }
+.role-caps li.role-caps-link::before { content: none; }
+.role-caps li.role-caps-link a { color: var(--brand); text-decoration: none; font-weight: 600; }
+.role-caps li.role-caps-link a:hover { text-decoration: underline; }
 
 /* Combined role + server-metrics widget layout */
 .server-metrics-body { display: grid; grid-template-columns: minmax(200px, 1fr) 2fr; gap: 24px; align-items: start; }
@@ -2778,6 +2785,47 @@ body.embed .card:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom
 .special-page-info p { margin: 0; }
 .special-page-toggle-form { margin: 0; display: flex; align-items: center; gap: 8px;
   flex-shrink: 0; }
+
+/* "Your Access" tab inside the Settings modal. Header row pairs the
+   user-identity block with their role pill on the right; the body
+   uses ya-yes / ya-no bullet rows with circular check / × glyphs so
+   the can / can't matrix is scannable at a glance. */
+.your-access-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.your-access-head .u-name { margin-bottom: 2px; }
+.your-access-list {
+  list-style: none; margin: 8px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.your-access-list li {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px;
+  align-items: start; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel-2); line-height: 1.45;
+}
+.your-access-list .ya-icon {
+  display: inline-grid; place-items: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  font-weight: 700; font-size: 0.75rem; line-height: 1;
+}
+.your-access-list .ya-yes .ya-icon {
+  background: rgba(22, 163, 74, 0.12); color: #16a34a;
+  border: 1px solid rgba(22, 163, 74, 0.30);
+}
+.your-access-list .ya-no .ya-icon {
+  background: rgba(220, 38, 38, 0.10); color: #b91c1c;
+  border: 1px solid rgba(220, 38, 38, 0.30);
+}
+html[data-theme="dark"] .your-access-list .ya-yes .ya-icon {
+  background: rgba(22, 163, 74, 0.20); color: #86efac;
+  border-color: rgba(22, 163, 74, 0.45);
+}
+html[data-theme="dark"] .your-access-list .ya-no .ya-icon {
+  background: rgba(220, 38, 38, 0.20); color: #fca5a5;
+  border-color: rgba(220, 38, 38, 0.45);
+}
 
 /* Access Requests Active / Archived view tabs in the card head. Sit
    to the right of the Requests heading, switch between the two views

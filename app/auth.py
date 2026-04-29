@@ -22,43 +22,59 @@ ROLE_LABELS = {
 }
 
 # Plain-text bullet list of capabilities included in the welcome email
-# sent to a freshly-created user. Mirrors the descriptions on the
-# Users-panel "Roles & permissions" card and the dashboard role widget
-# so the recipient gets the same picture of what their role unlocks.
+# sent to a freshly-created user. Each role's list is fully expanded —
+# inherited capabilities are repeated rather than abbreviated as
+# "Inherits every Editor capability above" — so the recipient can see
+# the complete picture of what their role unlocks without having to
+# cross-reference another role's bullets. Order follows: positives
+# (what you can do) first, then restrictions (what you can't).
+_VIEWER_BASE = [
+    "View meetings, libraries, readings, and uploaded files.",
+    "View Zoom accounts and the calendar.",
+    "Customize your own dashboard widgets and order.",
+]
+
+_EDITOR_BASE = _VIEWER_BASE + [
+    "Create, edit, and reorder meetings, locations, schedules, and Zoom accounts.",
+    "Create, edit, and reorder libraries and the readings/files inside them.",
+    "Upload media and manage file attachments on meetings.",
+]
+
 ROLE_PERMISSIONS = {
     "admin": [
         "Full access to every feature in the portal.",
-        "Create, edit, and delete meetings, libraries, readings, and uploads.",
-        "Manage users, access requests, modules, and site settings.",
-        "Edit the Web Frontend (header, footer, homepage, navigation, theme).",
-        "Edit the Intergroup Email Accounts page and Documents/Minutes libraries.",
-    ],
-    "editor": [
-        "Create, edit, and reorder meetings, locations, schedules, and Zoom accounts.",
-        "Create, edit, and reorder libraries and the readings/files inside them.",
+        "View meetings, libraries, readings, uploaded files, Zoom accounts, and the calendar.",
+        "Create, edit, reorder, and delete meetings, locations, schedules, and Zoom accounts.",
+        "Create, edit, reorder, and delete libraries and the readings inside them — any uploader, any library.",
         "Upload media and manage file attachments on meetings.",
+        "Edit the Web Frontend module: header, footer, homepage builder, navigation, mega menus, alert bars, theme/design tokens.",
+        "Toggle public visibility of the Web Frontend.",
+        "Edit the Intergroup Documents and Intergroup Minutes libraries.",
+        "Read and edit the Intergroup Email Accounts page.",
+        "Manage users, access requests, modules, site settings, and security.",
+        "Import and export the full data archive (database + uploads).",
+        "Customize your own dashboard widgets and order.",
+    ],
+    "editor": _EDITOR_BASE + [
+        "Library-file deletion: only readings whose creator was an editor-tier user. Admin-created and legacy files are protected.",
         "Cannot reach Settings, Users, the Web Frontend module, or the Intergroup Email Accounts page.",
         "Cannot edit the Intergroup Documents or Intergroup Minutes libraries (admin / Intergroup-Member only).",
     ],
-    "frontend_editor": [
-        "Inherits every Editor capability above.",
+    "frontend_editor": _EDITOR_BASE + [
         "Edit the Web Frontend module: header, footer, homepage builder, navigation, mega menus, alert bars, theme/design tokens.",
         "Toggle public visibility of the Web Frontend.",
+        "Cannot delete library files regardless of uploader.",
         "Cannot reach Settings, Users, or the Intergroup Email Accounts page.",
         "Cannot edit the Intergroup Documents or Intergroup Minutes libraries.",
     ],
-    "intergroup_member": [
-        "Inherits every Editor capability above.",
-        "Exclusive edit access to the Intergroup Documents and Intergroup Minutes libraries — regular Editors and Frontend Editors cannot edit those.",
+    "intergroup_member": _EDITOR_BASE + [
+        "Edit access to the Intergroup Documents and Intergroup Minutes libraries — regular Editors and Frontend Editors cannot edit those.",
+        "May delete any library file regardless of who uploaded it.",
         "Cannot edit the Web Frontend module.",
-        "Cannot reach Settings, Users, or the Intergroup Email Accounts page.",
-        "Library and reading deletion remains admin-only.",
+        "Cannot reach Settings, Users, or the Intergroup Email Accounts page (admin-only).",
     ],
-    "viewer": [
+    "viewer": _VIEWER_BASE + [
         "Read-only access across the portal.",
-        "View meetings, libraries, readings, and uploaded files.",
-        "View Zoom accounts and the calendar.",
-        "Customize your own dashboard widgets and order.",
         "Cannot edit, upload, or reach admin areas.",
     ],
 }
@@ -80,7 +96,11 @@ def _send_welcome_email(user, plaintext_password):
     role_label = ROLE_LABELS.get(user.role, user.role)
     perms = ROLE_PERMISSIONS.get(user.role, [])
     portal_name = (site.smtp_from_name or "Trusted Servants Pro").strip() or "Trusted Servants Pro"
-    login_url = url_for("auth.login", _external=True)
+    # Prefer the admin-configured canonical URL so the email body never
+    # surfaces a Docker bridge IP / internal hostname. Falls back to the
+    # request-context URL builder when no override is set.
+    from .routes import _public_url_for
+    login_url = _public_url_for("auth.login")
 
     lines = [
         f"Hello {user.username},",
