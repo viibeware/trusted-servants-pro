@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Delete Log · Trusted Servants Pro{% endblock %}
+{% block heading %}Delete Log{% endblock %}
+{% block content %}
+
+<section class="card">
+  <div class="card-head">
+    <h2>Recently deleted files</h2>
+    <span class="muted smaller">Files are restorable for {{ retention_days }} days · then permanently purged</span>
+  </div>
+  {% if not items %}
+  <p class="muted">No files in the recycle bin. Library files, meeting attachments, and File-Browser entries land here when deleted.</p>
+  {% else %}
+  <ul class="dlog-list">
+    {% for it in items %}
+    <li class="dlog-item">
+      <div class="dlog-item-head">
+        <div class="dlog-icon" aria-hidden="true">{{ icon('trash') }}</div>
+        <div class="dlog-item-main">
+          <div class="dlog-filename">{{ it.original_filename or it.title or '(untitled)' }}</div>
+          <div class="dlog-meta muted smaller">
+            Deleted {{ it.deleted_at.strftime('%Y-%m-%d %H:%M') }}
+            by <b>{{ it.deleter }}</b>
+            ·
+            {% if it.days_left > 0 %}
+              <span class="dlog-days-left">Auto-purges in {{ it.days_left }} day{{ '' if it.days_left == 1 else 's' }}</span>
+            {% else %}
+              <span class="dlog-days-left dlog-days-out">Past retention — purges on next sweep</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="dlog-actions">
+          <form method="post" action="{{ url_for('main.delete_log_restore', rid=it.id) }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-primary" title="Restore this file to its original location">Restore</button>
+          </form>
+          <form method="post" action="{{ url_for('main.delete_log_purge', rid=it.id) }}"
+                onsubmit='return confirm("Permanently delete " + {{ (it.original_filename or it.title or "this file")|tojson }} + "? This cannot be undone.");'
+                style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-danger" title="Permanently delete this file now">Purge now</button>
+          </form>
+        </div>
+      </div>
+      {% if it.crumbs %}
+      <ol class="dlog-tree" aria-label="Where this file was used">
+        {% for kind, label, link in it.crumbs %}
+        <li class="dlog-tree-node">
+          <span class="dlog-tree-kind">{{ kind }}</span>
+          {% if link %}<a class="dlog-tree-label" href="{{ link }}">{{ label }}</a>
+          {% else %}<span class="dlog-tree-label">{{ label }}</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endblock %}

@@ -3,8 +3,8 @@
    block render-collapses naturally — no wrapper is emitted. #}
 {% set _meeting_slug = meeting.public_slug %}
 {% set _public_files = meeting.public_files() %}
-{% set _public_readings = meeting.public_readings %}
-{% if _public_files or _public_readings %}
+{% set _public_library_items = meeting.public_library_items %}
+{% if _public_files or _public_library_items %}
 <section class="fe-meeting-resources" aria-labelledby="meeting-resources-head">
   <h3 id="meeting-resources-head">{{ icon('file-text') }} Files &amp; Readings</h3>
 
@@ -46,11 +46,11 @@
   {% endfor %}
   {% endif %}
 
-  {% if _public_readings %}
+  {% if _public_library_items %}
   <div class="fe-meeting-resources-group">
     <h4>Readings</h4>
     <ul>
-      {% for r in _public_readings %}
+      {% for r in _public_library_items %}
       {# A reading that's purely an external URL (no body, no upload)
          links straight to the destination — same rationale as external
          links above. #}

@@ -8,19 +8,19 @@
   <button type="button" class="btn" data-open-modal="meeting-edit-modal">Edit</button>
   {% if current_user.is_admin() %}
     {% if meeting.archived_at %}
-    <form method="post" action="{{ url_for('main.meeting_unarchive', mid=meeting.id) }}" style="display:inline">
+    <form method="post" action="{{ url_for('main.meeting_unarchive', slug=meeting.public_slug) }}" style="display:inline">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn">Restore</button>
     </form>
     {% else %}
-    <form method="post" action="{{ url_for('main.meeting_archive', mid=meeting.id) }}" onsubmit="return confirm('Archive this meeting? It will be hidden from the main list but can be restored later.');" style="display:inline">
+    <form method="post" action="{{ url_for('main.meeting_archive', slug=meeting.public_slug) }}" onsubmit="return confirm('Archive this meeting? It will be hidden from the main list but can be restored later.');" style="display:inline">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn">Archive</button>
     </form>
     {% endif %}
   {% endif %}
   {% if current_user.can_create_meetings() %}
-  <form method="post" action="{{ url_for('main.meeting_delete', mid=meeting.id) }}" onsubmit="return confirm('Delete this meeting permanently?');" style="display:inline">
+  <form method="post" action="{{ url_for('main.meeting_delete', slug=meeting.public_slug) }}" onsubmit="return confirm('Delete this meeting permanently?');" style="display:inline">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button class="btn btn-danger">Delete</button>
   </form>
@@ -135,7 +135,7 @@
 
 {% if current_user.can_edit() %}
   {% with modal_id="meeting-edit-modal",
-          form_action=url_for('main.meeting_edit', mid=meeting.id),
+          form_action=url_for('main.meeting_edit', slug=meeting.public_slug),
           zoom_accounts=zoom_accounts,
           locations=locations,
           all_libraries=all_libraries,
@@ -161,8 +161,8 @@
   {% set libs_mid = libs_all|rejectattr('name','equalto','Readings')|rejectattr('name','equalto','Meditation Videos')|list %}
   {% for lib in libs_first + libs_mid + libs_last %}
   <div class="lib-block">
-    <h3><a href="{{ url_for('main.library_detail', lid=lib.id) }}">{{ lib.name }}</a></h3>
-    {% set rs = meeting.visible_readings(lib) %}
+    <h3><a href="{{ url_for('main.library_detail', slug=lib.public_slug) }}">{{ lib.name }}</a></h3>
+    {% set rs = meeting.visible_library_items(lib) %}
     {% if rs %}
     <ul class="file-list">
       {% for r in rs %}

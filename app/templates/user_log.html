@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}User Log · Trusted Servants Pro{% endblock %}
+{% block heading %}User Log{% endblock %}
+{% block content %}
+
+{% if not users %}
+<section class="card"><p class="muted">No users on file yet.</p></section>
+{% else %}
+
+{# Live "Currently online" widget — markup + polling JS live in the
+   shared partial so the admin dashboard can re-use it. #}
+{% include "_online_widget.html" %}
+
+{# ---- Per-user detail card: picker + sessions + activity feed ------ #}
+{# Three previously-separate cards are merged into one so the
+   selected-account header stays anchored next to the data it
+   describes, and so vertical separators between subsections are
+   thin dividers rather than full card gaps. #}
+<section class="card user-log-detail">
+  <header class="user-log-detail-head">
+    <form method="get" action="{{ url_for('main.user_log') }}" class="user-log-picker-form">
+      <label class="user-log-picker-label">
+        <span>Account</span>
+        <select name="user_id" onchange="this.form.submit()">
+          {% for u in users %}
+          <option value="{{ u.id }}" {% if selected and u.id == selected.id %}selected{% endif %}>{{ u.username }} ({{ u.role.replace('_', ' ') }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="user-log-picker-label">
+        <span>Activity window</span>
+        <select name="days" onchange="this.form.submit()">
+          {% for d, lbl in [(7, 'Last 7 days'), (30, 'Last 30 days'), (90, 'Last 90 days'), (365, 'Last year')] %}
+          <option value="{{ d }}" {% if days == d %}selected{% endif %}>{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <noscript><button class="btn btn-sm">Apply</button></noscript>
+    </form>
+    <div class="user-log-summary">
+      <div class="ulog-chip">
+        <div class="avatar avatar-lg">{{ selected.username[:1].upper() }}</div>
+        <div>
+          <div class="ulog-chip-name">{{ selected.username }}</div>
+          <div class="muted small">{{ selected.email or '—' }} · {{ selected.role.replace('_', ' ') }}</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section class="user-log-detail-section">
+    <div class="user-log-detail-subhead">
+      <h3>Login sessions</h3>
+      <span class="muted smaller">Last 30 days · {{ sessions|length }} session{{ '' if sessions|length == 1 else 's' }}</span>
+    </div>
+    {% if not sessions %}
+    <p class="muted">No login activity in the last 30 days.</p>
+    {% else %}
+    <table class="tbl ulog-sessions-tbl">
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>Started</th>
+          <th>Last activity</th>
+          <th>Ended</th>
+          <th>IP</th>
+          <th>Browser</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sessions %}
+        <tr class="{% if s.is_active %}ulog-session-active{% endif %}">
+          <td>
+            {% if s.is_active %}
+              <span class="badge badge-success">Active</span>
+            {% else %}
+              <span class="badge badge-muted">{{ s.end_reason or 'ended' }}</span>
+            {% endif %}
+          </td>
+          <td class="muted small">{{ s.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td class="muted small">{{ s.last_activity_at.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td class="muted small">{% if s.ended_at %}{{ s.ended_at.strftime('%Y-%m-%d %H:%M') }}{% else %}—{% endif %}</td>
+          <td class="muted small mono">{{ s.ip or '—' }}</td>
+          <td class="muted small ulog-ua" title="{{ s.user_agent or '' }}">{{ (s.user_agent or '—')[:60] }}{% if s.user_agent and s.user_agent|length > 60 %}…{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+
+  <section class="user-log-detail-section">
+    <div class="user-log-detail-subhead">
+      <h3>Activity</h3>
+      <span class="muted smaller">{{ events|length }} event{{ '' if events|length == 1 else 's' }}{% if events|length == 500 %} · capped{% endif %}</span>
+    </div>
+    {% if not events %}
+    <p class="muted">No activity recorded for {{ selected.username }} in this window. Activity logging started in v1.7.18 — events from before the upgrade aren't backfilled.</p>
+    {% else %}
+    <ol class="ulog-feed">
+      {% for ev in events %}
+      <li class="ulog-event ulog-event-{{ ev.action.split('.')[0] }}">
+        <span class="ulog-event-icon">{{ icon(ev.icon) }}</span>
+        <div class="ulog-event-body">
+          <div class="ulog-event-title">{{ ev.label }}</div>
+          {% if ev.summary %}<div class="ulog-event-summary muted small">{{ ev.summary }}</div>{% endif %}
+          <div class="ulog-event-meta muted smaller">
+            {{ ev.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+            {% if ev.ip %}· <span class="mono">{{ ev.ip }}</span>{% endif %}
+            {% if ev.entity_type and ev.entity_id %}· {{ ev.entity_type }} #{{ ev.entity_id }}{% endif %}
+          </div>
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+    {% endif %}
+  </section>
+</section>
+
+{% endif %}
+
+{% endblock %}

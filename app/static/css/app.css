@@ -2137,6 +2137,332 @@ button.chip { font-family: inherit; }
 .pwreset-public-form .pwreset-policy { grid-template-columns: 1fr; }
 .pwreset-public-form .pwreset-strength { margin-top: 0; }
 
+/* ================================================================
+   User Log page — admin-only timeline of write actions, with a
+   companion login-sessions table on top. The picker card lives at
+   the top so the selected account is always visible while you scroll.
+   ================================================================ */
+.user-log-picker { display: flex; flex-direction: column; gap: 14px; }
+.user-log-picker-form { display: flex; gap: 14px; flex-wrap: wrap; }
+
+/* Merged detail card — picker + sessions + activity in one panel.
+   Subsections are separated by a thin divider rather than the full
+   card gap that the previous three-card layout used. */
+.user-log-detail { display: flex; flex-direction: column; gap: 0; padding: 0; }
+.user-log-detail > .user-log-detail-head,
+.user-log-detail > .user-log-detail-section {
+  padding: 18px 20px;
+}
+.user-log-detail > .user-log-detail-section + .user-log-detail-section,
+.user-log-detail > .user-log-detail-head + .user-log-detail-section {
+  border-top: 1px solid var(--border);
+}
+.user-log-detail-head { display: flex; flex-direction: column; gap: 14px; }
+.user-log-detail-subhead { display: flex; align-items: baseline;
+  justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin: 0 0 12px; }
+.user-log-detail-subhead h3 { font-size: 1rem; font-weight: 700; margin: 0; }
+.user-log-picker-label { display: flex; flex-direction: column; gap: 4px;
+  font-size: 0.75rem; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .5px; flex: 1 1 220px; }
+.user-log-picker-label > span { padding: 0 2px; }
+.user-log-picker-label select { padding: 9px 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
+  font-size: 0.9375rem; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.user-log-summary { display: flex; align-items: center; gap: 14px;
+  padding-top: 6px; border-top: 1px dashed var(--border); }
+.ulog-chip { display: flex; align-items: center; gap: 12px; }
+.ulog-chip-name { font-size: 1.0625rem; font-weight: 700; }
+.user-log-summary .avatar { width: 44px; height: 44px; font-size: 1.125rem; }
+
+.badge-success { background: #d1fae5; color: #065f46; border-color: #10b981; }
+[data-theme="dark"] .badge-success,
+[data-theme="neobrutal-dark"] .badge-success,
+[data-theme="cyberpunk"] .badge-success { background: #064e3b; color: #d1fae5; border-color: #059669; }
+
+.ulog-sessions-tbl { font-size: 0.875rem; }
+.ulog-sessions-tbl th { white-space: nowrap; }
+.ulog-sessions-tbl .ulog-ua { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+.ulog-session-active td { background: color-mix(in srgb, #10b981 8%, transparent); }
+
+/* Activity feed — vertical timeline with rail + circular icon nodes.
+   Icons are tinted by event family (auth / users / meeting / etc.)
+   via the parent ``.ulog-event-<family>`` class derived from the
+   first segment of the action verb. Unknown families fall through
+   to a neutral muted tint. */
+.ulog-feed { list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 0; }
+.ulog-event { position: relative; display: grid;
+  grid-template-columns: 36px 1fr; gap: 12px;
+  padding: 14px 0; border-bottom: 1px dashed var(--border); }
+.ulog-event:last-child { border-bottom: none; }
+.ulog-event-icon { width: 36px; height: 36px; border-radius: 999px;
+  display: grid; place-items: center; flex: 0 0 auto;
+  background: var(--panel-2); color: var(--muted);
+  border: 1px solid var(--border); }
+.ulog-event-icon .icon { width: 18px; height: 18px; }
+.ulog-event-title { font-size: 0.9375rem; font-weight: 600; }
+.ulog-event-summary { line-height: 1.5; margin-top: 2px; }
+.ulog-event-meta { margin-top: 4px; }
+.ulog-event-meta .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.ulog-event-login .ulog-event-icon { background: color-mix(in srgb, #10b981 12%, var(--panel-2)); color: #065f46; border-color: #10b981; }
+.ulog-event-logout .ulog-event-icon { background: var(--panel-2); }
+.ulog-event-password .ulog-event-icon { background: color-mix(in srgb, #f59e0b 12%, var(--panel-2)); color: #78350f; border-color: #f59e0b; }
+.ulog-event-user .ulog-event-icon { background: color-mix(in srgb, #6366f1 12%, var(--panel-2)); color: #3730a3; border-color: #6366f1; }
+.ulog-event-meeting .ulog-event-icon,
+.ulog-event-library .ulog-event-icon,
+.ulog-event-reading .ulog-event-icon,
+.ulog-event-post .ulog-event-icon,
+.ulog-event-file .ulog-event-icon { background: color-mix(in srgb, var(--brand) 12%, var(--panel-2)); color: var(--brand); border-color: var(--brand); }
+[data-theme="dark"] .ulog-event-login .ulog-event-icon,
+[data-theme="neobrutal-dark"] .ulog-event-login .ulog-event-icon,
+[data-theme="cyberpunk"] .ulog-event-login .ulog-event-icon { color: #d1fae5; }
+[data-theme="dark"] .ulog-event-password .ulog-event-icon,
+[data-theme="neobrutal-dark"] .ulog-event-password .ulog-event-icon,
+[data-theme="cyberpunk"] .ulog-event-password .ulog-event-icon { color: #fef3c7; }
+[data-theme="dark"] .ulog-event-user .ulog-event-icon,
+[data-theme="neobrutal-dark"] .ulog-event-user .ulog-event-icon,
+[data-theme="cyberpunk"] .ulog-event-user .ulog-event-icon { color: #c7d2fe; }
+
+/* "Currently online" live widget — header carries a green pulse dot
+   so the live aspect is obvious; rows briefly highlight when their
+   destination changes between polls. */
+.user-log-online .card-head h2 { display: inline-flex; align-items: center; gap: 8px; }
+.online-pulse { width: 9px; height: 9px; border-radius: 999px;
+  background: #10b981; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55);
+  animation: online-pulse 2s ease-out infinite; }
+@keyframes online-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55); }
+  70%  { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+.online-list { display: flex; flex-direction: column; gap: 6px; }
+.online-empty { margin: 0; padding: 8px 0; }
+.online-row { display: grid; gap: 12px; align-items: center;
+  grid-template-columns: 36px minmax(140px, 1fr) minmax(180px, 2fr) auto;
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  transition: background 220ms ease, border-color 220ms ease; }
+.online-row.is-self { border-color: var(--brand); }
+.online-row.just-moved { animation: online-flash 1400ms ease-out; }
+@keyframes online-flash {
+  0%   { background: color-mix(in srgb, #10b981 22%, transparent); }
+  100% { background: var(--panel-2); }
+}
+.online-avatar { width: 36px; height: 36px; border-radius: 999px;
+  background: var(--brand); color: #fff; font-weight: 700; font-size: 0.9375rem;
+  display: grid; place-items: center; flex: 0 0 auto; }
+.online-name { font-weight: 700; font-size: 0.9375rem; }
+.online-where { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.online-where-link { color: var(--brand); text-decoration: none; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.online-where-link:hover { text-decoration: underline; }
+.online-path { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.online-seen { white-space: nowrap; }
+
+@media (max-width: 720px) {
+  .online-row { grid-template-columns: 36px 1fr; grid-template-rows: auto auto auto;
+    grid-template-areas: "avatar meta" "where where" "seen seen";
+    row-gap: 6px; }
+  .online-avatar { grid-area: avatar; }
+  .online-meta   { grid-area: meta; }
+  .online-where  { grid-area: where; }
+  .online-seen   { grid-area: seen; }
+}
+
+/* Per-user "Self-reset allowed?" toggle in the Users table.
+   Sits below the Reset password button; the mode-track/mode-thumb
+   classes piggyback on the existing settings-modal switch styling
+   so we don't reinvent the look. */
+.users-reset-allow-toggle { display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 8px; cursor: pointer; user-select: none; font-size: 0.75rem;
+  color: var(--muted); }
+.users-reset-allow-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.users-reset-allow-label { white-space: nowrap; }
+
+/* Recent Deletions dashboard widget — a touch tighter than Recent
+   Files since each row carries a parent-label sub-line. */
+.dash-deletions-list li a { display: flex; flex-direction: column;
+  align-items: flex-start; gap: 2px; }
+.dash-deletion-name { font-weight: 500; }
+.dash-deletion-meta { font-size: 0.75rem; }
+.dash-deletions-foot { padding: 8px 0 4px; border-top: 1px dashed var(--border);
+  margin-top: 6px; }
+
+/* ================================================================
+   Backend-wide search modal — floating popup with live results.
+   Pinned toward the top of the viewport so the input is always
+   thumb-reachable on mobile while the result list scrolls below.
+   ================================================================ */
+.search-modal .modal-panel {
+  max-width: 640px;
+  margin: 7vh auto 0;
+  max-height: 80vh;
+  overflow: hidden;
+  padding: 0;
+}
+.search-modal-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.search-modal-icon { color: var(--muted); display: inline-flex; }
+.search-modal-icon .icon { width: 20px; height: 20px; }
+.search-modal-head input {
+  flex: 1; min-width: 0;
+  padding: 10px 0; border: none; outline: none;
+  background: transparent; color: var(--text);
+  font-size: 1.0625rem; font-weight: 500;
+}
+.search-modal-head input::placeholder { color: var(--muted); }
+.search-modal-esc {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.6875rem; color: var(--muted);
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 2px 6px; flex: 0 0 auto;
+}
+.search-modal-body {
+  padding: 8px 8px 14px;
+  overflow-y: auto; max-height: calc(80vh - 64px);
+}
+.search-modal-hint, .search-modal-empty {
+  margin: 24px 14px; text-align: center; line-height: 1.5;
+}
+.search-section + .search-section { margin-top: 6px; }
+.search-section-head {
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted);
+  padding: 12px 14px 6px;
+}
+.search-results { list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 2px; }
+.search-result {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 14px; border-radius: 10px;
+  text-decoration: none; color: var(--text);
+  outline: none;
+  transition: background 120ms ease;
+}
+.search-result:hover,
+.search-result:focus { background: var(--panel-2); }
+.search-result:focus { box-shadow: 0 0 0 2px var(--brand-soft); }
+.search-result-label { font-weight: 600; font-size: 0.9375rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-result-snippet { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-modal-body mark {
+  background: color-mix(in srgb, var(--brand) 25%, transparent);
+  color: inherit; padding: 0 1px; border-radius: 3px;
+}
+
+/* Sidebar Search button — sits between the brand block and the nav.
+   Wide pill that visually lives in the same space as the nav links;
+   the kbd hint slides off on narrow viewports where the sidebar is
+   tighter. */
+.sidebar-search-btn {
+  display: flex; align-items: center; gap: 10px;
+  margin: 8px 12px 12px; padding: 9px 12px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel-2); color: var(--muted);
+  cursor: pointer; font-size: 0.875rem; font-weight: 500;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.sidebar-search-btn:hover {
+  background: var(--panel); color: var(--text);
+  border-color: color-mix(in srgb, var(--brand) 35%, var(--border));
+}
+.sidebar-search-icon .icon { width: 16px; height: 16px; display: block; }
+.sidebar-search-label { flex: 1; text-align: left; }
+.sidebar-search-kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.6875rem; color: var(--muted);
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 6px; padding: 1px 6px; flex: 0 0 auto;
+}
+@media (max-width: 880px) {
+  .sidebar-search-kbd { display: none; }
+  .search-modal .modal-panel { margin: 4vh 12px 0; }
+}
+
+/* Permission-locked button: editor-tier user has the broad gate but
+   fails the per-row check. Renders dim + greyed; cursor flips to
+   not-allowed on hover so the disabled state is obvious; the native
+   ``title`` attribute still surfaces the explanation tooltip. Used
+   on Library detail row actions and the File Browser actions; viewers
+   continue to see no button at all (kept hidden upstream). */
+.btn-perm-disabled,
+.btn-perm-disabled:hover,
+.btn-perm-disabled:focus,
+.btn-perm-disabled:active {
+  opacity: 0.42;
+  cursor: not-allowed;
+  filter: grayscale(60%);
+  box-shadow: none;
+  transform: none;
+  /* Native ``disabled`` already blocks click handlers, but some
+     browsers also kill pointer-events which would suppress the
+     tooltip. Force pointer-events back on so hover shows the
+     not-allowed cursor + the title attribute renders. */
+  pointer-events: auto;
+}
+.btn-perm-disabled:hover { opacity: 0.42; }
+
+/* Delete Log (recycle bin) */
+.dlog-list { list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 12px; }
+.dlog-item { padding: 14px 16px; border: 1px solid var(--border);
+  border-radius: 12px; background: var(--panel-2); }
+.dlog-item-head { display: grid; gap: 14px; align-items: center;
+  grid-template-columns: 36px 1fr auto; }
+.dlog-icon { width: 36px; height: 36px; border-radius: 999px;
+  background: color-mix(in srgb, #ef4444 12%, var(--panel)); color: #b91c1c;
+  border: 1px solid color-mix(in srgb, #ef4444 35%, var(--border));
+  display: grid; place-items: center; }
+.dlog-icon .icon { width: 18px; height: 18px; }
+[data-theme="dark"] .dlog-icon,
+[data-theme="neobrutal-dark"] .dlog-icon,
+[data-theme="cyberpunk"] .dlog-icon { color: #fecaca; }
+.dlog-item-main { min-width: 0; }
+.dlog-filename { font-weight: 700; font-size: 0.9375rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dlog-meta { margin-top: 2px; }
+.dlog-days-left { color: var(--muted); }
+.dlog-days-out  { color: #b91c1c; }
+.dlog-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Nested tree showing where the file lived. Indent each level
+   slightly with a thin connector line so it reads as a hierarchy
+   rather than a flat list. */
+.dlog-tree { list-style: none; padding: 0; margin: 10px 0 0 8px;
+  display: flex; flex-direction: column; gap: 2px;
+  font-size: 0.8125rem; }
+.dlog-tree-node { position: relative; padding: 4px 0 4px 22px; }
+.dlog-tree-node::before { content: ""; position: absolute; left: 6px;
+  top: 0; bottom: 0; width: 1px;
+  background: color-mix(in srgb, var(--border) 80%, transparent); }
+.dlog-tree-node:last-child::before { bottom: 50%; }
+.dlog-tree-node::after { content: ""; position: absolute; left: 6px;
+  top: 14px; width: 12px; height: 1px;
+  background: color-mix(in srgb, var(--border) 80%, transparent); }
+.dlog-tree-kind { display: inline-block; min-width: 88px; padding: 1px 8px;
+  margin-right: 8px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--border);
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--muted); }
+.dlog-tree-label { color: var(--text); font-weight: 500; }
+a.dlog-tree-label { color: var(--brand); text-decoration: none; }
+a.dlog-tree-label:hover { text-decoration: underline; }
+@media (max-width: 640px) {
+  .dlog-item-head { grid-template-columns: 36px 1fr; }
+  .dlog-actions { grid-column: 1 / -1; }
+}
+
+/* Recent password resets table on Access Requests */
+.ar-recent-resets-tbl { font-size: 0.875rem; }
+.ar-recent-resets-tbl .ar-reset-status-pending  { color: #92400e; }
+.ar-recent-resets-tbl .ar-reset-status-used     { color: #065f46; }
+.ar-recent-resets-tbl .ar-reset-status-expired  { color: var(--muted); }
+
 /* Split login screen */
 .login-split { position: relative; min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr;
   background: var(--bg); perspective: 1400px; perspective-origin: 50% 50%; overflow: hidden; }
@@ -3483,6 +3809,12 @@ h5.block-heading { font-size: 0.875rem; font-weight: 600; margin: 12px 0 4px; }
 .server-metrics-grid-5 { grid-template-columns: repeat(5, 1fr); }
 .metric-tile { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px;
   border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); min-width: 0; }
+a.metric-tile-link { text-decoration: none; color: inherit; cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease; }
+a.metric-tile-link:hover { border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 8%, var(--panel-2)); }
+a.metric-tile-link:active { transform: translateY(1px); }
+a.metric-tile-link .metric-value { color: var(--brand); }
 .metric-label { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.12em;
   text-transform: uppercase; color: var(--muted); }
 .metric-value { font-size: 1.75rem; font-weight: 700; color: var(--text); line-height: 1.1;

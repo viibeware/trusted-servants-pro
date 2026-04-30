@@ -50,6 +50,14 @@
         <div class="brand-sub">Pro</div>
       </div>
     </div>
+    {# Sidebar Search button. Opens the floating search modal; on
+       narrow viewports the JS first hides the sidebar overlay so the
+       modal isn't covered by it. #}
+    <button type="button" class="sidebar-search-btn" data-open-search title="Search the portal (⌘K)">
+      <span class="sidebar-search-icon" aria-hidden="true">{{ icon('search') }}</span>
+      <span class="sidebar-search-label">Search</span>
+      <kbd class="sidebar-search-kbd" aria-hidden="true">⌘K</kbd>
+    </button>
     <nav id="sidebar-nav">
       {% include "_sidebar_nav.html" %}
     </nav>
@@ -108,6 +116,25 @@
     {% endblock %}
     <section class="page">{% block content %}{% endblock %}</section>
   </main>
+</div>
+
+{# Backend-wide search modal — floating popup with live results.
+   Opened from the sidebar's Search button or via Ctrl/⌘-K. The
+   panel pins toward the top of the viewport so the input stays in
+   thumb-reach on mobile while the results list scrolls beneath. #}
+<div class="modal search-modal" id="search-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="search-input">
+    <div class="search-modal-head">
+      <span class="search-modal-icon" aria-hidden="true">{{ icon('search') }}</span>
+      <input type="search" id="search-input" autocomplete="off" spellcheck="false"
+             placeholder="Search meetings, libraries, files, posts…" aria-label="Search">
+      <kbd class="search-modal-esc" aria-hidden="true">Esc</kbd>
+    </div>
+    <div class="search-modal-body" id="search-modal-body">
+      <p class="muted search-modal-hint">Start typing to search across meetings, libraries, files, posts, and more.</p>
+    </div>
+  </div>
 </div>
 
 {# Settings modal #}
@@ -1071,6 +1098,25 @@
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
             <li>
+              <div class="u-name">1.8.0</div>
+              <div class="muted smaller">April 2026</div>
+              <ul>
+                <li><b>Delete Log (recycle bin) with one-click restore</b> — every reading deletion, meeting-attachment deletion, and File-Browser deletion now lands in a new <code>deleted_file</code> snapshot table instead of hard-deleting the row + file in one motion. The on-disk file is preserved; the live row is captured as a JSON snapshot of every field needed to rebuild it (library_id, position, body, url, category id+name pairs, public-visibility flag, thumbnail, etc.). New admin-only <i>Delete Log</i> page (sidebar's Admin section) lists every snapshot newest-first with a per-row trash-icon avatar, deleter username, days-remaining counter, and a nested-tree breadcrumb under the filename showing exactly where the file lived (Library → Reading, or Meeting → Category → File). <b>Restore</b> rebuilds the original record at its captured position — categories re-attach by id when intact and fall back to lookup-by-name so renamed/recreated category rows still bind. <b>Purge now</b> drops the snapshot and the on-disk bytes, but only when no live row + no other trashed snapshot still references the same stored filename, so dedup'd uploads stay intact. Sweep auto-runs on every Delete Log visit and once at boot, dropping snapshots past their 30-day window.</li>
+                <li><b>User Log — admin activity timeline</b> — new admin-only <i>User Log</i> page (sidebar's Admin section) showing per-user activity for any selected account. Two new tables: <code>activity_log</code> appends one row per write action (login / logout / failed login / password reset / user create-update-delete / meeting create-update-delete / library create-update-delete / reading create-delete / post create-update-delete / access-request handle-archive-delete / file restore-purge), and <code>login_session</code> tracks one row per sign-in with started/last-activity/ended timestamps, IP, and user-agent. Page picker switches between accounts and activity windows (7/30/90/365 days). The login sessions table and activity feed share one merged card under the picker; the activity feed renders as a vertical timeline with circular icon nodes tinted by event family (auth = green, password = amber, user-management = indigo, content = brand colour). All write helpers swallow exceptions so logging never blocks an action.</li>
+                <li><b>"Currently online" live widget</b> — User Log now opens with a real-time card pinned to the top showing every signed-in user, the page they're currently viewing (clickable), and a "Xs ago" stamp that ticks every second between polls. Polls <code>/api/online-users</code> every 5 seconds; pauses when the tab is hidden; uses an in-flight guard so slow responses can't queue overlapping requests. Rows briefly green-flash when the user's location changes between polls so admins see live navigation. Two new <code>User</code> columns (<code>last_endpoint</code>, <code>last_path</code>) drive the location pointer; the existing <code>_track_last_seen</code> hook writes them on every authenticated GET that's a real page (asset-fetch endpoints — <code>_download</code> / <code>_image</code> / <code>_logo</code> / <code>_pdf</code> / <code>_content</code> / <code>_favicon</code> / <code>_serve</code> / <code>_json</code> / <code>_thumb</code> — and asset-extension paths — <code>.png .jpg .jpeg .gif .svg .webp .avif .ico .pdf .json .woff .woff2 .ttf .otf .mp4 .webm .mp3 .zip .db .css .js</code> — are skipped so navigation tracking pins the user to the parent page rather than the most-recent download URL).</li>
+                <li><b>Dashboard "Online" tile links to User Log</b> — the admin-only Online metric tile in the Server Stats card on the dashboard is now an anchor pointing at <code>/user-log</code>. New <code>.metric-tile-link</code> styles add a brand-tinted hover (border + soft brand background), the count flips to brand colour, and a tiny press-down on click. The existing 30-second polling JS keeps working unchanged because the id and dataset are preserved.</li>
+                <li><b>Recent password resets on Access Requests</b> — new section between the existing Pending Resets card and the main Requests card. Combines self-service flows (<code>password_reset_token</code> rows: status Reset / Expired / Link live) AND admin-driven resets pulled from the activity log (status Reset, with the admin's username as the actor). Sorted newest-first, capped at 100 rows, hidden on the Archived view. The existing forgot-password flow + admin Reset Password modal now both invalidate every other live token on a successful reset, so the Pending Resets row disappears the moment the reset is handled either way.</li>
+                <li><b>Reset-password modal extracted to a partial</b> — the Settings → Users modal markup + JS moved to <code>app/templates/_pwreset_modal.html</code> so the Access Requests "Pending password resets" rows can re-use it. Modal accepts an optional <code>return_url</code> Jinja variable that, when present, posts a hidden field of the same name; the route validates it via <code>_is_safe_url</code> and bounces back there on success so the admin lands on whichever page they opened the modal from. The legacy inline <i>Reset password</i> input column on the Users tab was retired in favour of the modal-driven button.</li>
+                <li><b>Backend-wide search modal (⌘K / Ctrl-K)</b> — new floating search popup spans every content area users can already see in the sidebar: meetings, libraries, library files, meeting attachments, posts (when the module is enabled), files in the File Browser, locations, and (admin-only) users. Multi-token search splits whitespace; every token must match, OR'd across each row's searchable columns. Results are grouped by section with up to 8 per section, query-token <mark>highlighting</mark> on labels and snippets, and a Lucide icon per row. Live results: 150 ms debounce on input, <code>AbortController</code> cancels in-flight requests when the user keeps typing, fetch failures fall back to a friendly empty state. Keyboard navigation: ↓ from the input focuses the first result, ↑/↓ moves between results, Enter follows the focused link, Esc closes; <code>⌘K</code> / <code>Ctrl-K</code> opens the modal globally (skipped when focus is in another input so the user's typing isn't hijacked). New <i>Search</i> pill in the sidebar header above the nav with a magnifying glass + the keyboard-shortcut hint chip; on viewports under 880 px the JS closes the sidebar overlay first so the modal lives over a clean screen.</li>
+                <li><b>Per-user password-reset gate + Recent Deletions widget + live Currently Online widget on the dashboard</b> — Settings → Users grew a small <i>Self-reset</i> toggle next to each row's Reset-Password button (default on, additive <code>password_reset_allowed</code> column with <code>_migrate_sqlite</code> entry); turning it off silently no-ops the public Forgot Password flow for that account (still rendered as the same generic success page so the form can't enumerate disabled accounts) AND invalidates every live reset token on the row so a previously-emailed link can't bypass the gate; admins can still reset the password from the modal regardless. New admin-only <i>Recent Deletions</i> dashboard widget mirrors the Delete Log's most recent six snapshots inline with a parent-label sub-line; toggle-able from Customize Dashboard. The live <i>Currently Online</i> widget moved into a re-usable <code>_online_widget.html</code> partial — the User Log page consumes it as before, and a new admin-only dashboard widget includes the same partial right under the Server Stats card so admins watch live navigation without opening User Log first; <code>window.__tspOnlineWidgetInit</code> guard prevents stacked polling timers when a future page includes the partial twice.</li>
+                <li><b>Permission-locked buttons grey out instead of vanishing</b> — Editors and Intergroup Members hitting a row they can't act on (admin-uploaded library file, file-browser entry uploaded outside their tier, etc.) now see the action button with a <code>not-allowed</code> cursor and a tooltip explaining the restriction (<i>"You don't have permission to delete this file. Editors can only delete files uploaded by another Editor — only an admin or Intergroup Member can remove this one."</i>). New <code>.btn-perm-disabled</code> CSS dims and grayscales the button while preserving pointer-events so the tooltip + cursor render. Viewers (who fail the broader <code>can_edit</code> gate) continue to see no buttons at all — the upstream <code>{% if can_edit %}</code> wrapper still hides them. Pattern applied to Library detail (Edit / Delete row buttons) and the File Browser (Rename / Delete).</li>
+                <li><b>Slug-based admin URLs for meetings + libraries</b> — backend admin URLs are now derived from the row's <code>name</code>: <code>/tspro/meetings/&lt;slug&gt;</code> + every sub-route (<code>/edit</code>, <code>/delete</code>, <code>/archive</code>, <code>/unarchive</code>, <code>/libraries</code>, <code>/files/new</code>, <code>/files/reorder</code>) and <code>/tspro/libraries/&lt;slug&gt;</code> + sub-routes (<code>/edit</code>, <code>/delete</code>, <code>/readings/new</code>, <code>/readings/bulk-categories</code>, <code>/readings/bulk-delete</code>, <code>/readings/reorder</code>). New <code>Library.public_slug</code> property mirrors <code>Meeting.public_slug</code> — derived live from <code>name</code> via <code>slugify</code>, no schema change. Legacy <code>/tspro/meetings/&lt;int:mid&gt;</code> and <code>/tspro/libraries/&lt;int:lid&gt;</code> 301-redirect to the slug equivalent so external bookmarks survive. Asset-only endpoints (<code>meeting_logo</code>, <code>meeting_json</code>) stay on int-id since they're JS-fetched, not user-navigated. Every internal <code>url_for</code> caller — across <code>routes.py</code> and 9 templates — was updated to pass <code>slug=...</code> instead of <code>lid=...</code> / <code>mid=...</code>.</li>
+                <li><b>Module URLs renamed to readable single-segment paths</b> — Announcements &amp; Events lives at <code>/tspro/announcementsevents</code> (every sub-route too: <code>/new</code>, <code>/&lt;id&gt;</code>, <code>/save</code>, <code>/publish</code>, <code>/unpublish</code>, <code>/archive</code>, <code>/unarchive</code>, <code>/delete</code>, <code>/duplicate</code>); legacy <code>/posts/...</code> 301-redirects to the new path with the query string preserved. Email Accounts moved to <code>/tspro/intergroupemail</code> with a 301 from <code>/intergroup</code>; the dedicated <code>/intergroup/&lt;slug&gt;</code> Intergroup-library detail and <code>/intergroup/libraries/new</code> creation routes are unaffected. Endpoint names stay <code>main.posts</code> / <code>main.intergroup</code> so internal <code>url_for</code> callsites resolve unchanged.</li>
+                <li><b>Internal Reading → LibraryItem rename</b> — the SQLAlchemy class was renamed (table name kept as <code>reading</code> so no DB migration). Every relationship + helper followed: <code>Library.readings</code> → <code>Library.items</code>, <code>Meeting.selected_readings</code> → <code>Meeting.selected_library_items</code>, <code>Meeting.public_readings</code> → <code>Meeting.public_library_items</code>, <code>Meeting.visible_readings()</code> → <code>Meeting.visible_library_items()</code>, <code>LibraryCategory.readings</code> back-populates → <code>LibraryCategory.items</code>. Permission methods <code>User.can_edit_reading</code> / <code>can_delete_reading</code> renamed to <code>can_edit_library_item</code> / <code>can_delete_library_item</code> (old names kept as class-level aliases for one release). Trash helper <code>soft_delete_reading</code> → <code>soft_delete_library_item</code>. Every external caller across <code>routes.py</code>, <code>frontend.py</code>, <code>__init__.py</code>, <code>trash.py</code>, and the templates was updated.</li>
+                <li><b>Dashboard reorder save reliability</b> — the save signal moved from the <code>drop</code> handler (only fires when the cursor is over a valid drop target on release) to <code>dragend</code> (always fires). dragstart snapshots the original order; dragend compares to the current DOM order and only fires the POST when they actually differ. Releasing in the gap between widgets, between the last widget and the modal, or just outside the grid would otherwise silently drop the save while leaving the widget visually in its new spot — refresh would snap it back. Same fix pattern as the library-reorder save in 1.7.16.</li>
+              </ul>
+            </li>
+            <li>
               <div class="u-name">1.7.17</div>
               <div class="muted smaller">April 2026</div>
               <ul>
@@ -1630,5 +1676,175 @@
 </script>
 <script src="{{ url_for('static', filename='js/app.js', v=app_build_id) }}"></script>
 <script src="{{ url_for('static', filename='js/tour.js', v=app_build_id) }}"></script>
+
+{% if current_user.is_authenticated %}
+<script>
+(function initBackendSearch(){
+  const modal = document.getElementById('search-modal');
+  const input = document.getElementById('search-input');
+  const body  = document.getElementById('search-modal-body');
+  if (!modal || !input || !body) return;
+
+  const SEARCH_URL = "{{ url_for('main.api_search') }}";
+  const HINT_HTML = '<p class="muted search-modal-hint">Start typing to search across meetings, libraries, files, posts, and more.</p>';
+  const MOBILE_QUERY = window.matchMedia('(max-width: 880px)');
+
+  function escapeHtml(s){
+    if (s == null) return '';
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+
+  // Crude highlight — wraps each query token in <mark> within the
+  // visible label/snippet text. Case-insensitive; runs after escape
+  // so we never inject unsafe HTML.
+  function highlight(text, tokens){
+    let out = escapeHtml(text);
+    tokens.forEach(t => {
+      if (!t) return;
+      const re = new RegExp('(' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+      out = out.replace(re, '<mark>$1</mark>');
+    });
+    return out;
+  }
+
+  let lastQ = '';
+  let inflight = null;
+  let debounce = null;
+
+  function openSearch(){
+    // On narrow viewports the sidebar overlay is open; close it
+    // first so the search modal lives over a clean screen.
+    if (MOBILE_QUERY.matches) {
+      document.body.classList.remove('sidebar-open');
+    }
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => input.focus(), 30);
+  }
+
+  function closeSearch(){
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    input.value = '';
+    body.innerHTML = HINT_HTML;
+    lastQ = '';
+  }
+
+  modal.querySelectorAll('[data-close]').forEach(el =>
+    el.addEventListener('click', closeSearch));
+
+  // Sidebar Search button (and any other) toggle the modal open.
+  document.querySelectorAll('[data-open-search]').forEach(el =>
+    el.addEventListener('click', e => { e.preventDefault(); openSearch(); }));
+
+  // Global ⌘K / Ctrl-K shortcut. Skip when focus is in another input
+  // so the user's typing isn't hijacked.
+  document.addEventListener('keydown', e => {
+    const tag = (e.target && e.target.tagName || '').toLowerCase();
+    const inField = tag === 'input' || tag === 'textarea' || (e.target && e.target.isContentEditable);
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K') && !inField) {
+      e.preventDefault();
+      openSearch();
+    } else if (e.key === 'Escape' && modal.classList.contains('open')) {
+      e.preventDefault();
+      closeSearch();
+    }
+  });
+
+  function renderResults(data, tokens){
+    if (!data || !data.sections || !data.sections.length) {
+      body.innerHTML = '<p class="muted search-modal-empty">No matches for <b>'
+        + escapeHtml(data && data.query || '') + '</b>.</p>';
+      return;
+    }
+    let html = '';
+    data.sections.forEach(section => {
+      html += '<div class="search-section">'
+        + '<div class="search-section-head">'
+        + escapeHtml(section.label)
+        + ' <span class="muted smaller">(' + section.items.length + ')</span>'
+        + '</div>'
+        + '<ul class="search-results">';
+      section.items.forEach(item => {
+        html += '<li><a class="search-result" href="' + escapeHtml(item.url) + '" data-search-result>'
+          + '<span class="search-result-label">' + highlight(item.label || '', tokens) + '</span>'
+          + (item.snippet
+              ? '<span class="search-result-snippet muted smaller">' + highlight(item.snippet, tokens) + '</span>'
+              : '')
+          + '</a></li>';
+      });
+      html += '</ul></div>';
+    });
+    body.innerHTML = html;
+  }
+
+  async function runSearch(q){
+    if (q === lastQ) return;
+    lastQ = q;
+    if (q.length < 2) {
+      body.innerHTML = HINT_HTML;
+      return;
+    }
+    if (inflight) inflight.abort();
+    const ctl = new AbortController();
+    inflight = ctl;
+    body.innerHTML = '<p class="muted search-modal-hint">Searching…</p>';
+    try {
+      const r = await fetch(SEARCH_URL + '?q=' + encodeURIComponent(q), {
+        credentials: 'same-origin', signal: ctl.signal,
+        headers: { 'X-Requested-With': 'fetch' },
+      });
+      if (!r.ok) throw new Error('search failed: ' + r.status);
+      const data = await r.json();
+      const tokens = q.split(/\s+/).filter(Boolean);
+      renderResults(data, tokens);
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      body.innerHTML = '<p class="muted search-modal-empty">Couldn’t reach the search service.</p>';
+    } finally {
+      if (inflight === ctl) inflight = null;
+    }
+  }
+
+  input.addEventListener('input', () => {
+    clearTimeout(debounce);
+    const q = input.value.trim();
+    debounce = setTimeout(() => runSearch(q), 150);
+  });
+
+  // Keyboard navigation through result links. Up/Down moves a focused
+  // selection; Enter follows the focused link; default browser tab/
+  // shift-tab still works.
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') {
+      const first = body.querySelector('.search-result');
+      if (first) { e.preventDefault(); first.focus(); }
+    } else if (e.key === 'Enter') {
+      const first = body.querySelector('.search-result');
+      if (first) { e.preventDefault(); first.click(); }
+    }
+  });
+  body.addEventListener('keydown', e => {
+    const focusables = Array.from(body.querySelectorAll('.search-result'));
+    if (!focusables.length) return;
+    const idx = focusables.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = focusables[Math.min(idx + 1, focusables.length - 1)];
+      if (next) next.focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (idx <= 0) input.focus();
+      else focusables[idx - 1].focus();
+    }
+  });
+})();
+</script>
+{% endif %}
+
 </body>
 </html>

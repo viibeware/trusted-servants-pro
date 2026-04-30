@@ -18,7 +18,7 @@
   <button type="button" class="btn btn-primary" data-open-modal="library-edit-modal">Edit</button>
   {% endif %}
   {% if current_user.is_admin() %}
-  <form method="post" action="{{ url_for('main.library_delete', lid=library.id) }}" onsubmit="return confirm('Delete this library?');" style="display:inline">
+  <form method="post" action="{{ url_for('main.library_delete', slug=library.public_slug) }}" onsubmit="return confirm('Delete this library?');" style="display:inline">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button class="btn btn-danger">Delete</button>
   </form>
@@ -38,7 +38,7 @@
   {% endif %}
 {% endwith %}
 
-{% set rs = library.readings.all() %}
+{% set rs = library.items.all() %}
 {% set can_edit = current_user.can_edit_library(library) %}
 {% set is_ig = library.is_intergroup %}
 <section class="card"{% if is_ig %} data-ig-library{% endif %}>
@@ -99,7 +99,7 @@
     {% endif %}
     <button type="button" class="btn btn-sm btn-danger"
             data-bulk-delete
-            data-bulk-delete-url="{{ url_for('main.library_readings_bulk_delete', lid=library.id) }}"
+            data-bulk-delete-url="{{ url_for('main.library_readings_bulk_delete', slug=library.public_slug) }}"
             disabled>Delete</button>
     </div>
   </div>
@@ -111,7 +111,7 @@
      client-side sort then undoes. #}
   <ul class="file-list{% if can_edit and not is_ig %} file-list-sortable{% endif %}"
       data-ig-list
-      {% if can_edit and not is_ig %}data-reorder-url="{{ url_for('main.library_readings_reorder', lid=library.id) }}"
+      {% if can_edit and not is_ig %}data-reorder-url="{{ url_for('main.library_readings_reorder', slug=library.public_slug) }}"
        data-reorder-manual="1" data-reorder-savebar="1"{% endif %}>
     {% for r in rs %}
     {% set edit_id = 'edit-library-file-' ~ r.id %}
@@ -159,17 +159,30 @@
         {% elif r.url %}
         <button type="button" class="btn btn-sm btn-copy" data-copy-url="{{ r.url }}">Copy Link</button>
         {% endif %}
-        {% if can_edit and current_user.can_edit_reading(r) %}
-        <button type="button" class="btn btn-sm" data-open-modal="{{ edit_id }}-modal">Edit</button>
-        {% endif %}
-        {% if can_edit and current_user.can_delete_reading(r) %}
-        <form method="post" action="{{ url_for('main.reading_delete', rid=r.id) }}" onsubmit="return confirm('Delete this file?');">
+        {# Editor-tier roles always see Edit/Delete on every row; the
+           buttons grey out + show an explanatory tooltip when the
+           per-row gate denies the action so the role's restriction is
+           visible and not silently surprising. Viewers (who fail the
+           broader ``can_edit`` gate) continue to see no buttons at all. #}
+        {% if can_edit %}
+          {% if current_user.can_edit_library_item(r) %}
+          <button type="button" class="btn btn-sm" data-open-modal="{{ edit_id }}-modal">Edit</button>
+          {% else %}
+          <button type="button" class="btn btn-sm btn-perm-disabled" disabled
+                  title="You don't have permission to edit this file. Editors can only edit files uploaded by another Editor — this file's uploader is at a higher tier (admin or Intergroup Member).">Edit</button>
+          {% endif %}
+          {% if current_user.can_delete_library_item(r) %}
+          <form method="post" action="{{ url_for('main.reading_delete', rid=r.id) }}" onsubmit="return confirm('Delete this file?');">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>
-        </form>
+            <button class="btn btn-sm btn-danger">{{ icon('x') }}</button>
+          </form>
+          {% else %}
+          <button type="button" class="btn btn-sm btn-danger btn-perm-disabled" disabled
+                  title="You don't have permission to delete this file. Editors can only delete files uploaded by another Editor — only an admin or Intergroup Member can remove this one.">{{ icon('x') }}</button>
+          {% endif %}
         {% endif %}
       </div>
-      {% if can_edit and current_user.can_edit_reading(r) %}
+      {% if can_edit and current_user.can_edit_library_item(r) %}
       {% set _default_mode = 'paste' if (r.body and not r.stored_filename) else 'upload' %}
       <div class="modal" id="{{ edit_id }}-modal" aria-hidden="true">
         <div class="modal-backdrop" data-close></div>
@@ -277,7 +290,7 @@
   <div class="modal-backdrop" data-close></div>
   <div class="modal-panel" role="dialog" aria-modal="true">
     <form id="add-library-file" method="post" class="form" enctype="multipart/form-data"
-          action="{{ url_for('main.reading_new', lid=library.id) }}"
+          action="{{ url_for('main.reading_new', slug=library.public_slug) }}"
           data-content-mode-form>
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="modal-head">
@@ -361,7 +374,7 @@
 <div class="modal" id="library-bulk-categories-modal" aria-hidden="true" data-bulk-modal>
   <div class="modal-backdrop" data-close></div>
   <div class="modal-panel" role="dialog" aria-modal="true">
-    <form method="post" action="{{ url_for('main.library_readings_bulk_categories', lid=library.id) }}" class="form">
+    <form method="post" action="{{ url_for('main.library_readings_bulk_categories', slug=library.public_slug) }}" class="form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="modal-head">
         <h2>Edit Categories</h2>
@@ -430,7 +443,7 @@
 <div class="modal" id="library-edit-modal" aria-hidden="true">
   <div class="modal-backdrop" data-close></div>
   <div class="modal-panel" role="dialog" aria-modal="true">
-    <form id="{{ form_id }}" method="post" action="{{ url_for('main.library_edit', lid=library.id) }}" class="form">
+    <form id="{{ form_id }}" method="post" action="{{ url_for('main.library_edit', slug=library.public_slug) }}" class="form">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="modal-head">
         <h2>Edit Library</h2>
@@ -489,7 +502,7 @@
           <legend>Used by Meetings</legend>
           <ul class="list">
             {% for m in library.meetings %}
-            <li><a href="{{ url_for('main.meeting_detail', mid=m.id) }}">{{ m.name }}</a></li>
+            <li><a href="{{ url_for('main.meeting_detail', slug=m.public_slug) }}">{{ m.name }}</a></li>
             {% endfor %}
           </ul>
         </fieldset>

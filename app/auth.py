@@ -369,11 +369,24 @@ def login():
             _clear_login_failures(ip=ip, username=user.username)
             session.permanent = True
             login_user(user, remember=True)
+            from . import activity
+            activity.open_session(user)
+            activity.log("login", user=user, summary=f"Signed in from {ip}")
             next_url = request.args.get("next") or request.form.get("next")
             if next_url and _is_safe_url(next_url):
                 return redirect(next_url)
             return redirect(url_for("main.index"))
         _record_login_failure(ip, lockout_username)
+        from . import activity
+        # Log the failed attempt against the matched user when one
+        # exists (so the User Log shows attempts even on accounts
+        # that aren't currently signed in); fall back to a None
+        # user_id when the username is unknown so we don't drop the
+        # signal entirely.
+        activity.log("login.failed",
+                     user=user,
+                     summary=(f"Failed sign-in attempt for '{username}' from {ip}"
+                              if username else f"Failed sign-in from {ip}"))
         flash("Invalid credentials", "danger")
     return render_template("login.html")
 
@@ -381,6 +394,10 @@ def login():
 @bp.route("/logout")
 @login_required
 def logout():
+    from . import activity
+    actor = current_user._get_current_object() if hasattr(current_user, "_get_current_object") else current_user
+    activity.log("logout", user=actor, summary="Signed out")
+    activity.close_session(actor, reason="logout")
     logout_user()
     return redirect(url_for("auth.login"))
 
@@ -468,7 +485,7 @@ def forgot_password():
             | (func.lower(User.username) == identifier.lower())
         ).first()
 
-        if user:
+        if user and getattr(user, "password_reset_allowed", True):
             _purge_stale_reset_tokens()
             import secrets as _secrets
             token = _secrets.token_urlsafe(32)
@@ -480,6 +497,9 @@ def forgot_password():
             )
             db.session.add(row)
             db.session.commit()
+            from . import activity
+            activity.log("password.forgot", user=user,
+                         summary=f"Requested password reset (matched on '{identifier}')")
             ok, err = _send_reset_email(user, token)
             if not ok:
                 # Surface the SMTP failure to server logs but never to the
@@ -488,6 +508,16 @@ def forgot_password():
                 # sees the same generic success page either way.
                 current_app.logger.warning(
                     "Password reset email failed for user_id=%s: %s", user.id, err)
+        elif user:
+            # Self-service reset disabled for this account. Log the
+            # blocked attempt for the User Log audit, but render the
+            # same generic success page so the form can't be used to
+            # enumerate which accounts have the gate flipped off.
+            from . import activity
+            activity.log("password.forgot.blocked", user=user,
+                         summary=(f"Forgot-password request blocked — "
+                                  f"reset disabled on this account "
+                                  f"(matched on '{identifier}')"))
 
         return render_template("forgot_password.html", submitted=True)
     return render_template("forgot_password.html")
@@ -557,6 +587,10 @@ def reset_password(token):
         clear_user_lockout(user.username)
         session.permanent = True
         login_user(user, remember=True)
+        from . import activity
+        activity.open_session(user)
+        activity.log("password.reset.self", user=user,
+                     summary="Reset password via emailed link")
         flash("Password updated. You're signed in.", "success")
         return redirect(url_for("main.index"))
 
@@ -586,6 +620,9 @@ def users_unlock(uid):
     u = db.session.get(User, uid)
     if u:
         clear_user_lockout(u.username)
+        from . import activity
+        activity.log("user.unlock", entity_type="user", entity_id=u.id,
+                     summary=f"Cleared login lockout for {u.username}")
         flash(f"Login lockout cleared for {u.username}", "success")
     return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
 
@@ -612,6 +649,9 @@ def users_create():
              password_hash=generate_password_hash(password), role=role)
     db.session.add(u)
     db.session.commit()
+    from . import activity
+    activity.log("user.create", entity_type="user", entity_id=u.id,
+                 summary=f"Created user {username} ({role})")
     flash(f"User {username} created", "success")
 
     # Optional welcome email. Defaults to opt-in via the form checkbox;
@@ -674,6 +714,9 @@ def users_update(uid):
     if "phone" in request.form:
         u.phone = (request.form.get("phone") or "").strip() or None
     db.session.commit()
+    from . import activity
+    activity.log("user.update", entity_type="user", entity_id=u.id,
+                 summary=f"Updated user {u.username} (role={u.role})")
     flash("User updated", "success")
     return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
 
@@ -687,14 +730,27 @@ def users_reset_password(uid):
     earlier "resend welcome" route."""
     if not current_user.is_admin():
         return redirect(url_for("main.index"))
+
+    # Honor a same-host return_url so the modal can be invoked from
+    # pages other than the Users panel (e.g. Access Requests). Falls
+    # back to the Users panel — preserving the embed=1 hint when the
+    # request came from inside the Settings iframe.
+    def _bounce():
+        ru = (request.form.get("return_url") or "").strip()
+        if ru and _is_safe_url(ru):
+            return redirect(ru)
+        if request.form.get("embed") == "1":
+            return redirect(url_for("auth.users", embed=1))
+        return redirect(url_for("auth.users"))
+
     u = db.session.get(User, uid)
     if not u:
         flash("User not found", "danger")
-        return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
+        return _bounce()
     send_email = request.form.get("send_email", "1") == "1"
     if send_email and not u.email:
         flash(f"{u.username} has no email address on file — set one or use Save without emailing.", "warning")
-        return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
+        return _bounce()
 
     mode = request.form.get("mode", "generate")
     if mode == "custom":
@@ -702,7 +758,7 @@ def users_reset_password(uid):
         ok_pol, errs = validate_password_policy(new_pw, username=u.username, email=u.email)
         if not ok_pol:
             flash("Password rejected: " + " ".join(errs), "danger")
-            return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
+            return _bounce()
     else:
         new_pw = _generate_password()
 
@@ -713,12 +769,27 @@ def users_reset_password(uid):
         ok, err = _send_welcome_email(u, new_pw)
         if not ok:
             flash(f"Could not send welcome email: {err} — password was not changed.", "danger")
-            return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
+            return _bounce()
 
     u.password_hash = generate_password_hash(new_pw)
+    # Invalidate every live forgot-password token on this account — an
+    # admin-driven reset supersedes any pending email link the user
+    # may still have in their inbox, and the Access Requests page reads
+    # exactly this signal to decide whether to surface a "pending reset"
+    # row, so consuming the token here clears that row in one motion.
+    (PasswordResetToken.query
+     .filter(PasswordResetToken.user_id == u.id,
+             PasswordResetToken.used_at.is_(None))
+     .update({"used_at": datetime.utcnow()},
+             synchronize_session=False))
     db.session.commit()
     # Clear any active lockout — the user is getting a fresh start.
     clear_user_lockout(u.username)
+    from . import activity
+    activity.log("password.reset.admin",
+                 entity_type="user", entity_id=u.id,
+                 summary=(f"Admin reset password for {u.username} "
+                          f"(mode={mode}, email_sent={'yes' if send_email else 'no'})"))
     if send_email:
         flash(f"Password reset for {u.username}; welcome email sent to {u.email}.", "success")
     elif mode == "custom":
@@ -728,7 +799,7 @@ def users_reset_password(uid):
         # to be told the value, since neither the user nor the database
         # holds it in plaintext anywhere else.
         flash(f"Password reset for {u.username}. No email was sent — the new password is: {new_pw}", "success")
-    return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
+    return _bounce()
 
 
 @bp.route("/users/generate-password", methods=["POST"])
@@ -742,6 +813,38 @@ def users_generate_password():
     return jsonify({"password": _generate_password()})
 
 
+@bp.route("/users/<int:uid>/reset-allowed", methods=["POST"])
+@login_required
+def users_set_reset_allowed(uid):
+    """Toggle the per-user ``password_reset_allowed`` flag. Posted by
+    the small switch on each row of Settings → Users. Returns JSON for
+    the AJAX caller; falls back to a redirect for noscript form posts."""
+    from flask import jsonify
+    if not current_user.is_admin():
+        return jsonify({"error": "forbidden"}), 403
+    u = db.session.get(User, uid)
+    if not u:
+        return jsonify({"error": "not found"}), 404
+    allowed = request.form.get("allowed") == "1"
+    u.password_reset_allowed = allowed
+    # When toggling reset OFF, invalidate any live tokens already in
+    # the user's inbox — keeping them around would defeat the gate.
+    if not allowed:
+        (PasswordResetToken.query
+         .filter(PasswordResetToken.user_id == u.id,
+                 PasswordResetToken.used_at.is_(None))
+         .update({"used_at": datetime.utcnow()},
+                 synchronize_session=False))
+    db.session.commit()
+    from . import activity
+    activity.log("user.reset_gate", entity_type="user", entity_id=u.id,
+                 summary=(f"{'Enabled' if allowed else 'Disabled'} self-service "
+                          f"password reset for {u.username}"))
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify(ok=True, allowed=allowed)
+    return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
+
+
 @bp.route("/users/<int:uid>/delete", methods=["POST"])
 @login_required
 def users_delete(uid):
@@ -752,6 +855,13 @@ def users_delete(uid):
         return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
     u = db.session.get(User, uid)
     if u:
+        from . import activity
+        # Log BEFORE the cascade nukes the row — entity_id stays valid
+        # but the FK on activity_log uses ON DELETE SET NULL so rows
+        # describing this user remain intact (and the username is in
+        # the summary string for posterity).
+        activity.log("user.delete", entity_type="user", entity_id=u.id,
+                     summary=f"Deleted user {u.username}")
         db.session.delete(u)
         db.session.commit()
         flash("User deleted", "success")

@@ -34,9 +34,9 @@
       <tbody>
         {% for l in libraries %}
         <tr>
-          <td><a href="{{ url_for('main.library_detail', lid=l.id) }}">{{ l.name }}</a></td>
+          <td><a href="{{ url_for('main.library_detail', slug=l.public_slug) }}">{{ l.name }}</a></td>
           <td class="muted hide-sm">{{ l.description or '—' }}</td>
-          <td>{{ l.readings.count() }}</td>
+          <td>{{ l.items.count() }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -45,10 +45,10 @@
   {% else %}
   <div class="cards">
     {% for l in libraries %}
-    <a class="card card-hover" href="{{ url_for('main.library_detail', lid=l.id) }}">
+    <a class="card card-hover" href="{{ url_for('main.library_detail', slug=l.public_slug) }}">
       <h3>{{ l.name }}</h3>
       {% if l.description %}<p class="clip">{{ l.description }}</p>{% endif %}
-      <div class="tags"><span class="tag">{{ l.readings.count() }} files</span></div>
+      <div class="tags"><span class="tag">{{ l.items.count() }} files</span></div>
     </a>
     {% endfor %}
   </div>

@@ -8,7 +8,7 @@ from markupsafe import Markup
 from flask import Flask, request, redirect
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
-from .models import db, User, MediaItem, MeetingFile, Reading, UrlRedirect
+from .models import db, User, MediaItem, MeetingFile, LibraryItem, UrlRedirect
 
 login_manager = LoginManager()
 login_manager.login_view = "auth.login"
@@ -236,6 +236,14 @@ def create_app():
         _seed_admin(app)
         _seed_custom_layouts(app)
         _backfill_media(app)
+        # Boot-time recycle-bin sweep. The Delete Log page also runs
+        # this lazily on every visit; the boot sweep covers installs
+        # whose admin doesn't routinely open the page.
+        try:
+            from . import trash as _trash
+            _trash.expire_old()
+        except Exception:
+            db.session.rollback()
 
     # Daily SQLite snapshot. Runs every boot; no-op when today's
     # snapshot already exists. Pruned to the most recent 14 days.
@@ -384,17 +392,17 @@ def create_app():
 
 
 def _backfill_media(app):
-    """Index any stored_filenames referenced by MeetingFile/Reading into MediaItem."""
+    """Index any stored_filenames referenced by MeetingFile/LibraryItem into MediaItem."""
     upload_dir = app.config["UPLOAD_FOLDER"]
     known = {m.stored_filename for m in MediaItem.query.all()}
     candidates = set()
     for row in db.session.query(MeetingFile.stored_filename, MeetingFile.original_filename).all():
         if row[0] and row[0] not in known:
             candidates.add((row[0], row[1] or row[0]))
-    for row in db.session.query(Reading.stored_filename, Reading.original_filename).all():
+    for row in db.session.query(LibraryItem.stored_filename, LibraryItem.original_filename).all():
         if row[0] and row[0] not in known:
             candidates.add((row[0], row[1] or row[0]))
-    for row in db.session.query(Reading.thumbnail_filename).filter(Reading.thumbnail_filename.isnot(None)).all():
+    for row in db.session.query(LibraryItem.thumbnail_filename).filter(LibraryItem.thumbnail_filename.isnot(None)).all():
         if row[0] and row[0] not in known:
             candidates.add((row[0], row[0]))
     added = 0
@@ -653,9 +661,14 @@ def _migrate_sqlite(app):
                          ("dash_show_server_metrics", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_online_users", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_access_requests", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("dash_show_deletions", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("dash_show_currently_online", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_order_json", "TEXT"),
                          ("last_seen_at", "DATETIME"),
-                         ("phone", "VARCHAR(64)")):
+                         ("phone", "VARCHAR(64)"),
+                         ("last_endpoint", "VARCHAR(128)"),
+                         ("last_path", "VARCHAR(500)"),
+                         ("password_reset_allowed", "BOOLEAN NOT NULL DEFAULT 1")):
             add("user", col, ddl)
         for col, ddl in (("open_in_new_tab", "BOOLEAN NOT NULL DEFAULT 0"),):
             add("frontend_nav_item", col, ddl)

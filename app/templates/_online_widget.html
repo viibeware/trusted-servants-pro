@@ -1,0 +1,123 @@
+{# Live "Currently online" widget — included by both the User Log
+   page and the admin dashboard. Polls /api/online-users every 5
+   seconds, renders one row per active session with username, role,
+   current page (clickable), and a ticking time-since-seen stamp.
+   The destination cell green-flashes when it changes between polls
+   so admins can see live navigation without refreshing.
+
+   Designed to be safe to include twice on a page (defensive ID guard
+   in the JS), but the existing pages each only include it once. #}
+<section class="card user-log-online" id="user-log-online"
+         data-endpoint="{{ url_for('main.api_online_users') }}">
+  <div class="card-head">
+    <h2>
+      <span class="online-pulse" aria-hidden="true"></span>
+      Currently online
+      <span class="muted smaller online-count" id="online-count">…</span>
+    </h2>
+    <span class="muted smaller">Refreshes every 5 seconds</span>
+  </div>
+  <div class="online-list" id="online-list">
+    <p class="muted online-empty">Loading…</p>
+  </div>
+</section>
+
+<script>
+(function(){
+  // Single-shot init guard: if a previous include already wired the
+  // widget on this page, exit so we don't stack multiple polling
+  // timers (would result in 2× refresh rate per timer).
+  if (window.__tspOnlineWidgetInit) return;
+  window.__tspOnlineWidgetInit = true;
+
+  const wrap = document.getElementById('user-log-online');
+  if (!wrap) return;
+  const url = wrap.dataset.endpoint;
+  const listEl = document.getElementById('online-list');
+  const countEl = document.getElementById('online-count');
+  // Cache last-known location per user-id so we can flash a row when
+  // it actually changes instead of every poll.
+  const lastLoc = new Map();
+
+  function fmtAgo(iso){
+    if (!iso) return '—';
+    const t = new Date(iso);
+    const ms = Date.now() - t.getTime();
+    const s = Math.max(0, Math.round(ms / 1000));
+    if (s < 5)   return 'just now';
+    if (s < 60)  return s + 's ago';
+    if (s < 3600) return Math.round(s / 60) + 'm ago';
+    return Math.round(s / 3600) + 'h ago';
+  }
+
+  function escapeHtml(s){
+    if (s == null) return '';
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+
+  function render(data){
+    const users = data.users || [];
+    countEl.textContent = users.length
+      ? users.length + (users.length === 1 ? ' user' : ' users')
+      : 'no one online';
+    if (!users.length){
+      listEl.innerHTML = '<p class="muted online-empty">Nobody is currently signed in.</p>';
+      lastLoc.clear();
+      return;
+    }
+    const html = users.map(u => {
+      const prev = lastLoc.get(u.id);
+      const path = u.last_path || '';
+      const moved = prev && prev !== path;
+      lastLoc.set(u.id, path);
+      const linkOpen = path
+        ? '<a class="online-where-link" href="' + escapeHtml(path) + '">'
+        : '<span class="online-where-link">';
+      const linkClose = path ? '</a>' : '</span>';
+      return '<div class="online-row' + (u.is_self ? ' is-self' : '') + (moved ? ' just-moved' : '') + '" data-uid="' + u.id + '">'
+        + '<div class="online-avatar">' + escapeHtml((u.username || '?').slice(0,1).toUpperCase()) + '</div>'
+        + '<div class="online-meta">'
+        + '<div class="online-name">' + escapeHtml(u.username) + (u.is_self ? ' <span class="muted smaller">(you)</span>' : '') + '</div>'
+        + '<div class="online-role muted smaller">' + escapeHtml((u.role || '').replace('_',' ')) + '</div>'
+        + '</div>'
+        + '<div class="online-where">'
+        + linkOpen + escapeHtml(u.location_label || u.last_path || '—') + linkClose
+        + (u.last_path ? '<div class="muted smaller mono online-path">' + escapeHtml(u.last_path) + '</div>' : '')
+        + '</div>'
+        + '<div class="online-seen muted smaller" data-iso="' + escapeHtml(u.last_seen_at || '') + '">' + fmtAgo(u.last_seen_at) + '</div>'
+        + '</div>';
+    }).join('');
+    listEl.innerHTML = html;
+  }
+
+  let inflight = false;
+  async function refresh(){
+    if (document.hidden) return;
+    if (inflight) return;
+    inflight = true;
+    try {
+      const r = await fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' }});
+      if (!r.ok) return;
+      const data = await r.json();
+      render(data);
+    } catch(_) {} finally {
+      inflight = false;
+    }
+  }
+
+  // Tick the "Xs ago" stamps every second between polls so they
+  // don't sit static for the full 5-second window.
+  function tickAgo(){
+    document.querySelectorAll('.online-seen[data-iso]').forEach(el => {
+      const iso = el.dataset.iso;
+      if (iso) el.textContent = fmtAgo(iso);
+    });
+  }
+
+  refresh();
+  setInterval(refresh, 5000);
+  setInterval(tickAgo, 1000);
+})();
+</script>

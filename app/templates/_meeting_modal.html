@@ -174,7 +174,7 @@
           <legend>Libraries</legend>
           {% if all_libraries %}
           <div class="library-picker">
-            {% set _public_reading_ids = (meeting.public_readings|map(attribute='id')|list) if meeting else [] %}
+            {% set _public_reading_ids = (meeting.public_library_items|map(attribute='id')|list) if meeting else [] %}
             {% for lib in all_libraries %}
               {% set included = meeting and lib in meeting.libraries %}
               {% set mode = meeting.library_mode(lib) if included else 'all' %}
@@ -184,7 +184,7 @@
                   <input type="checkbox" name="library_ids" value="{{ lib.id }}"
                          class="library-include" {% if included %}checked{% endif %}>
                   <span class="library-name">{{ lib.name }}</span>
-                  <span class="muted smaller">{{ lib.readings.count() }} files</span>
+                  <span class="muted smaller">{{ lib.items.count() }} files</span>
                 </label>
                 <div class="library-detail" {% if not included %}style="display:none"{% endif %}>
                   <label class="mode-toggle">
@@ -195,7 +195,7 @@
                     <span class="mode-label-granular">Granular</span>
                   </label>
                   <div class="library-readings" {% if mode != 'granular' %}style="display:none"{% endif %}>
-                    {% for r in lib.readings %}
+                    {% for r in lib.items %}
                     <label class="reading-check">
                       <input type="checkbox" name="library_readings_{{ lib.id }}" value="{{ r.id }}"
                              {% if r.id in sel_ids %}checked{% endif %}>
@@ -205,12 +205,12 @@
                     <p class="muted small">No files in this library yet.</p>
                     {% endfor %}
                   </div>
-                  {% if lib.readings.count() %}
+                  {% if lib.items.count() %}
                   <div class="library-public-readings">
                     <div class="library-public-readings-head muted smaller">Show on public meeting page:</div>
-                    {% for r in lib.readings %}
+                    {% for r in lib.items %}
                     <label class="reading-check reading-public-check">
-                      <input type="checkbox" name="library_public_readings_{{ lib.id }}" value="{{ r.id }}"
+                      <input type="checkbox" name="library_public_library_items_{{ lib.id }}" value="{{ r.id }}"
                              {% if r.id in _public_reading_ids %}checked{% endif %}>
                       <span>{{ r.title }}</span>
                     </label>
@@ -239,7 +239,7 @@
           {% set items = meeting.files_by_category(cat) %}
           {% if items %}
           <ul class="file-list file-list-sortable"
-              data-reorder-url="{{ url_for('main.meeting_files_reorder', mid=meeting.id) }}"
+              data-reorder-url="{{ url_for('main.meeting_files_reorder', slug=meeting.public_slug) }}"
               data-reorder-category="{{ cat }}">
             {% for f in items %}
             {% set f_edit_id = 'edit-file-' ~ f.id %}
@@ -312,7 +312,7 @@
           <p class="muted small">No {{ CATEGORY_LABELS[cat]|lower }} yet.</p>
           {% endif %}
           <form id="add-{{ cat }}" method="post" class="file-add-form collapsed" enctype="multipart/form-data"
-                action="{{ url_for('main.file_new', mid=meeting.id, category=cat) }}">
+                action="{{ url_for('main.file_new', slug=meeting.public_slug, category=cat) }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label>Title<input name="title" required></label>
             <label>Description<textarea name="description" rows="2"></textarea></label>

@@ -1344,12 +1344,44 @@
     });
   });
 
-  // Dashboard widget drag-and-drop reorder
+  // Dashboard widget drag-and-drop reorder.
+  //
+  // Save signal lives on ``dragend`` (always fires) rather than
+  // ``drop`` (only fires when the cursor is over a valid drop target
+  // on release). Releasing in the gap between widgets, between the
+  // last widget and the modal, or just outside the grid would
+  // otherwise silently drop the save while leaving the widget
+  // visually in its new spot — refresh would snap it back. Same fix
+  // pattern as the library-reorder save in 1.7.16.
+  //
+  // dragstart snapshots the original order; dragend compares to the
+  // current DOM order and only fires the POST when they actually
+  // differ, so a click-and-cancel doesn't write a redundant row.
   (function initDashboardReorder(){
     const grid = document.querySelector("[data-dashboard-reorder]");
     if (!grid) return;
     const url = grid.dataset.orderUrl;
     let dragging = null;
+    let originalOrder = null;
+
+    function currentOrder() {
+      return Array.from(grid.querySelectorAll(".dash-widget[data-widget-key]"))
+        .map(x => x.dataset.widgetKey);
+    }
+
+    async function commit() {
+      if (!url) return;
+      const order = currentOrder();
+      if (originalOrder && order.join("|") === originalOrder.join("|")) return;
+      try {
+        await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+          credentials: "same-origin",
+          body: JSON.stringify({ order }),
+        });
+      } catch (_) {}
+    }
 
     grid.querySelectorAll('.dash-widget[draggable="true"]').forEach(w => {
       w.addEventListener("dragstart", (e) => {
@@ -1360,6 +1392,7 @@
           }
         }
         dragging = w;
+        originalOrder = currentOrder();
         w.classList.add("dragging");
         e.dataTransfer.effectAllowed = "move";
         try { e.dataTransfer.setData("text/plain", w.dataset.widgetKey || ""); } catch(_) {}
@@ -1368,6 +1401,8 @@
         w.classList.remove("dragging");
         grid.querySelectorAll(".dash-widget.drag-over").forEach(x => x.classList.remove("drag-over"));
         dragging = null;
+        commit();
+        originalOrder = null;
       });
       w.addEventListener("dragover", (e) => {
         if (!dragging || dragging === w) return;
@@ -1380,20 +1415,12 @@
         else grid.insertBefore(dragging, w);
       });
       w.addEventListener("dragleave", () => w.classList.remove("drag-over"));
-      w.addEventListener("drop", async (e) => {
+      // ``drop`` no longer commits — left in place only to swallow the
+      // default browser navigation that some browsers fire on drop
+      // events when not preventDefault'd.
+      w.addEventListener("drop", (e) => {
         e.preventDefault();
         w.classList.remove("drag-over");
-        if (!url) return;
-        const order = Array.from(grid.querySelectorAll(".dash-widget[data-widget-key]"))
-          .map(x => x.dataset.widgetKey);
-        try {
-          await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
-            credentials: "same-origin",
-            body: JSON.stringify({ order }),
-          });
-        } catch (_) {}
       });
     });
   })();

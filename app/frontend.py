@@ -464,7 +464,7 @@ def meeting_resource(slug, resource):
     The route looks up the meeting by slug first (same logic as
     ``meeting_detail``), then matches ``resource`` against the meeting's
     public files (``MeetingFile.public_visible=True``) and any
-    ``meeting.public_readings`` by their respective ``url_slug`` properties.
+    ``meeting.public_library_items`` by their respective ``url_slug`` properties.
     Files take precedence over readings on slug collision.
 
     The legacy singular-form ``/meeting/<slug>/<resource>`` URL is wired
@@ -512,7 +512,7 @@ def meeting_resource(slug, resource):
                     download_name=f.original_filename or f.stored_filename)
             abort(404)
 
-    for r in m.public_readings:
+    for r in m.public_library_items:
         if r.url_slug == resource:
             if r.body:
                 return render_template("reading_view.html", title=r.title,

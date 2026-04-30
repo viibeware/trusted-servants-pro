@@ -2,6 +2,108 @@
 {% block title %}Access Requests · Trusted Servants Pro{% endblock %}
 {% block heading %}Access Requests{% endblock %}
 {% block content %}
+
+{# Pending password resets — surfaced on the Active view so the admin
+   has one obvious place to handle outstanding reset asks. Hidden on
+   the Archived tab (those rows describe historical access requests,
+   not pending account actions). The rows are populated whenever a
+   user's forgot-password link is still live; admin-driven reset via
+   the modal invalidates every live token on that account, so the row
+   disappears the moment it's been handled. #}
+{% if pending_resets %}
+<section class="card pending-resets-card">
+  <div class="card-head">
+    <h2>Pending password resets</h2>
+    <span class="muted smaller">Accounts that have requested a password reset and still hold a live link in their inbox. Resetting from here invalidates the pending email link.</span>
+  </div>
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>User</th>
+        <th>Email</th>
+        <th>Requested</th>
+        <th>Link expires</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u, tok, mins in pending_resets %}
+      <tr>
+        <td><b>{{ u.username }}</b></td>
+        <td class="muted small">{{ u.email or '—' }}</td>
+        <td class="muted small">{{ tok.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="muted small">
+          {{ tok.expires_at.strftime('%H:%M') }}
+          {% if mins > 0 %}<span class="muted smaller"> · in ~{{ mins }} min</span>{% endif %}
+        </td>
+        <td class="nowrap">
+          <button type="button" class="btn btn-sm btn-primary js-pwreset-open"
+                  data-uid="{{ u.id }}"
+                  data-username="{{ u.username }}"
+                  data-email="{{ u.email or '' }}"
+                  title="Open the reset-password modal for {{ u.username }}">Reset password</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{# Recent password reset activity (last 30 days). Shows both self-
+   service flows (the user clicked "Forgot password?" — token may be
+   used, expired, or still live) AND admin-driven resets pulled from
+   the activity log. Hidden on Archived since it's account-state
+   history, not access-request history. #}
+{% if recent_resets %}
+<section class="card recent-resets-card">
+  <div class="card-head">
+    <h2>Recent password resets</h2>
+    <span class="muted smaller">Last 30 days · {{ recent_resets|length }} event{{ '' if recent_resets|length == 1 else 's' }}{% if recent_resets|length == 100 %} · capped{% endif %}</span>
+  </div>
+  <table class="tbl ar-recent-resets-tbl">
+    <thead>
+      <tr>
+        <th>User</th>
+        <th>Email</th>
+        <th>Type</th>
+        <th>Status</th>
+        <th>When</th>
+        <th>Actor</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in recent_resets %}
+      <tr>
+        <td><b>{{ r.username }}</b></td>
+        <td class="muted small">{{ r.email or '—' }}</td>
+        <td>
+          {% if r.kind == 'admin' %}
+            <span class="badge badge-muted">Admin reset</span>
+          {% else %}
+            <span class="badge badge-muted">Self-service</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if r.status == 'admin_reset' %}
+            <span class="badge badge-success">Reset</span>
+          {% elif r.status == 'used' %}
+            <span class="badge badge-success">Reset</span>
+          {% elif r.status == 'expired' %}
+            <span class="badge badge-muted ar-reset-status-expired">Expired</span>
+          {% elif r.status == 'pending' %}
+            <span class="badge badge-warning ar-reset-status-pending">Link live</span>
+          {% endif %}
+        </td>
+        <td class="muted small">{{ r.effective_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="muted small">{{ r.actor }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
 <section class="card">
   <div class="card-head ar-card-head">
     <h2>Requests</h2>
@@ -109,4 +211,11 @@
   </table>
   {% endif %}
 </section>
+
+{# Reset-password modal — shared with Settings → Users. The
+   return_url drops the admin back here after a successful reset
+   so they can keep working through pending requests. #}
+{% with return_url = url_for('main.access_requests', view=view) %}
+  {% include "_pwreset_modal.html" %}
+{% endwith %}
 {% endblock %}

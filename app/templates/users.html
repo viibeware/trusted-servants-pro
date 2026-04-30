@@ -110,6 +110,15 @@
         {% else %}
         <span class="muted smaller">No email on file</span>
         {% endif %}
+        <label class="users-reset-allow-toggle"
+               title="Allow {{ u.username }} to use the public Forgot Password flow. Admins can always reset this account regardless of this switch.">
+          <input type="checkbox"
+                 class="js-reset-allow-toggle"
+                 data-uid="{{ u.id }}"
+                 {% if u.password_reset_allowed %}checked{% endif %}>
+          <span class="mode-track"><span class="mode-thumb"></span></span>
+          <span class="users-reset-allow-label">Self-reset</span>
+        </label>
       </td>
       <td class="users-actions">
         <button class="btn btn-sm btn-primary">Save</button>
@@ -150,230 +159,38 @@
   </form>
 </section>
 
-{# ============================================================
-   Reset-password modal — shared across every row of the users
-   table. Two tabs:
-     • Generate — fetches a fresh random password from the
-       server, shows it in a copy-friendly readout, sends with
-       mode=generate so the server re-rolls server-side rather
-       than trusting the value posted from the client.
-     • Custom — admin types their own. Live policy meter
-       enforces the same rules the server validates against.
-   Either path: on submit, password is reset AND the welcome
-   email is re-sent so the user knows what changed.
-   ============================================================ #}
-<div class="modal pwreset-modal" id="pwreset-modal" aria-hidden="true">
-  <div class="modal-backdrop" data-close></div>
-  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="pwreset-title">
-    <div class="modal-head">
-      <h2 id="pwreset-title">Reset password</h2>
-      <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
-    </div>
-    <form method="post" id="pwreset-form" action="">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
-      <input type="hidden" name="mode" id="pwreset-mode" value="generate">
-      <div class="modal-body">
-        <p class="muted small pwreset-target">
-          Resetting the password for <b id="pwreset-username"></b>
-          (<span id="pwreset-email"></span>). The welcome email will be re-sent to
-          this address with the new password — their current password will stop working.
-        </p>
-
-        <div class="pwreset-tabs" role="tablist">
-          <button type="button" class="pwreset-tab is-active" data-pwtab="generate" role="tab" aria-selected="true">Generate random</button>
-          <button type="button" class="pwreset-tab" data-pwtab="custom" role="tab" aria-selected="false">Set custom</button>
-        </div>
-
-        <div class="pwreset-pane" data-pwpane="generate">
-          <label class="pwreset-readout-label">Generated password</label>
-          <div class="pwreset-readout">
-            <input type="text" id="pwreset-generated" readonly aria-label="Generated password" autocomplete="off" spellcheck="false">
-            <button type="button" class="btn btn-sm" id="pwreset-copy" title="Copy to clipboard">Copy</button>
-            <button type="button" class="btn btn-sm" id="pwreset-reroll" title="Generate a new one">Re-roll</button>
-          </div>
-          <p class="muted smaller pwreset-hint">16 characters · uppercase, lowercase, digits, and symbols. The server generates a fresh value at submit time too — what you see here is just a preview.</p>
-        </div>
-
-        <div class="pwreset-pane" data-pwpane="custom" hidden>
-          <label class="pwreset-custom-label">New password
-            <div class="pwreset-custom-input">
-              <input type="password" name="password" id="pwreset-custom" autocomplete="new-password" minlength="12" disabled>
-              <button type="button" class="btn btn-sm" id="pwreset-show" aria-pressed="false">Show</button>
-            </div>
-          </label>
-          <div class="pwreset-strength" aria-live="polite">
-            <div class="pwreset-strength-bar"><span data-strength-fill></span></div>
-            <div class="pwreset-strength-label" data-strength-label>Enter a password</div>
-          </div>
-          <ul class="pwreset-policy" aria-label="Password requirements">
-            <li data-rule="length">At least 12 characters</li>
-            <li data-rule="lower">A lowercase letter</li>
-            <li data-rule="upper">An uppercase letter</li>
-            <li data-rule="digit">A digit</li>
-            <li data-rule="symbol">A symbol (! @ # $ % ^ &amp; * ? - _ = +)</li>
-          </ul>
-        </div>
-      </div>
-      <input type="hidden" name="send_email" id="pwreset-send-email" value="1">
-      <div class="modal-foot">
-        <button type="button" class="btn" data-close>Cancel</button>
-        <button type="submit" class="btn" id="pwreset-save-only"
-                title="Save the password silently without sending an email — useful when SMTP isn't configured or you'll share the password out-of-band">Save without emailing</button>
-        <button type="submit" class="btn btn-primary" id="pwreset-submit">Reset &amp; send email</button>
-      </div>
-    </form>
-  </div>
-</div>
+{# Reset-password modal markup + JS lives in _pwreset_modal.html so the
+   Access Requests page can re-use it. Open buttons on this page rely
+   on the standard `.js-pwreset-open` data attributes. #}
+{% include "_pwreset_modal.html" %}
 
 <script>
 (function(){
-  const modal = document.getElementById('pwreset-modal');
-  if (!modal) return;
-  const form = document.getElementById('pwreset-form');
-  const modeIn = document.getElementById('pwreset-mode');
-  const usernameEl = document.getElementById('pwreset-username');
-  const emailEl = document.getElementById('pwreset-email');
-  const tabs = modal.querySelectorAll('.pwreset-tab');
-  const panes = modal.querySelectorAll('[data-pwpane]');
-  const generated = document.getElementById('pwreset-generated');
-  const copyBtn = document.getElementById('pwreset-copy');
-  const reroll = document.getElementById('pwreset-reroll');
-  const customIn = document.getElementById('pwreset-custom');
-  const showBtn = document.getElementById('pwreset-show');
-  const fillEl = modal.querySelector('[data-strength-fill]');
-  const labelEl = modal.querySelector('[data-strength-label]');
-  const ruleEls = {
-    length: modal.querySelector('[data-rule="length"]'),
-    lower:  modal.querySelector('[data-rule="lower"]'),
-    upper:  modal.querySelector('[data-rule="upper"]'),
-    digit:  modal.querySelector('[data-rule="digit"]'),
-    symbol: modal.querySelector('[data-rule="symbol"]'),
-  };
-  const submitBtn = document.getElementById('pwreset-submit');
-  const saveOnlyBtn = document.getElementById('pwreset-save-only');
-  const sendEmailIn = document.getElementById('pwreset-send-email');
-
-  // The two submit buttons share the same form. Track which one was
-  // clicked so the form post carries the right send_email flag — a
-  // bare submit (Enter key) defaults to the primary "Reset & send".
-  saveOnlyBtn.addEventListener('click', () => { sendEmailIn.value = '0'; });
-  submitBtn.addEventListener('click',  () => { sendEmailIn.value = '1'; });
-
-  // CSRF + path: the action attribute is rewritten per-user when the
-  // modal opens, so a single dialog drives N table rows. Use a
-  // placeholder UID and substitute at click time — letting Flask
-  // build the URL keeps blueprint prefix + URL_PREFIX honored.
-  const ACTION_TEMPLATE = "{{ url_for('auth.users_reset_password', uid=0) }}";
+  // Per-user "Self-reset allowed?" toggle. POSTs the new state to
+  // /users/<uid>/reset-allowed and surfaces a brief inline confirmation
+  // so the admin doesn't have to refresh to see the change applied.
   const csrf = "{{ csrf_token() }}";
-  async function fetchGenerated(){
-    try {
+  const baseUrl = "{{ url_for('auth.users_set_reset_allowed', uid=0) }}";
+  document.querySelectorAll('.js-reset-allow-toggle').forEach(input => {
+    input.addEventListener('change', async () => {
+      const uid = input.dataset.uid;
+      const allowed = input.checked ? '1' : '0';
+      const url = baseUrl.replace(/\/0\/reset-allowed$/, '/' + uid + '/reset-allowed');
       const fd = new FormData();
       fd.append('csrf_token', csrf);
-      const r = await fetch("{{ url_for('auth.users_generate_password') }}", {
-        method: 'POST', body: fd, credentials: 'same-origin'
-      });
-      if (!r.ok) return;
-      const data = await r.json();
-      generated.value = data.password || '';
-    } catch(_) {}
-  }
-
-  function setMode(m){
-    modeIn.value = m;
-    tabs.forEach(t => {
-      const on = t.dataset.pwtab === m;
-      t.classList.toggle('is-active', on);
-      t.setAttribute('aria-selected', on ? 'true' : 'false');
-    });
-    panes.forEach(p => { p.hidden = (p.dataset.pwpane !== m); });
-    customIn.disabled = (m !== 'custom');
-    if (m === 'custom') {
-      setTimeout(() => customIn.focus(), 50);
-      evaluateCustom();
-    } else {
-      submitBtn.disabled = false;
-      saveOnlyBtn.disabled = false;
-    }
-  }
-  tabs.forEach(t => t.addEventListener('click', () => setMode(t.dataset.pwtab)));
-
-  copyBtn.addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(generated.value);
-      const old = copyBtn.textContent;
-      copyBtn.textContent = 'Copied';
-      setTimeout(() => copyBtn.textContent = old, 1200);
-    } catch(_) {
-      generated.select();
-      document.execCommand && document.execCommand('copy');
-    }
-  });
-  reroll.addEventListener('click', fetchGenerated);
-
-  showBtn.addEventListener('click', () => {
-    const showing = customIn.type === 'text';
-    customIn.type = showing ? 'password' : 'text';
-    showBtn.textContent = showing ? 'Show' : 'Hide';
-    showBtn.setAttribute('aria-pressed', showing ? 'false' : 'true');
-  });
-
-  const SYMBOLS = "!@#$%^&*?-_=+";
-  function evaluateCustom(){
-    const v = customIn.value || '';
-    const checks = {
-      length: v.length >= 12,
-      lower:  /[a-z]/.test(v),
-      upper:  /[A-Z]/.test(v),
-      digit:  /[0-9]/.test(v),
-      symbol: [...v].some(c => SYMBOLS.includes(c)),
-    };
-    Object.keys(checks).forEach(k => {
-      ruleEls[k].classList.toggle('is-met', checks[k]);
-    });
-    const passed = Object.values(checks).filter(Boolean).length;
-    const pct = Math.min(100, Math.round((passed / 5) * 100));
-    fillEl.style.width = pct + '%';
-    let tier = 'weak';
-    if (pct === 100) tier = (v.length >= 16) ? 'strong' : 'good';
-    else if (pct >= 80) tier = 'fair';
-    fillEl.dataset.tier = tier;
-    if (!v) {
-      labelEl.textContent = 'Enter a password';
-    } else if (pct < 100) {
-      labelEl.textContent = 'Doesn’t meet policy yet';
-    } else {
-      labelEl.textContent = tier === 'strong' ? 'Strong' : 'Meets policy';
-    }
-    const blocked = (modeIn.value === 'custom' && pct < 100);
-    submitBtn.disabled = blocked;
-    saveOnlyBtn.disabled = blocked;
-  }
-  customIn.addEventListener('input', evaluateCustom);
-
-  document.querySelectorAll('.js-pwreset-open').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const uid = btn.dataset.uid;
-      form.action = ACTION_TEMPLATE.replace(/\/0\/reset_password$/, '/' + uid + '/reset_password');
-      usernameEl.textContent = btn.dataset.username || '';
-      emailEl.textContent = btn.dataset.email || '';
-      customIn.value = '';
-      customIn.type = 'password';
-      showBtn.textContent = 'Show';
-      showBtn.setAttribute('aria-pressed', 'false');
-      setMode('generate');
-      fetchGenerated();
-      modal.classList.add('open');
-      modal.setAttribute('aria-hidden', 'false');
-      document.body.style.overflow = 'hidden';
+      fd.append('allowed', allowed);
+      try {
+        const r = await fetch(url, {
+          method: 'POST', body: fd, credentials: 'same-origin',
+          headers: { 'X-Requested-With': 'fetch' }
+        });
+        if (!r.ok) throw new Error('Bad status: ' + r.status);
+      } catch (_) {
+        // Revert on failure so the UI doesn't lie about the saved state.
+        input.checked = !input.checked;
+      }
     });
   });
-  modal.querySelectorAll('[data-close]').forEach(el =>
-    el.addEventListener('click', () => {
-      modal.classList.remove('open');
-      modal.setAttribute('aria-hidden', 'true');
-      document.body.style.overflow = '';
-    }));
 })();
 </script>
 

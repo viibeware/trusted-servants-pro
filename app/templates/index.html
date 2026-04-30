@@ -89,13 +89,14 @@
               <div class="metric-sub muted smaller" data-field="cpu_count">—</div>
             </div>
             {% if current_user.is_admin() %}
-            <div class="metric-tile metric-tile-text" id="online-users-tile"
+            <a class="metric-tile metric-tile-text metric-tile-link" id="online-users-tile"
+                 href="{{ url_for('main.user_log') }}"
                  data-endpoint="{{ url_for('main.api_online_users') }}"
                  title="{% for u in online_users %}{{ u.username }} ({{ u.role }}){% if not loop.last %}, {% endif %}{% endfor %}">
               <div class="metric-label">Online</div>
               <div class="metric-value" data-field="online_count">{{ online_count }}</div>
               <div class="metric-sub muted smaller" data-field="online_label">{% if online_count == 1 %}user · last 5 min{% else %}users · last 5 min{% endif %}</div>
-            </div>
+            </a>
             {% endif %}
           </div>
         </div>
@@ -116,7 +117,7 @@
       {% if meetings %}
       <ul class="list">
         {% for m in meetings[:6] %}
-        <li><a href="{{ url_for('main.meeting_detail', mid=m.id) }}"><span>{{ m.name }}</span><span class="muted">{% if m.schedules %}{{ m.schedules[0].day_name[:3] }} {{ m.schedules[0].start_time }}{% endif %}</span></a></li>
+        <li><a href="{{ url_for('main.meeting_detail', slug=m.public_slug) }}"><span>{{ m.name }}</span><span class="muted">{% if m.schedules %}{{ m.schedules[0].day_name[:3] }} {{ m.schedules[0].start_time }}{% endif %}</span></a></li>
         {% endfor %}
       </ul>
       {% else %}<p class="muted">No meetings yet.</p>{% endif %}
@@ -135,7 +136,7 @@
       {% if libraries %}
       <ul class="list">
         {% for l in libraries[:6] %}
-        <li><a href="{{ url_for('main.library_detail', lid=l.id) }}"><span>{{ l.name }}</span><span class="muted">{{ l.readings.count() }} files</span></a></li>
+        <li><a href="{{ url_for('main.library_detail', slug=l.public_slug) }}"><span>{{ l.name }}</span><span class="muted">{{ l.items.count() }} files</span></a></li>
         {% endfor %}
       </ul>
       {% else %}<p class="muted">No libraries yet.</p>{% endif %}
@@ -158,6 +159,40 @@
         {% endfor %}
       </ul>
       {% else %}<p class="muted">No files uploaded yet.</p>{% endif %}
+    </section>
+  </div>
+  {% endif %}
+
+  {% if widget_key == 'currently-online' and current_user.is_admin() and current_user.dash_show_currently_online %}
+  <div class="dash-widget" data-widget-key="currently-online" {% if can_reorder %}draggable="true"{% endif %}>
+    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
+    {% include "_online_widget.html" %}
+  </div>
+  {% endif %}
+
+  {% if widget_key == 'deletions' and current_user.is_admin() and current_user.dash_show_deletions %}
+  <div class="dash-widget" data-widget-key="deletions" {% if can_reorder %}draggable="true"{% endif %}>
+    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
+    <section class="card">
+      <div class="card-head">
+        <h2>Recent Deletions</h2>
+        <a href="{{ url_for('main.delete_log') }}" class="link">Open Delete Log {{ icon('arrow-right') }}</a>
+      </div>
+      {% if recent_deletions %}
+      <ul class="list dash-deletions-list">
+        {% for d in recent_deletions %}
+        <li>
+          <a href="{{ url_for('main.delete_log') }}">
+            <span class="dash-deletion-name">{{ d.original_filename or d.title or '(untitled)' }}</span>
+            <span class="muted smaller dash-deletion-meta">
+              {% if d.parent_label %}{{ d.parent_label }} · {% endif %}{{ d.deleted_at.strftime('%b %d') }}
+            </span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      <div class="dash-deletions-foot muted smaller">Files are restorable for 30 days.</div>
+      {% else %}<p class="muted">Nothing in the recycle bin.</p>{% endif %}
     </section>
   </div>
   {% endif %}
@@ -248,6 +283,26 @@
             </div>
             <label class="mode-toggle" title="Show Access Requests &amp; Locked Accounts">
               <input type="checkbox" name="dash_show_access_requests" value="1" {% if current_user.dash_show_access_requests %}checked{% endif %}>
+              <span class="mode-track"><span class="mode-thumb"></span></span>
+            </label>
+          </li>
+          <li class="special-page-row">
+            <div class="special-page-info">
+              <div class="u-name">Currently Online</div>
+              <p class="muted small">Live view of every signed-in user and the page they're on right now. Refreshes every 5 seconds.</p>
+            </div>
+            <label class="mode-toggle" title="Show Currently Online">
+              <input type="checkbox" name="dash_show_currently_online" value="1" {% if current_user.dash_show_currently_online %}checked{% endif %}>
+              <span class="mode-track"><span class="mode-thumb"></span></span>
+            </label>
+          </li>
+          <li class="special-page-row">
+            <div class="special-page-info">
+              <div class="u-name">Recent Deletions</div>
+              <p class="muted small">Most recent files in the Delete Log recycle bin — restorable for 30 days.</p>
+            </div>
+            <label class="mode-toggle" title="Show Recent Deletions">
+              <input type="checkbox" name="dash_show_deletions" value="1" {% if current_user.dash_show_deletions %}checked{% endif %}>
               <span class="mode-track"><span class="mode-thumb"></span></span>
             </label>
           </li>

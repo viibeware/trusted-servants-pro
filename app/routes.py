@@ -10,9 +10,10 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 from .models import (db, User, Meeting, MeetingFile, MeetingSchedule, MeetingLibrary, CustomIcon, CustomFont, CustomLayout, FrontendHeroButton,
-                     Post, ZoomAccount, ZoomOtpEmail, Location, Library, Reading,
+                     Post, ZoomAccount, ZoomOtpEmail, Location, Library, LibraryItem,
                      LibraryCategory, MediaItem, NavLink, SiteSetting,
-                     IntergroupAccount, AccessRequest, FrontendNavItem,
+                     IntergroupAccount, AccessRequest, PasswordResetToken,
+                     FrontendNavItem,
                      FrontendNavColumn, FrontendNavLink, FILE_CATEGORIES,
                      DAYS_OF_WEEK, INTERGROUP_LIBRARY_NAMES)
 
@@ -190,7 +191,7 @@ def inject_globals():
             "pending_access_count": pending_access_count, "otp": otp}
 
 
-DASHBOARD_WIDGET_KEYS = ("server-metrics", "meetings", "libraries", "files", "access-requests")
+DASHBOARD_WIDGET_KEYS = ("server-metrics", "currently-online", "meetings", "libraries", "files", "access-requests", "deletions")
 
 ONLINE_WINDOW = timedelta(minutes=5)
 LAST_SEEN_THROTTLE = timedelta(seconds=60)
@@ -218,18 +219,88 @@ def _guard_frontend_module():
     return redirect(url_for("main.index"))
 
 
+# Endpoint-name suffixes that identify asset-serving / sub-resource
+# routes (file downloads, image fetches, PDF generators, JSON probes,
+# logo fetches, etc.). Resolving an endpoint to one of these means the
+# request is fetching a *resource* belonging to a page, not navigating
+# to a page itself, so it must not flip the user's "where they are
+# right now" pointer to a download URL.
+_LOCATION_SKIP_SUFFIXES = (
+    "_download", "_pdf", "_content", "_image", "_logo",
+    "_favicon", "_serve", "_json", "_thumb", "_thumbnail",
+)
+# Path extensions (case-insensitive) that always indicate a sub-
+# resource even when the endpoint name doesn't follow the convention
+# above — covers static-passthrough routes and any new asset endpoint
+# that ships before the suffix list catches up.
+_LOCATION_SKIP_EXTS = (
+    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".avif", ".ico",
+    ".pdf", ".json", ".woff", ".woff2", ".ttf", ".otf",
+    ".mp4", ".webm", ".mp3", ".zip", ".db", ".css", ".js",
+)
+
+
 @bp.before_app_request
 def _track_last_seen():
-    """Throttled last_seen_at update for the authenticated user."""
+    """Throttled last_seen_at update for the authenticated user.
+
+    Also captures the user's current navigation location (endpoint +
+    path) so the User Log live widget can show where each online
+    person is right now. Skips:
+
+      • Non-GET requests — POSTs redirect to the destination, which
+        re-fires this hook with the friendlier final URL.
+      • API / metrics polling endpoints — these would otherwise pin
+        every viewer to ``/api/online-users`` etc.
+      • Static + favicon assets.
+      • **Sub-resource fetches** — any endpoint whose name ends in
+        ``_download`` / ``_image`` / ``_logo`` / ``_pdf`` / ``_content``
+        / ``_favicon`` / ``_serve`` / ``_json`` / ``_thumb`` and any
+        request whose path ends in a known asset extension. These are
+        files the page being viewed is loading, not the page itself,
+        so we hold the location pointer at the parent page.
+
+    Within those rules the location is written either when it
+    actually changed (snappy: navigation flips inside one tick of the
+    5-second poll) OR when the standard last-seen throttle lapses
+    (keeps a pure idle user's row warm enough that they don't drop
+    off the online list)."""
     if not getattr(current_user, "is_authenticated", False):
         return
+    if request.method != "GET":
+        return
+    endpoint = request.endpoint or ""
+    if endpoint.startswith("main.api_") or endpoint == "static":
+        return
+    if endpoint.endswith("_metrics"):
+        return
+    # The forgot/reset and login pages aren't reachable when
+    # authenticated, but be defensive.
+    if endpoint in ("auth.login", "auth.logout", "auth.forgot_password",
+                    "auth.reset_password"):
+        return
+    if endpoint and endpoint.endswith(_LOCATION_SKIP_SUFFIXES):
+        return
+    path_lower = request.path.lower()
+    if path_lower.endswith(_LOCATION_SKIP_EXTS):
+        return
     now = datetime.utcnow()
-    last = getattr(current_user, "last_seen_at", None)
-    if last is not None and (now - last) < LAST_SEEN_THROTTLE:
+    last_seen = getattr(current_user, "last_seen_at", None)
+    last_path = getattr(current_user, "last_path", None)
+    path = request.path[:500]
+    path_changed = (path != last_path)
+    seen_throttled = last_seen is not None and (now - last_seen) < LAST_SEEN_THROTTLE
+    if not path_changed and seen_throttled:
         return
     try:
         current_user.last_seen_at = now
+        current_user.last_endpoint = endpoint[:128] or None
+        current_user.last_path = path or None
         db.session.commit()
+        # Touch the open login session too so the User Log's session
+        # table reflects the user's freshness without an extra hook.
+        from . import activity
+        activity.touch_session(current_user)
     except Exception:
         db.session.rollback()
 
@@ -273,6 +344,7 @@ def index():
     online_count = 0
     online_users = []
     locked_accounts = []
+    recent_deletions = []
     if current_user.is_admin():
         access_requests = (AccessRequest.query
                            .filter_by(status="pending", is_archived=False)
@@ -289,11 +361,19 @@ def index():
                     "username": u.username,
                     "expires_in_minutes": (user_lockout_expires_in(u.username) // 60) + 1,
                 })
+        # Most recent deletions across the portal — drives the new
+        # admin-only Recent Deletions widget. Capped at 6 so the
+        # widget stays compact; the full list lives at /delete-log.
+        from .models import DeletedFile as _DF
+        recent_deletions = (_DF.query
+                            .order_by(_DF.deleted_at.desc())
+                            .limit(6).all())
     dashboard_order = _dashboard_order(current_user)
     return render_template("index.html", meetings=meetings, libraries=libraries,
                            recent_files=recent_files, access_requests=access_requests,
                            online_count=online_count, online_users=online_users,
                            locked_accounts=locked_accounts,
+                           recent_deletions=recent_deletions,
                            dashboard_order=dashboard_order)
 
 
@@ -307,6 +387,8 @@ def dashboard_customize():
     current_user.dash_show_server_metrics = request.form.get("dash_show_server_metrics") == "1"
     if current_user.is_admin():
         current_user.dash_show_access_requests = request.form.get("dash_show_access_requests") == "1"
+        current_user.dash_show_deletions = request.form.get("dash_show_deletions") == "1"
+        current_user.dash_show_currently_online = request.form.get("dash_show_currently_online") == "1"
     db.session.commit()
     flash("Dashboard updated", "success")
     return redirect(url_for("main.index"))
@@ -333,10 +415,277 @@ def api_online_users():
         abort(403)
     count, users = _online_users()
     return jsonify(count=count, users=[
-        {"username": u.username, "role": u.role,
-         "last_seen_at": u.last_seen_at.isoformat() + "Z" if u.last_seen_at else None}
+        {"id": u.id,
+         "username": u.username,
+         "role": u.role,
+         "last_seen_at": u.last_seen_at.isoformat() + "Z" if u.last_seen_at else None,
+         "last_endpoint": u.last_endpoint or "",
+         "last_path": u.last_path or "",
+         "location_label": _endpoint_label(u.last_endpoint, u.last_path),
+         "is_self": (u.id == current_user.id)}
         for u in users
     ])
+
+
+# Friendly labels for the most common navigation endpoints so the
+# live "currently online" widget can show readable destinations
+# instead of raw paths. Falls back to a tidied path when the endpoint
+# isn't in the table.
+_ENDPOINT_LABELS = {
+    "main.index":              "Dashboard",
+    "main.meetings":           "Meetings",
+    "main.meeting_detail":     "Meeting detail",
+    "main.meeting_new":        "Creating a meeting",
+    "main.libraries":          "Libraries",
+    "main.library_detail":     "Library detail",
+    "main.library_new":        "Creating a library",
+    "main.intergroup_library_detail": "Intergroup library",
+    "main.library_item_view":  "Library item detail",
+    "main.library_item_new":   "Adding a library item",
+    "main.intergroup":         "Intergroup",
+    "main.zoom_tech":          "Zoom Tech",
+    "main.zoom_accounts":      "Zoom Accounts",
+    "main.posts":              "Announcements & Events",
+    "main.post_new":           "Composing a post",
+    "main.post_edit":          "Editing a post",
+    "main.media":              "File browser",
+    "main.locations":          "Meeting locations",
+    "main.access_requests":    "Access Requests",
+    "main.user_log":           "User Log",
+    "main.frontend_dashboard": "Web Frontend",
+    "auth.users":              "Settings → Users",
+}
+
+
+def _endpoint_label(endpoint, path):
+    if endpoint and endpoint in _ENDPOINT_LABELS:
+        return _ENDPOINT_LABELS[endpoint]
+    if endpoint and endpoint.startswith("main.frontend_"):
+        return "Web Frontend"
+    if not path:
+        return "—"
+    # Strip the /tspro prefix and trim trailing slashes for a tidier
+    # fallback on routes the lookup table hasn't covered.
+    stub = path
+    if stub.startswith("/tspro"):
+        stub = stub[len("/tspro"):] or "/"
+    return stub
+
+
+@bp.route("/api/search")
+@login_required
+def api_search():
+    """Backend-wide search. Returns grouped results across the
+    content the user can already see in the sidebar — meetings,
+    libraries + library items, meeting attachments, posts (when
+    the module is enabled), media files, locations, and (admin-only)
+    users.
+
+    The query is split into whitespace-separated tokens; every token
+    must match somewhere in the row (case-insensitive ``LIKE %tok%``
+    on each searchable column, AND'd across tokens, OR'd across
+    columns). Per-section cap of 8 keeps the modal compact; results
+    arrive grouped + ready-to-render.
+
+    Each result carries a ``url`` (relative path the modal navigates
+    to on click), a ``label`` (the visible row), a ``snippet``
+    (small muted line), an ``icon`` (Lucide name), and a ``type``
+    label keyed by section."""
+    from sqlalchemy import or_, and_, func as _sa_func
+    raw = (request.args.get("q") or "").strip()
+    if len(raw) < 2:
+        return jsonify(query=raw, total=0, sections=[])
+    tokens = [t for t in raw.split() if t]
+    if not tokens:
+        return jsonify(query=raw, total=0, sections=[])
+
+    PER_SECTION = 8
+
+    def _match(cols):
+        """Build the AND-of-tokens / OR-of-columns predicate. ``cols``
+        is a list of SQLAlchemy column expressions; each token must
+        match at least one column (LIKE %tok%, case-insensitive)."""
+        clauses = []
+        for tok in tokens:
+            like = f"%{tok.lower()}%"
+            clauses.append(or_(*[_sa_func.lower(c).like(like) for c in cols]))
+        return and_(*clauses)
+
+    sections = []
+
+    # --- Meetings -----------------------------------------------------------
+    meetings = (Meeting.query
+                .filter(_match([Meeting.name, Meeting.description,
+                                Meeting.location]))
+                .order_by(Meeting.name)
+                .limit(PER_SECTION).all())
+    if meetings:
+        sections.append({
+            "type": "meeting",
+            "label": "Meetings",
+            "icon": "calendar",
+            "items": [{
+                "label": m.name,
+                "snippet": (m.location or m.description or "").strip()[:140],
+                "url": url_for("main.meeting_detail", slug=m.public_slug),
+                "icon": "calendar",
+            } for m in meetings],
+        })
+
+    # --- Libraries ----------------------------------------------------------
+    libraries = (Library.query
+                 .filter(_match([Library.name, Library.description]))
+                 .order_by(Library.name)
+                 .limit(PER_SECTION).all())
+    if libraries:
+        sections.append({
+            "type": "library",
+            "label": "Libraries",
+            "icon": "book",
+            "items": [{
+                "label": l.name,
+                "snippet": (l.description or "").strip()[:140] or "Library",
+                "url": (url_for("main.intergroup_library_detail", slug=l.public_slug)
+                        if l.is_intergroup
+                        else url_for("main.library_detail", slug=l.public_slug)),
+                "icon": "book",
+            } for l in libraries],
+        })
+
+    # --- Library items (Reading rows) --------------------------------------
+    items = (LibraryItem.query
+             .filter(_match([LibraryItem.title, LibraryItem.body,
+                             LibraryItem.original_filename, LibraryItem.url]))
+             .order_by(LibraryItem.created_at.desc())
+             .limit(PER_SECTION).all())
+    # Filter out items whose library the current user can't see
+    # (Intergroup libraries restricted to admins / IG members). The
+    # gate is identical to ``can_edit_library`` minus the editor
+    # tier — non-IG libraries are visible to every authenticated
+    # user, so we skip the check there.
+    visible_items = []
+    for it in items:
+        lib = it.library
+        if lib is not None and lib.is_intergroup and not current_user.can_edit_intergroup_libraries():
+            continue
+        visible_items.append(it)
+    if visible_items:
+        sections.append({
+            "type": "library_item",
+            "label": "Library files",
+            "icon": "file-text",
+            "items": [{
+                "label": it.title,
+                "snippet": ((it.library.name + " · ") if it.library else "")
+                           + (it.original_filename or (it.body or "")[:120]),
+                "url": (url_for("main.intergroup_library_detail", slug=it.library.public_slug)
+                        if (it.library and it.library.is_intergroup)
+                        else url_for("main.library_detail", slug=it.library.public_slug)) if it.library else "#",
+                "icon": "file-text",
+            } for it in visible_items],
+        })
+
+    # --- Meeting attachments (MeetingFile) ----------------------------------
+    mfiles = (MeetingFile.query
+              .filter(_match([MeetingFile.title, MeetingFile.description,
+                              MeetingFile.original_filename, MeetingFile.url,
+                              MeetingFile.body]))
+              .order_by(MeetingFile.created_at.desc())
+              .limit(PER_SECTION).all())
+    if mfiles:
+        sections.append({
+            "type": "meeting_file",
+            "label": "Meeting attachments",
+            "icon": "file",
+            "items": [{
+                "label": f.title,
+                "snippet": ((f.meeting.name + " · " + f.category.replace('_', ' '))
+                            if f.meeting else "Meeting attachment"),
+                "url": (url_for("main.meeting_detail", slug=f.meeting.public_slug)
+                        + f"#{f.category}") if f.meeting else "#",
+                "icon": "file",
+            } for f in mfiles],
+        })
+
+    # --- Posts (announcements & events) ------------------------------------
+    s = _get_site_setting()
+    if s and s.posts_enabled:
+        posts = (Post.query
+                 .filter(Post.is_archived.is_(False))
+                 .filter(_match([Post.title, Post.summary, Post.body,
+                                 Post.location_name]))
+                 .order_by(Post.updated_at.desc())
+                 .limit(PER_SECTION).all())
+        if posts:
+            sections.append({
+                "type": "post",
+                "label": "Announcements & events",
+                "icon": "megaphone",
+                "items": [{
+                    "label": p.title,
+                    "snippet": (p.summary or (p.body or ""))[:140],
+                    "url": url_for("main.post_edit", pid=p.id),
+                    "icon": "megaphone",
+                } for p in posts],
+            })
+
+    # --- Media files (the File Browser) ------------------------------------
+    media = (MediaItem.query
+             .filter(_match([MediaItem.original_filename]))
+             .order_by(MediaItem.created_at.desc())
+             .limit(PER_SECTION).all())
+    if media:
+        sections.append({
+            "type": "media",
+            "label": "Files",
+            "icon": "folder",
+            "items": [{
+                "label": m.original_filename or m.stored_filename,
+                "snippet": (m.mime_type or "File"),
+                "url": url_for("main.media_list") + "?q=" + (m.original_filename or "")[:80],
+                "icon": "folder",
+            } for m in media],
+        })
+
+    # --- Locations ----------------------------------------------------------
+    locs = (Location.query
+            .filter(_match([Location.name, Location.address]))
+            .order_by(Location.name)
+            .limit(PER_SECTION).all())
+    if locs:
+        sections.append({
+            "type": "location",
+            "label": "Locations",
+            "icon": "map-pin",
+            "items": [{
+                "label": l.name,
+                "snippet": (l.address or "").strip()[:140] or "Meeting location",
+                "url": url_for("main.locations"),
+                "icon": "map-pin",
+            } for l in locs],
+        })
+
+    # --- Users (admin-only) -------------------------------------------------
+    if current_user.is_admin():
+        users = (User.query
+                 .filter(_match([User.username, User.email]))
+                 .order_by(User.username)
+                 .limit(PER_SECTION).all())
+        if users:
+            sections.append({
+                "type": "user",
+                "label": "Users",
+                "icon": "user",
+                "items": [{
+                    "label": u.username,
+                    "snippet": (u.email or "") + " · " + u.role.replace("_", " "),
+                    "url": url_for("main.user_log") + "?user_id=" + str(u.id),
+                    "icon": "user",
+                } for u in users],
+            })
+
+    total = sum(len(s["items"]) for s in sections)
+    return jsonify(query=raw, total=total, sections=sections)
 
 
 @bp.route("/dashboard/order", methods=["POST"])
@@ -474,8 +823,8 @@ def _apply_library_selections(m, form):
     # rebuild association rows
     m.library_assocs = []
     db.session.flush()
-    selected_readings = []
-    public_readings = []
+    selected_library_items = []
+    public_library_items = []
     for lid in ids:
         lib = db.session.get(Library, lid)
         if not lib:
@@ -487,21 +836,21 @@ def _apply_library_selections(m, form):
         if mode == "granular":
             rids = form.getlist(f"library_readings_{lid}", type=int)
             if rids:
-                selected_readings.extend(
-                    Reading.query.filter(Reading.id.in_(rids),
-                                         Reading.library_id == lid).all()
+                selected_library_items.extend(
+                    LibraryItem.query.filter(LibraryItem.id.in_(rids),
+                                         LibraryItem.library_id == lid).all()
                 )
         # Per-library, per-reading public-frontend visibility (independent of
         # the granular-mode selection above — admins may want to surface a
         # reading on the public page even if the meeting is in "all" mode).
-        prids = form.getlist(f"library_public_readings_{lid}", type=int)
+        prids = form.getlist(f"library_public_library_items_{lid}", type=int)
         if prids:
-            public_readings.extend(
-                Reading.query.filter(Reading.id.in_(prids),
-                                     Reading.library_id == lid).all()
+            public_library_items.extend(
+                LibraryItem.query.filter(LibraryItem.id.in_(prids),
+                                     LibraryItem.library_id == lid).all()
             )
-    m.selected_readings = selected_readings
-    m.public_readings = public_readings
+    m.selected_library_items = selected_library_items
+    m.public_library_items = public_library_items
 
 
 def _normalize_slug(value):
@@ -610,14 +959,28 @@ def meeting_new():
     _apply_meeting_form(m, request.form, schedules, request.files)
     db.session.add(m)
     db.session.commit()
+    from . import activity
+    activity.log("meeting.create", entity_type="meeting", entity_id=m.id,
+                 summary=f"Created meeting “{m.name}”")
     flash("Meeting created", "success")
-    return redirect(url_for("main.meeting_detail", mid=m.id))
+    return redirect(url_for("main.meeting_detail", slug=m.public_slug))
 
 
-@bp.route("/meetings/<int:mid>")
+def _resolve_meeting_by_slug(slug):
+    """Return the Meeting whose ``public_slug`` matches ``slug``, or
+    ``None``. Mirrors ``_resolve_library_by_slug`` — case-insensitive
+    on the URL side; first match wins on the rare collision."""
+    target = (slug or "").lower()
+    if not target:
+        return None
+    rows = Meeting.query.all()
+    return next((m for m in rows if m.public_slug == target), None)
+
+
+@bp.route("/meetings/<slug>")
 @login_required
-def meeting_detail(mid):
-    m = db.session.get(Meeting, mid) or abort(404)
+def meeting_detail(slug):
+    m = _resolve_meeting_by_slug(slug) or abort(404)
     all_libraries = Library.query.order_by(Library.name).all()
     zoom_accounts = ZoomAccount.query.order_by(ZoomAccount.name).all()
     locations = Location.query.order_by(Location.name).all()
@@ -629,25 +992,39 @@ def meeting_detail(mid):
                            otp_email=otp_email)
 
 
-@bp.route("/meetings/<int:mid>/edit", methods=["POST"])
-@editor_required
-def meeting_edit(mid):
+@bp.route("/meetings/<int:mid>")
+@login_required
+def meeting_detail_legacy(mid):
+    """Legacy id-based URL — 301 to the slug equivalent so external
+    bookmarks survive the rename."""
     m = db.session.get(Meeting, mid) or abort(404)
-    schedules, err = _parse_schedule_form(request.form, meeting_id=mid)
+    return redirect(url_for("main.meeting_detail", slug=m.public_slug), code=301)
+
+
+@bp.route("/meetings/<slug>/edit", methods=["POST"])
+@editor_required
+def meeting_edit(slug):
+    m = _resolve_meeting_by_slug(slug) or abort(404)
+    schedules, err = _parse_schedule_form(request.form, meeting_id=m.id)
     if err:
         flash(err, "danger")
-        return redirect(request.referrer or url_for("main.meeting_detail", mid=mid))
+        return redirect(request.referrer or url_for("main.meeting_detail", slug=m.public_slug))
     _apply_meeting_form(m, request.form, schedules, request.files)
     if "library_ids" in request.form:
         _apply_library_selections(m, request.form)
     db.session.commit()
+    from . import activity
+    activity.log("meeting.update", entity_type="meeting", entity_id=m.id,
+                 summary=f"Updated meeting “{m.name}”")
     flash("Meeting updated", "success")
-    return redirect(url_for("main.meeting_detail", mid=m.id))
+    return redirect(url_for("main.meeting_detail", slug=m.public_slug))
 
 
 @bp.route("/meetings/<int:mid>.json")
 @login_required
 def meeting_json(mid):
+    """Asset endpoint — kept on the int:mid form because callers are
+    JS fetches that already have the meeting id in hand."""
     m = db.session.get(Meeting, mid) or abort(404)
     return jsonify({
         "id": m.id, "name": m.name, "description": m.description or "",
@@ -661,46 +1038,49 @@ def meeting_json(mid):
     })
 
 
-@bp.route("/meetings/<int:mid>/delete", methods=["POST"])
+@bp.route("/meetings/<slug>/delete", methods=["POST"])
 @meeting_admin_required
-def meeting_delete(mid):
-    m = db.session.get(Meeting, mid) or abort(404)
+def meeting_delete(slug):
+    m = _resolve_meeting_by_slug(slug) or abort(404)
+    from . import activity
+    activity.log("meeting.delete", entity_type="meeting", entity_id=m.id,
+                 summary=f"Deleted meeting “{m.name}”")
     db.session.delete(m)
     db.session.commit()
     flash("Meeting deleted", "success")
     return redirect(url_for("main.meetings"))
 
 
-@bp.route("/meetings/<int:mid>/archive", methods=["POST"])
+@bp.route("/meetings/<slug>/archive", methods=["POST"])
 @admin_required
-def meeting_archive(mid):
+def meeting_archive(slug):
     from datetime import datetime
-    m = db.session.get(Meeting, mid) or abort(404)
+    m = _resolve_meeting_by_slug(slug) or abort(404)
     m.archived_at = datetime.utcnow()
     db.session.commit()
     flash(f"Archived “{m.name}”", "success")
     return redirect(url_for("main.meetings"))
 
 
-@bp.route("/meetings/<int:mid>/unarchive", methods=["POST"])
+@bp.route("/meetings/<slug>/unarchive", methods=["POST"])
 @admin_required
-def meeting_unarchive(mid):
-    m = db.session.get(Meeting, mid) or abort(404)
+def meeting_unarchive(slug):
+    m = _resolve_meeting_by_slug(slug) or abort(404)
     m.archived_at = None
     db.session.commit()
     flash(f"Restored “{m.name}”", "success")
     return redirect(url_for("main.meetings", show="archived"))
 
 
-@bp.route("/meetings/<int:mid>/libraries", methods=["POST"])
+@bp.route("/meetings/<slug>/libraries", methods=["POST"])
 @editor_required
-def meeting_libraries(mid):
-    m = db.session.get(Meeting, mid) or abort(404)
+def meeting_libraries(slug):
+    m = _resolve_meeting_by_slug(slug) or abort(404)
     ids = request.form.getlist("library_ids", type=int)
     m.libraries = Library.query.filter(Library.id.in_(ids)).all() if ids else []
     db.session.commit()
     flash("Libraries updated for meeting", "success")
-    return redirect(url_for("main.meeting_detail", mid=m.id))
+    return redirect(url_for("main.meeting_detail", slug=m.public_slug))
 
 
 # --- Locations ---
@@ -1054,6 +1434,13 @@ def _public_url_for(endpoint, **values):
 
 
 @bp.route("/intergroup")
+def intergroup_legacy_redirect():
+    """301 the old Email Accounts URL to its new home. Bookmarks +
+    external links survive the rename."""
+    return redirect(url_for("main.intergroup"), code=301)
+
+
+@bp.route("/intergroupemail")
 @login_required
 def intergroup():
     s = _get_site_setting()
@@ -1072,7 +1459,7 @@ def intergroup():
     return render_template("intergroup.html", site=s, accounts=accounts)
 
 
-@bp.route("/intergroup/edit", methods=["GET", "POST"])
+@bp.route("/intergroupemail/edit", methods=["GET", "POST"])
 @admin_required
 def intergroup_edit():
     s = _get_site_setting()
@@ -1608,8 +1995,8 @@ def data_wp_import_posts():
         db.session.add(lib)
         db.session.flush()
 
-    existing_titles = {r.title.strip() for r in lib.readings}
-    next_position = (db.session.query(db.func.max(Reading.position))
+    existing_titles = {r.title.strip() for r in lib.items}
+    next_position = (db.session.query(db.func.max(LibraryItem.position))
                      .filter_by(library_id=lib.id).scalar() or 0) + 1
 
     imported = 0
@@ -1671,7 +2058,7 @@ def data_wp_import_posts():
             skipped_no_url += 1
             continue
 
-        r = Reading(
+        r = LibraryItem(
             library_id=lib.id,
             title=title,
             stored_filename=stored,
@@ -1694,7 +2081,7 @@ def data_wp_import_posts():
     if download_failed:
         parts.append(f"{download_failed} skipped (download failed or unsupported file type).")
     flash(" ".join(parts), "success" if imported else "info")
-    return redirect(request.referrer or url_for("main.library_detail", lid=lib.id))
+    return redirect(request.referrer or url_for("main.library_detail", slug=lib.public_slug))
 
 
 @bp.route("/settings/db-snapshot-now", methods=["POST"])
@@ -3843,10 +4230,10 @@ def og_save():
 
 # --- Files ---
 
-@bp.route("/meetings/<int:mid>/files/new", methods=["GET", "POST"])
+@bp.route("/meetings/<slug>/files/new", methods=["GET", "POST"])
 @editor_required
-def file_new(mid):
-    m = db.session.get(Meeting, mid) or abort(404)
+def file_new(slug):
+    m = _resolve_meeting_by_slug(slug) or abort(404)
     category = request.values.get("category", "documents")
     if category not in FILE_CATEGORIES:
         category = "documents"
@@ -3878,7 +4265,7 @@ def file_new(mid):
         db.session.add(f)
         db.session.commit()
         flash("File added", "success")
-        return redirect(url_for("main.meeting_detail", mid=m.id) + f"#{category}")
+        return redirect(url_for("main.meeting_detail", slug=m.public_slug) + f"#{category}")
     return render_template("file_form.html", meeting=m, category=category, file=None)
 
 
@@ -3900,7 +4287,7 @@ def file_edit(fid):
         _apply_file_upload(f, request.files.get("file"), request.form.get("media_id"))
         db.session.commit()
         flash("File updated", "success")
-        return redirect(url_for("main.meeting_detail", mid=f.meeting_id) + f"#{f.category}")
+        return redirect(url_for("main.meeting_detail", slug=f.meeting.public_slug) + f"#{f.category}")
     return render_template("file_form.html", meeting=f.meeting, category=f.category, file=f)
 
 
@@ -3923,10 +4310,10 @@ def file_public_toggle(fid):
     return jsonify({"ok": True, "public_visible": f.public_visible})
 
 
-@bp.route("/meetings/<int:mid>/files/reorder", methods=["POST"])
+@bp.route("/meetings/<slug>/files/reorder", methods=["POST"])
 @editor_required
-def meeting_files_reorder(mid):
-    m = db.session.get(Meeting, mid) or abort(404)
+def meeting_files_reorder(slug):
+    m = _resolve_meeting_by_slug(slug) or abort(404)
     data = request.get_json(silent=True) or {}
     category = (data.get("category") or "").strip()
     ids = data.get("order") or []
@@ -3949,13 +4336,15 @@ def meeting_files_reorder(mid):
 @editor_required
 def file_delete(fid):
     f = db.session.get(MeetingFile, fid) or abort(404)
-    mid = f.meeting_id
+    parent_slug = f.meeting.public_slug
     cat = f.category
-    _delete_upload(f.stored_filename)
-    db.session.delete(f)
-    db.session.commit()
-    flash("File deleted", "success")
-    return redirect(url_for("main.meeting_detail", mid=mid) + f"#{cat}")
+    title = f.title
+    from . import trash, activity
+    trash.soft_delete_meeting_file(f, current_user.id)
+    activity.log("file.delete", entity_type="meeting_file", entity_id=fid,
+                 summary=f"Deleted meeting attachment “{title}” (recoverable for {trash.RETENTION_DAYS} days)")
+    flash("File moved to the Delete Log — restorable for 30 days.", "success")
+    return redirect(url_for("main.meeting_detail", slug=parent_slug) + f"#{cat}")
 
 
 @bp.route("/files/<int:fid>/view")
@@ -3964,7 +4353,7 @@ def file_view(fid):
     f = db.session.get(MeetingFile, fid) or abort(404)
     if f.category in ("readings", "scripts") and f.body:
         return render_template("reading_view.html", title=f.title, body=f.body,
-                               back_url=url_for("main.meeting_detail", mid=f.meeting_id))
+                               back_url=url_for("main.meeting_detail", slug=f.meeting.public_slug))
     if f.url:
         return redirect(f.url)
     if f.stored_filename:
@@ -4002,7 +4391,7 @@ def libraries():
     # dedicated Intergroup sidebar subsection instead.
     items = Library.query.filter(Library.is_intergroup == False).all()  # noqa: E712
     if sort == "files":
-        items.sort(key=lambda l: (l.readings.count(), l.name.lower()))
+        items.sort(key=lambda l: (l.items.count(), l.name.lower()))
     else:
         items.sort(key=lambda l: l.name.lower())
     if direction == "desc":
@@ -4031,8 +4420,11 @@ def library_new():
         )
         db.session.add(lib)
         db.session.commit()
+        from . import activity
+        activity.log("library.create", entity_type="library", entity_id=lib.id,
+                     summary=f"Created library “{lib.name}”")
         flash("Library created", "success")
-        return redirect(url_for("main.library_detail", lid=lib.id))
+        return redirect(url_for("main.library_detail", slug=lib.public_slug))
     return render_template("library_form.html", library=None)
 
 
@@ -4052,24 +4444,49 @@ def intergroup_library_new():
         )
         db.session.add(lib)
         db.session.commit()
+        from . import activity
+        activity.log("library.create", entity_type="library", entity_id=lib.id,
+                     summary=f"Created intergroup library “{lib.name}”")
         flash("Intergroup library created", "success")
-        return redirect(url_for("main.library_detail", lid=lib.id))
+        return redirect(url_for("main.library_detail", slug=lib.public_slug))
     return render_template("library_form.html", library=None, intergroup_create=True)
+
+
+def _resolve_library_by_slug(slug):
+    """Return the Library whose ``slugify(name)`` matches ``slug``,
+    or ``None``. Case-insensitive on the URL side; the first match
+    wins on the rare collision (admin can rename to disambiguate)."""
+    from .colors import slugify
+    target = (slug or "").lower()
+    if not target:
+        return None
+    libs = Library.query.all()
+    return next((l for l in libs if slugify(l.name) == target), None)
+
+
+@bp.route("/libraries/<slug>")
+@login_required
+def library_detail(slug):
+    """Slug-based library detail. Intergroup libraries continue to
+    redirect to their dedicated /tspro/intergroup/<slug> URL so the
+    address bar reflects which sidebar section the library lives in."""
+    lib = _resolve_library_by_slug(slug) or abort(404)
+    if lib.is_intergroup:
+        return redirect(url_for("main.intergroup_library_detail",
+                                slug=lib.public_slug), code=301)
+    return render_template("library_detail.html", library=lib)
 
 
 @bp.route("/libraries/<int:lid>")
 @login_required
-def library_detail(lid):
+def library_detail_legacy(lid):
+    """Legacy id-based URL — 301 to the slug equivalent so external
+    bookmarks survive the rename."""
     lib = db.session.get(Library, lid) or abort(404)
-    # Intergroup libraries have a canonical slug-based URL under
-    # /tspro/intergroup/<slug>. Redirect id-based hits there so the
-    # browser address bar shows the human-readable URL even when the
-    # request originated from an internal url_for(main.library_detail).
     if lib.is_intergroup:
-        from .colors import slugify
         return redirect(url_for("main.intergroup_library_detail",
-                                slug=slugify(lib.name)), code=301)
-    return render_template("library_detail.html", library=lib)
+                                slug=lib.public_slug), code=301)
+    return redirect(url_for("main.library_detail", slug=lib.public_slug), code=301)
 
 
 @bp.route("/intergroup/<slug>")
@@ -4090,10 +4507,10 @@ def intergroup_library_detail(slug):
     return render_template("library_detail.html", library=lib)
 
 
-@bp.route("/libraries/<int:lid>/edit", methods=["GET", "POST"])
+@bp.route("/libraries/<slug>/edit", methods=["GET", "POST"])
 @login_required
-def library_edit(lid):
-    lib = db.session.get(Library, lid) or abort(404)
+def library_edit(slug):
+    lib = _resolve_library_by_slug(slug) or abort(404)
     deny = _require_can_edit_library(lib)
     if deny is not None:
         return deny
@@ -4114,7 +4531,7 @@ def library_edit(lid):
                 and new_name != lib.name
                 and not current_user.is_admin()):
             flash("Only admins can rename Intergroup libraries", "danger")
-            return redirect(url_for("main.library_detail", lid=lib.id))
+            return redirect(url_for("main.library_detail", slug=lib.public_slug))
         lib.name = new_name
         lib.description = request.form.get("description", "").strip()
         lib.alert_message = request.form.get("alert_message", "").strip() or None
@@ -4134,8 +4551,11 @@ def library_edit(lid):
             lib.categories_required = (
                 request.form.get("categories_required") == "1")
         db.session.commit()
+        from . import activity
+        activity.log("library.update", entity_type="library", entity_id=lib.id,
+                     summary=f"Updated library “{lib.name}”")
         flash("Library updated", "success")
-        return redirect(url_for("main.library_detail", lid=lib.id))
+        return redirect(url_for("main.library_detail", slug=lib.public_slug))
     return render_template("library_form.html", library=lib)
 
 
@@ -4181,10 +4601,13 @@ def _apply_library_categories(lib, form):
             db.session.delete(cat)
 
 
-@bp.route("/libraries/<int:lid>/delete", methods=["POST"])
+@bp.route("/libraries/<slug>/delete", methods=["POST"])
 @admin_required
-def library_delete(lid):
-    lib = db.session.get(Library, lid) or abort(404)
+def library_delete(slug):
+    lib = _resolve_library_by_slug(slug) or abort(404)
+    from . import activity
+    activity.log("library.delete", entity_type="library", entity_id=lib.id,
+                 summary=f"Deleted library “{lib.name}”")
     db.session.delete(lib)
     db.session.commit()
     flash("Library deleted", "success")
@@ -4239,10 +4662,10 @@ def _apply_reading_form(r, form, files):
         r.thumbnail_filename = None
 
 
-@bp.route("/libraries/<int:lid>/readings/new", methods=["GET", "POST"])
+@bp.route("/libraries/<slug>/readings/new", methods=["GET", "POST"])
 @login_required
-def reading_new(lid):
-    lib = db.session.get(Library, lid) or abort(404)
+def reading_new(slug):
+    lib = _resolve_library_by_slug(slug) or abort(404)
     deny = _require_can_edit_library(lib)
     if deny is not None:
         return deny
@@ -4258,38 +4681,41 @@ def reading_new(lid):
                 flash("Add at least one category to this Intergroup library before uploading.", "danger")
             else:
                 flash("Pick at least one category for this upload.", "danger")
-            return redirect(url_for("main.library_detail", lid=lib.id))
-        r = Reading(library_id=lib.id, title=request.form["title"].strip(),
+            return redirect(url_for("main.library_detail", slug=lib.public_slug))
+        r = LibraryItem(library_id=lib.id, title=request.form["title"].strip(),
                     created_by=current_user.id)
         _apply_reading_form(r, request.form, request.files)
         if picker_present:
             r.categories = cats
         db.session.add(r)
         db.session.commit()
+        from . import activity
+        activity.log("reading.create", entity_type="reading", entity_id=r.id,
+                     summary=f"Added reading “{r.title}” to library “{lib.name}”")
         flash("Item added to library", "success")
-        return redirect(url_for("main.library_detail", lid=lib.id))
+        return redirect(url_for("main.library_detail", slug=lib.public_slug))
     return render_template("reading_form.html", library=lib, reading=None)
 
 
 @bp.route("/readings/<int:rid>")
 @login_required
 def reading_view(rid):
-    r = db.session.get(Reading, rid) or abort(404)
+    r = db.session.get(LibraryItem, rid) or abort(404)
     if r.body:
         return render_template("reading_view.html", reading=r,
-                               back_url=url_for("main.library_detail", lid=r.library_id))
+                               back_url=url_for("main.library_detail", slug=r.library.public_slug))
     if r.url:
         return redirect(r.url)
     if r.stored_filename:
         return redirect(url_for("main.reading_download", rid=rid))
     return render_template("reading_view.html", reading=r,
-                           back_url=url_for("main.library_detail", lid=r.library_id))
+                           back_url=url_for("main.library_detail", slug=r.library.public_slug))
 
 
 @bp.route("/readings/<int:rid>/download")
 @login_required
 def reading_download(rid):
-    r = db.session.get(Reading, rid) or abort(404)
+    r = db.session.get(LibraryItem, rid) or abort(404)
     if not r.stored_filename:
         abort(404)
     return send_from_directory(current_app.config["UPLOAD_FOLDER"],
@@ -4301,7 +4727,7 @@ def reading_download(rid):
 @login_required
 def reading_content(rid):
     """Return the reading's body rendered to HTML (bleached)."""
-    r = db.session.get(Reading, rid) or abort(404)
+    r = db.session.get(LibraryItem, rid) or abort(404)
     if not r.body:
         abort(404)
     from flask import render_template_string
@@ -4315,7 +4741,7 @@ def reading_content(rid):
 @login_required
 def reading_pdf(rid):
     """Generate a PDF from the reading's body on the fly."""
-    r = db.session.get(Reading, rid) or abort(404)
+    r = db.session.get(LibraryItem, rid) or abort(404)
     if not r.body:
         abort(404)
     from weasyprint import HTML
@@ -4379,7 +4805,7 @@ def markdown_preview():
 @bp.route("/readings/<int:rid>/thumbnail")
 @login_required
 def reading_thumbnail(rid):
-    r = db.session.get(Reading, rid) or abort(404)
+    r = db.session.get(LibraryItem, rid) or abort(404)
     if not r.thumbnail_filename:
         abort(404)
     return send_from_directory(current_app.config["UPLOAD_FOLDER"], r.thumbnail_filename)
@@ -4388,11 +4814,11 @@ def reading_thumbnail(rid):
 @bp.route("/readings/<int:rid>/edit", methods=["GET", "POST"])
 @login_required
 def reading_edit(rid):
-    r = db.session.get(Reading, rid) or abort(404)
+    r = db.session.get(LibraryItem, rid) or abort(404)
     deny = _require_can_edit_library(r.library)
     if deny is not None:
         return deny
-    if not current_user.can_edit_reading(r):
+    if not current_user.can_edit_library_item(r):
         # Editor-tier per-row gate: editors can only modify readings
         # they (or another editor-tier user) uploaded. Admin-uploaded
         # and legacy (creator-unknown) rows are protected.
@@ -4409,13 +4835,13 @@ def reading_edit(rid):
         if (r.library.is_intergroup and r.library.categories_required
                 and picker_present and not cats):
             flash("Pick at least one category for this upload.", "danger")
-            return redirect(url_for("main.library_detail", lid=r.library_id))
+            return redirect(url_for("main.library_detail", slug=r.library.public_slug))
         _apply_reading_form(r, request.form, request.files)
         if picker_present:
             r.categories = cats
         db.session.commit()
         flash("Item updated", "success")
-        return redirect(url_for("main.library_detail", lid=r.library_id))
+        return redirect(url_for("main.library_detail", slug=r.library.public_slug))
     return render_template("reading_form.html", library=r.library, reading=r)
 
 
@@ -4427,12 +4853,12 @@ def _library_browse_url(lib):
     if lib.is_intergroup:
         from .colors import slugify
         return url_for("main.intergroup_library_detail", slug=slugify(lib.name))
-    return url_for("main.library_detail", lid=lib.id)
+    return url_for("main.library_detail", slug=lib.public_slug)
 
 
-@bp.route("/libraries/<int:lid>/readings/bulk-categories", methods=["POST"])
+@bp.route("/libraries/<slug>/readings/bulk-categories", methods=["POST"])
 @login_required
-def library_readings_bulk_categories(lid):
+def library_readings_bulk_categories(slug):
     """Apply a category change to a multi-select set of readings.
 
     Form fields:
@@ -4446,7 +4872,7 @@ def library_readings_bulk_categories(lid):
     knows when their edit was scoped down. Categories from another
     library (a tampered POST) are silently dropped at the query layer
     via the ``library_id`` filter."""
-    lib = db.session.get(Library, lid) or abort(404)
+    lib = _resolve_library_by_slug(slug) or abort(404)
     deny = _require_can_edit_library(lib)
     if deny is not None:
         return deny
@@ -4471,9 +4897,9 @@ def library_readings_bulk_categories(lid):
             and lib.is_intergroup):
         flash("This library requires at least one category — pick one before replacing.", "danger")
         return redirect(_library_browse_url(lib))
-    readings = Reading.query.filter(
-        Reading.library_id == lib.id,
-        Reading.id.in_(rids),
+    readings = LibraryItem.query.filter(
+        LibraryItem.library_id == lib.id,
+        LibraryItem.id.in_(rids),
     ).all()
     applied = 0
     skipped = 0
@@ -4505,18 +4931,18 @@ def library_readings_bulk_categories(lid):
     return redirect(_library_browse_url(lib))
 
 
-@bp.route("/libraries/<int:lid>/readings/bulk-delete", methods=["POST"])
+@bp.route("/libraries/<slug>/readings/bulk-delete", methods=["POST"])
 @login_required
-def library_readings_bulk_delete(lid):
+def library_readings_bulk_delete(slug):
     """Delete a multi-select set of readings. Per-row authorization
-    mirrors ``User.can_delete_reading`` (Editors can only delete rows
+    mirrors ``User.can_delete_library_item`` (Editors can only delete rows
     whose creator was another Editor; admin / intergroup_member
     free-and-clear within a library they can edit; viewers can't
     delete at all). Stored files + thumbnails are cleaned up via
     ``_delete_upload`` before the DB row is removed. Skipped rows are
     silently filtered with a flash summary so the user sees when
     authorization scoped their action down."""
-    lib = db.session.get(Library, lid) or abort(404)
+    lib = _resolve_library_by_slug(slug) or abort(404)
     deny = _require_can_edit_library(lib)
     if deny is not None:
         return deny
@@ -4524,14 +4950,14 @@ def library_readings_bulk_delete(lid):
     if not rids:
         flash("Pick at least one file to delete.", "danger")
         return redirect(_library_browse_url(lib))
-    readings = Reading.query.filter(
-        Reading.library_id == lib.id,
-        Reading.id.in_(rids),
+    readings = LibraryItem.query.filter(
+        LibraryItem.library_id == lib.id,
+        LibraryItem.id.in_(rids),
     ).all()
     deleted = 0
     skipped = 0
     for r in readings:
-        if not current_user.can_delete_reading(r):
+        if not current_user.can_delete_library_item(r):
             skipped += 1
             continue
         if r.stored_filename:
@@ -4554,17 +4980,17 @@ def library_readings_bulk_delete(lid):
     return redirect(_library_browse_url(lib))
 
 
-@bp.route("/libraries/<int:lid>/readings/reorder", methods=["POST"])
+@bp.route("/libraries/<slug>/readings/reorder", methods=["POST"])
 @login_required
-def library_readings_reorder(lid):
-    lib = db.session.get(Library, lid) or abort(404)
+def library_readings_reorder(slug):
+    lib = _resolve_library_by_slug(slug) or abort(404)
     if not current_user.can_edit_library(lib):
         return jsonify({"error": "forbidden"}), 403
     data = request.get_json(silent=True) or {}
     ids = data.get("order") or []
     if not isinstance(ids, list):
         return jsonify({"error": "invalid"}), 400
-    readings = {r.id: r for r in lib.readings.all()}
+    readings = {r.id: r for r in lib.items.all()}
     for pos, rid in enumerate(ids):
         try:
             rid = int(rid)
@@ -4580,20 +5006,19 @@ def library_readings_reorder(lid):
 @bp.route("/readings/<int:rid>/delete", methods=["POST"])
 @login_required
 def reading_delete(rid):
-    r = db.session.get(Reading, rid) or abort(404)
-    if not current_user.can_delete_reading(r):
+    r = db.session.get(LibraryItem, rid) or abort(404)
+    if not current_user.can_delete_library_item(r):
         flash("You don't have permission to delete this file", "danger")
         return redirect(request.referrer
-                        or url_for("main.library_detail", lid=r.library_id))
-    lid = r.library_id
-    if r.stored_filename:
-        _delete_upload(r.stored_filename)
-    if r.thumbnail_filename:
-        _delete_upload(r.thumbnail_filename)
-    db.session.delete(r)
-    db.session.commit()
-    flash("Item deleted", "success")
-    return redirect(url_for("main.library_detail", lid=lid))
+                        or url_for("main.library_detail", slug=r.library.public_slug))
+    parent_slug = r.library.public_slug
+    title = r.title
+    from . import trash, activity
+    activity.log("reading.delete", entity_type="reading", entity_id=r.id,
+                 summary=f"Deleted reading “{title}” (recoverable for {trash.RETENTION_DAYS} days)")
+    trash.soft_delete_library_item(r, current_user.id)
+    flash("Item moved to the Delete Log — restorable for 30 days.", "success")
+    return redirect(url_for("main.library_detail", slug=parent_slug))
 
 
 # --- helpers ---
@@ -4726,8 +5151,8 @@ def _cleanup_retired_asset(stored):
                         s.frontend_404_image_filename):
         return  # still referenced by another interface asset
     refs = (MeetingFile.query.filter_by(stored_filename=stored).count()
-            + Reading.query.filter_by(stored_filename=stored).count()
-            + Reading.query.filter_by(thumbnail_filename=stored).count()
+            + LibraryItem.query.filter_by(stored_filename=stored).count()
+            + LibraryItem.query.filter_by(thumbnail_filename=stored).count()
             + Meeting.query.filter_by(logo_filename=stored).count()
             + Post.query.filter_by(featured_image_filename=stored).count())
     if refs > 0:
@@ -4820,14 +5245,17 @@ def media_rename(mid):
 def media_delete(mid):
     m = db.session.get(MediaItem, mid) or abort(404)
     refs = (MeetingFile.query.filter_by(stored_filename=m.stored_filename).count()
-            + Reading.query.filter_by(stored_filename=m.stored_filename).count()
-            + Reading.query.filter_by(thumbnail_filename=m.stored_filename).count())
+            + LibraryItem.query.filter_by(stored_filename=m.stored_filename).count()
+            + LibraryItem.query.filter_by(thumbnail_filename=m.stored_filename).count())
     if refs > 0:
         flash(f"Cannot delete — file is used by {refs} item(s)", "warning")
     else:
-        _delete_upload(m.stored_filename)
-        db.session.delete(m); db.session.commit()
-        flash("File deleted", "success")
+        from . import trash, activity
+        name = m.original_filename
+        activity.log("file.delete", entity_type="media_item", entity_id=m.id,
+                     summary=f"Deleted file “{name}” from File Browser (recoverable for {trash.RETENTION_DAYS} days)")
+        trash.soft_delete_media(m, current_user.id)
+        flash("File moved to the Delete Log — restorable for 30 days.", "success")
     return redirect(url_for("main.media_list"))
 
 
@@ -5081,14 +5509,266 @@ def access_requests():
                            AccessRequest.created_at.desc()).all()
     archived_count = AccessRequest.query.filter_by(is_archived=True).count()
     active_count = AccessRequest.query.filter_by(is_archived=False).count()
+
+    # Pending password resets — distinct users with at least one live
+    # (unused, unexpired) reset token. A user can hold multiple live
+    # tokens if they re-requested in the same window; collapse to one
+    # row per user, surfacing the most recent token's timestamp +
+    # expiry. Only shown on the active view; the archive is purely
+    # access-request history and a stale forgot-password link wouldn't
+    # belong there.
+    pending_resets = []
+    recent_resets = []
+    if view == "active":
+        now = datetime.utcnow()
+        live_tokens = (PasswordResetToken.query
+                       .filter(PasswordResetToken.used_at.is_(None),
+                               PasswordResetToken.expires_at > now)
+                       .order_by(PasswordResetToken.created_at.desc())
+                       .all())
+        seen = {}
+        for tok in live_tokens:
+            if tok.user_id not in seen:
+                seen[tok.user_id] = tok
+        for tok in seen.values():
+            u = db.session.get(User, tok.user_id)
+            if u:
+                # Minutes-remaining is computed server-side so the
+                # template stays free of datetime arithmetic.
+                mins = max(0, int((tok.expires_at - now).total_seconds() // 60))
+                pending_resets.append((u, tok, mins))
+
+        # 30-day password reset activity. Includes self-service flows
+        # (PasswordResetToken rows: pending, used, or expired) AND
+        # admin-driven resets pulled from the activity log
+        # (``password.reset.admin``). Each entry carries a ``kind``
+        # tag so the template can format it consistently. Sorted
+        # newest-first; capped at 100 rows for legibility.
+        from .models import ActivityLog
+        cutoff = now - timedelta(days=30)
+        all_tokens = (PasswordResetToken.query
+                      .filter(PasswordResetToken.created_at >= cutoff)
+                      .order_by(PasswordResetToken.created_at.desc())
+                      .all())
+        for tok in all_tokens:
+            u = db.session.get(User, tok.user_id)
+            if not u:
+                continue
+            if tok.used_at is not None:
+                status = "used"
+                effective_at = tok.used_at
+            elif tok.expires_at <= now:
+                status = "expired"
+                effective_at = tok.expires_at
+            else:
+                status = "pending"
+                effective_at = tok.created_at
+            recent_resets.append({
+                "kind": "self_service",
+                "username": u.username,
+                "email": u.email or "",
+                "status": status,
+                "requested_at": tok.created_at,
+                "effective_at": effective_at,
+                "actor": u.username,
+            })
+        admin_resets = (ActivityLog.query
+                        .filter(ActivityLog.action == "password.reset.admin",
+                                ActivityLog.created_at >= cutoff)
+                        .order_by(ActivityLog.created_at.desc())
+                        .limit(200)
+                        .all())
+        for ev in admin_resets:
+            target = db.session.get(User, ev.entity_id) if ev.entity_id else None
+            actor = db.session.get(User, ev.user_id) if ev.user_id else None
+            recent_resets.append({
+                "kind": "admin",
+                "username": target.username if target else f"user #{ev.entity_id}",
+                "email": (target.email if target else "") or "",
+                "status": "admin_reset",
+                "requested_at": ev.created_at,
+                "effective_at": ev.created_at,
+                "actor": actor.username if actor else "(deleted user)",
+                "summary": ev.summary or "",
+            })
+        recent_resets.sort(key=lambda r: r["requested_at"], reverse=True)
+        recent_resets = recent_resets[:100]
+
     resp = current_app.make_response(
         render_template("access_requests.html", items=items, view=view,
-                        archived_count=archived_count, active_count=active_count)
+                        archived_count=archived_count, active_count=active_count,
+                        pending_resets=pending_resets,
+                        recent_resets=recent_resets)
     )
     # Defeat stale-HTML caching after the modal-driven Create User flow.
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
     return resp
+
+
+@bp.route("/user-log")
+@admin_required
+def user_log():
+    """Admin-only timeline of write actions, scoped to a single user
+    selected by the ``?user_id=`` query string. Defaults to the current
+    admin so the page always renders something useful when first
+    opened. Two sections: 30-day login session table on top, then the
+    activity feed (newest first) below it."""
+    from . import activity
+    users = User.query.order_by(User.username).all()
+    if not users:
+        return render_template("user_log.html", users=[], selected=None,
+                               sessions=[], events=[])
+
+    raw_uid = request.args.get("user_id")
+    selected = None
+    if raw_uid:
+        try:
+            selected = db.session.get(User, int(raw_uid))
+        except (TypeError, ValueError):
+            selected = None
+    if selected is None:
+        # Default to the current admin so the page is never blank on
+        # first load.
+        selected = next((u for u in users if u.id == current_user.id), users[0])
+
+    sessions = activity.recent_sessions(selected.id, since_days=30)
+    # Activity feed defaults to the same 30-day window — wide enough to
+    # see recent context, tight enough that the page stays fast on
+    # noisy accounts. The window is configurable via ``?days=``.
+    try:
+        days = max(1, min(365, int(request.args.get("days", 30))))
+    except (TypeError, ValueError):
+        days = 30
+    raw_events = activity.recent_activity(selected.id, since_days=days, limit=500)
+    events = []
+    for ev in raw_events:
+        label, icon_name = activity.label_for(ev.action)
+        events.append({
+            "id": ev.id,
+            "action": ev.action,
+            "label": label,
+            "icon": icon_name,
+            "summary": ev.summary or "",
+            "ip": ev.ip or "",
+            "entity_type": ev.entity_type or "",
+            "entity_id": ev.entity_id,
+            "created_at": ev.created_at,
+        })
+    return render_template("user_log.html",
+                           users=users, selected=selected,
+                           sessions=sessions, events=events,
+                           days=days)
+
+
+# ---- Delete Log (recycle bin) -----------------------------------------------
+
+@bp.route("/delete-log")
+@admin_required
+def delete_log():
+    """Admin recycle bin — every soft-deleted file from the last 30
+    days, sorted newest-first. Each row carries a captured snapshot
+    that the Restore button rebuilds into a live record at the
+    captured position. Auto-purges expired rows on every visit so the
+    list stays accurate without needing a separate cron."""
+    from . import trash
+    from .models import DeletedFile
+    # Lazy expiry sweep — best-effort; failures don't block the page.
+    try:
+        trash.expire_old()
+    except Exception:
+        db.session.rollback()
+    rows = (DeletedFile.query
+            .order_by(DeletedFile.deleted_at.desc())
+            .limit(500)
+            .all())
+    items = []
+    now = datetime.utcnow()
+    for row in rows:
+        # Days remaining (round up so a row with <24h showing "1 day"
+        # is never confusing).
+        seconds_left = max(0, (row.expires_at - now).total_seconds())
+        days_left = int((seconds_left + 86399) // 86400) if seconds_left > 0 else 0
+        # Resolve the parent into something the template can render
+        # without re-querying. Both lookups are scoped to the
+        # captured ``parent_id`` and gracefully fall back to the
+        # captured label when the parent has since been removed.
+        parent_link = None
+        if row.parent_type == "library" and row.parent_id:
+            lib = db.session.get(Library, row.parent_id)
+            if lib:
+                parent_link = url_for("main.library_detail", slug=lib.public_slug)
+        elif row.parent_type == "meeting" and row.parent_id:
+            mt = db.session.get(Meeting, row.parent_id)
+            if mt:
+                parent_link = url_for("main.meeting_detail", slug=mt.public_slug)
+        # Per-source-type breadcrumb building. Surfaces a nested tree
+        # under the filename: "Library: Foo → Item: Bar" etc.
+        crumbs = []
+        if row.source_type == "reading":
+            # source_type stays "reading" for back-compat with rows
+            # written under the previous naming; the user-facing
+            # crumb label uses the new "Library item" terminology.
+            crumbs.append(("Library", row.parent_label or "(deleted library)", parent_link))
+            crumbs.append(("Item", row.title or "(untitled)", None))
+        elif row.source_type == "meeting_file":
+            import json as _json
+            try:
+                snap = _json.loads(row.snapshot_json or "{}")
+            except (ValueError, TypeError):
+                snap = {}
+            crumbs.append(("Meeting", row.parent_label or "(deleted meeting)", parent_link))
+            cat = snap.get("category") or "documents"
+            crumbs.append(("Category", cat.replace("_", " ").title(), None))
+            crumbs.append(("File", row.title or "(untitled)", None))
+        else:
+            crumbs.append(("File browser", row.original_filename or "(unknown file)", None))
+        deleter = db.session.get(User, row.deleted_by) if row.deleted_by else None
+        items.append({
+            "id": row.id,
+            "source_type": row.source_type,
+            "stored_filename": row.stored_filename,
+            "original_filename": row.original_filename,
+            "title": row.title,
+            "deleted_at": row.deleted_at,
+            "deleter": deleter.username if deleter else "(unknown)",
+            "expires_at": row.expires_at,
+            "days_left": days_left,
+            "crumbs": crumbs,
+        })
+    return render_template("delete_log.html", items=items,
+                           retention_days=trash.RETENTION_DAYS)
+
+
+@bp.route("/delete-log/<int:rid>/restore", methods=["POST"])
+@admin_required
+def delete_log_restore(rid):
+    from . import trash, activity
+    from .models import DeletedFile
+    row = db.session.get(DeletedFile, rid) or abort(404)
+    label = row.original_filename or row.title or f"#{row.id}"
+    ok, msg = trash.restore(rid)
+    if ok:
+        activity.log("file.restore", entity_type="deleted_file", entity_id=rid,
+                     summary=f"Restored “{label}” — {msg}")
+        flash(f"Restored “{label}”. {msg}.", "success")
+    else:
+        flash(f"Couldn't restore “{label}”: {msg}", "danger")
+    return redirect(url_for("main.delete_log"))
+
+
+@bp.route("/delete-log/<int:rid>/purge", methods=["POST"])
+@admin_required
+def delete_log_purge(rid):
+    from . import trash, activity
+    from .models import DeletedFile
+    row = db.session.get(DeletedFile, rid) or abort(404)
+    label = row.original_filename or row.title or f"#{row.id}"
+    activity.log("file.purge", entity_type="deleted_file", entity_id=rid,
+                 summary=f"Permanently purged “{label}”")
+    trash.purge(rid)
+    flash(f"Permanently deleted “{label}”.", "success")
+    return redirect(url_for("main.delete_log"))
 
 
 @bp.route("/access-requests/<int:rid>/handled", methods=["POST"])
@@ -5099,6 +5779,9 @@ def access_request_handled(rid):
     r.status = "handled" if r.status == "pending" else "pending"
     r.handled_at = datetime.utcnow() if r.status == "handled" else None
     db.session.commit()
+    from . import activity
+    activity.log("access_request.handle", entity_type="access_request", entity_id=r.id,
+                 summary=f"Marked request from {r.name} <{r.email}> as {r.status}")
     return redirect(url_for("main.access_requests",
                             view=request.form.get("view") or "active"))
 
@@ -5118,6 +5801,9 @@ def access_request_archive(rid):
     r.is_archived = True
     r.archived_at = datetime.utcnow()
     db.session.commit()
+    from . import activity
+    activity.log("access_request.archive", entity_type="access_request", entity_id=r.id,
+                 summary=f"Archived request from {r.name} <{r.email}>")
     flash("Request archived", "success")
     return redirect(url_for("main.access_requests",
                             view=request.form.get("view") or "active"))
@@ -5139,6 +5825,9 @@ def access_request_unarchive(rid):
 @admin_required
 def access_request_delete(rid):
     r = db.session.get(AccessRequest, rid) or abort(404)
+    from . import activity
+    activity.log("access_request.delete", entity_type="access_request", entity_id=r.id,
+                 summary=f"Deleted request from {r.name} <{r.email}>")
     db.session.delete(r)
     db.session.commit()
     flash("Request deleted", "success")
@@ -5363,7 +6052,7 @@ def _auto_archive_events():
         db.session.commit()
 
 
-@bp.route("/posts")
+@bp.route("/announcementsevents")
 @login_required
 def posts():
     _require_posts_enabled()
@@ -5387,14 +6076,14 @@ def posts():
     return render_template("posts.html", posts=items, show=show, kind=kind)
 
 
-@bp.route("/posts/new")
+@bp.route("/announcementsevents/new")
 @login_required
 def post_new():
     _require_posts_enabled()
     return render_template("post_edit.html", post=None)
 
 
-@bp.route("/posts/<int:pid>")
+@bp.route("/announcementsevents/<int:pid>")
 @login_required
 def post_edit(pid):
     _require_posts_enabled()
@@ -5402,7 +6091,7 @@ def post_edit(pid):
     return render_template("post_edit.html", post=post)
 
 
-@bp.route("/posts/save", methods=["POST"])
+@bp.route("/announcementsevents/save", methods=["POST"])
 @login_required
 def post_save():
     _require_posts_enabled()
@@ -5488,6 +6177,11 @@ def post_save():
         if _prev_public_slug and _prev_public_slug != post.public_slug:
             _record_slug_change("post", post.id, _prev_public_slug, post.public_slug)
     db.session.commit()
+    from . import activity
+    activity.log("post.create" if creating else "post.update",
+                 entity_type="post", entity_id=post.id,
+                 summary=(f"Created post “{post.title}”" if creating
+                          else f"Updated post “{post.title}”"))
     if creating:
         flash(("Draft saved: " + post.title) if post.is_draft else ("Published: " + post.title), "success")
         return redirect(url_for("main.posts", show=("drafts" if post.is_draft else "active")))
@@ -5495,7 +6189,7 @@ def post_save():
     return redirect(url_for("main.post_edit", pid=post.id))
 
 
-@bp.route("/posts/<int:pid>/publish", methods=["POST"])
+@bp.route("/announcementsevents/<int:pid>/publish", methods=["POST"])
 @login_required
 def post_publish(pid):
     """Transition a draft to active. No-op if already published."""
@@ -5507,7 +6201,7 @@ def post_publish(pid):
     return redirect(request.referrer or url_for("main.posts"))
 
 
-@bp.route("/posts/<int:pid>/unpublish", methods=["POST"])
+@bp.route("/announcementsevents/<int:pid>/unpublish", methods=["POST"])
 @login_required
 def post_unpublish(pid):
     """Move a published post back to drafts. No-op if already a draft."""
@@ -5519,7 +6213,7 @@ def post_unpublish(pid):
     return redirect(request.referrer or url_for("main.posts", show="drafts"))
 
 
-@bp.route("/posts/<int:pid>/archive", methods=["POST"])
+@bp.route("/announcementsevents/<int:pid>/archive", methods=["POST"])
 @login_required
 def post_archive(pid):
     _require_posts_enabled()
@@ -5530,7 +6224,7 @@ def post_archive(pid):
     return redirect(request.referrer or url_for("main.posts"))
 
 
-@bp.route("/posts/<int:pid>/unarchive", methods=["POST"])
+@bp.route("/announcementsevents/<int:pid>/unarchive", methods=["POST"])
 @login_required
 def post_unarchive(pid):
     _require_posts_enabled()
@@ -5541,11 +6235,14 @@ def post_unarchive(pid):
     return redirect(request.referrer or url_for("main.posts"))
 
 
-@bp.route("/posts/<int:pid>/delete", methods=["POST"])
+@bp.route("/announcementsevents/<int:pid>/delete", methods=["POST"])
 @login_required
 def post_delete(pid):
     _require_posts_enabled()
     post = db.session.get(Post, pid) or abort(404)
+    from . import activity
+    activity.log("post.delete", entity_type="post", entity_id=post.id,
+                 summary=f"Deleted post “{post.title}”")
     # Clear the featured-image reference BEFORE the cleanup check so the
     # post being deleted doesn't count itself as a referrer. If another
     # post (e.g. one created by Duplicate) still points at the same
@@ -5560,7 +6257,7 @@ def post_delete(pid):
     return redirect(url_for("main.posts"))
 
 
-@bp.route("/posts/<int:pid>/duplicate", methods=["POST"])
+@bp.route("/announcementsevents/<int:pid>/duplicate", methods=["POST"])
 @login_required
 def post_duplicate(pid):
     """Clone a post into a Draft. Title gets a "(copy)" suffix; the
@@ -5601,6 +6298,17 @@ def post_duplicate(pid):
     db.session.commit()
     flash(f"Draft created: {copy.title}", "success")
     return redirect(url_for("main.posts", show="drafts"))
+
+
+# Back-compat redirects: existing bookmarks / external links to
+# /tspro/posts and /tspro/posts/<rest> 301 to the new
+# /tspro/announcementsevents location. Query string is preserved.
+@bp.route("/posts", defaults={"rest": ""})
+@bp.route("/posts/<path:rest>")
+def posts_legacy_redirect(rest):
+    qs = ("?" + request.query_string.decode("utf-8")) if request.query_string else ""
+    target = url_for("main.posts") + (("/" + rest) if rest else "") + qs
+    return redirect(target, code=301)
 
 
 @public_bp.route("/post-image/<int:pid>")

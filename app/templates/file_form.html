@@ -21,7 +21,7 @@
   {% endif %}
 
   <div class="form-actions">
-    <a href="{{ url_for('main.meeting_detail', mid=meeting.id) }}" class="btn">Cancel</a>
+    <a href="{{ url_for('main.meeting_detail', slug=meeting.public_slug) }}" class="btn">Cancel</a>
     <button class="btn btn-primary">{{ "Save" if file else "Add" }}</button>
   </div>
 </form>

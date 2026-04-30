@@ -75,8 +75,25 @@ class User(UserMixin, db.Model):
     dash_show_server_metrics = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_online_users = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_access_requests = db.Column(db.Boolean, nullable=False, default=True)
+    dash_show_deletions = db.Column(db.Boolean, nullable=False, default=True)
+    dash_show_currently_online = db.Column(db.Boolean, nullable=False, default=True)
     dash_order_json = db.Column(db.Text)
     last_seen_at = db.Column(db.DateTime)
+    # Current navigation location for the live "who's online" widget.
+    # Updated by the same throttled before_request hook that maintains
+    # last_seen_at, but cheap to skip for API polling / static asset
+    # paths so the widget itself doesn't pin every viewer to /api/...
+    # ``last_endpoint`` stores the Flask endpoint name ("main.meetings"),
+    # ``last_path`` stores the URL path ("/tspro/meetings/12") so the
+    # widget can show a clickable, human-readable destination.
+    last_endpoint = db.Column(db.String(128))
+    last_path = db.Column(db.String(500))
+    # Per-user gate on the public Forgot Password flow. False blocks
+    # the account from generating reset tokens so the user can't drive
+    # their own password change — admins can still reset the password
+    # via the Settings → Users modal regardless of this flag. Default
+    # True preserves the historical behaviour for upgraded installs.
+    password_reset_allowed = db.Column(db.Boolean, nullable=False, default=True)
 
     def can_edit(self):
         """Broad editor gate: meetings, files, libraries, etc. Intergroup
@@ -106,25 +123,28 @@ class User(UserMixin, db.Model):
             return self.can_edit_intergroup_libraries()
         return self.can_edit()
 
-    def can_edit_reading(self, reading):
-        """Per-reading gate for renaming / editing an existing reading
-        (title change, file replacement, body / URL / thumbnail swap,
-        inline category re-tag). Editors are restricted to readings
+    def can_edit_library_item(self, item):
+        """Per-item gate for renaming / editing an existing library
+        item (title change, file replacement, body / URL / thumbnail
+        swap, inline category re-tag). Editors are restricted to items
         whose creator was another Editor — mirrors
-        ``can_delete_reading`` so a single rule covers both rename and
-        delete authority. Admin- and Intergroup-Member-uploaded
-        readings are protected. Admin / intergroup_member follow the
-        broader ``can_edit_library`` gate; viewers fail at that gate."""
-        if reading is None:
+        ``can_delete_library_item`` so a single rule covers both
+        rename and delete authority. Admin- and Intergroup-Member-
+        uploaded items are protected. Admin / intergroup_member follow
+        the broader ``can_edit_library`` gate; viewers fail at that gate."""
+        if item is None:
             return False
-        if not self.can_edit_library(reading.library):
+        if not self.can_edit_library(item.library):
             return False
         if self.role == "editor":
-            creator = reading.creator
+            creator = item.creator
             if creator is None:
                 return False
             return creator.role == "editor"
         return True
+
+    # Legacy alias kept for one release while every caller is updated.
+    can_edit_reading = can_edit_library_item
 
     def can_use_editor_tools(self):
         """Generic gate for utility endpoints used during editing
@@ -171,44 +191,47 @@ class User(UserMixin, db.Model):
         catalog of libraries stays coherent across the portal."""
         return self.role in ("admin", "intergroup_member")
 
-    def can_bulk_edit_categories(self, reading):
-        """Per-reading gate for the multi-select bulk-edit-categories
+    def can_bulk_edit_categories(self, item):
+        """Per-item gate for the multi-select bulk-edit-categories
         action on the library detail page. Mirrors
-        ``can_delete_reading`` exactly: if the user is allowed to
-        destroy a reading, they're allowed to mass-tag it. A single
-        'destructive enough' authority gates both bulk operations."""
-        return self.can_delete_reading(reading)
+        ``can_delete_library_item`` exactly: if the user is allowed
+        to destroy an item, they're allowed to mass-tag it."""
+        return self.can_delete_library_item(item)
 
-    def can_delete_reading(self, reading):
-        """Per-reading deletion gate.
+    def can_delete_library_item(self, item):
+        """Per-library-item deletion gate.
 
-        - Admins: any reading.
-        - Intergroup members: any reading inside a library they can edit
+        - Admins: any item.
+        - Intergroup members: any item inside a library they can edit
           (they have exclusive edit on Intergroup-flagged libraries; for
           everything else they inherit the broad editor gate).
-        - Editors: only readings whose creator was another Editor.
-          Admin-, Intergroup-Member-, and legacy (creator=None)
-          readings are protected — Editors can't touch content
-          uploaded by users who outrank them. This keeps authoritative
-          content (admin uploads, Intergroup-Member uploads of
-          trusted-servant material) safe from editor purges.
+        - Editors: only items whose creator was another Editor.
+          Admin-, Intergroup-Member-, and legacy (creator=None) items
+          are protected — Editors can't touch content uploaded by
+          users who outrank them. This keeps authoritative content
+          (admin uploads, Intergroup-Member uploads of trusted-servant
+          material) safe from editor purges.
         - Viewers: never.
 
-        ``reading`` is the ``Reading`` row about to be deleted; ``None``
-        is treated as a no-op deny."""
-        if reading is None:
+        ``item`` is the ``LibraryItem`` row about to be deleted;
+        ``None`` is treated as a no-op deny."""
+        if item is None:
             return False
         if self.role == "admin":
             return True
         if self.role == "intergroup_member":
-            return self.can_edit_library(reading.library)
+            return self.can_edit_library(item.library)
         if self.role == "editor":
-            creator = reading.creator
+            creator = item.creator
             if creator is None:
                 return False
             return creator.role == "editor"
         # viewer falls through to deny.
         return False
+
+    # Legacy alias for the old method name. Kept for one release while
+    # every caller is migrated to ``can_delete_library_item``.
+    can_delete_reading = can_delete_library_item
 
     def is_admin(self):
         return self.role == "admin"
@@ -245,8 +268,8 @@ class Meeting(db.Model):
                                      cascade="all, delete-orphan")
     libraries = association_proxy("library_assocs", "library",
                                   creator=lambda lib: MeetingLibrary(library=lib))
-    selected_readings = db.relationship("Reading", secondary=meeting_reading_selections)
-    public_readings = db.relationship("Reading", secondary=meeting_reading_public)
+    selected_library_items = db.relationship("LibraryItem", secondary=meeting_reading_selections)
+    public_library_items = db.relationship("LibraryItem", secondary=meeting_reading_public)
     schedules = db.relationship("MeetingSchedule", backref="meeting",
                                 cascade="all, delete-orphan", lazy="select",
                                 order_by="MeetingSchedule.day_of_week, MeetingSchedule.start_time")
@@ -277,15 +300,15 @@ class Meeting(db.Model):
                 return a.mode
         return "all"
 
-    def visible_readings(self, library):
+    def visible_library_items(self, library):
         if self.library_mode(library) == "granular":
-            sel_ids = {r.id for r in self.selected_readings}
-            return [r for r in library.readings if r.id in sel_ids]
-        return library.readings.all()
+            sel_ids = {r.id for r in self.selected_library_items}
+            return [r for r in library.items if r.id in sel_ids]
+        return library.items.all()
 
     def selected_ids_for_library(self, library):
-        sel_ids = {r.id for r in self.selected_readings}
-        return [r.id for r in library.readings if r.id in sel_ids]
+        sel_ids = {r.id for r in self.selected_library_items}
+        return [r.id for r in library.items if r.id in sel_ids]
 
 
 class MeetingSchedule(db.Model):
@@ -650,8 +673,16 @@ class Library(db.Model):
     categories_required = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    readings = db.relationship("Reading", backref="library", cascade="all, delete-orphan",
-                               lazy="dynamic", order_by="Reading.position, Reading.id")
+    items = db.relationship("LibraryItem", backref="library", cascade="all, delete-orphan",
+                            lazy="dynamic", order_by="LibraryItem.position, LibraryItem.id")
+
+    @property
+    def public_slug(self):
+        """Slug-form name used in URLs. Same shape as ``Meeting.public_slug``
+        — derived live from ``name`` so renaming a library moves its
+        canonical URL automatically (no slug column, no history table)."""
+        from .colors import slugify
+        return slugify(self.name)
     meeting_assocs = db.relationship("MeetingLibrary", back_populates="library",
                                      cascade="all, delete-orphan")
     meetings = association_proxy("meeting_assocs", "meeting",
@@ -675,8 +706,8 @@ class LibraryCategory(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     library = db.relationship("Library", back_populates="categories")
-    readings = db.relationship("Reading", secondary=reading_categories,
-                               back_populates="categories")
+    items = db.relationship("LibraryItem", secondary=reading_categories,
+                            back_populates="categories")
 
     __table_args__ = (
         db.UniqueConstraint("library_id", "name", name="uq_library_category_name"),
@@ -718,7 +749,15 @@ class AccessRequest(db.Model):
         return data if isinstance(data, list) else []
 
 
-class Reading(db.Model):
+class LibraryItem(db.Model):
+    """A single file / link / pasted-body entry inside a Library.
+
+    Renamed from ``Reading`` in 1.8.x — the table name + column names
+    stay as ``reading`` / ``library_id`` so the rename is purely a
+    Python-identifier cleanup with no DB migration. Old reading-flavoured
+    helper names live on as aliases below for one release while every
+    caller is updated."""
+    __tablename__ = "reading"
     id = db.Column(db.Integer, primary_key=True)
     library_id = db.Column(db.Integer, db.ForeignKey("library.id", ondelete="CASCADE"), nullable=False)
     title = db.Column(db.String(255), nullable=False)
@@ -728,17 +767,18 @@ class Reading(db.Model):
     original_filename = db.Column(db.String(500))
     thumbnail_filename = db.Column(db.String(500))
     position = db.Column(db.Integer, nullable=False, default=0)
-    # User who created the reading. Drives the per-reading deletion gate
-    # for the Editor role (Editors may only delete readings whose creator
-    # was an editor-tier user — admin-created content is protected).
-    # Nullable so legacy rows survive the migration; legacy readings are
-    # treated as admin-created (uneditable to non-admins) by the gate.
+    # User who created the library item. Drives the per-item deletion
+    # gate for the Editor role (Editors may only delete items whose
+    # creator was an editor-tier user — admin-created content is
+    # protected). Nullable so legacy rows survive the migration; legacy
+    # items are treated as admin-created (uneditable to non-admins) by
+    # the gate.
     created_by = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     creator = db.relationship("User", foreign_keys=[created_by])
     categories = db.relationship("LibraryCategory", secondary=reading_categories,
-                                 back_populates="readings",
+                                 back_populates="items",
                                  order_by="LibraryCategory.position, LibraryCategory.id")
 
     @property
@@ -1005,6 +1045,116 @@ class LoginFailure(db.Model):
     __table_args__ = (
         db.Index("ix_login_failure_kind_key_time", "kind", "key", "failed_at"),
     )
+
+
+class ActivityLog(db.Model):
+    """Append-only feed of user-driven write actions across the portal.
+
+    Drives the User Log admin page. Each row captures who did what,
+    against which entity, with a short human-readable summary and the
+    request's source IP for audit. Reads are NOT logged — only saves
+    / deletes / role-mutating actions and the auth events that bracket
+    them. ``entity_type`` + ``entity_id`` are nullable for actions that
+    don't bind to a specific record (e.g. login, settings save).
+
+    Rows are never edited; they're inserted once and read by the user
+    log UI. A small periodic cleanup (out of scope for the first cut)
+    can prune rows older than the retention window if storage becomes
+    a concern."""
+    __tablename__ = "activity_log"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"),
+                        index=True)
+    # Short snake_case verb identifying the action (``login``,
+    # ``meeting.update``, ``library.delete``, …). Free-form on
+    # purpose — formatting / icon lookup is done on the rendering
+    # side from a small mapping table, with sensible fallbacks for
+    # unknown verbs so adding new instrumentation never breaks the UI.
+    action = db.Column(db.String(64), nullable=False, index=True)
+    entity_type = db.Column(db.String(32))   # 'meeting', 'library', 'user', etc.
+    entity_id = db.Column(db.Integer)
+    # One-line human-readable summary surfaced in the timeline. Avoid
+    # leaking secrets here — admin-visible only, but still public to
+    # every admin so credentials, tokens, etc. should not appear.
+    summary = db.Column(db.String(500))
+    ip = db.Column(db.String(64))
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow,
+                           index=True)
+
+    user = db.relationship("User", foreign_keys=[user_id])
+
+
+class LoginSession(db.Model):
+    """Single login session per row. Created on successful sign-in,
+    closed (``ended_at`` + ``end_reason``) on logout / timeout / new
+    sign-in from the same browser. The User Log surfaces the last 30
+    days of these so admins can see who's actively using the portal
+    and from where."""
+    __tablename__ = "login_session"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"),
+                        nullable=False, index=True)
+    ip = db.Column(db.String(64))
+    user_agent = db.Column(db.String(500))
+    started_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow,
+                           index=True)
+    last_activity_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    ended_at = db.Column(db.DateTime)
+    # 'logout' | 'replaced' | 'expired' | 'admin_reset' | 'forced'
+    end_reason = db.Column(db.String(16))
+
+    user = db.relationship("User", foreign_keys=[user_id])
+
+    @property
+    def is_active(self):
+        return self.ended_at is None
+
+
+class DeletedFile(db.Model):
+    """Recycle bin row for soft-deleted file-bearing records.
+
+    Deletes through the regular UI (Reading, MeetingFile, MediaItem)
+    no longer hard-delete the underlying row + file in one motion;
+    they snapshot the row's full state into this table, leave the
+    file on disk, and remove the live record. Restoring rebuilds the
+    original row from the snapshot at its captured position.
+
+    Three ``source_type`` values today: ``reading`` (library file),
+    ``meeting_file`` (meeting attachment), ``media_item`` (file-browser
+    only entry, never bound to a reading or meeting). The
+    ``parent_type`` / ``parent_id`` / ``parent_label`` columns are
+    captured at delete time so the Delete Log can show *where* a file
+    came from even if the parent library / meeting was renamed (or
+    itself deleted) since.
+
+    ``snapshot_json`` carries every field needed to rebuild the row:
+    library_id, title, body, url, position, category ids,
+    public_visible, created_by, etc. Stored as JSON so adding fields
+    to the underlying model in a future release doesn't require a
+    schema migration here.
+
+    ``expires_at`` is the cutoff after which a periodic sweep
+    permanently purges the row + on-disk file (subject to the
+    no-live-references guard). Admins can also purge any row
+    immediately from the Delete Log UI."""
+    __tablename__ = "deleted_file"
+    id = db.Column(db.Integer, primary_key=True)
+    source_type = db.Column(db.String(32), nullable=False, index=True)
+    source_id = db.Column(db.Integer)  # original row id, for traceability
+    stored_filename = db.Column(db.String(500))
+    original_filename = db.Column(db.String(500))
+    title = db.Column(db.String(255))
+    thumbnail_filename = db.Column(db.String(500))
+    parent_type = db.Column(db.String(32))   # 'library' | 'meeting' | None
+    parent_id = db.Column(db.Integer)
+    parent_label = db.Column(db.String(255))
+    snapshot_json = db.Column(db.Text)       # JSON blob of full row state
+    deleted_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow,
+                           index=True)
+    deleted_by = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"))
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+
+    deleter = db.relationship("User", foreign_keys=[deleted_by])
 
 
 class PasswordResetToken(db.Model):

@@ -40,6 +40,8 @@ _MAIN_CATALOG = [
 _ADMIN_CATALOG = [
     # Items that are always admin-only by code, not configuration.
     {"key": "access_requests", "label": "Access Requests",        "endpoint": "main.access_requests",  "active_kind": "contains:access_request"},
+    {"key": "user_log",        "label": "User Log",               "endpoint": "main.user_log",         "active_kind": "contains:user_log"},
+    {"key": "delete_log",      "label": "Delete Log",             "endpoint": "main.delete_log",       "active_kind": "contains:delete_log"},
 ]
 
 # Static (non-library) items that live inside the "Intergroup" sidebar
@@ -103,6 +105,8 @@ def _is_visible(key, site, user):
         return bool(site and site.posts_enabled
                     and user_meets_role(user, site.posts_required_role))
     if key == "access_requests": return bool(user.is_admin())
+    if key == "user_log":        return bool(user.is_admin())
+    if key == "delete_log":      return bool(user.is_admin())
     if key == "web_frontend":
         # The Web Frontend's route gates resolve to admin-only via
         # ``can_edit_frontend`` (the dedicated frontend_editor role

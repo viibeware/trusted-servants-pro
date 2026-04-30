@@ -59,7 +59,7 @@
   {% endif %}
 
   <div class="form-actions">
-    <a href="{{ url_for('main.library_detail', lid=library.id) }}" class="btn">Cancel</a>
+    <a href="{{ url_for('main.library_detail', slug=library.public_slug) }}" class="btn">Cancel</a>
     <button class="btn btn-primary">{{ "Save" if reading else "Add" }}</button>
   </div>
 </form>
