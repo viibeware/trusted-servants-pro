@@ -2075,16 +2075,19 @@ button.chip { font-family: inherit; }
 .pwreset-modal .modal-panel { max-width: 520px; }
 .pwreset-target { background: var(--panel-2); border: 1px solid var(--border);
   border-radius: 10px; padding: 10px 12px; line-height: 1.5; }
-.pwreset-tabs { display: flex; gap: 4px; padding: 4px;
-  background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
-  margin-bottom: 4px; }
-.pwreset-tab { flex: 1; appearance: none; border: none; background: transparent;
-  padding: 8px 12px; border-radius: 7px; font-size: 0.875rem; font-weight: 600;
-  color: var(--muted); cursor: pointer; transition: background 120ms ease, color 120ms ease; }
-.pwreset-tab:hover { color: var(--text); }
-.pwreset-tab.is-active { background: var(--panel); color: var(--text);
-  box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+/* Replaces the previous .pwreset-tabs two-tab control: a single
+   toggle that flips between Generate (off, default) and Custom
+   (on). When off, only the readonly Generated-password readout is
+   shown; when on, the readout hides and the New Password field
+   reveals with its strength meter. */
+.pwreset-mode-toggle { align-self: flex-start; margin: 4px 0; }
+.pwreset-mode-label { font-size: 0.875rem; font-weight: 600; }
 .pwreset-pane { display: flex; flex-direction: column; gap: 10px; }
+/* The author-level ``display: flex`` above outranks the UA stylesheet's
+   ``[hidden] { display: none }``, so the New Password pane would stay
+   visible even with the ``hidden`` attribute set. Pin it back here so
+   the Set-custom-password toggle's off state genuinely hides the pane. */
+.pwreset-pane[hidden] { display: none; }
 .pwreset-readout-label, .pwreset-custom-label { font-size: 0.8125rem;
   font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
 .pwreset-readout { display: flex; gap: 8px; align-items: center; }
@@ -2142,26 +2145,17 @@ button.chip { font-family: inherit; }
    companion login-sessions table on top. The picker card lives at
    the top so the selected account is always visible while you scroll.
    ================================================================ */
-.user-log-picker { display: flex; flex-direction: column; gap: 14px; }
 .user-log-picker-form { display: flex; gap: 14px; flex-wrap: wrap; }
 
-/* Merged detail card — picker + sessions + activity in one panel.
-   Subsections are separated by a thin divider rather than the full
-   card gap that the previous three-card layout used. */
-.user-log-detail { display: flex; flex-direction: column; gap: 0; padding: 0; }
-.user-log-detail > .user-log-detail-head,
-.user-log-detail > .user-log-detail-section {
-  padding: 18px 20px;
-}
-.user-log-detail > .user-log-detail-section + .user-log-detail-section,
-.user-log-detail > .user-log-detail-head + .user-log-detail-section {
-  border-top: 1px solid var(--border);
-}
-.user-log-detail-head { display: flex; flex-direction: column; gap: 14px; }
-.user-log-detail-subhead { display: flex; align-items: baseline;
-  justify-content: space-between; gap: 12px; flex-wrap: wrap;
-  margin: 0 0 12px; }
-.user-log-detail-subhead h3 { font-size: 1rem; font-weight: 700; margin: 0; }
+/* Account picker card — Account dropdown on the left, summary chip on
+   the right. The two carry-forward hidden inputs (days, sdays) keep
+   the Activity + Sessions windows intact when the operator changes
+   account. */
+.user-log-account { display: flex; align-items: center; gap: 18px;
+  flex-wrap: wrap; }
+.user-log-account .user-log-picker-form { flex: 1 1 240px; }
+.user-log-account .user-log-summary { flex: 0 0 auto; padding-top: 0;
+  border-top: none; }
 .user-log-picker-label { display: flex; flex-direction: column; gap: 4px;
   font-size: 0.75rem; font-weight: 700; color: var(--muted);
   text-transform: uppercase; letter-spacing: .5px; flex: 1 1 220px; }
@@ -2169,11 +2163,66 @@ button.chip { font-family: inherit; }
 .user-log-picker-label select { padding: 9px 12px; border-radius: 8px;
   border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
   font-size: 0.9375rem; font-weight: 500; text-transform: none; letter-spacing: 0; }
-.user-log-summary { display: flex; align-items: center; gap: 14px;
-  padding-top: 6px; border-top: 1px dashed var(--border); }
+.user-log-summary { display: flex; align-items: center; gap: 14px; }
 .ulog-chip { display: flex; align-items: center; gap: 12px; }
 .ulog-chip-name { font-size: 1.0625rem; font-weight: 700; }
 .user-log-summary .avatar { width: 44px; height: 44px; font-size: 1.125rem; }
+
+/* Activity + Login sessions cards — each gets its own card with a
+   collapse toggle. The whole header is the click target on expanded
+   cards; the whole card is the click target when collapsed (handled
+   in JS). Cursor signals match: pointer on the head when expanded,
+   pointer on the entire card when collapsed. */
+.user-log-card { padding: 0; }
+.user-log-card-head { display: flex; align-items: center; gap: 12px;
+  flex-wrap: wrap; padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer; user-select: none; }
+.user-log-card.is-collapsed { cursor: pointer; }
+.user-log-card.is-collapsed .user-log-card-head {
+  border-bottom-color: transparent; }
+/* Subtle hover affordance — matches the cursor:pointer signal. */
+.user-log-card-head:hover h2 { color: var(--brand); }
+.user-log-card.is-collapsed:hover .user-log-chevron { color: var(--brand); }
+.user-log-card-head:focus-visible { outline: 2px solid var(--brand);
+  outline-offset: -2px; border-radius: 8px; }
+.user-log-card-body { padding: 16px 18px 18px; }
+.user-log-card-head h2 { margin: 0; font-size: 1.0625rem; font-weight: 700;
+  transition: color 150ms ease; }
+.user-log-chevron { display: inline-flex; align-items: center;
+  color: var(--muted); transition: transform 200ms ease, color 150ms ease; }
+.user-log-chevron .icon { width: 18px; height: 18px; }
+.user-log-card.is-collapsed .user-log-chevron { transform: rotate(-90deg); }
+.user-log-card-count { margin-right: auto; }
+/* When collapsed, hide the in-header window dropdown — changing the
+   window only matters when the body is visible, and the form would
+   otherwise be the only "click here doesn't toggle" exception inside
+   the card-wide click target. */
+.user-log-card.is-collapsed .user-log-card-form { display: none; }
+.user-log-card-form { display: inline-flex; align-items: center; gap: 8px;
+  margin: 0; }
+.user-log-window-label { display: inline-flex; }
+.user-log-window-label select { padding: 6px 28px 6px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
+  font-size: 0.875rem; font-weight: 500;
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat; background-position: right 8px center;
+  background-size: 14px 14px; }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0);
+  white-space: nowrap; border: 0; }
+
+/* Sessions table can grow up to 7 columns. Wrap it in a horizontal
+   scroll container so it keeps its full layout on narrow viewports
+   instead of being squished. */
+.ulog-sessions-scroll { overflow-x: auto; }
+.ulog-sessions-scroll .tbl { width: 100%; }
+
+/* Infinite-scroll sentinel — sits at the end of the feed and
+   IntersectionObserver fires when it scrolls into view. */
+.ulog-feed-sentinel { padding: 14px 0 4px; text-align: center; }
+.ulog-feed-sentinel[hidden] { display: none; }
 
 .badge-success { background: #d1fae5; color: #065f46; border-color: #10b981; }
 [data-theme="dark"] .badge-success,

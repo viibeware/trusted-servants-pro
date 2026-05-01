@@ -123,15 +123,28 @@ def touch_session(user):
 
 # ---- LibraryItem helpers --------------------------------------------------------
 
-def recent_activity(user_id, since_days=None, limit=500):
+def recent_activity(user_id, since_days=None, limit=500, offset=0):
     # ``user_id=None`` returns activity across every user — drives the
-    # "All users" view on the User Log page.
+    # "All users" view on the User Log page. ``offset`` powers
+    # infinite-scroll pagination from /api/user-log-events.
     q = ActivityLog.query
     if user_id is not None:
         q = q.filter(ActivityLog.user_id == user_id)
     if since_days:
         q = q.filter(ActivityLog.created_at >= datetime.utcnow() - timedelta(days=since_days))
-    return q.order_by(ActivityLog.created_at.desc()).limit(limit).all()
+    q = q.order_by(ActivityLog.created_at.desc(), ActivityLog.id.desc())
+    if offset:
+        q = q.offset(offset)
+    return q.limit(limit).all()
+
+
+def recent_activity_count(user_id, since_days=None):
+    q = ActivityLog.query
+    if user_id is not None:
+        q = q.filter(ActivityLog.user_id == user_id)
+    if since_days:
+        q = q.filter(ActivityLog.created_at >= datetime.utcnow() - timedelta(days=since_days))
+    return q.count()
 
 
 def recent_sessions(user_id, since_days=30, limit=100):

@@ -63,13 +63,11 @@ body.frontend-body {
 .fe-page .btn, .frontend-body .btn,
 .fe-page .fe-btn, .frontend-body .fe-btn,
 .frontend-body .fe-nav-cta,
-.frontend-body .fe-recovery-nav-cta,
-.fe-page .fe-event-cta, .frontend-body .fe-event-cta { text-decoration: var(--fe-btn-decoration, none); }
+.frontend-body .fe-recovery-nav-cta { text-decoration: var(--fe-btn-decoration, none); }
 .fe-page .btn:hover, .frontend-body .btn:hover,
 .fe-page .fe-btn:hover, .frontend-body .fe-btn:hover,
 .frontend-body .fe-nav-cta:hover,
-.frontend-body .fe-recovery-nav-cta:hover,
-.fe-page .fe-event-cta:hover, .frontend-body .fe-event-cta:hover { text-decoration: var(--fe-btn-decoration, none); }
+.frontend-body .fe-recovery-nav-cta:hover { text-decoration: var(--fe-btn-decoration, none); }
 /* Mega-menu links read their own colour + decoration tokens so they
    don't inherit the body-link colour. */
 .fe-megamenu-link { text-decoration: var(--fe-megamenu-link-decoration, none); }
@@ -699,6 +697,22 @@ body.fe-megamenu-open .fe-recovery-menu-btn span:last-child {
   color: var(--fe-color-btn-secondary-text, var(--fe-ink));
   border-color: var(--fe-color-btn-secondary-text, var(--fe-ink));
 }
+/* Recovery Blue theme — secondary (.fe-btn-ghost) hover treatment.
+   The body carries data-fe-theme="recovery-blue" when this theme is
+   active (set in templates/frontend/base.html), so scoping the rule
+   on that attribute keeps every other theme on the default hover and
+   leaves Recovery Blue with its bespoke pale-blue surface + border.
+   The light-mode values were specified by the user; the dark-mode
+   parallel uses the same recipe shape (a tinted surface + a readable
+   border) tuned for a dark page background. */
+body[data-fe-theme="recovery-blue"] .fe-btn-ghost:hover {
+  background: color-mix(in srgb, #e0e9f4 92%, #f3ecec);
+  border-color: #afc2e4;
+}
+html[data-theme="dark"] body[data-fe-theme="recovery-blue"] .fe-btn-ghost:hover {
+  background: color-mix(in srgb, #1f2a40 92%, #2c2222);
+  border-color: #5b78ad;
+}
 .fe-btn { gap: 10px; }
 .fe-btn-icon {
   display: inline-flex; align-items: center; justify-content: center;
@@ -815,7 +829,14 @@ body.fe-megamenu-open .fe-recovery-menu-btn span:last-child {
   text-align: center;
   box-shadow: none;
 }
-.fe-meeting-card-actions .fe-btn:hover { box-shadow: none; }
+/* Meeting-card buttons opt out of the global hover ``lift`` (1-px
+   translateY + drop shadow) used elsewhere on .fe-btn-primary — in a
+   tight card grid the lift reads as jitter rather than affordance,
+   and the surrounding card already provides hover feedback. The
+   border itself never toggles (the base .fe-btn keeps a 1-px
+   transparent border at all times), so this rule and the no-shadow
+   sibling are the only sources of geometric shift on hover. */
+.fe-meeting-card-actions .fe-btn:hover { box-shadow: none; transform: none; }
 .fe-meeting-type {
   display: inline-block; align-self: flex-start;
   padding: 3px 10px; border-radius: 999px;
@@ -1358,9 +1379,19 @@ html[data-theme="dark"] .fe-hero-blob { opacity: 0.25; }
 html[data-theme="dark"] .fe-hero-eyebrow { background: rgba(81,100,255,0.18); color: #7aa3ff; }
 html[data-theme="dark"] .fe-btn-primary { background: #e2e8f0; color: #0b1026;
   box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
-html[data-theme="dark"] .fe-btn-primary:hover { background: #fff; }
+/* Explicit ``color`` on the dark hover — the lower-specificity
+   ``.frontend-body .fe-btn-primary:hover`` rule resolves
+   ``color: var(--fe-color-btn-primary-text, #fff)`` to white via the
+   design tokens, which would land white text on the white hover
+   background and hide the label. Pinning the dark text colour here
+   wins the cascade because the dark rule outranks
+   ``.frontend-body`` on specificity. */
+html[data-theme="dark"] .fe-btn-primary:hover { background: #fff; color: #0b1026; }
 html[data-theme="dark"] .fe-btn-ghost { background: transparent; color: #e2e8f0; border-color: #334155; }
-html[data-theme="dark"] .fe-btn-ghost:hover { background: #1e293b; border-color: #94a3b8; }
+/* Same fix on the ghost variant: the inherited hover color
+   resolves to ``#0f172a`` (dark slate) via the secondary-text token,
+   which would disappear into the dark hover background. */
+html[data-theme="dark"] .fe-btn-ghost:hover { background: #1e293b; color: #e2e8f0; border-color: #94a3b8; }
 
 /* Quick links / sections */
 html[data-theme="dark"] .fe-quick { background: #0b1026; }
@@ -1577,12 +1608,28 @@ html[data-theme="dark"] .fe-meetings-day-heading { color: #e2e8f0; }
   background: #fff;
   border: 1px solid var(--fe-accent);
   border-radius: 16px;
+  cursor: pointer;
   transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
 }
 .fe-event-row:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 28px rgba(15, 23, 42, 0.10);
 }
+/* Whole-card click target — the title's <a> is "stretched" via
+   ::after to cover the entire row. The title stays the single
+   semantic link per card (one focus stop, one screen-reader
+   announcement) and the existing thumbnail anchor is still in the
+   DOM but its click is consumed by the overlay (same target URL).
+   z-index keeps the overlay below interactive children that opt in
+   with their own ``z-index: 2`` if any are added in the future. */
+.fe-event-title a::after {
+  content: ""; position: absolute; inset: 0;
+  border-radius: inherit;
+  z-index: 1;
+}
+/* Title link inherits the row colour by default; on row-hover the
+   title tints brand to mirror the previous CTA-pill affordance. */
+.fe-event-row:hover .fe-event-title a { color: var(--fe-color-brand, #0b5cff); }
 html[data-theme="dark"] .fe-event-row { background: #131a33; border-color: #1f2a44; }
 html[data-theme="dark"] .fe-event-row:hover { box-shadow: 0 10px 28px rgba(0,0,0,0.45); }
 
@@ -1636,6 +1683,13 @@ html[data-theme="dark"] .fe-event-row:hover { box-shadow: 0 10px 28px rgba(0,0,0
 }
 .fe-event-title a { color: inherit; text-decoration: none; }
 .fe-event-title a:hover { color: var(--fe-color-brand, #0b5cff); }
+/* Suppress the default ``.fe-page a:hover { text-decoration: underline }``
+   inside event cards — the whole card is the click target now and
+   the title's brand-tint hover already telegraphs interactivity. */
+.fe-page .fe-event-row a,
+.frontend-body .fe-event-row a,
+.fe-page .fe-event-row a:hover,
+.frontend-body .fe-event-row a:hover { text-decoration: none; }
 
 .fe-event-attrs {
   display: flex; flex-wrap: wrap; gap: 6px 18px;
@@ -1656,46 +1710,16 @@ html[data-theme="dark"] .fe-event-row:hover { box-shadow: 0 10px 28px rgba(0,0,0
   overflow: hidden;
 }
 
-/* CTA on the far right — pill-style button-like link */
-.fe-event-cta,
-.fe-page .fe-event-cta,
-.frontend-body .fe-event-cta {
-  flex: 0 0 auto;
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 8px 16px; border-radius: 999px;
-  background: transparent;
-  border: 1.5px solid var(--fe-color-btn-primary-bg, var(--fe-color-brand, #0b5cff));
-  color: var(--fe-color-btn-primary-bg, var(--fe-color-brand, #0b5cff));
-  font-weight: 600; font-size: 0.9rem;
-  white-space: nowrap;
-  transition: background 160ms ease, border-color 160ms ease, gap 160ms ease, color 160ms ease;
-}
-.fe-event-cta:hover,
-.fe-page .fe-event-cta:hover,
-.frontend-body .fe-event-cta:hover {
-  background: var(--fe-color-btn-primary-bg, var(--fe-color-brand, #0b5cff));
-  border-color: var(--fe-color-btn-primary-bg, var(--fe-color-brand, #0b5cff));
-  color: var(--fe-color-btn-primary-text, #fff);
-  gap: 10px;
-}
-.fe-event-cta-arrow { transition: transform 160ms ease; }
-.fe-event-cta:hover .fe-event-cta-arrow { transform: translateX(2px); }
-
-/* Tablet / narrow desktop — keep the row horizontal but tighten gaps,
-   shrink the thumbnail, and let the View Event pill drop to its own
-   centered row underneath so the body has room to breathe. */
+/* Tablet / narrow desktop — keep the row horizontal but tighten gaps
+   and shrink the thumbnail. The View Event pill that used to drop to
+   its own row at this breakpoint is gone; the whole card is now the
+   click target. */
 @media (max-width: 1023px) {
   .fe-event-row {
     flex-wrap: wrap; gap: 14px 18px; padding: 20px;
   }
   .fe-event-thumb { width: 80px; height: 80px; }
   .fe-event-body { flex: 1 1 200px; min-width: 0; }
-  .fe-event-cta,
-  .fe-page .fe-event-cta,
-  .frontend-body .fe-event-cta {
-    flex: 1 1 100%; justify-content: center; order: 99;
-    padding: 10px 16px;
-  }
 }
 
 /* Mobile — stack everything vertically. Image on top (full-width

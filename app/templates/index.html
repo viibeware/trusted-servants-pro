@@ -6,11 +6,13 @@
 {% endblock %}
 {% block content %}
 {% set can_reorder = true %}
-{# Operator-tier roles see the Server Stats column on the role widget;
-   editors and viewers see only the role panel. Centralised here so
-   the widget gate, the role-only styling class, and the dashboard
-   customize toggle's label all read from one source. #}
-{% set _has_server = current_user.role in ('admin', 'intergroup_member') %}
+{# Admins see the Server Stats column on the role widget; every other
+   role (intergroup members included) sees only the role panel — they
+   don't operate the server, so the live CPU / memory / disk metrics
+   aren't relevant. Centralised here so the widget gate, the role-only
+   styling class, and the dashboard customize toggle's label all read
+   from one source. #}
+{% set _has_server = current_user.is_admin() %}
 <div class="dash-grid"
      {% if can_reorder %}data-dashboard-reorder data-order-url="{{ url_for('main.dashboard_order_save') }}"{% endif %}>
 {% for widget_key in dashboard_order %}
@@ -56,10 +58,9 @@
             <li class="role-caps-link"><a href="#" data-open-modal="settings-modal" data-settings-tab="your-access">See full access details →</a></li>
           </ul>
         </div>
-        {# Server widget is shown to admins, frontend editors, and
-           intergroup members only. Editors and viewers see the Your
+        {# Server widget is admin-only. Everyone else sees the Your
            role panel alone — they don't operate the server, so the
-           live CPU / memory / disk metrics aren't relevant to them. #}
+           live CPU / memory / disk metrics aren't relevant. #}
         {% if _has_server %}
         <div class="server-metrics-column">
           <div class="card-head">

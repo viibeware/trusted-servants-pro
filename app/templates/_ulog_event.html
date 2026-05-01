@@ -1,0 +1,18 @@
+{# One row of the User Log activity feed. Shared by the initial
+   server-side render in user_log.html and the JSON pagination API
+   (/api/user-log-events) so the markup stays in one place. #}
+<li class="ulog-event ulog-event-{{ ev.action.split('.')[0] }}">
+  <span class="ulog-event-icon">{{ icon(ev.icon) }}</span>
+  <div class="ulog-event-body">
+    <div class="ulog-event-title">
+      {% if show_all %}{% if ev.user_id %}<a class="ulog-event-user" href="{{ url_for('main.user_log') }}?user_id={{ ev.user_id }}">{{ ev.username or 'user #' ~ ev.user_id }}</a>{% else %}<span class="muted">deleted user</span>{% endif %} · {% endif %}
+      {{ ev.label }}
+    </div>
+    {% if ev.summary %}<div class="ulog-event-summary muted small">{{ ev.summary }}</div>{% endif %}
+    <div class="ulog-event-meta muted smaller">
+      {{ ev.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+      {% if ev.ip %}· <span class="mono">{{ ev.ip }}</span>{% endif %}
+      {% if ev.entity_type and ev.entity_id %}· {{ ev.entity_type }} #{{ ev.entity_id }}{% endif %}
+    </div>
+  </div>
+</li>

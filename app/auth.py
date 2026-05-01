@@ -409,6 +409,18 @@ def logout():
     actor = current_user._get_current_object() if hasattr(current_user, "_get_current_object") else current_user
     activity.log("logout", user=actor, summary="Signed out")
     activity.close_session(actor, reason="logout")
+    # Drop the user from the live "Currently online" widget on their
+    # next-poll. _online_users() filters on User.last_seen_at within
+    # ONLINE_WINDOW; clearing the column here means other admins watching
+    # the widget see the row disappear within ~5 seconds rather than
+    # waiting out the full window after sign-out.
+    try:
+        actor.last_seen_at = None
+        actor.last_endpoint = None
+        actor.last_path = None
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
     logout_user()
     return redirect(url_for("auth.login"))
 
@@ -801,15 +813,17 @@ def users_reset_password(uid):
         flash(f"{u.username} has no email address on file — set one or use Save without emailing.", "warning")
         return _bounce()
 
+    # The modal posts the actual password value in both modes — the
+    # previewed "generated" value is now the one that gets saved (was:
+    # server re-rolled at submit, throwing away whatever the admin
+    # had on screen). ``mode`` survives only so the activity-log entry
+    # can still record which path the admin chose.
     mode = request.form.get("mode", "generate")
-    if mode == "custom":
-        new_pw = request.form.get("password", "")
-        ok_pol, errs = validate_password_policy(new_pw, username=u.username, email=u.email)
-        if not ok_pol:
-            flash("Password rejected: " + " ".join(errs), "danger")
-            return _bounce()
-    else:
-        new_pw = _generate_password()
+    new_pw = request.form.get("password", "")
+    ok_pol, errs = validate_password_policy(new_pw, username=u.username, email=u.email)
+    if not ok_pol:
+        flash("Password rejected: " + " ".join(errs), "danger")
+        return _bounce()
 
     if send_email:
         # Send first; only persist on success so an SMTP failure doesn't

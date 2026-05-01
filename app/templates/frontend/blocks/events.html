@@ -1,8 +1,9 @@
 {# Upcoming events block — stacked rows sourced from Post rows where
-   is_event = True. Each row is rendered as a horizontally-laid-out card
-   (matching the Today's Meetings card visual treatment) with a
-   "View Event" pill on the right that links to the public event detail
-   page. Past events drop off automatically — see blocks.filtered_events. #}
+   is_event = True. The whole card is the click target via a
+   ``stretched-link`` ::after overlay anchored to the title's <a>;
+   the title remains the single semantic link per card so screen
+   readers + keyboard nav still announce one event per row. Past
+   events drop off automatically — see blocks.filtered_events. #}
 {% set _es = (block_content.get('_events', {}) if block_content else {}) %}
 {% set _heading = _es.heading or 'Upcoming Events' %}
 {% set _intro = _es.intro or '' %}
@@ -75,11 +76,6 @@
           <p class="fe-event-summary muted">{{ ev.summary }}</p>
           {% endif %}
         </div>
-
-        <a class="fe-event-cta" href="{{ _detail_url }}">
-          <span class="fe-event-cta-label">View Event</span>
-          <span class="fe-event-cta-arrow" aria-hidden="true">→</span>
-        </a>
       </li>
       {% endfor %}
     </ol>

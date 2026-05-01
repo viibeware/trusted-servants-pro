@@ -1,15 +1,19 @@
 {# ============================================================
    Reset-password modal — shared between Settings → Users and the
-   Access Requests page. Two tabs:
-     • Generate — fetches a fresh random password from the
-       server, shows it in a copy-friendly readout, sends with
-       mode=generate so the server re-rolls server-side rather
-       than trusting the value posted from the client.
-     • Custom — admin types their own. Live policy meter
+   Access Requests page. A "Set custom password" switch toggles
+   between two modes:
+     • Off (default) — readonly readout filled by the server's
+       password generator. Re-roll fetches a new value; Copy
+       drops it on the clipboard. Whatever sits in the readout
+       at submit is what gets saved (the field carries
+       name="password").
+     • On — the New Password field reveals (the readout hides)
+       so the admin can type a value. Live policy meter
        enforces the same rules the server validates against.
-   Either path: on submit, password is reset; the welcome
-   email is re-sent on the primary submit, or skipped on
-   "Save without emailing".
+   Both inputs share name="password"; the inactive one is
+   ``disabled`` so the form posts a single value either way.
+   On submit the password is reset and the welcome email goes
+   out (primary submit) or is skipped ("Save without emailing").
 
    Caller can pass a `return_url` (must be same-host; validated
    server-side) so the post-submit redirect lands on the page
@@ -35,19 +39,21 @@
           this address with the new password — their current password will stop working.
         </p>
 
-        <div class="pwreset-tabs" role="tablist">
-          <button type="button" class="pwreset-tab is-active" data-pwtab="generate" role="tab" aria-selected="true">Generate random</button>
-          <button type="button" class="pwreset-tab" data-pwtab="custom" role="tab" aria-selected="false">Set custom</button>
-        </div>
+        <label class="mode-toggle pwreset-mode-toggle"
+               title="Off: save the generated password shown below. On: type your own.">
+          <input type="checkbox" id="pwreset-custom-toggle">
+          <span class="mode-track"><span class="mode-thumb"></span></span>
+          <span class="pwreset-mode-label">Set custom password</span>
+        </label>
 
         <div class="pwreset-pane" data-pwpane="generate">
           <label class="pwreset-readout-label">Generated password</label>
           <div class="pwreset-readout">
-            <input type="text" id="pwreset-generated" readonly aria-label="Generated password" autocomplete="off" spellcheck="false">
+            <input type="text" name="password" id="pwreset-generated" readonly aria-label="Generated password" autocomplete="off" spellcheck="false">
             <button type="button" class="btn btn-sm" id="pwreset-copy" title="Copy to clipboard">Copy</button>
             <button type="button" class="btn btn-sm" id="pwreset-reroll" title="Generate a new one">Re-roll</button>
           </div>
-          <p class="muted smaller pwreset-hint">16 characters · uppercase, lowercase, digits, and symbols. The server generates a fresh value at submit time too — what you see here is just a preview.</p>
+          <p class="muted smaller pwreset-hint">16 characters · uppercase, lowercase, digits, and symbols. The value shown here is what gets saved when you submit.</p>
         </div>
 
         <div class="pwreset-pane" data-pwpane="custom" hidden>
@@ -87,10 +93,11 @@
   if (!modal) return;
   const form = document.getElementById('pwreset-form');
   const modeIn = document.getElementById('pwreset-mode');
+  const customToggle = document.getElementById('pwreset-custom-toggle');
   const usernameEl = document.getElementById('pwreset-username');
   const emailEl = document.getElementById('pwreset-email');
-  const tabs = modal.querySelectorAll('.pwreset-tab');
-  const panes = modal.querySelectorAll('[data-pwpane]');
+  const generatePane = modal.querySelector('[data-pwpane="generate"]');
+  const customPane = modal.querySelector('[data-pwpane="custom"]');
   const generated = document.getElementById('pwreset-generated');
   const copyBtn = document.getElementById('pwreset-copy');
   const reroll = document.getElementById('pwreset-reroll');
@@ -134,16 +141,19 @@
     } catch(_) {}
   }
 
+  // Mode = which input is the source of truth for the posted
+  // ``password`` value. Both fields share name="password"; whichever
+  // is inactive is ``disabled`` so the form only ever submits one
+  // value (browsers skip disabled controls on submit).
   function setMode(m){
     modeIn.value = m;
-    tabs.forEach(t => {
-      const on = t.dataset.pwtab === m;
-      t.classList.toggle('is-active', on);
-      t.setAttribute('aria-selected', on ? 'true' : 'false');
-    });
-    panes.forEach(p => { p.hidden = (p.dataset.pwpane !== m); });
-    customIn.disabled = (m !== 'custom');
-    if (m === 'custom') {
+    const isCustom = (m === 'custom');
+    customToggle.checked = isCustom;
+    generatePane.hidden = isCustom;
+    customPane.hidden = !isCustom;
+    generated.disabled = isCustom;
+    customIn.disabled = !isCustom;
+    if (isCustom) {
       setTimeout(() => customIn.focus(), 50);
       evaluateCustom();
     } else {
@@ -151,7 +161,9 @@
       saveOnlyBtn.disabled = false;
     }
   }
-  tabs.forEach(t => t.addEventListener('click', () => setMode(t.dataset.pwtab)));
+  customToggle.addEventListener('change', () => {
+    setMode(customToggle.checked ? 'custom' : 'generate');
+  });
 
   copyBtn.addEventListener('click', async () => {
     try {

@@ -11,60 +11,120 @@
    shared partial so the admin dashboard can re-use it. #}
 {% include "_online_widget.html" %}
 
-{# ---- Per-user detail card: picker + sessions + activity feed ------ #}
-{# Three previously-separate cards are merged into one so the
-   selected-account header stays anchored next to the data it
-   describes, and so vertical separators between subsections are
-   thin dividers rather than full card gaps. #}
-<section class="card user-log-detail">
-  <header class="user-log-detail-head">
-    <form method="get" action="{{ url_for('main.user_log') }}" class="user-log-picker-form">
-      <label class="user-log-picker-label">
-        <span>Account</span>
-        <select name="user_id" onchange="this.form.submit()">
-          <option value="all" {% if show_all %}selected{% endif %}>All users</option>
-          {% for u in users %}
-          <option value="{{ u.id }}" {% if not show_all and selected and u.id == selected.id %}selected{% endif %}>{{ u.username }} ({{ u.role.replace('_', ' ') }})</option>
-          {% endfor %}
-        </select>
-      </label>
-      <label class="user-log-picker-label">
-        <span>Activity window</span>
+{# Window-option lists — declared once so each card's <select> can
+   render the same set without duplicating the labels. #}
+{% set window_options = [(1, 'Last 24 hours'), (7, 'Last 7 days'), (30, 'Last 30 days'), (90, 'Last 90 days'), (365, 'Last year')] %}
+{% set scope_value = 'all' if show_all else selected.id %}
+
+{# ---- Account picker card ------------------------------------------ #}
+<section class="card user-log-account">
+  <form method="get" action="{{ url_for('main.user_log') }}" class="user-log-picker-form">
+    <label class="user-log-picker-label">
+      <span>Account</span>
+      <select name="user_id" onchange="this.form.submit()">
+        <option value="all" {% if show_all %}selected{% endif %}>All users</option>
+        {% for u in users %}
+        <option value="{{ u.id }}" {% if not show_all and selected and u.id == selected.id %}selected{% endif %}>{{ u.username }} ({{ u.role.replace('_', ' ') }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    {# Carry the other cards' window selections forward so changing
+       Account doesn't reset them. #}
+    <input type="hidden" name="days" value="{{ days }}">
+    <input type="hidden" name="sdays" value="{{ sdays }}">
+    <noscript><button class="btn btn-sm">Apply</button></noscript>
+  </form>
+  <div class="user-log-summary">
+    <div class="ulog-chip">
+      {% if show_all %}
+      <div class="avatar avatar-lg">★</div>
+      <div>
+        <div class="ulog-chip-name">All users</div>
+        <div class="muted small">{{ users|length }} account{{ '' if users|length == 1 else 's' }} · combined activity</div>
+      </div>
+      {% else %}
+      <div class="avatar avatar-lg">{{ selected.username[:1].upper() }}</div>
+      <div>
+        <div class="ulog-chip-name">{{ selected.username }}</div>
+        <div class="muted small">{{ selected.email or '—' }} · {{ selected.role.replace('_', ' ') }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{# ---- Activity card (collapsible — collapsed by default) ----------- #}
+{# Initial render is collapsed so there's no expand→collapse flash on
+   first paint. The collapse JS expands afterwards when localStorage
+   has an explicit "expanded" pin for this card. #}
+<section class="card user-log-card is-collapsed" data-collapse-key="ulog-activity">
+  <header class="user-log-card-head" role="button" tabindex="0" aria-expanded="false" aria-controls="ulog-activity-body" data-collapse-toggle>
+    <span class="user-log-chevron">{{ icon('chevron-down') }}</span>
+    <h2>Activity</h2>
+    <span class="muted smaller user-log-card-count" id="ulog-activity-count">
+      {{ events|length }}{% if total_events > events|length %} of {{ total_events }}{% endif %}
+      event{{ '' if total_events == 1 else 's' }}
+    </span>
+    <form method="get" action="{{ url_for('main.user_log') }}" class="user-log-card-form">
+      <input type="hidden" name="user_id" value="{{ scope_value }}">
+      <input type="hidden" name="sdays" value="{{ sdays }}">
+      <label class="user-log-window-label">
+        <span class="visually-hidden">Activity window</span>
         <select name="days" onchange="this.form.submit()">
-          {% for d, lbl in [(7, 'Last 7 days'), (30, 'Last 30 days'), (90, 'Last 90 days'), (365, 'Last year')] %}
+          {% for d, lbl in window_options %}
           <option value="{{ d }}" {% if days == d %}selected{% endif %}>{{ lbl }}</option>
           {% endfor %}
         </select>
       </label>
-      <noscript><button class="btn btn-sm">Apply</button></noscript>
     </form>
-    <div class="user-log-summary">
-      <div class="ulog-chip">
-        {% if show_all %}
-        <div class="avatar avatar-lg">★</div>
-        <div>
-          <div class="ulog-chip-name">All users</div>
-          <div class="muted small">{{ users|length }} account{{ '' if users|length == 1 else 's' }} · combined activity</div>
-        </div>
-        {% else %}
-        <div class="avatar avatar-lg">{{ selected.username[:1].upper() }}</div>
-        <div>
-          <div class="ulog-chip-name">{{ selected.username }}</div>
-          <div class="muted small">{{ selected.email or '—' }} · {{ selected.role.replace('_', ' ') }}</div>
-        </div>
-        {% endif %}
-      </div>
-    </div>
   </header>
-
-  <section class="user-log-detail-section">
-    <div class="user-log-detail-subhead">
-      <h3>Login sessions</h3>
-      <span class="muted smaller">Last 30 days · {{ sessions|length }} session{{ '' if sessions|length == 1 else 's' }}</span>
-    </div>
-    {% if not sessions %}
-    <p class="muted">No login activity in the last 30 days.</p>
+  <div class="user-log-card-body" id="ulog-activity-body" hidden>
+    {% if not events %}
+    <p class="muted">No activity recorded for {{ 'any user' if show_all else selected.username }} in this window. Activity logging started in v1.7.18 — events from before the upgrade aren't backfilled.</p>
     {% else %}
+    <ol class="ulog-feed" id="ulog-feed"
+        data-endpoint="{{ url_for('main.api_user_log_events') }}"
+        data-user-id="{{ scope_value }}"
+        data-days="{{ days }}"
+        data-offset="{{ events|length }}"
+        data-total="{{ total_events }}"
+        data-page-size="{{ page_size }}">
+      {% for ev in events %}
+        {% include "_ulog_event.html" %}
+      {% endfor %}
+    </ol>
+    <div class="ulog-feed-sentinel" id="ulog-feed-sentinel"
+         {% if total_events <= events|length %}hidden{% endif %}>
+      <span class="muted smaller ulog-feed-status">Loading more…</span>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+{# ---- Login sessions card (collapsible — collapsed by default) ----- #}
+<section class="card user-log-card is-collapsed" data-collapse-key="ulog-sessions">
+  <header class="user-log-card-head" role="button" tabindex="0" aria-expanded="false" aria-controls="ulog-sessions-body" data-collapse-toggle>
+    <span class="user-log-chevron">{{ icon('chevron-down') }}</span>
+    <h2>Login sessions</h2>
+    <span class="muted smaller user-log-card-count">{{ sessions|length }} session{{ '' if sessions|length == 1 else 's' }}</span>
+    <form method="get" action="{{ url_for('main.user_log') }}" class="user-log-card-form">
+      <input type="hidden" name="user_id" value="{{ scope_value }}">
+      <input type="hidden" name="days" value="{{ days }}">
+      <label class="user-log-window-label">
+        <span class="visually-hidden">Sessions window</span>
+        <select name="sdays" onchange="this.form.submit()">
+          {% for d, lbl in window_options %}
+          <option value="{{ d }}" {% if sdays == d %}selected{% endif %}>{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </form>
+  </header>
+  <div class="user-log-card-body" id="ulog-sessions-body" hidden>
+    {% if not sessions %}
+    <p class="muted">No login activity in this window.</p>
+    {% else %}
+    <div class="ulog-sessions-scroll">
     <table class="tbl ulog-sessions-tbl">
       <thead>
         <tr>
@@ -99,39 +159,148 @@
         {% endfor %}
       </tbody>
     </table>
-    {% endif %}
-  </section>
-
-  <section class="user-log-detail-section">
-    <div class="user-log-detail-subhead">
-      <h3>Activity</h3>
-      <span class="muted smaller">{{ events|length }} event{{ '' if events|length == 1 else 's' }}{% if events|length == 500 %} · capped{% endif %}</span>
     </div>
-    {% if not events %}
-    <p class="muted">No activity recorded for {{ 'any user' if show_all else selected.username }} in this window. Activity logging started in v1.7.18 — events from before the upgrade aren't backfilled.</p>
-    {% else %}
-    <ol class="ulog-feed">
-      {% for ev in events %}
-      <li class="ulog-event ulog-event-{{ ev.action.split('.')[0] }}">
-        <span class="ulog-event-icon">{{ icon(ev.icon) }}</span>
-        <div class="ulog-event-body">
-          <div class="ulog-event-title">
-            {% if show_all %}{% if ev.user_id %}<a class="ulog-event-user" href="{{ url_for('main.user_log') }}?user_id={{ ev.user_id }}">{{ ev.username or 'user #' ~ ev.user_id }}</a>{% else %}<span class="muted">deleted user</span>{% endif %} · {% endif %}
-            {{ ev.label }}
-          </div>
-          {% if ev.summary %}<div class="ulog-event-summary muted small">{{ ev.summary }}</div>{% endif %}
-          <div class="ulog-event-meta muted smaller">
-            {{ ev.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
-            {% if ev.ip %}· <span class="mono">{{ ev.ip }}</span>{% endif %}
-            {% if ev.entity_type and ev.entity_id %}· {{ ev.entity_type }} #{{ ev.entity_id }}{% endif %}
-          </div>
-        </div>
-      </li>
-      {% endfor %}
-    </ol>
     {% endif %}
-  </section>
+  </div>
 </section>
+
+<script>
+(function(){
+  // Collapse / expand for Activity + Login sessions cards. Both default
+  // to collapsed (matches the server-rendered ``is-collapsed`` state, so
+  // there's no expand→collapse flash on first paint); localStorage can
+  // pin a card open across reloads. Click target rules:
+  //   • Card is collapsed → a click anywhere on the card expands it.
+  //     The body is hidden so "anywhere" is just the head visually,
+  //     but the card-level handler keeps the affordance generous.
+  //   • Card is expanded  → only header clicks collapse it; body
+  //     clicks (links, table rows, sentinel) are left alone.
+  //   • Form controls (the window <select>, hidden inputs, etc.)
+  //     always pass through unchanged so changing the window doesn't
+  //     accidentally collapse the card.
+  document.querySelectorAll('.user-log-card[data-collapse-key]').forEach(card => {
+    const key = 'ulog-collapsed:' + card.dataset.collapseKey;
+    const head = card.querySelector('[data-collapse-toggle]');
+    const body = card.querySelector('.user-log-card-body');
+    if (!head || !body) return;
+
+    let collapsed = true;  // default
+    try {
+      const v = localStorage.getItem(key);
+      if (v === '0') collapsed = false;
+      else if (v === '1') collapsed = true;
+    } catch(_){}
+
+    function apply(){
+      card.classList.toggle('is-collapsed', collapsed);
+      head.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      body.hidden = collapsed;
+    }
+    apply();
+
+    function setCollapsed(next){
+      if (next === collapsed) return;
+      collapsed = next;
+      try { localStorage.setItem(key, collapsed ? '1' : '0'); } catch(_){}
+      apply();
+    }
+
+    card.addEventListener('click', (e) => {
+      // Form controls + links keep working untouched.
+      if (e.target.closest('form, select, input, textarea, a, button')) return;
+      if (collapsed) {
+        setCollapsed(false);
+      } else if (e.target.closest('.user-log-card-head')) {
+        setCollapsed(true);
+      }
+    });
+
+    // Keyboard: Enter/Space on the head toggles. role="button" on the
+    // head puts it in the tab order and announces the right semantic.
+    head.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        setCollapsed(!collapsed);
+      }
+    });
+  });
+})();
+</script>
+
+<script>
+(function(){
+  // Infinite-scroll loader for the activity feed. Watches a sentinel
+  // at the bottom of the list with IntersectionObserver and pulls one
+  // page at a time from /api/user-log-events. Stops when the API
+  // signals has_more=false. No-ops if the Activity card starts
+  // collapsed — IntersectionObserver naturally won't fire for a
+  // hidden sentinel; the next expand re-evaluates intersection.
+  const feed = document.getElementById('ulog-feed');
+  const sentinel = document.getElementById('ulog-feed-sentinel');
+  const countEl = document.getElementById('ulog-activity-count');
+  if (!feed || !sentinel) return;
+
+  const total = parseInt(feed.dataset.total || '0', 10);
+  if (parseInt(feed.dataset.offset || '0', 10) >= total) {
+    sentinel.hidden = true;
+    return;
+  }
+  const statusEl = sentinel.querySelector('.ulog-feed-status');
+
+  let inflight = false;
+  let done = false;
+
+  async function loadMore(){
+    if (done || inflight) return;
+    inflight = true;
+    if (statusEl) statusEl.textContent = 'Loading more…';
+    try {
+      const offset = parseInt(feed.dataset.offset || '0', 10);
+      const params = new URLSearchParams({
+        user_id: feed.dataset.userId,
+        days: feed.dataset.days,
+        offset: String(offset),
+      });
+      const r = await fetch(feed.dataset.endpoint + '?' + params.toString(),
+                            { credentials: 'same-origin' });
+      if (!r.ok) throw new Error('http ' + r.status);
+      const data = await r.json();
+      if (data.html) {
+        feed.insertAdjacentHTML('beforeend', data.html);
+      }
+      const newOffset = data.next_offset != null ? data.next_offset : (offset + (data.count || 0));
+      feed.dataset.offset = String(newOffset);
+      if (countEl) {
+        const tot = total;
+        countEl.textContent = newOffset + (tot > newOffset ? ' of ' + tot : '') +
+          ' event' + (tot === 1 ? '' : 's');
+      }
+      if (!data.has_more || (data.count || 0) === 0) {
+        done = true;
+        sentinel.hidden = true;
+      }
+    } catch (e) {
+      if (statusEl) statusEl.textContent = 'Couldn’t load more — scroll to retry.';
+    } finally {
+      inflight = false;
+    }
+  }
+
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(entries => {
+      for (const ent of entries) {
+        if (ent.isIntersecting) loadMore();
+      }
+    }, { rootMargin: '600px 0px' });
+    io.observe(sentinel);
+  } else {
+    window.addEventListener('scroll', () => {
+      const r = sentinel.getBoundingClientRect();
+      if (r.top < window.innerHeight + 600) loadMore();
+    }, { passive: true });
+  }
+})();
+</script>
 
 {% endif %}
 
