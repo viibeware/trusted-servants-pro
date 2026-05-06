@@ -134,27 +134,40 @@
      SCHEDULE · {site title}" replaces the previous big serif H1. The
      subheading (admin-tunable) reads as the document's working title.
      Right side stacks meta lines (count, date, website). */
+  /* Header band — uses CSS table layout instead of flex because
+     WeasyPrint's flex implementation in the 62.x line doesn't fully
+     honour `gap` or `flex: 1` shrink-to-fit, which left the logo
+     pressed against the eyebrow text and the meta column squeezed
+     against the brand block in the rendered PDF. CSS tables behave
+     identically in browsers and WeasyPrint, so the on-screen view
+     and the PDF stay in sync. */
   .pl-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1.5rem;
+    display: table;
+    width: 100%;
     padding-bottom: 0.45rem;
     border-bottom: 3px solid var(--accent);
     margin-bottom: 0.5rem;
   }
-  .pl-head-brand {
-    display: flex;
-    align-items: center;
-    gap: 0.875rem;
-    min-width: 0;
-    flex: 1;
+  .pl-head > * {
+    display: table-cell;
+    vertical-align: middle;
   }
+  .pl-head-brand {
+    display: table;
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .pl-head-brand-cell {
+    display: table-cell;
+    vertical-align: middle;
+  }
+  .pl-head-brand-cell-logo { width: 1.35in; padding-right: 0.875rem; }
+  .pl-head-brand-cell-logo:empty { width: 0; padding-right: 0; }
   .pl-head-brand img {
     max-height: 0.71in;
     max-width: 1.35in;
     object-fit: contain;
-    flex-shrink: 0;
+    display: block;
   }
   .pl-head-text { min-width: 0; }
   .pl-head-text .pl-eyebrow {
@@ -190,8 +203,10 @@
     font-size: 8.25pt;
     color: #555;
     line-height: 1.5;
-    flex-shrink: 0;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    padding-left: 1.5rem;
+    width: 1%;  /* shrink-to-fit in the table-cell context */
   }
   .pl-head-meta .pl-meta-strong { color: #0a0a0a; font-weight: 700; }
   .pl-head-meta .pl-meta-website {
@@ -256,27 +271,33 @@
     page-break-inside: avoid;
   }
   .pl-mtg:last-child { border-bottom: 0; }
+  /* Meeting row 1 — same WeasyPrint flex caveat as the header band.
+     Switched to display: table so the title fills the row and the
+     time stays anchored to the right edge in both browser and PDF. */
   .pl-mtg-row1 {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
+    display: table;
+    width: 100%;
     margin: 0;
   }
   .pl-mtg-name {
+    display: table-cell;
+    vertical-align: baseline;
     font-weight: 700;
     font-size: 9.5pt;
     color: #0a0a0a;
     line-height: 1.25;
-    flex: 1;
-    min-width: 0;
     word-wrap: break-word;
+    padding-right: 0.5rem;
   }
   .pl-mtg-time {
+    display: table-cell;
+    vertical-align: baseline;
+    text-align: right;
+    width: 1%;  /* shrink-to-fit so the title takes the rest */
     font-weight: 700;
     font-size: 9pt;
     color: var(--accent);
     white-space: nowrap;
-    flex-shrink: 0;
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.005em;
   }
@@ -354,9 +375,11 @@
   <header class="pl-head">
     <div class="pl-head-brand">
       {% if site and site.frontend_logo_filename %}
-        <img src="{{ url_for('public.site_frontend_logo') }}" alt="{{ frontend_title }}">
+        <div class="pl-head-brand-cell pl-head-brand-cell-logo">
+          <img src="{{ url_for('public.site_frontend_logo') }}" alt="{{ frontend_title }}">
+        </div>
       {% endif %}
-      <div class="pl-head-text">
+      <div class="pl-head-brand-cell pl-head-text">
         <p class="pl-eyebrow">Meeting Schedule<span class="pl-eyebrow-sep">·</span>{{ frontend_title }}</p>
         {% if printlist_subheading %}
           <p class="pl-subheading">{{ printlist_subheading }}</p>
