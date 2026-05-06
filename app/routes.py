@@ -2069,6 +2069,7 @@ def _frontend_export_payload():
                     "custom_color": l.custom_color,
                     "button_style": l.button_style,
                     "open_in_new_tab": bool(l.open_in_new_tab),
+                    "form_trigger": l.form_trigger,
                 })
             cols.append({
                 "position": c.position, "heading": c.heading, "links": links,
@@ -2078,6 +2079,7 @@ def _frontend_export_payload():
             "line1": it.line1, "line2": it.line2, "url": it.url,
             "has_megamenu": bool(it.has_megamenu),
             "open_in_new_tab": bool(it.open_in_new_tab),
+            "form_trigger": it.form_trigger,
             "columns": cols,
         })
 
@@ -2514,6 +2516,7 @@ def data_frontend_import():
                 url=ni.get("url"),
                 has_megamenu=bool(ni.get("has_megamenu")),
                 open_in_new_tab=bool(ni.get("open_in_new_tab")),
+                form_trigger=(ni.get("form_trigger") or None),
             )
             db.session.add(item)
             db.session.flush()
@@ -2558,6 +2561,7 @@ def data_frontend_import():
                         custom_color=_sanitize_icon_color(nl.get("custom_color")),
                         button_style=(nl.get("button_style") or "pill"),
                         open_in_new_tab=bool(nl.get("open_in_new_tab")),
+                        form_trigger=(nl.get("form_trigger") or None),
                     )
                     db.session.add(link)
 
@@ -3344,11 +3348,18 @@ def frontend_nav_appearance_save():
 
 
 def _apply_nav_item_form(item, form):
+    from .forms_registry import form_keys as _form_keys
     style = (form.get("style") or "text").strip()
     item.style = style if style in ("text", "button", "button-rounded", "two-line") else "text"
     item.url = (form.get("url") or "").strip() or None
     item.has_megamenu = form.get("has_megamenu") == "1"
     item.open_in_new_tab = form.get("open_in_new_tab") == "1"
+    # form_trigger — when set to a registered key, the rendered link
+    # opens that form's modal instead of (or in addition to) navigating.
+    # Validate against the live registry so a stale value can't sneak
+    # through if a form was retired.
+    trig = (form.get("form_trigger") or "").strip()
+    item.form_trigger = trig if trig in _form_keys() else None
     if item.style == "two-line":
         item.line1 = (form.get("line1") or "").strip() or None
         item.line2 = (form.get("line2") or "").strip() or None
@@ -3416,8 +3427,10 @@ def frontend_nav_item_reorder():
 @bp.route("/frontend/nav-item/<int:nid>/megamenu")
 @admin_required
 def frontend_nav_megamenu(nid):
+    from .forms_registry import all_forms
     item = db.session.get(FrontendNavItem, nid) or abort(404)
-    return render_template("frontend_nav_megamenu.html", item=item, site=_get_site_setting())
+    return render_template("frontend_nav_megamenu.html", item=item, site=_get_site_setting(),
+                           form_registry_all=all_forms())
 
 
 # ---- Columns ----
@@ -3583,6 +3596,15 @@ def _apply_nav_link_form(link, form):
         link.button_style = bs if bs in _NAV_BUTTON_STYLES else "pill"
     else:
         link.button_style = "pill"
+    # form_trigger applies to anything that renders as a clickable
+    # element on the public site (link / button). Other kinds keep
+    # NULL — a "title" or "section" divider can't be clicked anyway.
+    if link.kind in ("link", "button"):
+        from .forms_registry import form_keys as _form_keys
+        trig = (form.get("form_trigger") or "").strip()
+        link.form_trigger = trig if trig in _form_keys() else None
+    else:
+        link.form_trigger = None
 
 
 @bp.route("/frontend/nav-column/<int:cid>/link/new", methods=["POST"])
@@ -4033,6 +4055,45 @@ def frontend_fonts_icons():
                            site=s, custom_icons=custom_icons, custom_fonts=custom_fonts)
 
 
+@bp.route("/frontend/forms")
+@admin_required
+def frontend_forms():
+    """Forms index — lists every registered public form. The list is
+    populated from ``app/forms_registry.py``; future forms join the
+    list automatically by adding an entry there."""
+    from .forms_registry import all_forms
+    return render_template("frontend_forms.html",
+                           site=_get_site_setting(),
+                           forms=all_forms())
+
+
+@bp.route("/frontend/forms/submission", methods=["GET", "POST"])
+@admin_required
+def frontend_form_submission():
+    """Settings page for the public Submission Form. GET renders the
+    settings form; POST persists every column on SiteSetting that
+    drives the form (toggle, copy, success message, allowed types,
+    submit button label, recipients)."""
+    s = _get_site_setting()
+    if request.method == "POST":
+        s.submission_form_enabled = request.form.get("submission_form_enabled") == "1"
+        s.submission_to = (request.form.get("submission_to") or "").strip()[:500] or None
+        s.submission_form_heading = (request.form.get("submission_form_heading") or "").strip()[:200] or None
+        s.submission_form_subheading = (request.form.get("submission_form_subheading") or "").strip()[:500] or None
+        s.submission_form_modal_heading = (request.form.get("submission_form_modal_heading") or "").strip()[:200] or None
+        s.submission_form_intro = (request.form.get("submission_form_intro") or "").strip() or None
+        s.submission_form_success_message = (request.form.get("submission_form_success_message") or "").strip()[:500] or None
+        allowed = (request.form.get("submission_form_allowed_types") or "both").strip().lower()
+        if allowed not in ("both", "announcements", "events"):
+            allowed = "both"
+        s.submission_form_allowed_types = allowed
+        s.submission_form_submit_label = (request.form.get("submission_form_submit_label") or "").strip()[:100] or None
+        db.session.commit()
+        flash("Submission form settings saved", "success")
+        return redirect(url_for("main.frontend_form_submission"))
+    return render_template("frontend_form_submission.html", site=s)
+
+
 @bp.route("/frontend/404")
 @admin_required
 def frontend_404():
@@ -4213,11 +4274,13 @@ def frontend_header():
 @admin_required
 def frontend_navigation():
     from .frontend import MEGAMENU_TEMPLATES
+    from .forms_registry import all_forms
     s = _get_site_setting()
     nav_items = FrontendNavItem.query.order_by(FrontendNavItem.position,
                                                FrontendNavItem.id).all()
     return render_template("frontend_navigation.html", site=s, nav_items=nav_items,
-                           megamenu_templates=MEGAMENU_TEMPLATES)
+                           megamenu_templates=MEGAMENU_TEMPLATES,
+                           form_registry_all=all_forms())
 
 
 @bp.route("/frontend/megamenu-template", methods=["POST"])

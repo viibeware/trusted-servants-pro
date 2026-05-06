@@ -45,7 +45,8 @@
                      data-megamenu-search autocomplete="off">
             </div>
           {% elif _k == 'button' %}
-            <a href="{{ link.url or '#' }}"{{ _tgt|safe }}
+            {%- set _ft = ' data-fe-form-trigger="' ~ link.form_trigger ~ '"' if link.form_trigger else '' -%}
+            <a href="{{ link.url or '#' }}"{{ _tgt|safe }}{{ _ft|safe }}
                class="fe-megamenu-block-btn fe-megamenu-block-btn-{{ link.button_style or 'pill' }}"
                style="--i: {{ _i }};">
               {% if link.icon_before %}<span class="fe-megamenu-icon"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before) }}</span>{% endif %}
@@ -62,7 +63,8 @@
               {% set _link_cls = _link_cls ~ ' fe-megamenu-link-colored' %}
               {% set _link_style = _link_style ~ ' --link-color-light: ' ~ link.custom_color ~ '; --link-color-dark: ' ~ (link.custom_color | dark_variant) ~ ';' %}
             {% endif %}
-            <a href="{{ link.url or '#' }}"{{ _tgt|safe }} class="{{ _link_cls }}" style="{{ _link_style }}">
+            {%- set _ft = ' data-fe-form-trigger="' ~ link.form_trigger ~ '"' if link.form_trigger else '' -%}
+            <a href="{{ link.url or '#' }}"{{ _tgt|safe }}{{ _ft|safe }} class="{{ _link_cls }}" style="{{ _link_style }}">
               {% if link.icon_before %}<span class="fe-megamenu-icon fe-megamenu-icon-before"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before) }}</span>{% endif %}
               <span class="fe-megamenu-label">{{ link.label }}</span>
               {% if link.icon_after %}<span class="fe-megamenu-icon fe-megamenu-icon-after"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>{% endif %}

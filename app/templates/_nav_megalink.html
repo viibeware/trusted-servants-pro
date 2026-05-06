@@ -134,6 +134,22 @@
             <span>Open in new tab</span>
           </label>
         </div>
+        {# Form-trigger picker — when set, clicking this link opens
+           the matching form modal instead of navigating. The URL
+           field above stays as a no-JS / right-click fallback. #}
+        {% set _forms = (form_registry_all if form_registry_all is defined else []) %}
+        <div class="nav-megalink-field nav-megalink-field-form-trigger">
+          <span class="nav-megalink-field-lbl">Triggers form</span>
+          <select data-block-field="form_trigger">
+            <option value="">— None —</option>
+            {% for f in _forms %}
+            <option value="{{ f.key }}"
+                    {% if link.form_trigger == f.key %}selected{% endif %}>
+              {{ f.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
       </div>
     {% endif %}
   </div>

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block heading %}Submission Form{% endblock %}
+{% block heading_help %}Configures the public submission form at <code>/submissionform</code> and its sibling site-wide modal. Visitor submissions land in the holding tank on the Announcements &amp; Events admin page; the recipients below also get an email notification.{% endblock %}
+{% block top_actions %}
+<a class="btn" href="{{ url_for('main.frontend_forms') }}">← All forms</a>
+<a class="btn" href="{{ url_for('frontend.submission_form') }}" target="_blank" rel="noopener">Preview /submissionform ↗</a>
+<a class="btn" href="{{ url_for('main.posts', show='pending') }}">Holding tank</a>
+{% endblock %}
+{% block content %}
+<div class="fe-admin-layout">
+  {% include "_frontend_subnav.html" %}
+  <div class="fe-admin-main">
+
+    <form class="form" method="post" action="{{ url_for('main.frontend_form_submission') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Visibility</h2>
+          <span class="muted smaller">Off-switch for the form site-wide. When off, the standalone page redirects and any modal trigger is a no-op (the link still navigates to its fallback URL).</span>
+        </div>
+        <li class="special-page-row" style="list-style:none; padding: 1rem;">
+          <div class="special-page-info">
+            <div class="u-name">Submission form enabled</div>
+            <p class="muted small">Hard off-switch. Settings below are preserved when off.</p>
+          </div>
+          <label class="mode-toggle">
+            <input type="checkbox" name="submission_form_enabled" value="1"
+                   {% if site.submission_form_enabled %}checked{% endif %}>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+          </label>
+        </li>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Recipients</h2>
+          <span class="muted smaller">Comma-separated list of admin email addresses. Falls back to the Access Request recipients when blank, so installs that already configured admin notifications get submissions for free.</span>
+        </div>
+        <label>Email addresses
+          <input type="text" name="submission_to" maxlength="500"
+                 value="{{ site.submission_to or '' }}"
+                 placeholder="admin@example.com, second@example.com">
+        </label>
+        <p class="muted small">Configured fallback: <code>{{ site.access_request_to or '(none)' }}</code></p>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Page content</h2>
+          <span class="muted smaller">Copy shown on the standalone <code>/submissionform</code> page. Each field has a baked default — leave a field blank to use it.</span>
+        </div>
+        <label>Page heading
+          <input type="text" name="submission_form_heading" maxlength="200"
+                 value="{{ site.submission_form_heading or '' }}"
+                 placeholder="Submit an event or announcement">
+        </label>
+        <label>Page subheading
+          <textarea name="submission_form_subheading" rows="2" maxlength="500"
+                    placeholder="Fill out the form below and an admin will review your submission before publishing it. Required fields are marked *.">{{ site.submission_form_subheading or '' }}</textarea>
+        </label>
+        <label>Optional intro <span class="muted smaller">(Markdown supported, shown above the form fields)</span>
+          <textarea name="submission_form_intro" rows="4"
+                    placeholder="**Tip:** include the meeting name, location, and a contact email so the admin can follow up quickly.">{{ site.submission_form_intro or '' }}</textarea>
+        </label>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Modal content</h2>
+          <span class="muted smaller">Heading shown when the form opens as a popup from a nav link or button. Defaults to the page heading when blank.</span>
+        </div>
+        <label>Modal heading
+          <input type="text" name="submission_form_modal_heading" maxlength="200"
+                 value="{{ site.submission_form_modal_heading or '' }}"
+                 placeholder="Submit an event or announcement">
+        </label>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Form behaviour</h2>
+          <span class="muted smaller">What the visitor sees and can pick from.</span>
+        </div>
+        <fieldset class="fieldset">
+          <legend>What can be submitted</legend>
+          <label class="check">
+            <input type="radio" name="submission_form_allowed_types" value="both"
+                   {% if (site.submission_form_allowed_types or 'both') == 'both' %}checked{% endif %}>
+            <span><b>Announcements and events</b> — visitors pick which they're submitting.</span>
+          </label>
+          <label class="check">
+            <input type="radio" name="submission_form_allowed_types" value="announcements"
+                   {% if site.submission_form_allowed_types == 'announcements' %}checked{% endif %}>
+            <span><b>Announcements only</b> — type picker hidden; event-only fields collapsed.</span>
+          </label>
+          <label class="check">
+            <input type="radio" name="submission_form_allowed_types" value="events"
+                   {% if site.submission_form_allowed_types == 'events' %}checked{% endif %}>
+            <span><b>Events only</b> — type picker hidden; event fields always shown.</span>
+          </label>
+        </fieldset>
+        <label>Submit button label
+          <input type="text" name="submission_form_submit_label" maxlength="100"
+                 value="{{ site.submission_form_submit_label or '' }}"
+                 placeholder="Submit for review">
+        </label>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Confirmation</h2>
+          <span class="muted smaller">Shown to the visitor after a successful submission.</span>
+        </div>
+        <label>Success message
+          <textarea name="submission_form_success_message" rows="2" maxlength="500"
+                    placeholder="Thank you — your submission has been received and will be reviewed before publishing.">{{ site.submission_form_success_message or '' }}</textarea>
+        </label>
+      </section>
+
+      <div class="form-actions">
+        <button class="btn btn-primary">Save submission form</button>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endblock %}

@@ -80,3 +80,21 @@
     <span class="mode-track"><span class="mode-thumb"></span></span>
   </label>
 </li>
+
+{# Form-trigger picker. When set, clicking this nav item opens the
+   matching form modal instead of (or in addition to) navigating to
+   the URL. The list is populated from app/forms_registry.py — see
+   the Forms admin page for what each entry does. #}
+{% set _forms = (form_registry_all if form_registry_all is defined else []) %}
+<label>Triggers form <span class="muted small">(opens as a modal on click)</span>
+  <select name="form_trigger">
+    <option value="">— No form (navigate to URL) —</option>
+    {% for f in _forms %}
+    <option value="{{ f.key }}"
+            {% if _item is defined and _item and _item.form_trigger == f.key %}selected{% endif %}>
+      {{ f.name }}
+    </option>
+    {% endfor %}
+  </select>
+  <span class="muted smaller">Pick a form on the <a href="{{ url_for('main.frontend_forms') }}">Forms admin page</a>. The URL above stays as a no-JS / right-click fallback.</span>
+</label>

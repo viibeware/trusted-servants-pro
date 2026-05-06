@@ -1134,11 +1134,17 @@ def submission_form():
     an event or announcement for admin review. Same form body the
     global modal uses — both POST to ``/submissionform/submit`` so
     the two contexts always stay in sync.
+
+    Honours the ``submission_form_enabled`` SiteSetting toggle: when
+    off, the page returns a 404 (matches what other admin-controlled
+    public surfaces do when their feature is disabled).
     """
     site = _site()
     gate = _frontend_gate(site)
     if gate is not None:
         return gate
+    if not site or not getattr(site, "submission_form_enabled", True):
+        abort(404)
     ctx = _frontend_context(site)
     return render_template("frontend/submission.html", **ctx)
 
@@ -1166,11 +1172,24 @@ def submission_submit():
         return gate
     if not site or not getattr(site, "posts_enabled", True):
         abort(404)
+    if not getattr(site, "submission_form_enabled", True):
+        abort(404)
+
+    # Allowed-types gate. When the admin restricted the form to one
+    # of announcements / events, force-set the matching flag and clear
+    # the other so a tampered POST can't smuggle the disallowed type
+    # through.
+    allowed = (getattr(site, "submission_form_allowed_types", None) or "both").lower()
 
     f = request.form
     title = (f.get("title") or "").strip()[:255]
-    is_announcement = f.get("is_announcement") == "1"
-    is_event = f.get("is_event") == "1"
+    if allowed == "announcements":
+        is_announcement, is_event = True, False
+    elif allowed == "events":
+        is_announcement, is_event = False, True
+    else:
+        is_announcement = f.get("is_announcement") == "1"
+        is_event = f.get("is_event") == "1"
     submitter_name = (f.get("submitter_name") or "").strip()[:120]
     submitter_email = (f.get("submitter_email") or "").strip()[:255]
 
@@ -1300,7 +1319,9 @@ def submission_submit():
         # is already persisted; the admin can find it in the holding
         # tank regardless of whether the notification email landed.
 
-    flash("Thank you — your submission has been received and will be reviewed before publishing.", "success")
+    success_msg = (getattr(site, "submission_form_success_message", None)
+                   or "Thank you — your submission has been received and will be reviewed before publishing.")
+    flash(success_msg, "success")
     return redirect(url_for("frontend.submission_form"))
 
 

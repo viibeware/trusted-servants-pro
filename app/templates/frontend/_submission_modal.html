@@ -1,16 +1,22 @@
 {# Frontend-wide submission modal — opens via any element carrying
-   the ``data-fe-submission-trigger`` attribute. Markup is included
-   once at the bottom of frontend/base.html so it's available on
-   every public page. The modal wraps the same form body the
-   standalone /submissionform page uses, so the two stay in sync. #}
-<div class="fe-submission-modal" data-fe-submission-modal hidden aria-hidden="true">
+   either the legacy ``data-fe-submission-trigger`` attribute OR the
+   generic ``data-fe-form-trigger="submission"`` attribute (which the
+   nav admin emits when an admin points a link at this form). Markup
+   is included once at the bottom of frontend/base.html so it's
+   available on every public page. The modal wraps the same form body
+   the standalone /submissionform page uses, so the two stay in sync. #}
+{%- set _modal_heading = (site.submission_form_modal_heading if site else None)
+    or (site.submission_form_heading if site else None)
+    or 'Submit an event or announcement' -%}
+<div class="fe-submission-modal" data-fe-submission-modal data-fe-form-modal="submission"
+     hidden aria-hidden="true">
   <div class="fe-submission-modal-backdrop" data-fe-submission-close></div>
   <div class="fe-submission-modal-panel" role="dialog" aria-modal="true"
        aria-labelledby="fe-submission-modal-title">
     <button type="button" class="fe-submission-modal-close" data-fe-submission-close
             aria-label="Close">{{ icon('x') }}</button>
     <header class="fe-submission-modal-head">
-      <h2 id="fe-submission-modal-title">Submit an event or announcement</h2>
+      <h2 id="fe-submission-modal-title">{{ _modal_heading }}</h2>
       <p class="muted small">An admin will review before publishing.</p>
     </header>
     <div class="fe-submission-modal-body">

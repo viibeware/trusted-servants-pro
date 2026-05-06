@@ -472,40 +472,90 @@
 {% endif %}
 
 <script>
-// ── FRONTEND-WIDE SUBMISSION MODAL ─────────────────────────────────
-// Any element with data-fe-submission-trigger opens the modal. The
-// event-fields fieldset reveals when the visitor checks "Event" —
-// matches the standalone page's behaviour so the two contexts feel
-// identical. Esc + backdrop click + close button all dismiss.
-(function feFrontendSubmission(){
-  var modal = document.querySelector('[data-fe-submission-modal]');
-  if (!modal) return;
-  var triggers = document.querySelectorAll('[data-fe-submission-trigger]');
-  var closers = modal.querySelectorAll('[data-fe-submission-close]');
+// ── FRONTEND-WIDE FORM-TRIGGER DISPATCHER ─────────────────────────
+// Two trigger conventions, both supported:
+//   data-fe-form-trigger="<key>"     — generic, set by the nav
+//                                       admin's "Triggers form" picker
+//   data-fe-submission-trigger       — legacy attribute kept for any
+//                                       hand-coded buttons admins
+//                                       embedded before the registry
+//                                       existed
+// Both resolve to the modal whose data-fe-form-modal="<key>"
+// matches. Esc + backdrop + close button all dismiss the active
+// modal. Adding a new form is just: include its modal partial in
+// frontend/base.html, give the modal a data-fe-form-modal attr,
+// and the dispatcher picks it up automatically.
+(function feFrontendFormDispatch(){
+  var body = document.body;
+  var modals = document.querySelectorAll('[data-fe-form-modal]');
+  if (!modals.length) return;
 
-  function open() {
+  function modalForKey(key) {
+    if (!key) return null;
+    return document.querySelector('[data-fe-form-modal="' + key + '"]');
+  }
+
+  function openModal(modal) {
+    if (!modal) return;
     modal.hidden = false;
     modal.setAttribute('aria-hidden', 'false');
-    document.body.classList.add('fe-submission-open');
-    var first = modal.querySelector('input[name="title"]');
-    if (first) requestAnimationFrame(function () { first.focus(); });
+    body.classList.add('fe-submission-open');
+    // Best-effort autofocus on the first text input in the modal so
+    // keyboard users land on a fillable field.
+    var first = modal.querySelector('input[type="text"], input:not([type]), textarea');
+    if (first) requestAnimationFrame(function () {
+      try { first.focus(); } catch (_) {}
+    });
   }
-  function close() {
+
+  function closeModal(modal) {
+    if (!modal) return;
     modal.hidden = true;
     modal.setAttribute('aria-hidden', 'true');
-    document.body.classList.remove('fe-submission-open');
+    // Only release the body lock when no modals remain open.
+    var anyOpen = false;
+    modals.forEach(function (m) { if (!m.hidden) anyOpen = true; });
+    if (!anyOpen) body.classList.remove('fe-submission-open');
   }
 
-  triggers.forEach(function (el) {
-    el.addEventListener('click', function (e) { e.preventDefault(); open(); });
-  });
-  closers.forEach(function (el) { el.addEventListener('click', close); });
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && !modal.hidden) { e.preventDefault(); close(); }
+  // Unified click handler: any element with data-fe-form-trigger or
+  // (legacy) data-fe-submission-trigger opens the matching modal.
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest('[data-fe-form-trigger], [data-fe-submission-trigger]');
+    if (!el) return;
+    var key = el.getAttribute('data-fe-form-trigger')
+              || (el.hasAttribute('data-fe-submission-trigger') ? 'submission' : '');
+    var modal = modalForKey(key);
+    if (!modal) return;  // unregistered key — let the link navigate
+    e.preventDefault();
+    openModal(modal);
   });
 
-  // Event-fields reveal — same logic as the standalone page.
-  modal.querySelectorAll('[data-submission-form]').forEach(function (form) {
+  // Per-modal close affordances. Each modal's close buttons /
+  // backdrop carry data-fe-{ key }-close OR a generic
+  // data-fe-modal-close attribute. We bind both for back-compat.
+  modals.forEach(function (modal) {
+    var closers = modal.querySelectorAll(
+      '[data-fe-submission-close], [data-fe-modal-close]'
+    );
+    closers.forEach(function (el) {
+      el.addEventListener('click', function () { closeModal(modal); });
+    });
+  });
+
+  // Esc closes whichever modal is currently open.
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    modals.forEach(function (m) {
+      if (!m.hidden) { e.preventDefault(); closeModal(m); }
+    });
+  });
+
+  // ── Submission-form-specific behaviour ─────────────────────────
+  // Event-fields fieldset reveals when "Event" is checked. Lives
+  // inside the dispatcher block because it's still scoped to forms
+  // that ship with the standard submission modal.
+  document.querySelectorAll('[data-submission-form]').forEach(function (form) {
     var eventBox = form.querySelector('input[name="is_event"]');
     var fields = form.querySelector('[data-submission-event-fields]');
     if (!eventBox || !fields) return;

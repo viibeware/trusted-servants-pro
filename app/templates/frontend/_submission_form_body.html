@@ -7,9 +7,21 @@
    is checked).
 
    Caller passes ``form_id`` so multiple instances on the same page
-   (unlikely but defensive) don't collide on element IDs. #}
+   (unlikely but defensive) don't collide on element IDs.
+
+   Admin-tunable copy + behaviour come from the SiteSetting
+   ``submission_form_*`` columns (configured on /tspro/frontend/forms/
+   submission). Each setting falls back to the baked default below
+   when blank. ``allowed_types`` decides whether the type picker
+   shows ('both') or whether the form is locked to a single type
+   ('announcements' / 'events'). #}
 {%- set _site_title = (site.frontend_title if site else None) or 'Trusted Servants' -%}
 {%- set _form_id = form_id or 'submission-form' -%}
+{%- set _allowed = (site.submission_form_allowed_types if site else None) or 'both' -%}
+{%- set _show_picker = _allowed == 'both' -%}
+{%- set _allow_announcement = _allowed in ('both', 'announcements') -%}
+{%- set _allow_event = _allowed in ('both', 'events') -%}
+{%- set _submit_label = (site.submission_form_submit_label if site else None) or 'Submit for review' -%}
 <form method="post" action="{{ url_for('frontend.submission_submit') }}"
       class="form fe-submission-form"
       data-submission-form
@@ -17,6 +29,7 @@
       id="{{ _form_id }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
+  {% if _show_picker %}
   <fieldset class="fe-submission-types">
     <legend>What are you submitting? <span class="req">*</span></legend>
     <label class="check">
@@ -28,6 +41,18 @@
       <span>Event <span class="muted smaller">— a dated happening with a start time</span></span>
     </label>
   </fieldset>
+  {% else %}
+    {# Single-type mode — the admin restricted the form to one of
+       Announcements / Events. Hidden input forces the type so the
+       submit handler still sees the flag, while the visitor doesn't
+       need to think about which checkbox to tick. #}
+    {% if _allow_announcement %}
+      <input type="hidden" name="is_announcement" value="1">
+    {% endif %}
+    {% if _allow_event %}
+      <input type="hidden" name="is_event" value="1">
+    {% endif %}
+  {% endif %}
 
   <label>
     <span>Title <span class="req">*</span></span>
@@ -49,7 +74,13 @@
     <input name="featured_image" type="file" accept="image/jpeg,image/png,image/gif,image/webp">
   </label>
 
-  <fieldset class="fe-submission-event-fields" data-submission-event-fields hidden>
+  {# Event-only fields. When the form is locked to events-only mode
+     the JS toggle is moot — they always show. When the picker is on,
+     they collapse via the [hidden] attribute and JS toggles in
+     response to the Event checkbox changing. #}
+  <fieldset class="fe-submission-event-fields" data-submission-event-fields
+            {% if _show_picker %}hidden{% endif %}
+            {% if not _allow_event %}hidden disabled{% endif %}>
     <legend>Event details</legend>
     <div class="fe-submission-grid-2">
       <label>
@@ -151,7 +182,7 @@
   {% endif %}
 
   <div class="fe-submission-actions">
-    <button class="btn btn-primary fe-submission-submit" type="submit">Submit for review</button>
+    <button class="btn btn-primary fe-submission-submit" type="submit">{{ _submit_label }}</button>
   </div>
 
   <p class="muted smaller fe-submission-fineprint">Submissions are held for review by an admin before being published. We don't publicly display your contact info — those fields are only used to follow up about your submission.</p>

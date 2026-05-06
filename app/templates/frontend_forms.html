@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block heading %}Forms{% endblock %}
+{% block heading_help %}Public-facing forms that visitors can fill out. Each form has its own settings page; admins can also point any nav link or button at a form so it opens as a modal anywhere on the public site.{% endblock %}
+{% block top_actions %}
+<a class="btn" href="{{ url_for('frontend.index') }}" target="_blank" rel="noopener">View frontend ↗</a>
+{% endblock %}
+{% block content %}
+<div class="fe-admin-layout">
+  {% include "_frontend_subnav.html" %}
+  <div class="fe-admin-main">
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Available forms</h2>
+        <span class="muted smaller">Every form registered with the site appears below. Click into one to configure its content, recipients, and behaviour. Adding a new form to the codebase automatically populates this list and the navigation builder's "Triggers form" picker.</span>
+      </div>
+
+      <ul class="fe-forms-list">
+        {% for f in forms %}
+        <li class="fe-forms-card">
+          <div class="fe-forms-card-icon" aria-hidden="true">{{ icon(f.icon or 'send') }}</div>
+          <div class="fe-forms-card-body">
+            <h3 class="fe-forms-card-name">{{ f.name }}</h3>
+            <p class="fe-forms-card-desc muted small">{{ f.description }}</p>
+            <p class="fe-forms-card-meta muted smaller">
+              <code>key: {{ f.key }}</code>
+              {% if f.public_url_endpoint %}
+                · <a href="{{ url_for(f.public_url_endpoint) }}" target="_blank" rel="noopener">Preview public page ↗</a>
+              {% endif %}
+            </p>
+          </div>
+          <div class="fe-forms-card-actions">
+            {% if f.settings_endpoint %}
+            <a class="btn btn-primary" href="{{ url_for(f.settings_endpoint) }}">Configure</a>
+            {% endif %}
+          </div>
+        </li>
+        {% else %}
+        <li class="muted">No forms registered yet.</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Triggering a form from a nav link</h2>
+        <span class="muted smaller">Pop a form modal from anywhere on the public site without writing code.</span>
+      </div>
+      <p>
+        Open the <a href="{{ url_for('main.frontend_navigation') }}">Navigation</a> admin and edit any top-level item or mega-menu link. Each link's edit panel includes a <strong>Triggers form</strong> dropdown that lists every form on this page. Pick one — the rendered link still carries its label / icon / button style, but clicking it opens the matching form modal instead of navigating to the URL. The link's URL stays as a no-JS / right-click fallback, so visitors with JavaScript disabled still reach the standalone form page.
+      </p>
+    </section>
+
+  </div>
+</div>
+{% endblock %}

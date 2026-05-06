@@ -583,6 +583,22 @@ class SiteSetting(db.Model):
     # access_request_to when blank so installs that already configured
     # admin notifications get submissions for free.
     submission_to = db.Column(db.String(500))
+    # Public submission form configuration. Settings live alongside
+    # the recipient list above so the Forms admin page can read all
+    # submission-form columns from one row. All admin-tunable copy
+    # is admin-only — visitors only see what survives the renderer.
+    submission_form_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    submission_form_heading = db.Column(db.String(200))
+    submission_form_subheading = db.Column(db.String(500))
+    submission_form_modal_heading = db.Column(db.String(200))
+    submission_form_intro = db.Column(db.Text)
+    submission_form_success_message = db.Column(db.String(500))
+    # 'both' | 'announcements' | 'events' — drives which type
+    # checkboxes the form exposes. 'both' shows both checkboxes
+    # (default); 'announcements' or 'events' restricts to a single
+    # type and skips the picker.
+    submission_form_allowed_types = db.Column(db.String(16), nullable=False, default="both")
+    submission_form_submit_label = db.Column(db.String(100))
     login_particle_effect = db.Column(db.String(32), nullable=False, default="stars")
     login_bg_color = db.Column(db.String(32))  # legacy single color
     login_bg_colors = db.Column(db.Text)  # JSON array of hex codes, 1..4, overrides login_bg_color
@@ -1090,6 +1106,11 @@ class FrontendNavItem(db.Model):
     url = db.Column(db.String(500))
     has_megamenu = db.Column(db.Boolean, nullable=False, default=False)
     open_in_new_tab = db.Column(db.Boolean, nullable=False, default=False)
+    # When set to a key registered in ``app/forms_registry.py``, clicking
+    # this nav item opens the matching form modal instead of navigating
+    # to ``url``. The URL still acts as a no-JS / right-click fallback,
+    # so admins typically point it at the standalone form page.
+    form_trigger = db.Column(db.String(64))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     columns = db.relationship(
         "FrontendNavColumn",
@@ -1141,6 +1162,10 @@ class FrontendNavLink(db.Model):
     custom_color = db.Column(db.String(16))
     button_style = db.Column(db.String(16), nullable=False, default="pill")  # pill | rounded
     open_in_new_tab = db.Column(db.Boolean, nullable=False, default=False)
+    # When set to a key registered in ``app/forms_registry.py``, clicking
+    # this mega-menu link opens the matching form modal instead of
+    # navigating. URL still ships as a no-JS fallback.
+    form_trigger = db.Column(db.String(64))
 
 
 class FrontendHeroButton(db.Model):

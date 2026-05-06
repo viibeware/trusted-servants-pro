@@ -1,18 +1,21 @@
 {% extends "frontend/base.html" %}
-{% block title %}Submit an Event or Announcement · {{ frontend_title }}{% endblock %}
+{%- set _heading = (site.submission_form_heading if site else None) or 'Submit an event or announcement' -%}
+{%- set _subheading = (site.submission_form_subheading if site else None)
+    or 'Fill out the form below and a ' ~ frontend_title ~ ' admin will review your submission before publishing it. Required fields are marked *.' -%}
+{%- set _intro = (site.submission_form_intro if site else None) -%}
+{% block title %}{{ _heading }} · {{ frontend_title }}{% endblock %}
 {% block content %}
 {# Standalone /submissionform page. Same form body as the global modal,
    wrapped in a centered single-column page layout that visually
    matches the login-page Request Access form: card-shaped panel,
-   centered title, vertical stack of inputs. #}
+   centered title, vertical stack of inputs. Heading / subheading /
+   intro come from SiteSetting (Forms admin) with baked fallbacks. #}
 <section class="fe-section fe-submission-section">
   <div class="fe-container">
     <div class="fe-submission-page">
       <header class="fe-submission-page-head">
-        <h1 class="fe-submission-page-title">Submit an event or announcement</h1>
-        <p class="fe-submission-page-blurb">
-          Fill out the form below and a {{ frontend_title }} admin will review your submission before publishing it. Required fields are marked <span class="req">*</span>.
-        </p>
+        <h1 class="fe-submission-page-title">{{ _heading }}</h1>
+        <p class="fe-submission-page-blurb">{{ _subheading }}</p>
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
           <div class="fe-submission-flashes">
@@ -22,6 +25,9 @@
         {% endwith %}
       </header>
       <div class="fe-submission-card">
+        {% if _intro %}
+        <div class="fe-submission-intro">{{ _intro|markdown }}</div>
+        {% endif %}
         {% include "frontend/_submission_form_body.html" %}
       </div>
     </div>

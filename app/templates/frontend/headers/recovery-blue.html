@@ -32,22 +32,23 @@
         {% if nav_items %}
           {% for ni in nav_items %}
             {% set _has_mm = ni.has_megamenu and ni.columns %}
-            {% set _href = ni.url or '#' %}
+            {% set _href = ni.url or url_for('frontend.submission_form') if ni.form_trigger == 'submission' else (ni.url or '#') %}
             {% set _tgt = ' target="_blank" rel="noopener"' if ni.open_in_new_tab else '' %}
+            {%- set _ft = ' data-fe-form-trigger="' ~ ni.form_trigger ~ '"' if ni.form_trigger else '' -%}
             {% if ni.style == 'two-line' %}
-              <a href="{{ _href }}"{{ _tgt|safe }} class="fe-recovery-nav-link fe-recovery-nav-newcomer{% if _has_mm %} fe-megaparent{% endif %}"
+              <a href="{{ _href }}"{{ _tgt|safe }}{{ _ft|safe }} class="fe-recovery-nav-link fe-recovery-nav-newcomer{% if _has_mm %} fe-megaparent{% endif %}"
                  {% if _has_mm %}data-megamenu="{{ ni.id }}"{% endif %}>
                 <span class="fe-recovery-nav-newcomer-lead">{{ ni.line1 or '' }}</span>
                 <span class="fe-recovery-nav-newcomer-cta">{{ ni.line2 or '' }}{% if _has_mm %}<span class="fe-nav-caret">{{ icon('chevron-down') }}</span>{% endif %}</span>
               </a>
             {% elif ni.style == 'button' %}
-              <a href="{{ _href }}"{{ _tgt|safe }} class="fe-recovery-nav-link fe-recovery-nav-cta{% if _has_mm %} fe-megaparent{% endif %}"
+              <a href="{{ _href }}"{{ _tgt|safe }}{{ _ft|safe }} class="fe-recovery-nav-link fe-recovery-nav-cta{% if _has_mm %} fe-megaparent{% endif %}"
                  {% if _has_mm %}data-megamenu="{{ ni.id }}"{% endif %}>{{ ni.label or '' }}{% if _has_mm %}<span class="fe-nav-caret">{{ icon('chevron-down') }}</span>{% endif %}</a>
             {% elif ni.style == 'button-rounded' %}
-              <a href="{{ _href }}"{{ _tgt|safe }} class="fe-recovery-nav-link fe-recovery-nav-btn-rounded{% if _has_mm %} fe-megaparent{% endif %}"
+              <a href="{{ _href }}"{{ _tgt|safe }}{{ _ft|safe }} class="fe-recovery-nav-link fe-recovery-nav-btn-rounded{% if _has_mm %} fe-megaparent{% endif %}"
                  {% if _has_mm %}data-megamenu="{{ ni.id }}"{% endif %}>{{ ni.label or '' }}{% if _has_mm %}<span class="fe-nav-caret">{{ icon('chevron-down') }}</span>{% endif %}</a>
             {% else %}
-              <a href="{{ _href }}"{{ _tgt|safe }} class="fe-recovery-nav-link{% if _has_mm %} fe-megaparent{% endif %}"
+              <a href="{{ _href }}"{{ _tgt|safe }}{{ _ft|safe }} class="fe-recovery-nav-link{% if _has_mm %} fe-megaparent{% endif %}"
                  {% if _has_mm %}data-megamenu="{{ ni.id }}"{% endif %}>{{ ni.label or '' }}{% if _has_mm %}<span class="fe-nav-caret">{{ icon('chevron-down') }}</span>{% endif %}</a>
             {% endif %}
           {% endfor %}

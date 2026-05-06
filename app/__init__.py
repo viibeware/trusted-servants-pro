@@ -765,6 +765,14 @@ def _migrate_sqlite(app):
                          ("smtp_security", "VARCHAR(16) NOT NULL DEFAULT 'starttls'"),
                          ("access_request_to", "VARCHAR(500)"),
                          ("submission_to", "VARCHAR(500)"),
+                         ("submission_form_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("submission_form_heading", "VARCHAR(200)"),
+                         ("submission_form_subheading", "VARCHAR(500)"),
+                         ("submission_form_modal_heading", "VARCHAR(200)"),
+                         ("submission_form_intro", "TEXT"),
+                         ("submission_form_success_message", "VARCHAR(500)"),
+                         ("submission_form_allowed_types", "VARCHAR(16) NOT NULL DEFAULT 'both'"),
+                         ("submission_form_submit_label", "VARCHAR(100)"),
                          ("login_particle_effect", "VARCHAR(32) NOT NULL DEFAULT 'stars'"),
                          ("login_bg_color", "VARCHAR(32)"),
                          ("login_bg_colors", "TEXT"),
@@ -930,7 +938,8 @@ def _migrate_sqlite(app):
                          ("password_reset_allowed", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("disabled", "BOOLEAN NOT NULL DEFAULT 0")):
             add("user", col, ddl)
-        for col, ddl in (("open_in_new_tab", "BOOLEAN NOT NULL DEFAULT 0"),):
+        for col, ddl in (("open_in_new_tab", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("form_trigger", "VARCHAR(64)")):
             add("frontend_nav_item", col, ddl)
         for col, ddl in (("asset_files_json", "TEXT"),):
             add("custom_font", col, ddl)
@@ -956,7 +965,8 @@ def _migrate_sqlite(app):
                          ("link_size", "VARCHAR(16)"),
                          ("link_size_pct", "INTEGER"),
                          ("override_color", "BOOLEAN NOT NULL DEFAULT 0"),
-                         ("custom_color", "VARCHAR(16)")):
+                         ("custom_color", "VARCHAR(16)"),
+                         ("form_trigger", "VARCHAR(64)")):
             add("frontend_nav_link", col, ddl)
 
         # One-shot data migration: when the new frontend_og_* columns are
