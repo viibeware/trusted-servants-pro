@@ -1,76 +1,21 @@
 {% extends "frontend/base.html" %}
 {% block title %}All meetings · {{ frontend_title }}{% endblock %}
+{# Dispatcher: each layout (sidebar / directory / weekboard) lives in
+   frontend/meetings_list/<key>.html and is selected on the admin's
+   Templates page (SiteSetting.frontend_meetings_list_template). Every
+   layout receives the same `all_meetings` list — clients filter on the
+   results without follow-up requests. #}
 {% block content %}
-<section class="fe-section fe-meetings" id="meetings">
-  <div class="fe-container">
-    <div class="fe-section-head">
-      <h2>All meetings</h2>
-      <p>Every meeting across the week, grouped by day. Tap a card for full details, the Zoom link, or directions.</p>
-    </div>
-
-    {% set _state = namespace(has_any=false) %}
-    {% for _g in (all_meetings_groups or []) %}
-      {% if _g['items'] %}{% set _state.has_any = true %}{% endif %}
-    {% endfor %}
-
-    {% if not _state.has_any %}
-    <p class="fe-meetings-empty muted">No meetings on the calendar.</p>
-    {% else %}
-      {% set _global_idx = namespace(n=0) %}
-      {% for _group in all_meetings_groups %}
-        {% if _group['items'] %}
-          {% if _group['label'] %}
-          <h3 class="fe-meetings-day-heading">{{ _group['label'] }}</h3>
-          {% endif %}
-          <div class="fe-meeting-grid">
-            {% for it in _group['items'] %}
-            {% set m = it['meeting'] %}
-            <div class="fe-meeting-card" style="--i: {{ _global_idx.n }};">
-              <div class="fe-meeting-type fe-meeting-type-{{ m.meeting_type }}">
-                {% if m.meeting_type == 'in_person' %}In Person
-                {% elif m.meeting_type == 'online' %}Online
-                {% else %}Hybrid{% endif %}
-              </div>
-              <h3>
-                <a class="fe-meeting-card-link"
-                   href="{{ url_for('frontend.meeting_detail', slug=m.public_slug) }}">{{ m.name }}</a>
-              </h3>
-              {% if m.schedules %}
-              <ul class="fe-meeting-sched">
-                {% for s in m.schedules[:3] %}
-                <li>
-                  <span class="fe-meeting-day">{{ s.day_name }}</span>
-                  · {{ s.start_time|fmt12h }}
-                </li>
-                {% endfor %}
-                {% if m.schedules|length > 3 %}
-                <li class="muted smaller">+ {{ m.schedules|length - 3 }} more</li>
-                {% endif %}
-              </ul>
-              {% endif %}
-              <span class="fe-meeting-card-cta muted smaller">Details →</span>
-              {%- set _show_zoom = m.meeting_type in ('online', 'hybrid') and m.zoom_link -%}
-              {%- set _show_directions = m.meeting_type in ('in_person', 'hybrid') and m.location -%}
-              {% if _show_zoom or _show_directions %}
-              <div class="fe-meeting-card-actions">
-                {% if _show_zoom %}
-                <a class="fe-btn fe-btn-primary"
-                   href="{{ m.zoom_link }}" target="_blank" rel="noopener">Join Zoom Meeting</a>
-                {% endif %}
-                {% if _show_directions %}
-                {% set _maps = "https://www.google.com/maps/search/?api=1&query=" ~ (m.location|urlencode) %}
-                <a class="fe-btn fe-btn-ghost"
-                   href="{{ _maps }}" target="_blank" rel="noopener">Get Directions</a>
-                {% endif %}
-              </div>
-              {% endif %}
-            </div>
-            {% set _global_idx.n = _global_idx.n + 1 %}
-            {% endfor %}
-          </div>
-        {% endif %}
-      {% endfor %}
-    {% endif %}
-  </div>
-</section>
+{% include list_partial %}
+{# Pro Tips accordion. Sidebar layout renders it inline (header in
+   rail, accordion in the main column) so the content shares the
+   filter-rail's vertical track; other layouts get the full-width
+   render below the main content. #}
+{% if list_template_key != 'sidebar' %}
+{% include "frontend/meetings_list/_protips.html" %}
+{% endif %}
+{# Click-to-copy handler for the per-card Meeting ID + Passcode chips.
+   Same handler used by the meeting detail page; load it once at this
+   level so each layout doesn't have to re-include it. #}
+{% include "frontend/meetings/_copy_script.html" %}
 {% endblock %}

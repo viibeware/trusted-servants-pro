@@ -1,0 +1,12 @@
+{# Secondary nav block — small inline links (privacy, terms, etc.)
+   from the Footer admin → Secondary nav editor. Different visual
+   treatment from the Link columns block — these are meant to sit
+   inline next to the copyright line, not in a column. #}
+{% set _nav = footer_content(site).secondary_nav %}
+{% if _nav %}
+<ul class="fe-footer-secondary-nav fe-footer-block fe-footer-block-secnav">
+  {% for l in _nav %}
+  <li><a href="{{ l.url or '#' }}">{{ l.label or '' }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}

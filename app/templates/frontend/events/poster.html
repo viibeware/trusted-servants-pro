@@ -8,7 +8,14 @@
        {% if _has_cover %}style="background-image: url('{{ url_for('public.post_featured_image', pid=event.id) }}');"{% endif %}>
     <div class="fe-event-poster-hero-shade" aria-hidden="true"></div>
     <div class="fe-container fe-event-poster-hero-inner">
-      <a class="fe-event-poster-back" href="{{ url_for('frontend.index') }}#events">← Back</a>
+      <div class="fe-edit-bar fe-edit-bar-on-dark">
+        <a class="fe-event-poster-back" href="{{ url_for('frontend.index') }}#events">← Back</a>
+        {% if current_user.is_authenticated and current_user.can_edit() %}
+        <a class="fe-edit-shortcut" href="{{ url_for('main.post_edit', pid=event.id) }}">
+          {{ icon('edit-3') }} <span>Edit event</span>
+        </a>
+        {% endif %}
+      </div>
       <div class="fe-event-poster-chips">
         {% if event.is_event %}<span>Event</span>{% endif %}
         {% if event.is_announcement %}<span>Announcement</span>{% endif %}
@@ -64,7 +71,7 @@
       <div class="fe-event-poster-ticket-actions">
         {% if event.is_online and event.zoom_url %}
         <a class="fe-btn fe-btn-primary fe-event-poster-cta" href="{{ event.zoom_url }}" target="_blank" rel="noopener">
-          {{ icon('video') }} Join via Zoom <em>↗</em>
+          {{ icon('video') }} Join Zoom Meeting <em>↗</em>
         </a>
         {% endif %}
         {% if not event.is_online and (event.location_address or event.location_name) %}
@@ -84,14 +91,20 @@
       <dl class="fe-event-poster-ticket-creds">
         {% if event.zoom_meeting_id %}
         <dt>Meeting ID</dt>
-        <dd><code>{{ event.zoom_meeting_id }}</code>
-          <button type="button" class="fe-copy-btn" data-copy="{{ event.zoom_meeting_id }}" title="Copy">{{ icon('copy') }}</button>
+        <dd>
+          <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ event.zoom_meeting_id }}" aria-label="Copy meeting ID">
+            <code>{{ event.zoom_meeting_id }}</code>
+            <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+          </button>
         </dd>
         {% endif %}
         {% if event.zoom_passcode %}
         <dt>Passcode</dt>
-        <dd><code>{{ event.zoom_passcode }}</code>
-          <button type="button" class="fe-copy-btn" data-copy="{{ event.zoom_passcode }}" title="Copy">{{ icon('copy') }}</button>
+        <dd>
+          <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ event.zoom_passcode }}" aria-label="Copy Zoom passcode">
+            <code>{{ event.zoom_passcode }}</code>
+            <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+          </button>
         </dd>
         {% endif %}
       </dl>

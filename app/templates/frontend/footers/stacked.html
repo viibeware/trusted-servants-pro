@@ -1,0 +1,57 @@
+{# "Stacked" footer — everything centered + stacked vertically:
+   brand at the top, then link columns in a centred grid, then a row
+   of social icons, then the copyright. Spacious and brand-forward. #}
+{% from "frontend/footers/_footer_helpers.html" import footer_inner_attrs, footer_copyright_text, footer_link %}
+{% set _f = footer_content(site) %}
+{% from "frontend/footers/_footer_bg.html" import footer_bg_class, footer_bg_style, footer_bg_data_attrs, footer_bg_inner %}
+{% set _bg = _f.bg %}
+{% set _min_h = (site.frontend_footer_min_height_vh if site else 0) or 0 %}
+{% set _font_scale = (site.frontend_footer_font_scale if site else 100) or 100 %}
+<footer class="fe-footer fe-footer-stacked {{ footer_bg_class(_bg) }}"
+        {% set _bgs = footer_bg_style(_bg, _min_h, _font_scale) %}{% if _bgs %}style="{{ _bgs }}"{% endif %}
+        {{ footer_bg_data_attrs(_bg) }}>
+  {{ footer_bg_inner(_bg) }}
+  <div {{ footer_inner_attrs(site) }}>
+
+    {# Brand panel — shared block partial wrapped in a `--center`
+       modifier so this stacked layout keeps its centred alignment. #}
+    <div class="fe-footer-brand--center">
+      {% include "frontend/footers/blocks/_brand.html" %}
+    </div>
+
+    {% if _f.columns %}
+    <div class="fe-footer-cols fe-footer-cols--center">
+      {% for col in _f.columns %}
+      <div class="fe-footer-col">
+        {% if col.title %}<div class="fe-footer-col-title">{{ col.title }}</div>{% endif %}
+        <ul class="fe-footer-link-list">
+          {% for l in col.links %}
+          <li>{{ footer_link(l) }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if _f.social %}
+    <ul class="fe-footer-social fe-footer-social--center">
+      {% for s in _f.social %}
+      <li><a href="{{ s.url or '#' }}" aria-label="{{ s.label or s.icon or 'Social link' }}"
+             target="_blank" rel="noopener">{{ icon(s.icon or 'link') }}</a></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="fe-footer-bottom fe-footer-bottom--center">
+      <div class="fe-footer-copy">{{ footer_copyright_text(_f.copyright, site) | safe_html }}</div>
+      {% if _f.secondary_nav %}
+      <ul class="fe-footer-secondary-nav">
+        {% for l in _f.secondary_nav %}
+        <li><a href="{{ l.url or '#' }}">{{ l.label or '' }}</a></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+  </div>
+</footer>

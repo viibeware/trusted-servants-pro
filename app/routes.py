@@ -832,7 +832,13 @@ def _apply_library_selections(m, form):
         mode = form.get(f"library_mode_{lid}", "all")
         if mode not in ("all", "granular"):
             mode = "all"
-        m.library_assocs.append(MeetingLibrary(library=lib, mode=mode))
+        # Whole-library Public toggle — only meaningful when mode='all',
+        # but we capture it regardless so the value survives mode flips
+        # without the admin having to re-tick the box.
+        whole_public = form.get(f"library_public_{lid}") == "1"
+        m.library_assocs.append(
+            MeetingLibrary(library=lib, mode=mode, public_visible=whole_public)
+        )
         if mode == "granular":
             rids = form.getlist(f"library_readings_{lid}", type=int)
             if rids:
@@ -840,15 +846,16 @@ def _apply_library_selections(m, form):
                     LibraryItem.query.filter(LibraryItem.id.in_(rids),
                                          LibraryItem.library_id == lid).all()
                 )
-        # Per-library, per-reading public-frontend visibility (independent of
-        # the granular-mode selection above — admins may want to surface a
-        # reading on the public page even if the meeting is in "all" mode).
-        prids = form.getlist(f"library_public_library_items_{lid}", type=int)
-        if prids:
-            public_library_items.extend(
-                LibraryItem.query.filter(LibraryItem.id.in_(prids),
-                                     LibraryItem.library_id == lid).all()
-            )
+        # Per-reading public-frontend visibility — only honoured when the
+        # library is in granular mode. In 'all' mode the whole-library
+        # flag above is the source of truth.
+        if mode == "granular":
+            prids = form.getlist(f"library_public_library_items_{lid}", type=int)
+            if prids:
+                public_library_items.extend(
+                    LibraryItem.query.filter(LibraryItem.id.in_(prids),
+                                         LibraryItem.library_id == lid).all()
+                )
     m.selected_library_items = selected_library_items
     m.public_library_items = public_library_items
 
@@ -880,6 +887,32 @@ def _record_slug_change(entity_type, entity_id, old_slug, new_slug):
     ))
 
 
+def _unique_post_slug(base_slug, *, exclude_id=None):
+    """Given a target slug, return one that's guaranteed not to collide
+    with any other Post.public_slug. Appends ``-2``, ``-3``, ... until
+    unique. Returns None when the input is blank.
+
+    Two posts with the same ``public_slug`` would render the same URL
+    (``/event/<slug>``, ``/announcement/<slug>``) — the route layer
+    walks candidates in id order so the older one wins and the newer
+    one becomes unreachable. Force uniqueness at save time so every
+    post gets its own URL.
+    """
+    base = _normalize_slug(base_slug)
+    if not base:
+        return None
+    q = Post.query
+    if exclude_id is not None:
+        q = q.filter(Post.id != exclude_id)
+    used = {p.public_slug for p in q.all()}
+    candidate = base
+    n = 2
+    while candidate in used:
+        candidate = f"{base}-{n}"
+        n += 1
+    return candidate
+
+
 def _apply_meeting_form(m, form, schedules, files=None):
     # Capture the previous effective slug *before* mutating name/slug so
     # the history row can record the URL the public site used to serve.
@@ -908,6 +941,27 @@ def _apply_meeting_form(m, form, schedules, files=None):
         m.location = loc_choice
     else:
         m.location = custom  # fallback
+    m.location_notes = form.get("location_notes", "").strip() or None
+    # Extended-content blocks — toggle + per-block title/body fields.
+    # Walk `ext_block_present` markers in submission order so the JS-
+    # added cards persist in the order the admin arranged them.
+    m.extended_content_enabled = form.get("extended_content_enabled") == "1"
+    ext_blocks = []
+    for raw_idx in form.getlist("ext_block_present"):
+        try:
+            i = int(raw_idx)
+        except (TypeError, ValueError):
+            continue
+        title = (form.get(f"ext_block_{i}_title") or "").strip()
+        body = (form.get(f"ext_block_{i}_body") or "").strip()
+        if not (title or body):
+            continue
+        ext_blocks.append({"title": title[:200], "body": body[:20000]})
+    if ext_blocks:
+        import json as _json_ext
+        m.extended_blocks_json = _json_ext.dumps(ext_blocks)
+    else:
+        m.extended_blocks_json = None
     if mtype == "in_person":
         m.zoom_meeting_id = ""
         m.zoom_passcode = ""
@@ -1085,27 +1139,64 @@ def meeting_libraries(slug):
 
 # --- Locations ---
 
+def _location_address_payload():
+    """Pull street/city/state/zip from the request form, sync the
+    legacy `address` column from those parts so callers reading the
+    single-string field stay correct, and return the dict that
+    `Location` columns can be **-spread into."""
+    street = (request.form.get("street") or "").strip() or None
+    city   = (request.form.get("city") or "").strip() or None
+    state  = (request.form.get("state") or "").strip() or None
+    zipc   = (request.form.get("zip_code") or "").strip() or None
+    csz_parts = [p for p in [city, " ".join(p for p in [state, zipc] if p) or None] if p]
+    csz_line = ", ".join(p for p in [city, " ".join(p for p in [state, zipc] if p)] if p) \
+               if (city or state or zipc) else ""
+    address_lines = [p for p in [street, csz_line] if p]
+    address = "\n".join(address_lines) if address_lines else None
+    # Legacy single-line fallback — admins authoring with the old form
+    # may still post `address` directly; honour it when none of the
+    # split fields are filled in.
+    if not address and (request.form.get("address") or "").strip():
+        address = request.form.get("address").strip()
+    return {"street": street, "city": city, "state": state, "zip_code": zipc,
+            "address": address}
+
+
+def _can_edit_locations():
+    """Locations gate — admins always; frontend editors too once the
+    capability is granted (admin-only today, semantically aligned
+    with footer editing). Centralised so the listing route, the
+    create/edit/delete handlers, and any future API all use the same
+    rule."""
+    return current_user.is_admin() or current_user.can_edit_frontend()
+
+
 @bp.route("/locations")
 @login_required
 def locations():
-    if not current_user.is_admin():
-        flash("Admins only", "danger")
+    if not _can_edit_locations():
+        flash("You don't have permission to manage Meeting Locations.", "danger")
         return redirect(url_for("main.index"))
     items = Location.query.order_by(Location.name).all()
     return render_template("locations.html", locations=items)
 
 
 @bp.route("/locations/new", methods=["POST"])
-@admin_required
+@login_required
 def location_new():
+    if not _can_edit_locations():
+        flash("You don't have permission to manage Meeting Locations.", "danger")
+        return redirect(url_for("main.index"))
     name = request.form["name"].strip()
     ltype = request.form.get("location_type", "in_person")
     if ltype not in ("in_person", "online"):
         ltype = "in_person"
-    address = request.form.get("address", "").strip() or None
-    maps_url = request.form.get("maps_url", "").strip() or None
+    payload = _location_address_payload()
+    maps_url    = request.form.get("maps_url", "").strip() or None
+    website_url = request.form.get("website_url", "").strip() or None
+    notes       = request.form.get("notes", "").strip() or None
     if ltype == "online":
-        address = None
+        payload = {"street": None, "city": None, "state": None, "zip_code": None, "address": None}
         maps_url = None
     if not name:
         flash("Name required", "danger")
@@ -1113,35 +1204,51 @@ def location_new():
         flash("Location already exists", "danger")
     else:
         db.session.add(Location(name=name, location_type=ltype,
-                                address=address, maps_url=maps_url))
+                                maps_url=maps_url, website_url=website_url,
+                                notes=notes, **payload))
         db.session.commit()
         flash("Location added", "success")
     return redirect(url_for("main.locations", **({"embed": "1"} if request.values.get("embed") == "1" else {})))
 
 
 @bp.route("/locations/<int:lid>/edit", methods=["POST"])
-@admin_required
+@login_required
 def location_edit(lid):
+    if not _can_edit_locations():
+        flash("You don't have permission to manage Meeting Locations.", "danger")
+        return redirect(url_for("main.index"))
     loc = db.session.get(Location, lid) or abort(404)
     loc.name = request.form["name"].strip()
     ltype = request.form.get("location_type", "in_person")
     if ltype not in ("in_person", "online"):
         ltype = "in_person"
     loc.location_type = ltype
+    # Notes + website URL apply to both in-person and online locations.
+    loc.notes       = request.form.get("notes", "").strip() or None
+    loc.website_url = request.form.get("website_url", "").strip() or None
     if ltype == "online":
+        loc.street = loc.city = loc.state = loc.zip_code = None
         loc.address = None
         loc.maps_url = None
     else:
-        loc.address = request.form.get("address", "").strip() or None
-        loc.maps_url = request.form.get("maps_url", "").strip() or None
+        payload = _location_address_payload()
+        loc.street    = payload["street"]
+        loc.city      = payload["city"]
+        loc.state     = payload["state"]
+        loc.zip_code  = payload["zip_code"]
+        loc.address   = payload["address"]
+        loc.maps_url  = request.form.get("maps_url", "").strip() or None
     db.session.commit()
     flash("Location updated", "success")
     return redirect(url_for("main.locations", **({"embed": "1"} if request.values.get("embed") == "1" else {})))
 
 
 @bp.route("/locations/<int:lid>/delete", methods=["POST"])
-@admin_required
+@login_required
 def location_delete(lid):
+    if not _can_edit_locations():
+        flash("You don't have permission to manage Meeting Locations.", "danger")
+        return redirect(url_for("main.index"))
     loc = db.session.get(Location, lid) or abort(404)
     db.session.delete(loc)
     db.session.commit()
@@ -1856,17 +1963,30 @@ _FRONTEND_SETTING_KEYS = (
     "frontend_header_padding_pct", "frontend_header_height",
     "frontend_header_template", "frontend_footer_template",
     "frontend_homepage_template", "frontend_megamenu_template",
-    "frontend_meeting_template", "frontend_event_template",
+    "frontend_meeting_template", "frontend_meetings_list_template",
+    "frontend_meetings_list_width_mode", "frontend_meetings_list_max_width",
+    "frontend_meetings_list_padding_pct",
+    "frontend_meetings_list_heading", "frontend_meetings_list_subheading",
+    "frontend_meetings_list_protips_json",
+    "frontend_events_list_template", "frontend_events_list_width_mode",
+    "frontend_events_list_max_width", "frontend_events_list_padding_pct",
+    "frontend_events_list_heading", "frontend_events_list_subheading",
+    "frontend_announcements_list_template", "frontend_announcements_list_width_mode",
+    "frontend_announcements_list_max_width", "frontend_announcements_list_padding_pct",
+    "frontend_announcements_list_heading", "frontend_announcements_list_subheading",
+    "frontend_event_template",
     # Mega menu styling
     "frontend_mega_bg_color", "frontend_mega_text_color",
     "frontend_mega_radius_bl", "frontend_mega_radius_br",
     # Logos
     "frontend_logo_filename", "frontend_logo_width",
     "footer_logo_filename", "footer_logo_url", "footer_logo_width",
-    # Alerts (frontend-only)
-    "top_alert_enabled", "top_alert_message",
-    "top_alert_bg_color", "top_alert_text_color",
-    "top_alert_icon", "top_alert_icon_position",
+    # Utility bar (top of every page)
+    "utility_bar_enabled", "utility_bar_bg_color", "utility_bar_text_color",
+    "utility_bar_left_json", "utility_bar_right_json",
+    "utility_bar_live_meetings", "utility_bar_mobile_default",
+    # Under-header alert bar (kept; the legacy Top Alert Bar was retired
+    # in favour of the more flexible utility bar above)
     "header_alert_enabled", "header_alert_message",
     "header_alert_bg_color", "header_alert_text_color",
     "header_alert_icon", "header_alert_icon_position",
@@ -1902,6 +2022,7 @@ def _frontend_export_payload():
                     "icon_before_size": l.icon_before_size,
                     "icon_after_size": l.icon_after_size,
                     "link_size": l.link_size,
+                    "link_size_pct": l.link_size_pct,
                     "override_color": bool(l.override_color),
                     "custom_color": l.custom_color,
                     "button_style": l.button_style,
@@ -2233,7 +2354,20 @@ def data_frontend_import():
                 db.session.add(col)
                 db.session.flush()
                 for nl in (nc.get("links") or []):
+                    # link_size is the legacy small/large value (kept for
+                    # round-trip JSON compat — no longer drives sizing).
+                    # link_size_pct is the new per-link percent override
+                    # (50–200, NULL = inherit global slider).
                     _lsz = (nl.get("link_size") or "").strip().lower() or None
+                    _lpct_raw = nl.get("link_size_pct")
+                    try:
+                        _lpct = int(_lpct_raw) if _lpct_raw not in (None, "", "null") else None
+                    except (TypeError, ValueError):
+                        _lpct = None
+                    if _lpct is not None:
+                        _lpct = max(50, min(_lpct, 200))
+                        if _lpct == 100:
+                            _lpct = None
                     link = FrontendNavLink(
                         column_id=col.id,
                         position=int(nl.get("position") or 0),
@@ -2247,6 +2381,7 @@ def data_frontend_import():
                         icon_before_size=_sanitize_icon_size(nl.get("icon_before_size")),
                         icon_after_size=_sanitize_icon_size(nl.get("icon_after_size")),
                         link_size=_lsz if _lsz in _NAV_LINK_SIZES else None,
+                        link_size_pct=_lpct,
                         override_color=bool(nl.get("override_color")),
                         custom_color=_sanitize_icon_color(nl.get("custom_color")),
                         button_style=(nl.get("button_style") or "pill"),
@@ -2385,7 +2520,7 @@ def frontend_save():
     import json as _json
     from .blocks import (site_blocks, parse_features, parse_stats,
                          parse_testimonials, parse_faq, parse_quick_links,
-                         parse_cta)
+                         parse_cta, parse_inclusion)
     s = _get_site_setting()
     for col in ("frontend_title",
                 "frontend_about_heading", "frontend_contact_heading"):
@@ -2396,44 +2531,20 @@ def frontend_save():
     # Block content. Only update keys that arrived in this submission so
     # editors hidden by the active layout's block list aren't blanked out.
     blocks = site_blocks(s)  # current values, including defaults
-    if "block_features" in request.form:
-        blocks["features"] = parse_features(request.form.get("block_features"))
+    if "features_present" in request.form:
+        blocks["features"] = parse_features(request.form)
     if "block_stats" in request.form:
         blocks["stats"] = parse_stats(request.form.get("block_stats"))
     if "block_testimonials" in request.form:
         blocks["testimonials"] = parse_testimonials(request.form.get("block_testimonials"))
-    if "block_faq" in request.form:
-        blocks["faq"] = parse_faq(request.form.get("block_faq"))
+    if "faq_present" in request.form:
+        blocks["faq"] = parse_faq(request.form)
     if "block_quick_links" in request.form:
         blocks["quick_links"] = parse_quick_links(request.form.get("block_quick_links"))
     if "block_cta_heading" in request.form:
         blocks["cta"] = parse_cta(request.form)
-
-    # Per-block visibility toggles. The form posts `block_visible_<type>`
-    # only for blocks the active layout actually renders — we read those
-    # and merge into the existing visibility map, so toggling on layout A
-    # doesn't blank out layout B's settings.
-    vis = dict(blocks.get("_visibility") or {})
-    # Drop any stray "present" marker from earlier saves that got mis-stored
-    # as a real block-visibility entry.
-    vis.pop("present", None)
-    for key in list(request.form.keys()):
-        if key == "block_visible_present":
-            continue  # this is the multi-valued marker, not a real toggle
-        if key.startswith("block_visible_"):
-            vis[key[len("block_visible_"):]] = (request.form.get(key) == "1")
-    # If a block editor was rendered but its checkbox is absent (i.e. user
-    # unticked it), the form simply omits the key — checkboxes don't post
-    # when unchecked. So we also need to inspect the form's "visibility
-    # editors present" marker. The homepage admin form posts a hidden
-    # `block_visible_present` for every block that has a toggle; we use
-    # that to detect "absent because unchecked" vs "absent because the
-    # block isn't on this page".
-    present = set((request.form.getlist("block_visible_present") or []))
-    for bt in present:
-        if "block_visible_" + bt not in request.form:
-            vis[bt] = False
-    blocks["_visibility"] = vis
+    if "inclusion_present" in request.form:
+        blocks["inclusion"] = parse_inclusion(request.form)
 
     # Meetings settings (only updated when the meetings editor was on the
     # form, signaled by a meetings_filter field).
@@ -2511,6 +2622,17 @@ def frontend_save():
                     _set_spacing("gap",        f"split_{split_idx}_gap")
                     _set_spacing("gap_top",    f"split_{split_idx}_gap_top")
                     _set_spacing("gap_bottom", f"split_{split_idx}_gap_bottom")
+                    def _set_pct(json_key, form_key):
+                        raw = (request.form.get(form_key) or "").strip()
+                        try:
+                            n = int(float(raw))
+                        except (TypeError, ValueError):
+                            n = 0
+                        n = max(0, min(50, n))
+                        if n: b[json_key] = n
+                        else: b.pop(json_key, None)
+                    _set_pct("pad_left_pct",  f"split_{split_idx}_pad_left_pct")
+                    _set_pct("pad_right_pct", f"split_{split_idx}_pad_right_pct")
                     def _set_bg(json_key, form_prefix):
                         if request.form.get(f"{form_prefix}_enabled") == "1":
                             v = (request.form.get(form_prefix) or "").strip()
@@ -2770,13 +2892,51 @@ def _apply_alert_form(s, form, prefix):
     setattr(s, f"{prefix}_alert_icon_position", pos if pos in ("before", "after") else "before")
 
 
-@bp.route("/frontend/top-alert-save", methods=["POST"])
+@bp.route("/frontend/utility-bar-save", methods=["POST"])
 @admin_required
-def frontend_top_alert_save():
+def frontend_utility_bar_save():
+    """Persist the utility-bar config: enable toggle, palette, left/right
+    item lists (parsed out of repeating ``utility_<side>_*[]`` arrays),
+    and the live-meeting-bar toggle."""
+    import re
+    from .utility_bar import parse_form_items, parse_form_payload, serialise_items
     s = _get_site_setting()
-    _apply_alert_form(s, request.form, "top")
+    s.utility_bar_enabled = request.form.get("utility_bar_enabled") == "1"
+    s.utility_bar_live_meetings = request.form.get("utility_bar_live_meetings") == "1"
+    hex_re = re.compile(r"#[0-9a-fA-F]{6}")
+    for color_col in ("bg_color", "text_color"):
+        val = (request.form.get(f"utility_bar_{color_col}") or "").strip()
+        setattr(s, f"utility_bar_{color_col}", val if hex_re.fullmatch(val) else None)
+    # JSON-payload submission (new shape, supports containers) takes
+    # priority. When it's missing — older browsers, JS disabled, or a
+    # programmatic POST — fall back to the legacy parallel-arrays
+    # parser. The legacy parser doesn't know about containers; it
+    # returns the flat item list it always has.
+    left  = parse_form_payload(request.form, "left")
+    right = parse_form_payload(request.form, "right")
+    if left is None:  left  = parse_form_items(request.form, "left")
+    if right is None: right = parse_form_items(request.form, "right")
+    s.utility_bar_left_json = serialise_items(left)
+    s.utility_bar_right_json = serialise_items(right)
+    # Mobile-default selector — validate the posted value against the
+    # items the admin just saved so a stale selector (e.g. they removed
+    # the row that used to be the default) doesn't survive. Accepts
+    # per-item ("left:N" / "right:N") or whole-side ("left" / "right").
+    raw_default = (request.form.get("utility_bar_mobile_default") or "").strip().lower()
+    chosen = ""
+    if raw_default == "left" and left:
+        chosen = "left"
+    elif raw_default == "right" and right:
+        chosen = "right"
+    elif ":" in raw_default:
+        side, _, idx = raw_default.partition(":")
+        try: i = int(idx)
+        except (TypeError, ValueError): i = -1
+        if side == "left" and 0 <= i < len(left):   chosen = f"left:{i}"
+        if side == "right" and 0 <= i < len(right): chosen = f"right:{i}"
+    s.utility_bar_mobile_default = chosen or None
     db.session.commit()
-    flash("Top alert bar saved", "success")
+    flash("Utility bar saved", "success")
     return redirect(url_for("main.frontend_header"))
 
 
@@ -2871,6 +3031,24 @@ def frontend_nav_appearance_save():
     except ValueError:
         ms = 320
     s.frontend_megamenu_animate_ms = max(100, min(ms, 1500))
+    # Heading + link font-size overrides as integer percentages
+    # (50 – 200, 100 = theme default). The sliders are centered at 100
+    # so a value of exactly 100 is also treated as "no override" — it
+    # persists as NULL so the theme's baked CSS base re-engages and
+    # we don't store a redundant value. Out-of-range values clamp to
+    # the band rather than being rejected.
+    def _read_pct(field, lo, hi):
+        raw = (request.form.get(field) or "").strip()
+        if not raw:
+            return None
+        try:
+            v = int(round(float(raw)))
+        except ValueError:
+            return None
+        v = max(lo, min(v, hi))
+        return None if v == 100 else v
+    s.frontend_megamenu_heading_size    = _read_pct("frontend_megamenu_heading_size", 50, 200)
+    s.frontend_megamenu_subheading_size = _read_pct("frontend_megamenu_subheading_size", 50, 200)
     db.session.commit()
     flash("Mega menu appearance saved", "success")
     return redirect(url_for("main.frontend_navigation"))
@@ -2887,7 +3065,18 @@ def _apply_nav_item_form(item, form):
         item.line2 = (form.get("line2") or "").strip() or None
         item.label = item.line1 or item.line2
     else:
-        item.label = (form.get("label") or "").strip() or None
+        # The modal renders one `<input name="label">` per style pane (text,
+        # button, button-rounded). The pane-toggle JS disables inactive
+        # panes' inputs so only one value posts — but if that JS hasn't
+        # run (or some other client submits the bare form), every pane's
+        # label posts. Pick the one whose pane matches the chosen style;
+        # fall back to the first non-empty value, then to None.
+        labels = form.getlist("label") or []
+        pane_index = {"text": 0, "button": 1, "button-rounded": 2}.get(item.style, 0)
+        chosen = labels[pane_index] if pane_index < len(labels) else ""
+        if not chosen.strip():
+            chosen = next((l for l in labels if l.strip()), "")
+        item.label = chosen.strip() or None
         item.line1 = item.line2 = None
 
 
@@ -3079,12 +3268,25 @@ def _apply_nav_link_form(link, form):
         link.icon_before_size = None
         link.icon_after_size = None
     if link.kind == "link":
-        sz = (form.get("link_size") or "").strip().lower()
-        link.link_size = sz if sz in _NAV_LINK_SIZES else None
+        # The legacy small/large radio is gone; per-link size is now a
+        # toggle + percentage slider that scopes a custom scale to one
+        # link. Toggle off → no override (NULL); toggle on → clamp the
+        # slider value to 50–200, treat exactly 100 as no-override.
+        link.link_size = None
+        if form.get("link_size_override") == "1":
+            try:
+                pct = int(round(float(form.get("link_size_pct") or 100)))
+            except (TypeError, ValueError):
+                pct = 100
+            pct = max(50, min(pct, 200))
+            link.link_size_pct = None if pct == 100 else pct
+        else:
+            link.link_size_pct = None
         link.override_color = form.get("override_color") == "1"
         link.custom_color = _sanitize_icon_color(form.get("custom_color")) if link.override_color else None
     else:
         link.link_size = None
+        link.link_size_pct = None
         link.override_color = False
         link.custom_color = None
     if link.kind == "button":
@@ -3619,6 +3821,22 @@ def frontend_design_save():
     return redirect(url_for("main.frontend_design"))
 
 
+@bp.route("/frontend/default-theme", methods=["POST"])
+@admin_required
+def frontend_default_theme_save():
+    """Persist the public site's default appearance mode for first-time
+    visitors. Validation: only 'light' / 'dark' / 'system' accepted; any
+    other value coerces to 'system' (matches the column default). A
+    returning visitor's localStorage wins over this server default — see
+    the bootstrap script in templates/frontend/base.html."""
+    s = _get_site_setting()
+    raw = (request.form.get("frontend_default_theme") or "").strip().lower()
+    s.frontend_default_theme = raw if raw in ("light", "dark", "system") else "system"
+    db.session.commit()
+    flash("Default theme saved", "success")
+    return redirect(url_for("main.frontend_design"))
+
+
 @bp.route("/frontend/design/reset", methods=["POST"])
 @admin_required
 def frontend_design_reset():
@@ -3740,25 +3958,116 @@ def frontend_header_template_save():
     return redirect(url_for("main.frontend_header"))
 
 
+_FOOTER_PREBUILT_BLOCK_TYPES = {
+    # Ordered lists matching the visual order each prebuilt Jinja file
+    # renders blocks in. Used for the Footer admin's "structure" card —
+    # for prebuilts it's flat (no rows/columns), so we display a single
+    # row of clickable pills in this order.
+    "classic":  ["brand", "link_columns", "copyright", "secondary_nav", "social_row"],
+    "minimal":  ["copyright", "secondary_nav"],
+    "stacked":  ["brand", "link_columns", "social_row", "copyright", "secondary_nav"],
+    "mega":     ["brand", "link_columns", "social_row", "copyright", "secondary_nav"],
+}
+
+
+def _footer_active_block_types(active_key, active_rows):
+    """Return the set of block-type strings used by the active footer
+    layout. For prebuilt keys we read from the hardcoded mapping above;
+    for custom layouts we walk the saved rows + columns."""
+    if active_rows:
+        types = set()
+        for row in active_rows:
+            for col in (row.get("columns") or []):
+                for b in col:
+                    t = b.get("type") if isinstance(b, dict) else None
+                    if t:
+                        types.add(t)
+        return types
+    return set(_FOOTER_PREBUILT_BLOCK_TYPES.get(active_key, []))
+
+
+def _footer_active_block_order(active_key, active_rows):
+    """Return an ordered list of block-type strings (de-duplicated) in
+    the order they appear in the active layout — used to render the
+    flat pill list for prebuilts AND to drive a stable display order
+    when the structure card needs a quick-access "edit any block" row."""
+    seen = set()
+    order = []
+    if active_rows:
+        for row in active_rows:
+            for col in (row.get("columns") or []):
+                for b in col:
+                    t = b.get("type") if isinstance(b, dict) else None
+                    if t and t not in seen:
+                        seen.add(t)
+                        order.append(t)
+        return order
+    for t in _FOOTER_PREBUILT_BLOCK_TYPES.get(active_key, []):
+        if t not in seen:
+            seen.add(t); order.append(t)
+    return order
+
+
 @bp.route("/frontend/footer")
 @admin_required
 def frontend_footer():
-    from .frontend import FOOTER_TEMPLATES
+    """Render the Footer admin. When the active layout is a custom
+    CustomLayout (kind='footer'), the page shows an additional
+    "Active layout structure" card visualising rows/columns/blocks so
+    the admin sees which slots they're filling. Prebuilt layouts skip
+    that card — their structure is fixed in the Jinja file.
+
+    `active_block_types` drives which content-editor cards render: only
+    the editors whose block type the active layout actually uses are
+    shown. Switching to a layout that doesn't include, say, social
+    icons hides the Social icons editor — the data still persists in
+    JSON; switching back reveals the editor and its saved values."""
+    import json as _json
+    from .frontend import all_footer_layouts, FOOTER_BLOCK_CATALOG
     s = _get_site_setting()
+    active_key = (s.frontend_footer_template if s else None) or "classic"
+    active_layout = CustomLayout.query.filter_by(key=active_key, kind="footer").first()
+    active_rows = None
+    if active_layout:
+        try:
+            active_rows = _normalize_footer_blocks(_json.loads(active_layout.blocks_json or "[]"))
+        except (ValueError, TypeError):
+            active_rows = []
+    active_block_types = _footer_active_block_types(active_key, active_rows)
+    active_block_order = _footer_active_block_order(active_key, active_rows)
+    # Pre-defined Meeting Locations from Settings — surfaced in the
+    # meeting_locations modal as a checkbox list so the admin can pull
+    # them in without retyping. Only in-person locations are shown
+    # (online meetings have no address to render in the footer).
+    all_locations = (Location.query
+                     .filter(Location.location_type == "in_person")
+                     .order_by(Location.name).all())
     return render_template("frontend_footer.html", site=s,
-                           footer_templates=FOOTER_TEMPLATES)
+                           footer_layouts=all_footer_layouts(),
+                           footer_block_catalog=FOOTER_BLOCK_CATALOG,
+                           active_layout=active_layout,
+                           active_layout_rows=active_rows,
+                           active_block_types=active_block_types,
+                           active_block_order=active_block_order,
+                           all_locations=all_locations)
 
 
 @bp.route("/frontend/footer-template", methods=["POST"])
 @admin_required
 def frontend_footer_template_save():
+    """Set the active footer layout. Accepts either a hardcoded prebuilt
+    key (FOOTER_TEMPLATES) OR a CustomLayout row of kind='footer' built
+    via the structure-layout drag-drop builder."""
     from .frontend import FOOTER_TEMPLATES
     s = _get_site_setting()
     key = (request.form.get("frontend_footer_template") or "").strip()
-    if key in {t["key"] for t in FOOTER_TEMPLATES}:
+    valid_keys = {t["key"] for t in FOOTER_TEMPLATES}
+    if CustomLayout.query.filter_by(key=key, kind="footer").first():
+        valid_keys.add(key)
+    if key in valid_keys:
         s.frontend_footer_template = key
         db.session.commit()
-        flash(f"Footer template set to {key}", "success")
+        flash(f"Footer layout set to {key}", "success")
     return redirect(url_for("main.frontend_footer"))
 
 
@@ -3770,6 +4079,7 @@ _HOMEPAGE_BLOCK_CATALOG = [
     {"key": "stats",        "name": "Stats",         "icon": "bar-chart",   "desc": "Number-driven metrics row for credibility cues."},
     {"key": "testimonials", "name": "Testimonials",  "icon": "message-circle", "desc": "Member quotes — adds social proof."},
     {"key": "cta",          "name": "Call to action","icon": "megaphone",   "desc": "Bold full-width banner with primary + ghost buttons."},
+    {"key": "inclusion",    "name": "Inclusion",     "icon": "heart-handshake", "desc": "Statement of inclusion — heading, prose, optional welcome chips, and a call-to-action."},
     {"key": "meetings",     "name": "Meetings list", "icon": "calendar",    "desc": "Live meetings preview pulled from the admin database. Filter + animation are configured under the meetings card."},
     {"key": "events",       "name": "Upcoming Events","icon": "calendar",   "desc": "Stacked rows for upcoming events from the Announcements & Events module. Past events drop off automatically."},
     {"key": "about",        "name": "About",         "icon": "info",        "desc": "About-the-fellowship copy with the three numbered pillars."},
@@ -3783,7 +4093,7 @@ _HOMEPAGE_BLOCK_CATALOG = [
 def frontend_homepage():
     from .frontend import HOMEPAGE_TEMPLATES
     from .blocks import (site_blocks,
-                         format_features, format_stats, format_testimonials,
+                         format_stats, format_testimonials,
                          format_faq, format_quick_links)
     import json as _json
     s = _get_site_setting()
@@ -3818,6 +4128,21 @@ def frontend_homepage():
                 _walk_types(b.get("left") or [], out)
                 _walk_types(b.get("right") or [], out)
     _walk_types(active_layout_seq, active_layout_blocks)
+    # Annotate each split entry with its document-order index so the
+    # admin's structure-card "Settings" buttons can target the matching
+    # per-split modal (homepage-split-settings-{idx}). Mutating a copy
+    # of the sequence keeps the underlying CustomLayout JSON untouched.
+    annotated_seq = []
+    _split_counter = 0
+    for b in active_layout_seq:
+        if isinstance(b, dict) and b.get("type") == "split":
+            entry = dict(b)
+            entry["_split_idx"] = _split_counter
+            annotated_seq.append(entry)
+            _split_counter += 1
+        else:
+            annotated_seq.append(b)
+    active_layout_seq = annotated_seq
     # Record each split in document order so the admin can render a
     # visualization + settings card per split.
     split_idx = 0
@@ -3829,6 +4154,10 @@ def frontend_homepage():
             legacy_m = (b.get("margin") or "").strip().lower()
             gt = (b.get("gap_top") or legacy_m or "none")
             gb = (b.get("gap_bottom") or legacy_m or "none")
+            try: _pl = max(0, min(50, int(b.get("pad_left_pct") or 0)))
+            except (TypeError, ValueError): _pl = 0
+            try: _pr = max(0, min(50, int(b.get("pad_right_pct") or 0)))
+            except (TypeError, ValueError): _pr = 0
             active_layout_splits.append({
                 "index":          split_idx,
                 "width":          (b.get("width") or "boxed"),
@@ -3836,6 +4165,8 @@ def frontend_homepage():
                 "gap":            (b.get("gap") or "none"),
                 "gap_top":        gt,
                 "gap_bottom":     gb,
+                "pad_left_pct":   _pl,
+                "pad_right_pct":  _pr,
                 "bg_color":       (b.get("bg_color") or ""),
                 "bg_color_left":  (b.get("bg_color_left") or ""),
                 "bg_color_right": (b.get("bg_color_right") or ""),
@@ -3848,7 +4179,6 @@ def frontend_homepage():
             split_idx += 1
     block_content = site_blocks(s)
     block_text = {
-        "features":     format_features(block_content.get("features")),
         "stats":        format_stats(block_content.get("stats")),
         "testimonials": format_testimonials(block_content.get("testimonials")),
         "faq":          format_faq(block_content.get("faq")),
@@ -3858,6 +4188,8 @@ def frontend_homepage():
                            homepage_templates=HOMEPAGE_TEMPLATES,
                            homepage_layouts=homepage_layouts,
                            homepage_block_catalog=_HOMEPAGE_BLOCK_CATALOG,
+                           active_layout=active_layout,
+                           active_layout_seq=active_layout_seq,
                            active_layout_blocks=active_layout_blocks,
                            active_layout_splits=active_layout_splits,
                            active_layout_key=active_key,
@@ -3891,14 +4223,31 @@ def frontend_homepage_template_save():
 @bp.route("/frontend/templates")
 @admin_required
 def frontend_templates():
-    from .frontend import MEETING_TEMPLATES, EVENT_TEMPLATES, template_settings
+    from .frontend import (MEETING_TEMPLATES, EVENT_TEMPLATES,
+                           MEETINGS_LIST_TEMPLATES, EVENTS_LIST_TEMPLATES,
+                           ANNOUNCEMENTS_LIST_TEMPLATES,
+                           LITERATURE_LIBRARY_TEMPLATES,
+                           template_settings, meetings_list_protips_resolved)
     from .fonts import all_fonts
     s = _get_site_setting()
     meeting_key = (s.frontend_meeting_template if s else None) or "classic"
     event_key = (s.frontend_event_template if s else None) or "classic"
+    meetings_list_key = (s.frontend_meetings_list_template if s else None) or "sidebar"
+    events_list_key = (s.frontend_events_list_template if s else None) or "cards"
+    announcements_list_key = (s.frontend_announcements_list_template if s else None) or "omni"
+    literature_library_key = (s.frontend_literature_library_template if s else None) or "classic"
     return render_template("frontend_templates.html", site=s,
                            meeting_templates=MEETING_TEMPLATES,
                            event_templates=EVENT_TEMPLATES,
+                           meetings_list_templates=MEETINGS_LIST_TEMPLATES,
+                           meetings_list_active_key=meetings_list_key,
+                           meetings_list_protips=meetings_list_protips_resolved(s),
+                           events_list_templates=EVENTS_LIST_TEMPLATES,
+                           events_list_active_key=events_list_key,
+                           announcements_list_templates=ANNOUNCEMENTS_LIST_TEMPLATES,
+                           announcements_list_active_key=announcements_list_key,
+                           literature_library_templates=LITERATURE_LIBRARY_TEMPLATES,
+                           literature_library_active_key=literature_library_key,
                            meeting_active_settings=template_settings(s, "meeting", meeting_key),
                            event_active_settings=template_settings(s, "event", event_key),
                            font_options=all_fonts())
@@ -3976,6 +4325,192 @@ def frontend_meeting_template_save():
     return redirect(url_for("main.frontend_templates"))
 
 
+@bp.route("/frontend/events-list-template", methods=["POST"])
+@admin_required
+def frontend_events_list_template_save():
+    """Persist the events-list template + container-width + page heading
+    selections from the admin Templates page in one POST. Mirrors the
+    meetings-list save endpoint exactly."""
+    from .frontend import EVENTS_LIST_TEMPLATES
+    s = _get_site_setting()
+    key = (request.form.get("frontend_events_list_template") or "").strip()
+    if key in {t["key"] for t in EVENTS_LIST_TEMPLATES}:
+        s.frontend_events_list_template = key
+    width = (request.form.get("frontend_events_list_width_mode") or "").strip()
+    if width in ("boxed", "full"):
+        s.frontend_events_list_width_mode = width
+    try:
+        max_w = int(request.form.get("frontend_events_list_max_width") or 1160)
+    except ValueError:
+        max_w = 1160
+    s.frontend_events_list_max_width = max(640, min(2400, max_w))
+    try:
+        pad = int(request.form.get("frontend_events_list_padding_pct") or 5)
+    except ValueError:
+        pad = 5
+    s.frontend_events_list_padding_pct = max(0, min(20, pad))
+    heading = (request.form.get("frontend_events_list_heading") or "").strip()
+    subheading = (request.form.get("frontend_events_list_subheading") or "").strip()
+    s.frontend_events_list_heading = heading[:200] or None
+    s.frontend_events_list_subheading = subheading[:500] or None
+    db.session.commit()
+    flash("Events list settings saved", "success")
+    return redirect(url_for("main.frontend_templates"))
+
+
+@bp.route("/frontend/announcements-list-template", methods=["POST"])
+@admin_required
+def frontend_announcements_list_template_save():
+    """Persist the announcements-list template + container-width + page
+    heading selections from the admin Templates page in one POST. Mirrors
+    the events-list save endpoint exactly."""
+    from .frontend import ANNOUNCEMENTS_LIST_TEMPLATES
+    s = _get_site_setting()
+    key = (request.form.get("frontend_announcements_list_template") or "").strip()
+    if key in {t["key"] for t in ANNOUNCEMENTS_LIST_TEMPLATES}:
+        s.frontend_announcements_list_template = key
+    width = (request.form.get("frontend_announcements_list_width_mode") or "").strip()
+    if width in ("boxed", "full"):
+        s.frontend_announcements_list_width_mode = width
+    try:
+        max_w = int(request.form.get("frontend_announcements_list_max_width") or 1160)
+    except ValueError:
+        max_w = 1160
+    s.frontend_announcements_list_max_width = max(640, min(2400, max_w))
+    try:
+        pad = int(request.form.get("frontend_announcements_list_padding_pct") or 5)
+    except ValueError:
+        pad = 5
+    s.frontend_announcements_list_padding_pct = max(0, min(20, pad))
+    heading = (request.form.get("frontend_announcements_list_heading") or "").strip()
+    subheading = (request.form.get("frontend_announcements_list_subheading") or "").strip()
+    s.frontend_announcements_list_heading = heading[:200] or None
+    s.frontend_announcements_list_subheading = subheading[:500] or None
+    db.session.commit()
+    flash("Announcements list settings saved", "success")
+    return redirect(url_for("main.frontend_templates"))
+
+
+@bp.route("/frontend/meetings-list-template", methods=["POST"])
+@admin_required
+def frontend_meetings_list_template_save():
+    from .frontend import MEETINGS_LIST_TEMPLATES
+    s = _get_site_setting()
+    key = (request.form.get("frontend_meetings_list_template") or "").strip()
+    if key in {t["key"] for t in MEETINGS_LIST_TEMPLATES}:
+        s.frontend_meetings_list_template = key
+    width = (request.form.get("frontend_meetings_list_width_mode") or "").strip()
+    if width in ("boxed", "full"):
+        s.frontend_meetings_list_width_mode = width
+    try:
+        max_w = int(request.form.get("frontend_meetings_list_max_width") or 1160)
+    except ValueError:
+        max_w = 1160
+    s.frontend_meetings_list_max_width = max(640, min(2400, max_w))
+    try:
+        pad = int(request.form.get("frontend_meetings_list_padding_pct") or 5)
+    except ValueError:
+        pad = 5
+    s.frontend_meetings_list_padding_pct = max(0, min(20, pad))
+    heading = (request.form.get("frontend_meetings_list_heading") or "").strip()
+    subheading = (request.form.get("frontend_meetings_list_subheading") or "").strip()
+    s.frontend_meetings_list_heading = heading[:200] or None
+    s.frontend_meetings_list_subheading = subheading[:500] or None
+    # Pro Tips section — collect form fields into a JSON blob layered
+    # over the defaults. Items default to the baked list when the admin
+    # hasn't supplied a JSON override; we accept either a structured
+    # JSON paste in `protips_items_json` or the form-array shape used
+    # by the per-item editor (parsed via parse_faq with a custom
+    # prefix). The empty / unparseable case stores NULL so the
+    # frontend resolver falls back wholesale to defaults.
+    import json as _json_pt
+    import re as _re_pt
+    _hex_re = _re_pt.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+    def _hex_or_blank(v):
+        v = (v or "").strip()
+        return v if _hex_re.match(v) else ""
+    pt_cfg = {
+        "enabled": request.form.get("protips_enabled") == "1",
+        "heading": (request.form.get("protips_heading") or "").strip()[:200],
+        "subheading": (request.form.get("protips_subheading") or "").strip()[:500],
+        "icon": (request.form.get("protips_icon") or "").strip()[:64],
+        "icon_color": _hex_or_blank(request.form.get("protips_icon_color")),
+    }
+    # Per-item form-array editor — same shape as the homepage FAQ
+    # parser, but with a `protip_item_*` prefix. Items keyed by the
+    # `protip_item_present` markers so submission order = render order.
+    pt_items = []
+    for raw_idx in request.form.getlist("protip_item_present"):
+        try:
+            i = int(raw_idx)
+        except (TypeError, ValueError):
+            continue
+        question = (request.form.get(f"protip_item_{i}_question") or "").strip()
+        answer = (request.form.get(f"protip_item_{i}_answer") or "").strip()
+        ic = (request.form.get(f"protip_item_{i}_icon") or "").strip()
+        ic_size = (request.form.get(f"protip_item_{i}_icon_size") or "").strip()
+        if not (question or answer):
+            continue
+        try:
+            sz = int(ic_size) if ic_size else 0
+        except (TypeError, ValueError):
+            sz = 0
+        size_out = str(sz) if 12 <= sz <= 200 else ""
+        pt_items.append({
+            "icon": ic[:64],
+            "icon_size": size_out,
+            "question": question[:300],
+            "answer": answer[:4000],
+        })
+    # When the editor submits any rows, that's the canonical list.
+    # An entirely empty submission (admin removed every row) saves an
+    # empty list so the section hides via the items-empty gate. No
+    # JSON-textarea fallback path — the GUI is the source of truth.
+    if request.form.getlist("protip_item_present"):
+        pt_cfg["items"] = pt_items
+    s.frontend_meetings_list_protips_json = _json_pt.dumps(pt_cfg)
+    db.session.commit()
+    flash("Meetings list settings saved", "success")
+    return redirect(url_for("main.frontend_templates"))
+
+
+@bp.route("/frontend/literature-library-template", methods=["POST"])
+@admin_required
+def frontend_literature_library_template_save():
+    """Persist the Literature Library template selection. Today there's
+    a single layout; the catalog gives the picker a place to land if
+    a second one's added later. The bigger work — flipping individual
+    libraries / items public — happens on each Library's own edit
+    modal, not here."""
+    from .frontend import LITERATURE_LIBRARY_TEMPLATES
+    s = _get_site_setting()
+    key = (request.form.get("frontend_literature_library_template") or "").strip()
+    if key in {t["key"] for t in LITERATURE_LIBRARY_TEMPLATES}:
+        s.frontend_literature_library_template = key
+        db.session.commit()
+        flash("Literature Library template saved", "success")
+    return redirect(url_for("main.frontend_templates"))
+
+
+@bp.route("/frontend/printlist-template", methods=["POST"])
+@admin_required
+def frontend_printlist_template_save():
+    """Persist the Printlist subheading, website, and page size. The
+    Printlist has a single layout today so there's no template radio —
+    the form is purely the configuration fields."""
+    s = _get_site_setting()
+    sub = (request.form.get("frontend_printlist_subheading") or "").strip()
+    s.frontend_printlist_subheading = sub[:500] or None
+    web = (request.form.get("frontend_printlist_website") or "").strip()
+    s.frontend_printlist_website = web[:200] or None
+    size = (request.form.get("frontend_printlist_page_size") or "").strip().lower()
+    if size in ("letter", "legal"):
+        s.frontend_printlist_page_size = size
+    db.session.commit()
+    flash("Printlist settings saved", "success")
+    return redirect(url_for("main.frontend_templates"))
+
+
 @bp.route("/frontend/event-template", methods=["POST"])
 @admin_required
 def frontend_event_template_save():
@@ -3991,8 +4526,69 @@ def frontend_event_template_save():
 
 _CUSTOM_LAYOUT_BLOCK_TYPES = {
     "hero", "quick_links", "meetings", "events", "about", "contact",
-    "features", "cta", "stats", "testimonials", "faq", "split",
+    "features", "cta", "stats", "testimonials", "faq", "inclusion", "split",
 }
+
+# Block types valid inside a footer custom layout. The footer dispatcher
+# (frontend/footers/_custom.html) walks these in order; each renders the
+# matching `frontend/footers/blocks/_<type>.html` partial which reads
+# from the shared structured content (footer_content(site)).
+_FOOTER_BLOCK_TYPES = {
+    "brand", "link_columns", "social_row", "secondary_nav", "copyright",
+    "divider", "spacer", "meeting_locations", "contact_section",
+    "powered_by", "admin_login",
+}
+
+
+_FOOTER_VALID_COLS = {1, 2, 3, 4}
+
+
+def _normalize_footer_blocks(raw_list):
+    """Validate a footer custom-layout block list. The canonical shape is:
+        [{"type": "row", "cols": 1-4,
+          "columns": [[{type: <block-type>}, ...], ...]}, ...]
+    The auto-migration path: a legacy flat list ([{type: <bt>}, ...]) gets
+    wrapped in a single 1-column row so older saves keep rendering after
+    the rows+cols upgrade. Block types must be in _FOOTER_BLOCK_TYPES;
+    column count clamps to 1-4; columns past `cols` are dropped, missing
+    columns are padded with empty arrays."""
+    if not raw_list:
+        return []
+    out = []
+    legacy_flat = []  # any top-level non-row entries collected here
+    for b in raw_list:
+        if not isinstance(b, dict):
+            continue
+        t = (b.get("type") or "").strip()
+        if t == "row":
+            try:
+                cols = int(b.get("cols") or 1)
+            except (TypeError, ValueError):
+                cols = 1
+            if cols not in _FOOTER_VALID_COLS:
+                cols = 1
+            raw_columns = b.get("columns") or []
+            columns = []
+            for col in raw_columns[:cols]:
+                if not isinstance(col, list):
+                    columns.append([])
+                    continue
+                clean = []
+                for bb in col:
+                    if isinstance(bb, dict) and bb.get("type") in _FOOTER_BLOCK_TYPES:
+                        clean.append({"type": bb["type"]})
+                columns.append(clean)
+            while len(columns) < cols:
+                columns.append([])
+            out.append({"type": "row", "cols": cols, "columns": columns})
+        elif t in _FOOTER_BLOCK_TYPES:
+            legacy_flat.append({"type": t})
+    # Wrap any top-level legacy blocks as one 1-col row so the saved
+    # layout still renders.
+    if legacy_flat:
+        out.insert(0 if not out else len(out),
+                   {"type": "row", "cols": 1, "columns": [legacy_flat]})
+    return out
 
 
 _SPLIT_VALID_WIDTHS = {"boxed", "full"}
@@ -4047,6 +4643,13 @@ def _normalize_blocks(raw_list):
                 if gt in _SPLIT_VALID_SPACING: norm["gap_top"] = gt
                 if gb in _SPLIT_VALID_SPACING: norm["gap_bottom"] = gb
                 if gp in _SPLIT_VALID_SPACING: norm["gap"] = gp
+                for pk in ("pad_left_pct", "pad_right_pct"):
+                    try:
+                        n = int(b.get(pk) or 0)
+                    except (TypeError, ValueError):
+                        n = 0
+                    n = max(0, min(50, n))
+                    if n: norm[pk] = n
                 if bg and _SPLIT_HEX_RE.match(bg): norm["bg_color"] = bg
                 bg_l = (b.get("bg_color_left") or "").strip()
                 bg_r = (b.get("bg_color_right") or "").strip()
@@ -4064,10 +4667,19 @@ def _normalize_blocks(raw_list):
 def frontend_custom_layout_save():
     """Persist a user-created layout from the drag-and-drop builder.
     Returns JSON {ok, key, layout} so the picker can re-render and
-    auto-select the new entry."""
+    auto-select the new entry. The optional `kind` field on the JSON
+    payload lets the same endpoint serve homepage AND footer (and any
+    future structural layout). Defaults to 'homepage' for backwards
+    compat with existing builder calls."""
     import json as _json
     payload = request.get_json(silent=True) or {}
-    blocks = _normalize_blocks(payload.get("blocks") or [])
+    kind = (payload.get("kind") or "homepage").strip().lower()
+    if kind == "footer":
+        blocks = _normalize_footer_blocks(payload.get("blocks") or [])
+    elif kind == "homepage":
+        blocks = _normalize_blocks(payload.get("blocks") or [])
+    else:
+        return jsonify(ok=False, error=f"Unknown layout kind: {kind}"), 400
     if not blocks:
         return jsonify(ok=False, error="At least one block is required"), 400
     raw_name = (payload.get("name") or "").strip()[:120] or "Custom layout"
@@ -4082,7 +4694,7 @@ def frontend_custom_layout_save():
         key=candidate, name=raw_name,
         description=f"Custom layout · {len(blocks)} block{'' if len(blocks)==1 else 's'}",
         blocks_json=_json.dumps(blocks),
-        kind="homepage", is_prebuilt=False,
+        kind=kind, is_prebuilt=False,
     )
     db.session.add(row)
     db.session.commit()
@@ -4094,13 +4706,17 @@ def frontend_custom_layout_save():
 def frontend_custom_layout_update(key):
     """Replace a custom layout's name + blocks. Pre-built layouts seeded
     via _seed_custom_layouts are read-only — admins can clone them by
-    using "Custom layout" in the picker but not edit the originals."""
+    using "Custom layout" in the picker but not edit the originals.
+    Dispatches to the right block-type validator based on row.kind."""
     import json as _json
     row = CustomLayout.query.filter_by(key=key).first() or abort(404)
     if row.is_prebuilt:
         return jsonify(ok=False, error="Built-in layouts can't be edited"), 400
     payload = request.get_json(silent=True) or {}
-    blocks = _normalize_blocks(payload.get("blocks") or [])
+    if row.kind == "footer":
+        blocks = _normalize_footer_blocks(payload.get("blocks") or [])
+    else:
+        blocks = _normalize_blocks(payload.get("blocks") or [])
     if not blocks:
         return jsonify(ok=False, error="At least one block is required"), 400
     raw_name = (payload.get("name") or "").strip()[:120] or row.name
@@ -4123,6 +4739,8 @@ def frontend_custom_layout_delete(key):
     s = _get_site_setting()
     if row.kind == "homepage" and s.frontend_homepage_template == row.key:
         s.frontend_homepage_template = "classic"
+    if row.kind == "footer" and s.frontend_footer_template == row.key:
+        s.frontend_footer_template = "classic"
     db.session.delete(row)
     db.session.commit()
     return jsonify(ok=True)
@@ -4158,8 +4776,69 @@ def frontend_pages():
 @bp.route("/frontend/footer-save", methods=["POST"])
 @admin_required
 def frontend_footer_save():
+    """Save the structured footer content + container settings (width
+    mode, max width, padding %). The legacy plain-text `frontend_footer_text`
+    field is still accepted for backwards compat — old templates that
+    haven't migrated yet read from it as a copyright fallback."""
+    import json as _json
+    from .blocks import parse_footer
     s = _get_site_setting()
-    s.frontend_footer_text = (request.form.get("frontend_footer_text") or "").strip() or None
+    # Width mode
+    raw_w = (request.form.get("frontend_footer_width_mode") or "").strip().lower()
+    s.frontend_footer_width_mode = raw_w if raw_w in ("boxed", "full") else "boxed"
+    try:
+        s.frontend_footer_max_width = max(640, min(int(request.form.get("frontend_footer_max_width") or 1160), 2400))
+    except (TypeError, ValueError):
+        s.frontend_footer_max_width = 1160
+    try:
+        s.frontend_footer_padding_pct = max(0, min(int(request.form.get("frontend_footer_padding_pct") or 5), 20))
+    except (TypeError, ValueError):
+        s.frontend_footer_padding_pct = 5
+    # Background mode — 'dark' (default; footer always dark) or 'light'
+    # (follows page theme).
+    raw_bg = (request.form.get("frontend_footer_bg_mode") or "").strip().lower()
+    s.frontend_footer_bg_mode = raw_bg if raw_bg in ("light", "dark") else "dark"
+    # Min-height in vh (0 = no min-height; clamp 0-100).
+    try:
+        s.frontend_footer_min_height_vh = max(0, min(int(request.form.get("frontend_footer_min_height_vh") or 0), 100))
+    except (TypeError, ValueError):
+        s.frontend_footer_min_height_vh = 0
+    # Font scale percentage — desktop-first; mobile media queries cap
+    # the upper bound so a 200% setting doesn't blow out a phone view.
+    try:
+        s.frontend_footer_font_scale = max(50, min(int(request.form.get("frontend_footer_font_scale") or 100), 200))
+    except (TypeError, ValueError):
+        s.frontend_footer_font_scale = 100
+    # Brand custom-logo upload — handled before parse_footer so the
+    # uploaded filename ends up on `s.frontend_brand_logo_filename`. The
+    # brand block's `logo_source` lives in the JSON content (see below)
+    # and the public render dispatches on it. A `clear_brand_logo`
+    # checkbox on the modal removes the file (the saved filename only;
+    # the on-disk asset is left for cleanup later).
+    if "footer_brand_present" in request.form:
+        if request.form.get("clear_brand_logo") == "1":
+            s.frontend_brand_logo_filename = None
+        upload = request.files.get("frontend_brand_logo")
+        if upload and upload.filename:
+            from werkzeug.utils import secure_filename
+            from uuid import uuid4
+            import os
+            safe = secure_filename(upload.filename) or "brand-logo"
+            stored = f"{uuid4().hex}_{safe}"
+            upload.save(os.path.join(current_app.config["UPLOAD_FOLDER"], stored))
+            s.frontend_brand_logo_filename = stored
+    # Structured content — only update if the form-level marker is
+    # present. parse_footer is given the existing content so any section
+    # whose editor card was hidden (because the active layout doesn't
+    # use that block) preserves its saved values instead of being wiped.
+    if "footer_blocks_present" in request.form:
+        from .blocks import footer_content
+        existing = footer_content(s)
+        content = parse_footer(request.form, existing=existing)
+        s.frontend_footer_blocks_json = _json.dumps(content)
+    # Legacy single-textarea field — still supported.
+    if "frontend_footer_text" in request.form:
+        s.frontend_footer_text = (request.form.get("frontend_footer_text") or "").strip() or None
     db.session.commit()
     flash("Footer saved", "success")
     return redirect(url_for("main.frontend_footer"))
@@ -4171,6 +4850,17 @@ def site_frontend_logo():
     if not s or not s.frontend_logo_filename:
         abort(404)
     return send_from_directory(current_app.config["UPLOAD_FOLDER"], s.frontend_logo_filename)
+
+
+@public_bp.route("/site-branding/frontend-brand-logo")
+def site_frontend_brand_logo():
+    """Custom logo for the public footer's Brand block. Distinct from
+    `frontend-logo` (the header logo) so admins can show one mark up
+    top and a different mark down below if they want."""
+    s = SiteSetting.query.first()
+    if not s or not s.frontend_brand_logo_filename:
+        abort(404)
+    return send_from_directory(current_app.config["UPLOAD_FOLDER"], s.frontend_brand_logo_filename)
 
 
 @public_bp.route("/site-branding/og-image")
@@ -4541,6 +5231,12 @@ def library_edit(slug):
         # form didn't render the field at all".
         if current_user.is_admin() and request.form.get("is_intergroup_present") == "1":
             lib.is_intergroup = request.form.get("is_intergroup") == "1"
+        # Whole-library public-visibility toggle for the /library page.
+        # Same hidden-marker pattern as is_intergroup so unchecking the
+        # box is distinguishable from the form not rendering it. Admin-
+        # only — non-admins can't surface a library to the public.
+        if current_user.is_admin() and request.form.get("public_visible_present") == "1":
+            lib.public_visible = request.form.get("public_visible") == "1"
         # Categories management is admin-only on every library — the
         # form renders the editor for admins, the re-check here keeps
         # a tampered POST from sneaking categories onto a library if
@@ -4791,14 +5487,24 @@ th, td {{ border: 1px solid #bbb; padding: .3em .6em; }}
 @bp.route("/markdown-preview", methods=["POST"])
 @login_required
 def markdown_preview():
-    """Render a markdown snippet to bleached HTML for the editor preview."""
+    """Render a markdown snippet to bleached HTML for the editor preview.
+    `mode=block` opts into the no-`nl2br` filter so lists render under a
+    bare paragraph (matches what `markdown_block` does on the public site).
+    Default mode keeps the legacy `markdown` filter behaviour so the
+    library reading editor renders identically to its persisted output."""
     if not current_user.can_use_editor_tools():
         return jsonify(error="forbidden"), 403
     from flask import render_template_string
-    body = request.form.get("body") or request.get_json(silent=True, force=False) or {}
-    if isinstance(body, dict):
-        body = body.get("body", "")
-    html = str(render_template_string("{{ body|markdown }}", body=body))
+    body = request.form.get("body")
+    mode = (request.form.get("mode") or "").strip().lower()
+    if body is None:
+        payload = request.get_json(silent=True, force=False) or {}
+        if isinstance(payload, dict):
+            body = payload.get("body", "")
+            mode = mode or (payload.get("mode") or "").strip().lower()
+    body = body or ""
+    filter_name = "markdown_block" if mode == "block" else "markdown"
+    html = str(render_template_string("{{ body|" + filter_name + " }}", body=body))
     return jsonify(html=html)
 
 
@@ -5001,6 +5707,32 @@ def library_readings_reorder(slug):
             r.position = pos
     db.session.commit()
     return jsonify({"ok": True})
+
+
+@bp.route("/readings/<int:rid>/public-visible", methods=["POST"])
+@login_required
+def library_item_public_toggle(rid):
+    """Per-item public-visibility toggle for the Literature Library page.
+
+    JSON-in, JSON-out so the per-row toggle in library_detail.html can
+    fire-and-forget on every change without a page reload. Authority
+    follows the same gate as editing the parent library — anyone who
+    can edit the library can flip individual items.
+
+    The flag is only meaningful when ``Library.public_visible`` is
+    True; the public /library route consults both. We don't
+    short-circuit the save here even when the parent is private — that
+    way an admin can pre-stage which items will surface before flipping
+    the parent on.
+    """
+    r = db.session.get(LibraryItem, rid) or abort(404)
+    if not current_user.can_edit_library(r.library):
+        return jsonify(error="forbidden"), 403
+    payload = request.get_json(silent=True) or {}
+    visible = bool(payload.get("public_visible"))
+    r.public_visible = visible
+    db.session.commit()
+    return jsonify(public_visible=r.public_visible)
 
 
 @bp.route("/readings/<int:rid>/delete", methods=["POST"])
@@ -5380,6 +6112,25 @@ def email_save():
     s.access_request_to = (request.form.get("access_request_to") or "").strip() or None
     db.session.commit()
     flash("Email settings saved", "success")
+    return redirect(request.referrer or url_for("main.index"))
+
+
+@bp.route("/settings/timezone-save", methods=["POST"])
+@admin_required
+def timezone_save():
+    try:
+        from zoneinfo import available_timezones
+    except ImportError:
+        flash("Timezone support requires Python 3.9+", "danger")
+        return redirect(request.referrer or url_for("main.index"))
+    raw = (request.form.get("timezone") or "").strip()
+    if not raw or raw not in available_timezones():
+        flash("Pick a valid timezone", "danger")
+        return redirect(request.referrer or url_for("main.index"))
+    s = _get_site_setting()
+    s.timezone = raw
+    db.session.commit()
+    flash("Timezone saved", "success")
     return redirect(request.referrer or url_for("main.index"))
 
 
@@ -6186,8 +6937,25 @@ def post_save():
 
     # Slug edits are gated to admins + frontend editors; all other users'
     # slug field is silently ignored.
+    explicit_slug = None
     if current_user.is_authenticated and current_user.can_edit_frontend():
-        post.slug = _normalize_slug(request.form.get("slug"))
+        explicit_slug = _normalize_slug(request.form.get("slug"))
+
+    # Resolve a unique public slug. The base is the explicit slug when
+    # the editor provided one, else the title-derived default. The
+    # uniqueness sweep appends -2/-3/... until no other post shares it.
+    # When the explicit value was blank AND the title-derived slug is
+    # already unique, leave Post.slug NULL so future title edits keep
+    # the URL in sync. Otherwise persist the resolved slug explicitly.
+    title_slug = _normalize_slug(post.title)
+    base = explicit_slug or title_slug
+    unique = _unique_post_slug(base, exclude_id=post.id if not creating else None)
+    if explicit_slug:
+        post.slug = unique
+        if explicit_slug != unique:
+            flash(f"URL already taken — saved as “{unique}”.", "info")
+    else:
+        post.slug = None if unique == title_slug else unique
     post.summary = (request.form.get("summary") or "").strip() or None
     post.body = (request.form.get("body") or "").strip() or None
 

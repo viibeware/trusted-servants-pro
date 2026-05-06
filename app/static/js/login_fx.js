@@ -36,7 +36,23 @@
     return '#' + f(0) + f(8) + f(4);
   }
 
-  function renderSineGradient(canvas, colors){
+  // Default sinewave shape constants — preserved as the canonical look
+  // when no `wave` opts are passed. `wave.f1Mul` / `f2Mul` scale the two
+  // sine frequencies (in units of "cycles across W"); `amp1` / `amp2`
+  // are the vertical bend amplitudes; `phase` shifts the second sine.
+  const SINEWAVE_DEFAULT = { f1Mul: 1.0, f2Mul: 2.3, amp1: 0.18, amp2: 0.09, phase: 1.2 };
+
+  function randomWaveParams(){
+    return {
+      f1Mul: rand(0.4, 2.2),
+      f2Mul: rand(1.4, 4.0),
+      amp1:  rand(0.06, 0.30),
+      amp2:  rand(0.02, 0.16),
+      phase: rand(0, Math.PI * 2),
+    };
+  }
+
+  function renderSineGradient(canvas, colors, opts){
     if (!canvas || !colors || colors.length < 1) return;
     const W = canvas.width = 300;
     const H = canvas.height = 500;
@@ -44,17 +60,18 @@
     if (colors.length === 1){
       gctx.fillStyle = colors[0]; gctx.fillRect(0, 0, W, H); return;
     }
+    const wave = Object.assign({}, SINEWAVE_DEFAULT, (opts && opts.wave) || {});
     const rgb = colors.map(hexToRgb);
     const n = rgb.length;
     const img = gctx.createImageData(W, H);
     const d = img.data;
-    const f1 = 2 * Math.PI / W * 1;
-    const f2 = 2 * Math.PI / W * 2.3;
-    const amp1 = 0.18, amp2 = 0.09;
+    const f1 = 2 * Math.PI / W * wave.f1Mul;
+    const f2 = 2 * Math.PI / W * wave.f2Mul;
+    const amp1 = wave.amp1, amp2 = wave.amp2, phase = wave.phase;
     for (let y = 0; y < H; y++){
       for (let x = 0; x < W; x++){
-        const phase = Math.sin(x * f1) * amp1 + Math.sin(x * f2 + 1.2) * amp2;
-        let t = y / (H - 1) + phase;
+        const ph = Math.sin(x * f1) * amp1 + Math.sin(x * f2 + phase) * amp2;
+        let t = y / (H - 1) + ph;
         if (t < 0) t = 0; else if (t > 1) t = 1;
         const p = t * (n - 1);
         const i = Math.floor(p);
@@ -72,12 +89,12 @@
     gctx.putImageData(img, 0, 0);
   }
 
-  function applyBackground(el, colors){
+  function applyBackground(el, colors, opts){
     if (!el) return;
     if (!colors || !colors.length){ el.style.background = ''; el.style.backgroundImage = ''; return; }
     if (colors.length === 1){ el.style.background = colors[0]; return; }
     const c = document.createElement('canvas');
-    renderSineGradient(c, colors);
+    renderSineGradient(c, colors, opts);
     el.style.backgroundImage = 'url(' + c.toDataURL('image/jpeg', 0.92) + ')';
     el.style.backgroundSize = '100% 100%';
     el.style.backgroundRepeat = 'no-repeat';
@@ -108,18 +125,21 @@
     return '#' + f(0) + f(8) + f(4);
   }
 
-  // Dim/mute a palette based on the active theme. Dark mode caps lightness
-  // and drops saturation noticeably so the gradient reads as moody-dark
-  // rather than neon. Light mode applies a subtle desaturation so the
-  // gradient feels softer / less garish on a bright page.
+  // Dim/mute a palette based on the active theme. Dark mode pulls lightness
+  // way down (cap at 0.18, scaled by 0.30 so already-dark inputs stay dark)
+  // for a "night sky with aurora overhead" look — the chosen hues read as
+  // moody glows over near-black rather than full-brightness bands. Saturation
+  // is barely reduced (0.85×) so the aurora keeps its colour identity. Light
+  // mode applies a subtle desaturation so the gradient feels softer / less
+  // garish on a bright page.
   function adjustPaletteForTheme(hexes, isDark){
     return (hexes || []).map(hex => {
       const [r, g, b] = hexToRgb(hex);
       const [h, s, l] = rgbToHsl(r, g, b);
       let newL, newS;
       if (isDark){
-        newL = Math.min(l, 0.42);
-        newS = s * 0.7;
+        newL = Math.min(l * 0.30, 0.18);
+        newS = s * 0.85;
       } else {
         newL = l;
         newS = s * 0.9;
@@ -128,7 +148,7 @@
     });
   }
 
-  window.loginFxUtils = { hexToRgb, rgbToCss, randomHex, randomPalette, renderSineGradient, applyBackground, adjustPaletteForTheme };
+  window.loginFxUtils = { hexToRgb, rgbToCss, randomHex, randomPalette, renderSineGradient, applyBackground, adjustPaletteForTheme, randomWaveParams, SINEWAVE_DEFAULT };
 
 
   const factories = {

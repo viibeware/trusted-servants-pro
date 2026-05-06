@@ -1,5 +1,27 @@
 {# Reusable meeting create/edit modal. #}
 {% set form_id = modal_id ~ '-form' %}
+
+{# One row of the Extended Content editor — optional title input plus
+   a Markdown-supported body textarea. Field names are scoped by
+   `idx`; the JS clones the hidden <template> below the editor and
+   swaps `__INDEX__` for a fresh integer. The save endpoint walks
+   `ext_block_present` markers in submission order. #}
+{% macro _ext_block_row(idx, block) %}
+<div class="fe-meeting-extended-card" data-extended-item data-item-index="{{ idx }}">
+  <input type="hidden" name="ext_block_present" value="{{ idx }}">
+  <div class="fe-meeting-extended-card-fields">
+    <input type="text"
+           name="ext_block_{{ idx }}_title"
+           value="{{ (block.title if block else '') or '' }}"
+           placeholder="Block title (optional)">
+    <textarea name="ext_block_{{ idx }}_body"
+              rows="5"
+              placeholder="Markdown supported. Use ## headings, **bold**, *italic*, [links](https://...), - lists, etc.">{{ (block.body if block else '') or '' }}</textarea>
+  </div>
+  <button type="button" class="fe-meeting-extended-card-remove" data-extended-remove
+          title="Remove block" aria-label="Remove block">{{ icon('trash') }}</button>
+</div>
+{% endmacro %}
 <div class="modal modal-lg" id="{{ modal_id }}" aria-hidden="true">
   <div class="modal-backdrop" data-close></div>
   <div class="modal-panel" role="dialog" aria-modal="true">
@@ -66,8 +88,20 @@
                  value="{% if chosen and not is_preset %}{{ chosen }}{% endif %}">
         </label>
 
-        <label>Description
-          <textarea name="description" rows="3">{{ (meeting.description if meeting else '') or '' }}</textarea>
+        <label>Location notes <span class="muted smaller">(optional, admin-only)</span>
+          <span class="muted small" style="display:block; margin: 2px 0 4px;">Anything visitors or hosts should know about getting in / where to park / who to ask. Plain text.</span>
+          <textarea name="location_notes" rows="2" placeholder="e.g. Side entrance off Main St. Ring buzzer #4. Free street parking after 6pm.">{{ (meeting.location_notes if meeting else '') or '' }}</textarea>
+        </label>
+
+        <label>Description <span class="muted smaller">— Markdown supported</span>
+          <div class="md-editor" data-md-editor>
+            <textarea name="description" rows="6" data-md-input
+                      class="md-editor-input"
+                      placeholder="Write a description… **bold**, *italic*, [links](https://example.com), - bulleted lists, etc.">{{ (meeting.description if meeting else '') or '' }}</textarea>
+            <div class="md-editor-preview" data-md-preview aria-live="polite">
+              <span class="md-editor-preview-empty muted small">Preview appears here as you type.</span>
+            </div>
+          </div>
         </label>
 
         <label>Backend Alert Message <span class="muted smaller">(leave blank to hide)</span>
@@ -79,6 +113,39 @@
           <span class="muted small" style="display:block; margin: 2px 0 4px;">Displayed prominently on the public meeting detail page.</span>
           <textarea name="public_alert_message" rows="2" placeholder="Notice for the public, e.g. cancellation, change of venue.">{{ (meeting.public_alert_message if meeting else '') or '' }}</textarea>
         </label>
+
+        {# Extended-content section — admin-tunable Markdown blocks
+           rendered on the public meeting detail page below the schedule
+           / zoom / files cards. Toggle gates the whole section so
+           admins can park draft content without exposing it; the
+           per-block list lets them stack as many blocks as they need. #}
+        <fieldset class="fieldset fe-meeting-extended-fieldset">
+          <legend>Extended Content</legend>
+          {%- set _ext_enabled = meeting.extended_content_enabled if meeting else false -%}
+          {%- set _ext_blocks = meeting.extended_blocks() if meeting else [] -%}
+          <label class="mode-toggle fe-meeting-extended-toggle">
+            <input type="checkbox" name="extended_content_enabled" value="1"
+                   {% if _ext_enabled %}checked{% endif %}
+                   data-extended-toggle>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+            <span class="muted smaller">Show extended content on the public meeting page</span>
+          </label>
+          <div class="fe-meeting-extended-editor"
+               data-extended-editor
+               {% if not _ext_enabled %}aria-hidden="true"{% endif %}>
+            <div class="fe-meeting-extended-list" data-extended-list>
+              {% for blk in _ext_blocks %}
+                {{ _ext_block_row(loop.index0, blk) }}
+              {% endfor %}
+            </div>
+            <template data-extended-template>
+              {{ _ext_block_row('__INDEX__', None) }}
+            </template>
+            <button type="button" class="btn btn-sm" data-extended-add>
+              {{ icon('plus') }} <span>Add block</span>
+            </button>
+          </div>
+        </fieldset>
 
         <label>Logo
           {% if meeting and meeting.logo_filename %}
@@ -173,19 +240,39 @@
         <fieldset class="fieldset">
           <legend>Libraries</legend>
           {% if all_libraries %}
+          {%- set _module_on = site and site.frontend_module_enabled -%}
+          {%- set _can_public = current_user.is_authenticated and current_user.can_edit_frontend() -%}
           <div class="library-picker">
             {% set _public_reading_ids = (meeting.public_library_items|map(attribute='id')|list) if meeting else [] %}
             {% for lib in all_libraries %}
               {% set included = meeting and lib in meeting.libraries %}
               {% set mode = meeting.library_mode(lib) if included else 'all' %}
               {% set sel_ids = meeting.selected_ids_for_library(lib) if (included and meeting) else [] %}
+              {% set whole_public = meeting.public_library_visible(lib) if (included and meeting) else false %}
               <div class="library-row" data-lib="{{ lib.id }}">
-                <label class="library-head">
-                  <input type="checkbox" name="library_ids" value="{{ lib.id }}"
-                         class="library-include" {% if included %}checked{% endif %}>
-                  <span class="library-name">{{ lib.name }}</span>
-                  <span class="muted smaller">{{ lib.items.count() }} files</span>
-                </label>
+                <div class="library-head-wrap">
+                  <label class="library-head">
+                    <input type="checkbox" name="library_ids" value="{{ lib.id }}"
+                           class="library-include" {% if included %}checked{% endif %}>
+                    <span class="library-name">{{ lib.name }}</span>
+                    <span class="muted smaller">{{ lib.items.count() }} files</span>
+                  </label>
+                  {# Whole-library Public toggle — same chrome as the Files
+                     row toggle. Only meaningful when mode='all' (granular
+                     mode uses the per-item toggles below); JS hides it
+                     when the row flips to granular. #}
+                  {% if _module_on %}
+                  <label class="mode-toggle file-public-row-toggle library-public-toggle{% if not _can_public %} is-disabled{% endif %}"
+                         data-library-public-toggle
+                         title="{{ 'Show this library on the public meeting page' if _can_public else 'Only admins and frontend editors can change public visibility' }}">
+                    <input type="checkbox" name="library_public_{{ lib.id }}" value="1"
+                           {% if whole_public %}checked{% endif %}
+                           {% if not _can_public %}disabled aria-disabled="true"{% endif %}>
+                    <span class="mode-track"><span class="mode-thumb"></span></span>
+                    <span class="muted smaller">Public</span>
+                  </label>
+                  {% endif %}
+                </div>
                 <div class="library-detail" {% if not included %}style="display:none"{% endif %}>
                   <label class="mode-toggle">
                     <span class="mode-label-all">All files</span>
@@ -194,29 +281,34 @@
                     <span class="mode-track"><span class="mode-thumb"></span></span>
                     <span class="mode-label-granular">Granular</span>
                   </label>
+                  {# Per-item include + public toggles. The include
+                     checkbox decides whether the item is part of the
+                     meeting's library scope; the public toggle (only
+                     visible in granular mode) controls whether it
+                     surfaces on the public meeting page. #}
                   <div class="library-readings" {% if mode != 'granular' %}style="display:none"{% endif %}>
                     {% for r in lib.items %}
-                    <label class="reading-check">
-                      <input type="checkbox" name="library_readings_{{ lib.id }}" value="{{ r.id }}"
-                             {% if r.id in sel_ids %}checked{% endif %}>
-                      <span>{{ r.title }}</span>
-                    </label>
+                    <div class="reading-row">
+                      <label class="reading-check">
+                        <input type="checkbox" name="library_readings_{{ lib.id }}" value="{{ r.id }}"
+                               {% if r.id in sel_ids %}checked{% endif %}>
+                        <span>{{ r.title }}</span>
+                      </label>
+                      {% if _module_on %}
+                      <label class="mode-toggle file-public-row-toggle reading-public-toggle{% if not _can_public %} is-disabled{% endif %}"
+                             title="{{ 'Show this reading on the public meeting page' if _can_public else 'Only admins and frontend editors can change public visibility' }}">
+                        <input type="checkbox" name="library_public_library_items_{{ lib.id }}" value="{{ r.id }}"
+                               {% if r.id in _public_reading_ids %}checked{% endif %}
+                               {% if not _can_public %}disabled aria-disabled="true"{% endif %}>
+                        <span class="mode-track"><span class="mode-thumb"></span></span>
+                        <span class="muted smaller">Public</span>
+                      </label>
+                      {% endif %}
+                    </div>
                     {% else %}
                     <p class="muted small">No files in this library yet.</p>
                     {% endfor %}
                   </div>
-                  {% if lib.items.count() %}
-                  <div class="library-public-readings">
-                    <div class="library-public-readings-head muted smaller">Show on public meeting page:</div>
-                    {% for r in lib.items %}
-                    <label class="reading-check reading-public-check">
-                      <input type="checkbox" name="library_public_library_items_{{ lib.id }}" value="{{ r.id }}"
-                             {% if r.id in _public_reading_ids %}checked{% endif %}>
-                      <span>{{ r.title }}</span>
-                    </label>
-                    {% endfor %}
-                  </div>
-                  {% endif %}
                 </div>
               </div>
             {% endfor %}
@@ -348,7 +440,191 @@
     </div>
     <div class="modal-foot">
       <button type="button" class="btn" data-close>Cancel</button>
-      <button type="submit" form="{{ form_id }}" class="btn btn-primary">{{ submit_label }}</button>
+      {# Yellow save bar replaces the static "Save" button — only
+         appears when the form has unsaved edits. Native submit via
+         `form="{{ form_id }}"` so existing server-side validation +
+         redirects keep working. #}
+      <div class="fe-save-bar fe-modal-save-bar" data-meeting-save-bar hidden
+           data-fe-skip-save-bar>
+        <span class="fe-save-bar-msg">Unsaved changes</span>
+        <button type="submit" form="{{ form_id }}" class="btn fe-save-bar-btn">{{ submit_label }}</button>
+      </div>
     </div>
   </div>
 </div>
+
+{# Markdown live-preview for the Description field. `marked` is vendored
+   under app/static/js/vendor/ and only loaded when this modal renders.
+   The handler walks every `[data-md-editor]` block (currently only the
+   description, but the same wiring works for additional Markdown
+   fields if we add more) and re-renders the preview on input. #}
+<script src="{{ url_for('static', filename='js/vendor/marked.min.js') }}"></script>
+<script>
+(function () {
+  if (typeof marked === 'undefined') return;
+  marked.setOptions({ breaks: true, gfm: true });
+  document.querySelectorAll('[data-md-editor]').forEach(function (wrap) {
+    var ta = wrap.querySelector('[data-md-input]');
+    var preview = wrap.querySelector('[data-md-preview]');
+    if (!ta || !preview) return;
+    function render() {
+      var v = ta.value || '';
+      if (!v.trim()) {
+        preview.innerHTML = '<span class="md-editor-preview-empty muted small">Preview appears here as you type.</span>';
+        return;
+      }
+      preview.innerHTML = marked.parse(v);
+    }
+    ta.addEventListener('input', render);
+    render();
+  });
+})();
+</script>
+
+{# Per-modal yellow save bar — show when the form has any unsaved
+   change. Listens for `input` / `change` events on the form, plus a
+   MutationObserver for dynamically-added fields (Add tip / Add block
+   / etc.). Native form submission still happens via the bar's
+   `<button type="submit" form="…">` so server-side redirect-after-
+   POST keeps working. The bar's wrapper carries `data-fe-skip-save-
+   bar` so the global feSaveBar IIFE doesn't double-track it. #}
+<script>
+(function () {
+  document.querySelectorAll('[data-meeting-form]').forEach(function (form) {
+    var modal = form.closest('.modal');
+    if (!modal) return;
+    var bar = modal.querySelector('[data-meeting-save-bar]');
+    if (!bar) return;
+    var msg = bar.querySelector('.fe-save-bar-msg');
+    var saveBtn = bar.querySelector('.fe-save-bar-btn');
+    var dirty = false;
+
+    function show() {
+      if (dirty) return;
+      dirty = true;
+      bar.hidden = false;
+      bar.classList.remove('is-leaving');
+      if (msg) msg.textContent = 'Unsaved changes';
+      if (saveBtn) saveBtn.disabled = false;
+    }
+    function hide() {
+      bar.hidden = true;
+      bar.classList.remove('is-leaving');
+      if (msg) msg.textContent = 'Unsaved changes';
+      if (saveBtn) saveBtn.disabled = false;
+      dirty = false;
+    }
+
+    form.addEventListener('input', show);
+    form.addEventListener('change', show);
+
+    if (window.MutationObserver) {
+      var mo = new MutationObserver(function (records) {
+        for (var i = 0; i < records.length; i++) {
+          var r = records[i];
+          var nodes = r.addedNodes.length ? r.addedNodes : r.removedNodes;
+          for (var j = 0; j < nodes.length; j++) {
+            var n = nodes[j];
+            if (n.nodeType === 1 && (
+                (n.matches && n.matches('input, select, textarea')) ||
+                (n.querySelector && n.querySelector('input, select, textarea')))) {
+              show();
+              return;
+            }
+          }
+        }
+      });
+      mo.observe(form, { childList: true, subtree: true });
+    }
+
+    // Intercept the native submit and POST via fetch so the modal stays
+    // open after a successful save (native form POST would follow the
+    // server's redirect away from this page). The server still validates
+    // and writes through the same route — we just don't navigate after.
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!dirty) return;
+      if (msg) msg.textContent = 'Saving…';
+      if (saveBtn) saveBtn.disabled = true;
+      var fd = new FormData(form);
+      fetch(form.action, {
+        method: 'POST',
+        credentials: 'same-origin',
+        body: fd,
+      }).then(function (r) {
+        if (!r.ok && (r.status < 200 || r.status >= 400)) {
+          throw new Error('save failed: ' + r.status);
+        }
+        if (msg) msg.textContent = 'Saved';
+        // Drop the bar back down with the same fe-save-leave keyframe
+        // the global save bar uses, then reset state so the next edit
+        // re-shows it as a fresh "Unsaved changes" pill.
+        var done = false;
+        var finish = function () {
+          if (done) return;
+          done = true;
+          hide();
+        };
+        bar.addEventListener('animationend', finish, { once: true });
+        bar.classList.add('is-leaving');
+        // Safety net for reduced-motion / animation skipped by browser.
+        setTimeout(finish, 400);
+      }).catch(function () {
+        if (msg) msg.textContent = 'Save failed — try again';
+        if (saveBtn) saveBtn.disabled = false;
+      });
+    });
+  });
+})();
+</script>
+
+{# Extended-content editor — toggle gates editor visibility, add/
+   remove cards work by cloning a hidden <template> with __INDEX__
+   placeholders. Submission keeps cards in document order via
+   `ext_block_present` markers. #}
+<script>
+(function () {
+  document.querySelectorAll('[data-extended-toggle]').forEach(function (toggle) {
+    var fieldset = toggle.closest('fieldset');
+    var editor = fieldset && fieldset.querySelector('[data-extended-editor]');
+    if (!editor) return;
+    function sync() {
+      editor.style.display = toggle.checked ? '' : 'none';
+      editor.setAttribute('aria-hidden', toggle.checked ? 'false' : 'true');
+    }
+    toggle.addEventListener('change', sync);
+    sync();
+  });
+
+  document.querySelectorAll('[data-extended-editor]').forEach(function (editor) {
+    var list = editor.querySelector('[data-extended-list]');
+    var tpl = editor.querySelector('[data-extended-template]');
+    var addBtn = editor.querySelector('[data-extended-add]');
+    if (!list || !tpl || !addBtn) return;
+
+    var nextIdx = 0;
+    list.querySelectorAll('[data-extended-item]').forEach(function (card) {
+      var i = parseInt(card.dataset.itemIndex, 10);
+      if (Number.isFinite(i) && i >= nextIdx) nextIdx = i + 1;
+    });
+
+    list.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-extended-remove]');
+      if (!btn) return;
+      var card = btn.closest('[data-extended-item]');
+      if (card) card.remove();
+    });
+
+    addBtn.addEventListener('click', function () {
+      var idx = nextIdx++;
+      var html = tpl.innerHTML.replace(/__INDEX__/g, String(idx));
+      var wrap = document.createElement('div');
+      wrap.innerHTML = html.trim();
+      var card = wrap.firstElementChild;
+      list.appendChild(card);
+      var titleInput = card.querySelector('input[type="text"]');
+      if (titleInput) titleInput.focus();
+    });
+  });
+})();
+</script>

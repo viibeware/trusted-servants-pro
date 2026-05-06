@@ -207,13 +207,23 @@
   });
 
   // Markdown editor tab switcher + debounced live preview via /markdown-preview.
-  document.querySelectorAll("[data-md-editor]").forEach(editor => {
+  // `data-md-live="1"` swaps tabbed UX for a side-by-side editor that renders
+  // the preview unconditionally on every keystroke (still debounced) — both
+  // panes stay visible at once, no tabs needed.
+  // Exposed as window.tspInitMdEditors(root) so dynamically inserted editors
+  // (e.g. features cards added via the "Add card" button) can be wired up.
+  function initMdEditor(editor) {
+    if (editor.__tspMdInited) return;
+    editor.__tspMdInited = true;
+    const isLive = editor.getAttribute("data-md-live") === "1";
+    const mode = editor.getAttribute("data-md-mode") || "";
     const tabs = editor.querySelectorAll(".md-editor-tab");
     const writePane = editor.querySelector(".md-editor-pane-write");
     const previewPane = editor.querySelector(".md-editor-pane-preview");
     const previewEl = editor.querySelector(".md-editor-preview");
     const textarea = editor.querySelector("textarea");
-    if (!tabs.length || !writePane || !previewPane || !textarea) return;
+    if (!writePane || !previewPane || !textarea) return;
+    if (!isLive && !tabs.length) return;
 
     let lastRendered = null;
     let pending = null;
@@ -227,6 +237,7 @@
       }
       const fd = new FormData();
       fd.append("body", content);
+      if (mode) fd.append("mode", mode);
       try {
         const r = await fetch("/tspro/markdown-preview", {
           method: "POST", body: fd, credentials: "same-origin",
@@ -239,21 +250,32 @@
       } catch (_) {}
     }
 
-    function activate(tabName) {
-      tabs.forEach(t => t.classList.toggle("active", t.dataset.mdTab === tabName));
-      writePane.classList.toggle("active", tabName === "write");
-      previewPane.classList.toggle("active", tabName === "preview");
-      if (tabName === "preview") renderPreview();
+    if (!isLive) {
+      function activate(tabName) {
+        tabs.forEach(t => t.classList.toggle("active", t.dataset.mdTab === tabName));
+        writePane.classList.toggle("active", tabName === "write");
+        previewPane.classList.toggle("active", tabName === "preview");
+        if (tabName === "preview") renderPreview();
+      }
+      tabs.forEach(t => t.addEventListener("click", () => activate(t.dataset.mdTab)));
     }
-    tabs.forEach(t => t.addEventListener("click", () => activate(t.dataset.mdTab)));
 
     textarea.addEventListener("input", () => {
       clearTimeout(pending);
       pending = setTimeout(() => {
-        if (previewPane.classList.contains("active")) renderPreview();
+        if (isLive || previewPane.classList.contains("active")) renderPreview();
       }, 250);
     });
-  });
+
+    // Initial paint for live editors so the user sees what's saved before
+    // touching the textarea (tabbed editors render lazily on tab click).
+    if (isLive) renderPreview();
+  }
+  function initMdEditors(root) {
+    (root || document).querySelectorAll("[data-md-editor]").forEach(initMdEditor);
+  }
+  window.tspInitMdEditors = initMdEditors;
+  initMdEditors();
 
   // Reading lightbox: click on [data-reading-lightbox] shows the rendered
   // body content in a paper-styled modal, with a Download PDF button.
@@ -973,16 +995,28 @@
     const bindItem = (item) => {
       if (item.__tspSortableBound) return;
       item.__tspSortableBound = true;
-      // Track whether the most recent mousedown started inside the drag
-      // handle. We use this in dragstart to decide whether to allow the
-      // drag — keeping the row draggable=true at all times so the browser
-      // never decides not to start a drag because of stale state. Text
-      // selection inside cells still works because dragstart preventDefault
-      // bails out on non-handle drags.
+      // Toggle `draggable` synchronously on mousedown so the browser only
+      // starts a drag when the press began on the handle. Leaving the
+      // row permanently draggable=true breaks text-input behaviour
+      // inside the row — the browser races the input for the mouse,
+      // which prevents click-to-position-cursor, double/triple-click
+      // selection, and drag-to-select within fields. dragstart
+      // preventDefault runs too late: native text selection has already
+      // been cancelled by the time it fires. Setting draggable=false at
+      // the start gives inputs first claim on the cursor; we flip it
+      // true only when the press lands on the .drag-handle, which is
+      // before the browser decides whether a drag should happen.
+      item.draggable = false;
       let mousedownOnHandle = false;
       item.addEventListener("mousedown", (e) => {
-        mousedownOnHandle = !!e.target.closest?.(".drag-handle");
+        const onHandle = !!e.target.closest?.(".drag-handle");
+        mousedownOnHandle = onHandle;
+        item.draggable = onHandle;
       });
+      // mouseup clears the flag in case the user pressed the handle but
+      // released without dragging — keeps the next click on a sibling
+      // input from being intercepted.
+      item.addEventListener("mouseup", () => { item.draggable = false; });
       item.addEventListener("dragstart", (e) => {
         if (!mousedownOnHandle) {
           e.preventDefault();
@@ -996,6 +1030,7 @@
       });
       item.addEventListener("dragend", () => {
         item.classList.remove("dragging");
+        item.draggable = false;
         clearMarkers();
         const currentOrder = snapshotOrder();
         const changed = originalOrder && !orderEqual(originalOrder, currentOrder);
@@ -1672,7 +1707,12 @@
 
 // ── MEGA MENU BULK SAVE ─────────────────────────────────────────────────────
 // Gather all block inputs inside an editor and POST them as one JSON payload.
-// Triggered by any button with [data-save-megamenu-for="<selector>"].
+// Hooked into the shared `#fe-save-bar` (yellow): editing any field flips
+// the bar into "Unsaved changes"; clicking Save runs collectBlocks() and
+// POSTs to the editor's `data-bulk-save-url`. The standard form-saver
+// also wires the same button — we intercept in the capture phase via
+// `bar.dataset.megamenuDirty` so bulk-save fires instead of (and
+// stopPropagation prevents) the form-saver's hide-empty-bar fallback.
 (function () {
   function collectBlocks(editor) {
     const out = [];
@@ -1684,7 +1724,6 @@
         const name = el.getAttribute("data-block-field");
         if (el.type === "checkbox") block[name] = el.checked;
         else if (el.type === "radio") {
-          // Radios share a `data-block-field`; only record the checked one.
           if (el.checked) block[name] = el.value;
           else if (!(name in block)) block[name] = "";
         }
@@ -1695,15 +1734,34 @@
     return out;
   }
 
-  async function save(btn) {
-    const sel = btn.getAttribute("data-save-megamenu-for");
-    const url = btn.getAttribute("data-save-url");
-    const editor = sel && document.querySelector(sel);
+  function activeEditor() {
+    return document.querySelector("[data-bulk-save-url]");
+  }
+  function saveBar() { return document.getElementById("fe-save-bar"); }
+  function saveBarBtn() { return document.getElementById("fe-save-bar-btn"); }
+  function saveBarMsg() {
+    const bar = saveBar();
+    return bar && bar.querySelector(".fe-save-bar-msg");
+  }
+
+  function markDirty() {
+    const bar = saveBar();
+    if (!bar) return;
+    bar.dataset.megamenuDirty = "1";
+    bar.hidden = false;
+    document.body.classList.add("has-fe-save-bar");
+    const msg = saveBarMsg();
+    if (msg) msg.textContent = "Unsaved changes";
+  }
+
+  async function save() {
+    const editor = activeEditor();
+    const url = editor && editor.getAttribute("data-bulk-save-url");
     if (!editor || !url) return;
-    const toast = window.tspShowToast || (() => {});
-    const origLabel = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = "Saving…";
+    const bar = saveBar();
+    const btn = saveBarBtn();
+    const msg = saveBarMsg();
+    if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
     try {
       const r = await fetch(url, {
         method: "POST",
@@ -1714,22 +1772,36 @@
       if (!r.ok) throw new Error("save failed");
       editor.querySelectorAll(".nav-megalink.is-dirty").forEach((el) =>
         el.classList.remove("is-dirty"));
-      btn.classList.remove("is-dirty");
-      toast("Changes saved", "success");
+      if (msg) msg.textContent = "Saved";
+      if (bar) bar.dataset.megamenuDirty = "";
+      // Reload so the freshly-saved values render server-side. Same
+      // animate-out + reload pattern as the standard form-saver.
+      const reload = () => window.location.reload();
+      if (bar) {
+        bar.addEventListener("animationend", reload, { once: true });
+        bar.classList.add("is-leaving");
+      }
+      setTimeout(reload, 360);
     } catch (_) {
-      toast("Save failed — retry", "error");
-    } finally {
-      btn.disabled = false;
-      btn.textContent = origLabel;
+      if (btn) { btn.disabled = false; btn.textContent = "Save"; }
+      if (msg) msg.textContent = "Save failed — try again";
+      (window.tspShowToast || (() => {}))("Save failed — retry", "error");
     }
   }
 
+  // Capture-phase click on the bar's Save button. Runs before the
+  // standard feSaveBar IIFE's bubbling handler. If a megamenu editor is
+  // dirty, intercept and run our bulk save; stopImmediatePropagation
+  // keeps the standard handler from running its empty-Set "hide" path.
   document.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-save-megamenu-for]");
+    const btn = e.target.closest("#fe-save-bar-btn");
     if (!btn) return;
+    const bar = saveBar();
+    if (!bar || bar.dataset.megamenuDirty !== "1") return;
     e.preventDefault();
-    save(btn);
-  });
+    e.stopImmediatePropagation();
+    save();
+  }, true);
 
   // Override-color toggle: enable/disable the color picker inline.
   document.addEventListener("change", (e) => {
@@ -1742,31 +1814,63 @@
     if (picker) picker.disabled = !toggle.checked;
   });
 
-  // Mark the editor + save button dirty on any field change, so the user has a
-  // visible "unsaved changes" signal until they click Save.
-  document.addEventListener("input", (e) => {
-    const el = e.target.closest("[data-block-field]");
-    if (!el) return;
-    const li = el.closest("li.nav-megalink");
-    if (li) li.classList.add("is-dirty");
-    const editor = el.closest(".nav-megamenu-editor");
-    if (!editor) return;
-    const btn = document.querySelector(
-      '[data-save-megamenu-for="#' + editor.id + '"]'
-    );
-    if (btn) btn.classList.add("is-dirty");
-  });
+  // Per-link size-override toggle: enable/disable the percentage
+  // slider inline. Mirrors the override-color pattern above.
   document.addEventListener("change", (e) => {
+    const toggle = e.target.closest("[data-size-override-toggle]");
+    if (!toggle) return;
+    const field = toggle.closest("[data-size-override-field]");
+    if (!field) return;
+    const slider = field.querySelector("[data-size-override-input]");
+    field.classList.toggle("is-on", toggle.checked);
+    if (slider) slider.disabled = !toggle.checked;
+  });
+  // Live "X%" readout for the per-link size slider.
+  document.addEventListener("input", (e) => {
+    const slider = e.target.closest("[data-size-override-input]");
+    if (!slider) return;
+    const out = slider.parentElement.querySelector("[data-size-override-out]");
+    if (out) out.textContent = (slider.value || "100") + "%";
+  });
+
+  // Any field change inside the editor flips the row to `.is-dirty`
+  // (visible per-row indicator) and shows the global yellow save bar.
+  function onDirty(e) {
     const el = e.target.closest("[data-block-field]");
     if (!el) return;
     const li = el.closest("li.nav-megalink");
     if (li) li.classList.add("is-dirty");
-    const editor = el.closest(".nav-megamenu-editor");
-    if (!editor) return;
-    const btn = document.querySelector(
-      '[data-save-megamenu-for="#' + editor.id + '"]'
-    );
-    if (btn) btn.classList.add("is-dirty");
+    if (el.closest("[data-bulk-save-url]")) markDirty();
+  }
+  document.addEventListener("input", onDirty);
+  document.addEventListener("change", onDirty);
+
+  // Auto-select-all on focus for text fields inside the mega-menu /
+  // bulk-save editor rows. Mega-menu admins typically click into a
+  // label or URL to overwrite it wholesale — defaulting the cursor
+  // to "everything selected" lets them just type the replacement.
+  // Native triple-click + drag-to-position-cursor still work because
+  // they happen in a later mouse event sequence; this only fires on
+  // the first focus-in. requestAnimationFrame defers the select() so
+  // the browser's own click→position-cursor handling doesn't immediately
+  // clobber our selection.
+  const SELECTABLE_TYPES = new Set([
+    "text", "url", "email", "search", "tel", "number", "password", "",
+  ]);
+  document.addEventListener("focusin", (e) => {
+    const el = e.target;
+    const isInput = el instanceof HTMLInputElement;
+    const isTextArea = el instanceof HTMLTextAreaElement;
+    if (!isInput && !isTextArea) return;
+    if (isInput && !SELECTABLE_TYPES.has((el.type || "").toLowerCase())) return;
+    // Only inside a mega-menu/bulk-save row — leaves every other admin
+    // field unchanged so we don't surprise users elsewhere in the app.
+    if (!el.closest("li.nav-megalink") && !el.closest("[data-bulk-save-url]")) return;
+    if (!el.value) return;
+    requestAnimationFrame(() => {
+      if (document.activeElement !== el) return;
+      try { el.select(); } catch (_) {}
+    });
   });
 })();
 
@@ -1840,6 +1944,10 @@
 // handlers. Save POSTs the resulting block sequence to the backend.
 (function feLayoutBuilder() {
   document.querySelectorAll(".fe-layout-builder-modal").forEach(modal => {
+    // Footer modals run a separate IIFE (feFooterLayoutBuilder) that
+    // manages multi-row, multi-column canvases. Skip those here so the
+    // flat-list logic below doesn't fight the row/column DOM structure.
+    if ((modal.dataset.layoutKind || "homepage") === "footer") return;
     const canvas = modal.querySelector("[data-builder-canvas]");
     const library = modal.querySelector("[data-builder-library]");
     const saveBtn = modal.querySelector("[data-builder-save]");
@@ -1850,6 +1958,7 @@
     const deleteUrlTpl = modal.dataset.deleteLayoutUrl;     // contains __KEY__
     const activateUrl = modal.dataset.activateUrl;
     const activateField = modal.dataset.activateField;
+    const layoutKind = modal.dataset.layoutKind || "homepage";
     const csrf = modal.dataset.csrfToken;
     if (!canvas || !library || !saveBtn) return;
 
@@ -2177,7 +2286,7 @@
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
-          body: JSON.stringify({ name, blocks }),
+          body: JSON.stringify({ name, blocks, kind: layoutKind }),
         });
         const data = await r.json();
         if (!r.ok || !data.ok) throw new Error(data.error || "Save failed");
@@ -2199,6 +2308,504 @@
         (window.tspShowToast || alert)("Could not save layout: " + (e.message || ""));
       }
     });
+  });
+})();
+
+// ── FOOTER LAYOUT BUILDER (rows + columns) ─────────────────────────────────
+// Footer custom layouts have a richer shape than homepage layouts: each
+// top-level entry is a "row" with 1-4 columns; blocks live inside a
+// specific column. This IIFE manages the multi-row canvas (add/remove,
+// per-row column-count selector, drag library blocks into row columns,
+// drag blocks between columns/rows) and serializes the rows+cols
+// structure on save. Triggered only when the modal carries
+// data-layout-kind="footer".
+(function feFooterLayoutBuilder() {
+  document.querySelectorAll('.fe-layout-builder-modal').forEach(modal => {
+    if ((modal.dataset.layoutKind || 'homepage') !== 'footer') return;
+    const canvas = modal.querySelector('[data-builder-canvas]');
+    const library = modal.querySelector('[data-builder-library]');
+    const saveBtn = modal.querySelector('[data-builder-save]');
+    const nameInp = modal.querySelector('[data-builder-name]');
+    const titleEl = modal.querySelector('[data-builder-title]');
+    const saveUrl = modal.dataset.saveLayoutUrl;
+    const updateUrlTpl = modal.dataset.updateLayoutUrl;
+    const deleteUrlTpl = modal.dataset.deleteLayoutUrl;
+    const activateUrl = modal.dataset.activateUrl;
+    const activateField = modal.dataset.activateField;
+    const csrf = modal.dataset.csrfToken;
+    if (!canvas || !library || !saveBtn) return;
+
+    // Mark the modal so CSS can widen it (the panel default is too narrow
+    // to comfortably show 4 column drop zones side-by-side).
+    modal.classList.add('fe-layout-builder-modal--wide');
+    canvas.classList.add('fe-footer-builder-canvas');
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    function blockNameForType(type) {
+      const lib = library.querySelector(
+        '.fe-builder-block[data-block-type="' + CSS.escape(type) + '"]');
+      return lib ? lib.dataset.blockName : type;
+    }
+    function blockIconForType(type) {
+      const lib = library.querySelector(
+        '.fe-builder-block[data-block-type="' + CSS.escape(type) + '"]');
+      return lib ? lib.querySelector('.fe-builder-block-icon').innerHTML : '';
+    }
+
+    function makeBlockNode(type) {
+      const el = document.createElement('div');
+      el.className = 'fe-builder-canvas-block';
+      el.draggable = true;
+      el.dataset.blockType = type;
+      el.innerHTML =
+        '<div class="fe-builder-block-icon">' + blockIconForType(type) + '</div>' +
+        '<div class="fe-builder-block-meta"><div class="fe-builder-block-name">' +
+        escapeHtml(blockNameForType(type)) + '</div></div>' +
+        '<button type="button" class="fe-builder-canvas-remove" title="Remove">&times;</button>';
+      return el;
+    }
+
+    function makeRowNode(cols, rowIndex) {
+      cols = Math.max(1, Math.min(4, cols || 1));
+      const row = document.createElement('div');
+      row.className = 'fe-footer-builder-row';
+      row.dataset.cols = String(cols);
+      row.innerHTML =
+        '<div class="fe-footer-builder-row-head">' +
+          '<div class="fe-footer-builder-row-handle" title="Drag to reorder row" aria-hidden="true">⋮⋮</div>' +
+          '<span class="fe-footer-builder-row-label">Row <span data-row-num>' + (rowIndex + 1) + '</span></span>' +
+          '<label class="fe-footer-builder-row-cols">' +
+            '<span class="muted smaller">Columns</span>' +
+            '<select data-row-cols-select>' +
+              [1, 2, 3, 4].map(n =>
+                '<option value="' + n + '"' + (n === cols ? ' selected' : '') + '>' + n + '</option>').join('') +
+            '</select>' +
+          '</label>' +
+          '<button type="button" class="fe-footer-builder-row-remove" title="Remove row" aria-label="Remove row">&times;</button>' +
+        '</div>' +
+        '<div class="fe-footer-builder-row-cols-wrap fe-footer-builder-cols-' + cols + '" data-row-cols></div>';
+      const colsWrap = row.querySelector('[data-row-cols]');
+      for (let i = 0; i < cols; i++) {
+        colsWrap.appendChild(makeColumnNode(i));
+      }
+      return row;
+    }
+
+    function makeColumnNode(index) {
+      const col = document.createElement('div');
+      col.className = 'fe-footer-builder-col';
+      col.dataset.colIndex = String(index);
+      col.innerHTML =
+        '<div class="fe-footer-builder-col-head muted smaller">Col ' + (index + 1) + '</div>' +
+        '<div class="fe-footer-builder-col-drop" data-col-drop>' +
+          '<div class="fe-builder-empty muted smaller">Drop blocks here</div>' +
+        '</div>';
+      return col;
+    }
+
+    function refreshRowNumbers() {
+      canvas.querySelectorAll('.fe-footer-builder-row').forEach((row, i) => {
+        const num = row.querySelector('[data-row-num]');
+        if (num) num.textContent = String(i + 1);
+      });
+      const empty = canvas.querySelector(':scope > .fe-builder-empty');
+      const hasRows = !!canvas.querySelector('.fe-footer-builder-row');
+      if (!hasRows && !empty) {
+        const ph = document.createElement('div');
+        ph.className = 'fe-builder-empty muted small';
+        ph.textContent = 'Click "+ Add row" to start.';
+        canvas.appendChild(ph);
+      } else if (hasRows && empty) {
+        empty.remove();
+      }
+    }
+
+    function refreshColEmpty(col) {
+      const drop = col.querySelector('[data-col-drop]');
+      if (!drop) return;
+      const hasBlocks = !!drop.querySelector('.fe-builder-canvas-block');
+      const empty = drop.querySelector('.fe-builder-empty');
+      if (!hasBlocks && !empty) {
+        const ph = document.createElement('div');
+        ph.className = 'fe-builder-empty muted smaller';
+        ph.textContent = 'Drop blocks here';
+        drop.appendChild(ph);
+      } else if (hasBlocks && empty) {
+        empty.remove();
+      }
+    }
+
+    function refreshAllColEmpty() {
+      canvas.querySelectorAll('.fe-footer-builder-col').forEach(refreshColEmpty);
+    }
+
+    function changeRowCols(row, newCols) {
+      newCols = Math.max(1, Math.min(4, newCols));
+      const oldCols = parseInt(row.dataset.cols || '1', 10);
+      if (newCols === oldCols) return;
+      const colsWrap = row.querySelector('[data-row-cols]');
+      const cols = colsWrap.querySelectorAll('.fe-footer-builder-col');
+      if (newCols > oldCols) {
+        // Add new empty columns
+        for (let i = oldCols; i < newCols; i++) {
+          colsWrap.appendChild(makeColumnNode(i));
+        }
+      } else {
+        // Move blocks from removed columns into the first column,
+        // then remove the trailing column nodes.
+        const firstDrop = cols[0].querySelector('[data-col-drop]');
+        for (let i = oldCols - 1; i >= newCols; i--) {
+          const drop = cols[i].querySelector('[data-col-drop]');
+          drop.querySelectorAll('.fe-builder-canvas-block').forEach(b => firstDrop.appendChild(b));
+          cols[i].remove();
+        }
+      }
+      row.dataset.cols = String(newCols);
+      colsWrap.classList.remove('fe-footer-builder-cols-1', 'fe-footer-builder-cols-2',
+        'fe-footer-builder-cols-3', 'fe-footer-builder-cols-4');
+      colsWrap.classList.add('fe-footer-builder-cols-' + newCols);
+      refreshAllColEmpty();
+    }
+
+    function clearCanvas() {
+      canvas.querySelectorAll('.fe-footer-builder-row').forEach(r => r.remove());
+      canvas.querySelectorAll(':scope > .fe-builder-empty').forEach(e => e.remove());
+      refreshRowNumbers();
+    }
+
+    // ── Add row button (inserted into the canvas footer area) ──
+    let addRowBtn = canvas.parentElement.querySelector('[data-footer-add-row]');
+    if (!addRowBtn) {
+      addRowBtn = document.createElement('button');
+      addRowBtn.type = 'button';
+      addRowBtn.className = 'btn btn-sm fe-footer-builder-add-row';
+      addRowBtn.dataset.footerAddRow = '1';
+      addRowBtn.textContent = '+ Add row';
+      canvas.parentElement.insertBefore(addRowBtn, canvas.nextSibling);
+    }
+    addRowBtn.addEventListener('click', e => {
+      e.preventDefault();
+      const rowCount = canvas.querySelectorAll('.fe-footer-builder-row').length;
+      const row = makeRowNode(1, rowCount);
+      canvas.appendChild(row);
+      refreshRowNumbers();
+      refreshAllColEmpty();
+    });
+
+    // ── Library → drop zone drag/drop ──
+    library.querySelectorAll('.fe-builder-block').forEach(block => {
+      block.addEventListener('dragstart', e => {
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('application/x-fe-block-type', block.dataset.blockType);
+        e.dataTransfer.setData('application/x-fe-source', 'library');
+        e.dataTransfer.setData('text/plain', block.dataset.blockName);
+      });
+    });
+
+    // Within-canvas drag — block dragged out of one drop zone (move).
+    canvas.addEventListener('dragstart', e => {
+      const block = e.target.closest('.fe-builder-canvas-block');
+      if (!block) return;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('application/x-fe-block-type', block.dataset.blockType);
+      e.dataTransfer.setData('application/x-fe-source', 'canvas');
+      block.dataset.dragging = '1';
+      setTimeout(() => block.classList.add('is-dragging'), 0);
+    });
+    canvas.addEventListener('dragend', e => {
+      const block = e.target.closest('.fe-builder-canvas-block');
+      if (block) {
+        block.classList.remove('is-dragging');
+        delete block.dataset.dragging;
+      }
+      refreshAllColEmpty();
+    });
+
+    // Drop zones (column drops + row reorder)
+    function getDropTarget(e) {
+      // 1) Try a column drop zone.
+      const drop = e.target.closest('[data-col-drop]');
+      return drop;
+    }
+
+    canvas.addEventListener('dragover', e => {
+      const drop = getDropTarget(e);
+      if (drop) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = e.dataTransfer.effectAllowed === 'copy' ? 'copy' : 'move';
+        drop.classList.add('is-dragover');
+        // Compute insertion point based on cursor Y vs existing blocks.
+        const blocks = drop.querySelectorAll(':scope > .fe-builder-canvas-block:not(.is-dragging)');
+        let inserted = false;
+        for (const b of blocks) {
+          const r = b.getBoundingClientRect();
+          if (e.clientY < r.top + r.height / 2) {
+            drop.dataset.insertBefore = b.dataset.blockType + ':' + Array.from(b.parentElement.children).indexOf(b);
+            inserted = true;
+            break;
+          }
+        }
+        if (!inserted) drop.dataset.insertBefore = '__end__';
+      }
+    });
+    canvas.addEventListener('dragleave', e => {
+      const drop = e.target.closest('[data-col-drop]');
+      if (drop) drop.classList.remove('is-dragover');
+    });
+    canvas.addEventListener('drop', e => {
+      const drop = getDropTarget(e);
+      if (!drop) return;
+      e.preventDefault();
+      drop.classList.remove('is-dragover');
+      const type = e.dataTransfer.getData('application/x-fe-block-type');
+      const source = e.dataTransfer.getData('application/x-fe-source');
+      if (!type) return;
+      let node;
+      if (source === 'canvas') {
+        // Move existing block (find the one currently being dragged)
+        node = canvas.querySelector('.fe-builder-canvas-block[data-dragging="1"]');
+        if (!node) return;
+        delete node.dataset.dragging;
+        node.classList.remove('is-dragging');
+      } else {
+        node = makeBlockNode(type);
+      }
+      // Insert at computed position
+      const sibs = drop.querySelectorAll(':scope > .fe-builder-canvas-block:not(.is-dragging)');
+      let placed = false;
+      for (const s of sibs) {
+        const r = s.getBoundingClientRect();
+        if (e.clientY < r.top + r.height / 2) {
+          drop.insertBefore(node, s);
+          placed = true; break;
+        }
+      }
+      if (!placed) drop.appendChild(node);
+      refreshAllColEmpty();
+    });
+
+    // Click handlers (delegated): remove block, remove row, change cols
+    canvas.addEventListener('click', e => {
+      const rmBlock = e.target.closest('.fe-builder-canvas-remove');
+      if (rmBlock) {
+        e.preventDefault();
+        rmBlock.closest('.fe-builder-canvas-block').remove();
+        refreshAllColEmpty();
+        return;
+      }
+      const rmRow = e.target.closest('.fe-footer-builder-row-remove');
+      if (rmRow) {
+        e.preventDefault();
+        rmRow.closest('.fe-footer-builder-row').remove();
+        refreshRowNumbers();
+        return;
+      }
+    });
+    canvas.addEventListener('change', e => {
+      const sel = e.target.closest('[data-row-cols-select]');
+      if (!sel) return;
+      const row = sel.closest('.fe-footer-builder-row');
+      const newCols = parseInt(sel.value, 10);
+      if (row) changeRowCols(row, newCols);
+    });
+
+    // ── Row drag-reorder via the row handle ──
+    let draggingRow = null;
+    canvas.addEventListener('pointerdown', e => {
+      const handle = e.target.closest('.fe-footer-builder-row-handle');
+      if (!handle) return;
+      const row = handle.closest('.fe-footer-builder-row');
+      if (!row) return;
+      draggingRow = row;
+      row.classList.add('is-dragging');
+      handle.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener('pointermove', e => {
+      if (!draggingRow) return;
+      const sibs = Array.from(canvas.querySelectorAll('.fe-footer-builder-row:not(.is-dragging)'));
+      for (const s of sibs) {
+        const r = s.getBoundingClientRect();
+        if (e.clientY < r.top + r.height / 2) {
+          canvas.insertBefore(draggingRow, s);
+          refreshRowNumbers();
+          return;
+        }
+      }
+      canvas.appendChild(draggingRow);
+      refreshRowNumbers();
+    });
+    function endRowDrag() {
+      if (!draggingRow) return;
+      draggingRow.classList.remove('is-dragging');
+      draggingRow = null;
+    }
+    canvas.addEventListener('pointerup', endRowDrag);
+    canvas.addEventListener('pointercancel', endRowDrag);
+
+    // ── Serialize: walk the rows → cols → blocks ──
+    function serialize() {
+      const rows = [];
+      canvas.querySelectorAll(':scope > .fe-footer-builder-row').forEach(row => {
+        const cols = parseInt(row.dataset.cols || '1', 10);
+        const columns = [];
+        row.querySelectorAll('.fe-footer-builder-col').forEach(col => {
+          const blocks = [];
+          col.querySelectorAll('[data-col-drop] > .fe-builder-canvas-block').forEach(b => {
+            blocks.push({ type: b.dataset.blockType });
+          });
+          columns.push(blocks);
+        });
+        rows.push({ type: 'row', cols, columns });
+      });
+      return rows;
+    }
+
+    // ── Edit mode rehydration ──
+    function enterCreateMode() {
+      delete modal.dataset.editKey;
+      if (titleEl) titleEl.textContent = 'Build a footer layout';
+      if (nameInp) nameInp.value = '';
+      saveBtn.textContent = 'Save layout';
+      clearCanvas();
+      // Seed an initial row so the admin sees a drop zone immediately.
+      canvas.appendChild(makeRowNode(1, 0));
+      refreshRowNumbers();
+      refreshAllColEmpty();
+    }
+    function enterEditMode(key, name, layout) {
+      modal.dataset.editKey = key;
+      if (titleEl) titleEl.textContent = 'Edit footer layout';
+      if (nameInp) nameInp.value = name || '';
+      saveBtn.textContent = 'Save changes';
+      clearCanvas();
+      // `layout` may be the new rows+cols shape or a legacy flat list;
+      // wrap a flat list in a single 1-col row to keep editing painless.
+      let rows = layout;
+      if (Array.isArray(rows) && rows.length && rows[0].type !== 'row') {
+        rows = [{ type: 'row', cols: 1, columns: [rows] }];
+      }
+      (rows || []).forEach((row, ri) => {
+        const cols = row.cols || 1;
+        const node = makeRowNode(cols, ri);
+        canvas.appendChild(node);
+        const colNodes = node.querySelectorAll('.fe-footer-builder-col');
+        (row.columns || []).forEach((blocks, ci) => {
+          const drop = colNodes[ci] && colNodes[ci].querySelector('[data-col-drop]');
+          if (!drop) return;
+          (blocks || []).forEach(b => {
+            const t = b && b.type;
+            if (!t) return;
+            drop.appendChild(makeBlockNode(t));
+          });
+        });
+      });
+      refreshRowNumbers();
+      refreshAllColEmpty();
+    }
+
+    // Document-level click delegation for the picker's Edit / Delete /
+    // "+ Custom layout" buttons. Mirrors the homepage flat-list IIFE
+    // patterns exactly — only routes when the button targets THIS modal.
+    const builderModalId = modal.id;
+    document.addEventListener('click', async e => {
+      const editBtn = e.target.closest('[data-edit-layout]');
+      if (editBtn && editBtn.getAttribute('data-builder-modal') === builderModalId) {
+        e.preventDefault(); e.stopPropagation();
+        // The button can either live inside a picker `.template-card`
+        // (which carries data-layout-* attrs) OR be standalone (e.g. the
+        // "Edit layout" shortcut on the Footer admin's Active layout
+        // structure card). Fall back to the button's own dataset when
+        // no card ancestor is present.
+        const card = editBtn.closest('.template-card');
+        const data = card ? card.dataset : editBtn.dataset;
+        let blocks = [];
+        try { blocks = JSON.parse(data.layoutBlocks || '[]'); } catch (_) {}
+        enterEditMode(data.layoutKey, data.layoutName, blocks);
+        const pickerModal = card && card.closest('.fe-layout-picker-modal');
+        if (pickerModal) {
+          pickerModal.classList.remove('open');
+          pickerModal.setAttribute('aria-hidden', 'true');
+        }
+        modal.classList.add('open');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        return;
+      }
+      const delBtn = e.target.closest('[data-delete-layout]');
+      if (delBtn) {
+        if (!deleteUrlTpl) return;
+        e.preventDefault(); e.stopPropagation();
+        const key = delBtn.getAttribute('data-delete-layout');
+        const card = delBtn.closest('.template-card');
+        if (!confirm('Delete this layout? Any page currently using it will fall back to the Classic layout.')) return;
+        try {
+          const url = deleteUrlTpl.replace('__KEY__', encodeURIComponent(key));
+          const fd = new FormData(); fd.append('csrf_token', csrf);
+          const r = await fetch(url, { method: 'POST', credentials: 'same-origin', body: fd });
+          const data = await r.json();
+          if (!r.ok || !data.ok) throw new Error(data.error || 'Delete failed');
+          if (card && card.classList.contains('active')) window.location.reload();
+          else if (card) card.remove();
+        } catch (err) {
+          (window.tspShowToast || alert)('Could not delete layout: ' + (err.message || ''));
+        }
+        return;
+      }
+      const newBtn = e.target.closest('[data-builder-mode-create]');
+      if (newBtn && newBtn.getAttribute('data-open-modal') === builderModalId) {
+        enterCreateMode();
+      }
+    });
+
+    // ── Save ──
+    saveBtn.addEventListener('click', async () => {
+      const blocks = serialize();
+      // Drop empty rows (no columns, or all columns empty)
+      const nonEmpty = blocks.filter(r =>
+        (r.columns || []).some(c => (c || []).length > 0));
+      if (!nonEmpty.length) {
+        (window.tspShowToast || alert)('Add at least one block before saving.');
+        return;
+      }
+      const name = (nameInp && nameInp.value.trim()) || 'Custom footer layout';
+      const editKey = modal.dataset.editKey;
+      saveBtn.disabled = true;
+      const orig = saveBtn.textContent;
+      saveBtn.textContent = 'Saving…';
+      try {
+        const url = editKey
+          ? updateUrlTpl.replace('__KEY__', encodeURIComponent(editKey))
+          : saveUrl;
+        const r = await fetch(url, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+          body: JSON.stringify({ name, blocks: nonEmpty, kind: 'footer' }),
+        });
+        const data = await r.json();
+        if (!r.ok || !data.ok) throw new Error(data.error || 'Save failed');
+        if (activateUrl && activateField && data.key) {
+          const fd = new FormData();
+          fd.append('csrf_token', csrf);
+          fd.append(activateField, data.key);
+          await fetch(activateUrl, { method: 'POST', credentials: 'same-origin', body: fd })
+            .catch(() => {});
+        }
+        window.location.reload();
+      } catch (e) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = orig;
+        (window.tspShowToast || alert)('Could not save layout: ' + (e.message || ''));
+      }
+    });
+
+    // Initial empty state
+    refreshRowNumbers();
   });
 })();
 
@@ -2233,6 +2840,15 @@
 
   function decorate(card) {
     if (card.__feCollapseInit) return;
+    // Cards rendered inside a modal panel (homepage / footer block-edit
+    // popups) shouldn't be collapsible — the modal IS the disclosure;
+    // a nested expand/collapse layer just gets in the user's way and
+    // can rehydrate as collapsed from stale localStorage state.
+    if (card.closest(".modal")) {
+      card.__feCollapseInit = true;
+      card.classList.remove("is-collapsed");
+      return;
+    }
     card.__feCollapseInit = true;
     const head = card.querySelector(".card-head");
     if (!head) return;
@@ -2353,6 +2969,35 @@
     const onChange = () => { dirty.add(form); show(); };
     form.addEventListener('input', onChange);
     form.addEventListener('change', onChange);
+    // Adding or removing form fields inside the form (clicking × on a
+    // row, "+ Add column", "+ Add link", etc.) is a meaningful "unsaved
+    // change" too — but those interactions only fire `click` events,
+    // which the form's input/change listeners never see. A MutationObserver
+    // on the form's subtree catches childList changes that add or remove
+    // anything containing `input`/`select`/`textarea` and treats them as
+    // a dirty event. Filtered to field-bearing mutations so style/class
+    // toggles + transient JS chrome don't flap the bar.
+    if (window.MutationObserver) {
+      const mo = new MutationObserver(records => {
+        for (const r of records) {
+          for (const n of r.addedNodes) {
+            if (n.nodeType === 1 &&
+                (n.matches && n.matches('input, select, textarea') ||
+                 n.querySelector && n.querySelector('input, select, textarea'))) {
+              onChange(); return;
+            }
+          }
+          for (const n of r.removedNodes) {
+            if (n.nodeType === 1 &&
+                (n.matches && n.matches('input, select, textarea') ||
+                 n.querySelector && n.querySelector('input, select, textarea'))) {
+              onChange(); return;
+            }
+          }
+        }
+      });
+      mo.observe(form, { childList: true, subtree: true });
+    }
   }
   main.querySelectorAll('form').forEach(f => { if (trackable(f)) instrument(f); });
 
@@ -2415,7 +3060,6 @@
   const modal = document.getElementById("icon-picker-modal");
   if (!modal) return;
 
-  const DEFAULT_COLOR = "#747474";
   const DEFAULT_SIZE = 20;
   const SVG_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
     'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
@@ -2441,7 +3085,6 @@
 
   const searchEl = modal.querySelector("[data-icon-search]");
   const catalogEl = modal.querySelector("[data-icon-catalog]");
-  const modalColorEl = modal.querySelector("[data-icon-modal-color]");
   const modalSizeEl = modal.querySelector("[data-icon-modal-size]");
   const modalSizeOut = modal.querySelector("[data-icon-size-out]");
   const uploadInput = modal.querySelector("[data-icon-upload]");
@@ -2554,14 +3197,7 @@
     } else {
       catalogEl.innerHTML = html.join("");
     }
-    applyModalColor();
     applyModalSize();
-  }
-
-  function applyModalColor() {
-    const c = modalColorEl && modalColorEl.value;
-    if (!c) return;
-    catalogEl.style.color = c;
   }
 
   function applyModalSize() {
@@ -2600,12 +3236,10 @@
     activeSizeInput = sizeSel && document.querySelector(sizeSel);
     activePreview = trigger.querySelector("[data-icon-preview]");
 
-    modalColorEl.value = (activeColorInput && activeColorInput.value) || DEFAULT_COLOR;
     const storedSize = activeSizeInput && parseInt(activeSizeInput.value, 10);
     modalSizeEl.value = (storedSize && storedSize > 0) ? storedSize : DEFAULT_SIZE;
     pendingRef = (activeIconInput && activeIconInput.value) || "";
     if (saveBtn) saveBtn.disabled = !pendingRef;
-    applyModalColor();
     applyModalSize();
     searchEl.value = "";
 
@@ -2641,12 +3275,13 @@
       activeIconInput.value = ref || "";
       dispatchChange(activeIconInput);
     }
+    // Color is no longer chosen here — the picker always clears the hidden
+    // color field so the rendered icon inherits whatever colour the
+    // surrounding theme/CSS dictates (currentColor on Lucide SVGs). Per-link
+    // color overrides that live OUTSIDE the picker (e.g. nav-link
+    // override_color / custom_color) are unaffected.
     if (activeColorInput) {
-      if (opts.clear || !ref) {
-        activeColorInput.value = "";
-      } else {
-        activeColorInput.value = (modalColorEl && modalColorEl.value) || DEFAULT_COLOR;
-      }
+      activeColorInput.value = "";
       dispatchChange(activeColorInput);
     }
     if (activeSizeInput) {
@@ -2659,8 +3294,7 @@
     }
     if (activePreview) {
       activePreview.innerHTML = ref ? renderIconHtml(found) : "";
-      const storedColor = activeColorInput && activeColorInput.value;
-      activePreview.style.color = storedColor || "";
+      activePreview.style.color = "";
       const storedSize = activeSizeInput && activeSizeInput.value;
       if (storedSize) activePreview.style.setProperty("--icon-size", storedSize + "px");
       else activePreview.style.removeProperty("--icon-size");
@@ -2728,7 +3362,6 @@
   });
 
   searchEl.addEventListener("input", () => buildGrid(searchEl.value));
-  modalColorEl.addEventListener("input", () => applyModalColor());
   modalSizeEl.addEventListener("input", () => applyModalSize());
 
   // Upload flow — POST the chosen file, splice into `customIcons`, redraw grid.

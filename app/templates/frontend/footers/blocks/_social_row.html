@@ -1,0 +1,14 @@
+{# Social icon row — pulls every entry from the Footer admin → Social
+   icons editor. Each icon name resolves through the global icon()
+   helper (Lucide catalog + admin-uploaded customs). Empty when no
+   social links are configured — the block stays in the layout but
+   contributes no markup. #}
+{% set _social = footer_content(site).social %}
+{% if _social %}
+<ul class="fe-footer-social fe-footer-block fe-footer-block-social">
+  {% for s in _social %}
+  <li><a href="{{ s.url or '#' }}" aria-label="{{ s.label or s.icon or 'Social link' }}"
+         target="_blank" rel="noopener">{{ icon(s.icon or 'link') }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}

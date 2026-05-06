@@ -3,7 +3,14 @@
 {% block content %}
 <section class="fe-event-min" id="event" style="{{ tpl_style or '' }}">
   <div class="fe-container fe-event-min-inner">
-    <a class="fe-event-min-back" href="{{ url_for('frontend.index') }}#events">← back</a>
+    <div class="fe-edit-bar">
+      <a class="fe-event-min-back" href="{{ url_for('frontend.index') }}#events">← back</a>
+      {% if current_user.is_authenticated and current_user.can_edit() %}
+      <a class="fe-edit-shortcut" href="{{ url_for('main.post_edit', pid=event.id) }}">
+        {{ icon('edit-3') }} <span>Edit</span>
+      </a>
+      {% endif %}
+    </div>
 
     {% if event.event_starts_at %}
     <p class="fe-event-min-date">
@@ -44,15 +51,19 @@
         {% if event.zoom_meeting_id %}
         <div class="fe-event-min-cred">
           <span class="muted">ID</span>
-          <code>{{ event.zoom_meeting_id }}</code>
-          <button type="button" class="fe-copy-btn" data-copy="{{ event.zoom_meeting_id }}" title="Copy">{{ icon('copy') }}</button>
+          <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ event.zoom_meeting_id }}" aria-label="Copy meeting ID">
+            <code>{{ event.zoom_meeting_id }}</code>
+            <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+          </button>
         </div>
         {% endif %}
         {% if event.zoom_passcode %}
         <div class="fe-event-min-cred">
           <span class="muted">Passcode</span>
-          <code>{{ event.zoom_passcode }}</code>
-          <button type="button" class="fe-copy-btn" data-copy="{{ event.zoom_passcode }}" title="Copy">{{ icon('copy') }}</button>
+          <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ event.zoom_passcode }}" aria-label="Copy Zoom passcode">
+            <code>{{ event.zoom_passcode }}</code>
+            <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+          </button>
         </div>
         {% endif %}
       </dd>

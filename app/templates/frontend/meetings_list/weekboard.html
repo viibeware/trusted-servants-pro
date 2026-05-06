@@ -1,0 +1,112 @@
+{# Week-board layout: seven vertical columns (Mon–Sun). For every meeting
+   we render a compact dense-card under each day it runs, sorted by
+   start time within the column. Best for fellowships with crowded
+   weekly schedules — visitors instantly see what's available on, say,
+   Saturday morning. On viewports < 900px the columns become a
+   horizontal swipe deck so each day still gets full width without
+   becoming a thin sliver. A "show busiest day" affordance auto-scrolls
+   to the day with the most meetings on first paint. #}
+{%- set _days = [(0,'Monday'),(1,'Tuesday'),(2,'Wednesday'),(3,'Thursday'),
+                 (4,'Friday'),(5,'Saturday'),(6,'Sunday')] -%}
+{# Build a (day_num → list of (start_time, schedule, meeting)) bucket so
+   we can render in chronological order without re-walking schedules per
+   day at the template layer. #}
+{%- set _buckets = namespace(d={0:[],1:[],2:[],3:[],4:[],5:[],6:[]}) -%}
+{%- for m in (all_meetings or []) -%}
+  {%- for s in m.schedules -%}
+    {%- if 0 <= s.day_of_week < 7 -%}
+      {%- set _ = _buckets.d[s.day_of_week].append((s.start_time or '00:00', s, m)) -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endfor -%}
+
+<section class="fe-section fe-mlist fe-mlist-weekboard fe-mlist--w-{{ list_width_mode }}" id="meetings">
+  <div class="{% if list_width_mode == 'boxed' %}fe-container{% else %}fe-mlist-fullwrap{% endif %}"
+       {% if list_width_mode == 'boxed' %}style="max-width: {{ list_max_width }}px;"
+       {%- elif list_padding_pct %}style="padding-left: {{ list_padding_pct }}vw; padding-right: {{ list_padding_pct }}vw;"{% endif %}>
+    <header class="fe-mlist-head">
+      <h1>{{ list_heading or "This week's meetings" }}</h1>
+      <p class="muted">{{ list_subheading or 'Every active meeting, placed under each day it runs. Swipe between days on mobile.' }}</p>
+    </header>
+
+    {% if not all_meetings %}
+    <p class="fe-mlist-empty muted">No active meetings on the calendar.</p>
+    {% else %}
+
+    {# Mobile day picker — clicking a chip scrolls the swipe-deck to the
+       chosen day. Hidden on desktop where the columns sit side-by-side. #}
+    <div class="fe-mlist-week-mobilebar" data-mlist-weekbar>
+      {% for dnum, full in _days %}
+      <button type="button" class="fe-mlist-chip{% if loop.first %} is-active{% endif %}"
+              data-mlist-week-day="{{ dnum }}">
+        {{ full[:3] }}
+        <span class="fe-mlist-chip-count">{{ _buckets.d[dnum]|length }}</span>
+      </button>
+      {% endfor %}
+    </div>
+
+    <div class="fe-mlist-week-deck" data-mlist-weekdeck>
+      {% for dnum, full in _days %}
+      <div class="fe-mlist-week-col" data-week-col="{{ dnum }}">
+        <header class="fe-mlist-week-col-head">
+          <h2>{{ full }}</h2>
+          <span class="fe-mlist-week-col-count">{{ _buckets.d[dnum]|length }}</span>
+        </header>
+        {% set _items = _buckets.d[dnum]|sort(attribute='0') %}
+        {% if not _items %}
+          <p class="fe-mlist-week-col-empty muted small">No meetings.</p>
+        {% else %}
+          <div class="fe-mlist-week-col-stack">
+            {% for _start, s, m in _items %}
+              {% with dense=true %}
+                {% include "frontend/meetings_list/_meeting_card.html" %}
+              {% endwith %}
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<script>
+(function () {
+  var deck = document.querySelector('[data-mlist-weekdeck]');
+  var bar = document.querySelector('[data-mlist-weekbar]');
+  if (!deck || !bar) return;
+  var chips = bar.querySelectorAll('[data-mlist-week-day]');
+  var cols = deck.querySelectorAll('[data-week-col]');
+
+  function scrollToDay(dnum) {
+    var col = deck.querySelector('[data-week-col="' + dnum + '"]');
+    if (!col) return;
+    // Only swipe-scroll on mobile (deck is the horizontal scroller).
+    var deckIsRow = window.matchMedia('(max-width: 900px)').matches;
+    if (deckIsRow) {
+      deck.scrollTo({ left: col.offsetLeft - deck.offsetLeft, behavior: 'smooth' });
+    } else {
+      col.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      chips.forEach(function (c) { c.classList.toggle('is-active', c === chip); });
+      scrollToDay(chip.getAttribute('data-mlist-week-day'));
+    });
+  });
+
+  // Default the active chip + scroll position to today's day-of-week
+  // (so visitors land on what's relevant). JS Date.getDay() is 0=Sun;
+  // our enum is 0=Mon, so adjust: ((d + 6) % 7).
+  var today = (new Date().getDay() + 6) % 7;
+  var todayChip = bar.querySelector('[data-mlist-week-day="' + today + '"]');
+  if (todayChip) {
+    chips.forEach(function (c) { c.classList.toggle('is-active', c === todayChip); });
+    // Wait for layout so offsetLeft is correct.
+    requestAnimationFrame(function () { scrollToDay(String(today)); });
+  }
+})();
+</script>

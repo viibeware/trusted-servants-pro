@@ -1,0 +1,26 @@
+{# "Minimal" footer — single line, copyright on the left + secondary nav
+   on the right. No brand block, no link columns. Quietest possible
+   footing for sites whose footer should disappear into the page chrome. #}
+{% from "frontend/footers/_footer_helpers.html" import footer_inner_attrs, footer_copyright_text %}
+{% set _f = footer_content(site) %}
+{% from "frontend/footers/_footer_bg.html" import footer_bg_class, footer_bg_style, footer_bg_data_attrs, footer_bg_inner %}
+{% set _bg = _f.bg %}
+{% set _min_h = (site.frontend_footer_min_height_vh if site else 0) or 0 %}
+{% set _font_scale = (site.frontend_footer_font_scale if site else 100) or 100 %}
+<footer class="fe-footer fe-footer-minimal {{ footer_bg_class(_bg) }}"
+        {% set _bgs = footer_bg_style(_bg, _min_h, _font_scale) %}{% if _bgs %}style="{{ _bgs }}"{% endif %}
+        {{ footer_bg_data_attrs(_bg) }}>
+  {{ footer_bg_inner(_bg) }}
+  <div {{ footer_inner_attrs(site) }}>
+    <div class="fe-footer-minimal-row">
+      <div class="fe-footer-copy">{{ footer_copyright_text(_f.copyright, site) | safe_html }}</div>
+      {% if _f.secondary_nav %}
+      <ul class="fe-footer-secondary-nav">
+        {% for l in _f.secondary_nav %}
+        <li><a href="{{ l.url or '#' }}">{{ l.label or '' }}</a></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+  </div>
+</footer>

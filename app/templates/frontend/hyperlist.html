@@ -1,0 +1,530 @@
+{# Hyperlist — accessibility-first index of every active meeting.
+
+   This template DOES NOT extend frontend/base.html. The whole point is
+   a stripped-down, screen-reader-first page with no header, no footer,
+   no utility bar, no megamenus, no animations, no third-party fonts,
+   no client-side framework. One semantic HTML5 document, one inline
+   stylesheet, one tiny progressive-enhancement script for the search
+   filter (page works without JS — search just stays unfiltered).
+
+   Design principles applied:
+
+   * Skip link as the first focusable element (visible on focus).
+   * Single <h1>; <h2> per day section; <h3> per meeting. Linear
+     heading hierarchy so AT users can navigate by heading level.
+   * Landmarks: <header role="banner">, <nav aria-label="…">,
+     <main role="main">, <footer role="contentinfo">. Each labelled
+     so the AT landmark menu lists them with meaningful names.
+   * "Currently in session" surfaced at top in role="status" so AT
+     announces it on load. Empty when no meeting is live (no announce).
+   * "Jump to day" nav uses anchor links — keyboard users tab through
+     seven links and Enter jumps to the section heading (which carries
+     tabindex="-1" so it can receive programmatic focus on jump).
+   * Each meeting is an <article> with its name as <h3> + a <dl>
+     description list mapping structured data (Time, Type, Location,
+     etc.) to clearly-labelled values.
+   * <time datetime="HH:MM"> on every start time so AT can resolve the
+     ISO time independent of the display string ("7:00 PM").
+   * Search input has a programmatic <label>, an <output aria-live="polite">
+     for the "N meetings match" announcement, and a `/` keyboard shortcut
+     when focus isn't already in an input.
+   * High-contrast palette (>= WCAG AAA against the white surface);
+     focus rings are explicit, thick, and non-colour-dependent.
+   * prefers-reduced-motion blanket-disables every transition.
+   * prefers-color-scheme: dark mirrors the same contrast ratio with a
+     near-black surface and pale text.
+   * No images, no icon fonts, no SVGs — every affordance is text.
+
+   Routes here include the public meeting detail page so visitors who
+   want full info can follow through; otherwise everything important
+   for showing up to a meeting (day, time, location/Zoom link, ID,
+   passcode) lives inline on this page. #}
+{%- set _site_title = (site.frontend_title if site else None) or 'Trusted Servants' -%}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hyperlist — every meeting · {{ _site_title }}</title>
+<meta name="description" content="Plain-text, screen-reader-first index of every active meeting at {{ _site_title }}. Day, time, location, type, and Zoom details for each.">
+<meta name="robots" content="index, follow">
+<meta name="color-scheme" content="light dark">
+{% if site and site.frontend_favicon_filename %}
+<link rel="icon" href="{{ url_for('public.site_frontend_favicon') }}">
+{% else %}
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+{% endif %}
+<style>
+  /* Reset + base. System font stack so AT users get the OS default
+     (which they'll have already tuned for their setup) instead of a
+     downloaded webfont they have to wait on. */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { font-size: 100%; -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                 Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 1.125rem;       /* 18px floor — comfortable for low-vision visitors */
+    line-height: 1.55;
+    color: #0a0a0a;            /* near-black on white = ~21:1, well past AAA */
+    background: #ffffff;
+    text-rendering: optimizeLegibility;
+  }
+  /* Skip link — only visible when focused. AT users press Tab on load
+     and land on this; sighted keyboard users see it pop in. */
+  .skip-link {
+    position: absolute;
+    left: 0;
+    top: 0;
+    background: #0a0a0a;
+    color: #ffffff;
+    padding: 0.75rem 1rem;
+    text-decoration: underline;
+    font-weight: 700;
+    transform: translateY(-100%);
+    z-index: 100;
+  }
+  .skip-link:focus { transform: translateY(0); }
+
+  /* Layout — single column, generous max-width capped at a comfortable
+     measure for long-form reading. */
+  .wrap { max-width: 56rem; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+
+  /* Page header */
+  header[role="banner"] { border-bottom: 2px solid #0a0a0a; padding-bottom: 1rem; margin-bottom: 1.5rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 0.5rem; }
+  .lede { font-size: 1.0625rem; color: #2a2a2a; margin: 0; }
+
+  /* Live-meeting status region. Background colour is supportive, not
+     load-bearing — the heading text "Currently in session" carries the
+     meaning. Visible only when the route resolves a live meeting. */
+  .live {
+    margin: 1.25rem 0 1.5rem;
+    padding: 1rem 1.25rem;
+    background: #fff8d6;
+    border: 2px solid #8a6d00;
+    border-left-width: 8px;
+    color: #1a1400;
+  }
+  .live h2 { margin: 0 0 0.5rem; font-size: 1.25rem; }
+  .live p  { margin: 0.25rem 0; }
+  .live .live-name { font-weight: 700; font-size: 1.125rem; }
+  .live a { color: #1a1400; }
+
+  /* Quick controls — search + day index. Both stack on every viewport
+     so reading order = visual order = DOM order. */
+  .controls { margin: 0 0 2rem; }
+  .search-row { margin-bottom: 1rem; }
+  .search-row label { display: block; font-weight: 700; margin-bottom: 0.25rem; }
+  .search-row input[type="search"] {
+    width: 100%;
+    font: inherit;
+    font-size: 1.125rem;
+    padding: 0.625rem 0.75rem;
+    border: 2px solid #0a0a0a;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #0a0a0a;
+  }
+  .search-row .hint { display: block; margin-top: 0.25rem; color: #2a2a2a; font-size: 0.9375rem; }
+  .search-row output { display: block; margin-top: 0.25rem; font-style: italic; color: #2a2a2a; }
+
+  nav[aria-label="Jump to day"] h2 {
+    font-size: 1rem;
+    margin: 0 0 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  nav[aria-label="Jump to day"] ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  nav[aria-label="Jump to day"] li { margin: 0; }
+  nav[aria-label="Jump to day"] a {
+    display: inline-block;
+    padding: 0.5rem 0.875rem;
+    border: 2px solid #0a0a0a;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #0a0a0a;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  nav[aria-label="Jump to day"] a[aria-current="date"] {
+    background: #0a0a0a;
+    color: #ffffff;
+  }
+  nav[aria-label="Jump to day"] a:hover,
+  nav[aria-label="Jump to day"] a:focus { text-decoration: underline; }
+
+  /* Day sections */
+  section.day { margin: 2.5rem 0 0; }
+  section.day:first-of-type { margin-top: 1rem; }
+  section.day h2 {
+    font-size: 1.5rem;
+    margin: 0 0 1rem;
+    padding: 0.5rem 0 0.5rem;
+    border-bottom: 2px solid #0a0a0a;
+  }
+  section.day h2 .day-count { font-size: 1rem; font-weight: 400; color: #2a2a2a; }
+  section.day .empty { color: #2a2a2a; font-style: italic; margin: 0.5rem 0 0; }
+
+  /* Meeting list */
+  ol.meetings { list-style: none; margin: 0; padding: 0; }
+  ol.meetings > li {
+    counter-increment: meeting;
+    margin: 0 0 1.25rem;
+    padding: 1rem 1.125rem;
+    border: 1px solid #0a0a0a;
+    border-radius: 6px;
+    background: #ffffff;
+  }
+  ol.meetings > li[hidden] { display: none; }
+  article.meeting h3 { margin: 0 0 0.5rem; font-size: 1.1875rem; line-height: 1.3; }
+  article.meeting h3 a { color: #0a0a0a; text-decoration: underline; }
+
+  dl.meeting-data { margin: 0.5rem 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
+  dl.meeting-data dt { font-weight: 700; color: #2a2a2a; }
+  dl.meeting-data dd { margin: 0; }
+  dl.meeting-data .copy { font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; word-break: break-all; }
+  /* Address: name on its own line; <address> below renders the street
+     and city/state/zip without italics (the browser default) so it
+     reads as plain text but keeps the semantic <address> wrapper. */
+  dl.meeting-data .loc-name { font-weight: 600; }
+  dl.meeting-data .loc-address { font-style: normal; margin: 0; }
+  dl.meeting-data .loc-address > div { line-height: 1.4; }
+
+  .meeting-actions { margin: 0.75rem 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
+  .meeting-actions a {
+    display: inline-block;
+    padding: 0.4375rem 0.75rem;
+    border: 2px solid #0a0a0a;
+    border-radius: 4px;
+    color: #0a0a0a;
+    text-decoration: underline;
+    font-weight: 600;
+  }
+  .meeting-actions a.zoom { background: #0a0a0a; color: #ffffff; }
+
+  /* Generic links */
+  a { color: #0033a0; }
+  a:hover, a:focus { color: #001a55; }
+
+  /* Focus rings — thick, high-contrast, never colour-only. */
+  :focus-visible {
+    outline: 3px solid #0033a0;
+    outline-offset: 2px;
+  }
+  /* For dark-on-light buttons (day pills, zoom CTA), invert the ring
+     so it stays visible against the dark surface. */
+  nav[aria-label="Jump to day"] a[aria-current="date"]:focus-visible,
+  .meeting-actions a.zoom:focus-visible {
+    outline-color: #ffd700;
+  }
+
+  /* Footer */
+  footer[role="contentinfo"] {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 2px solid #0a0a0a;
+    font-size: 0.9375rem;
+    color: #2a2a2a;
+  }
+  footer[role="contentinfo"] ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; }
+  footer[role="contentinfo"] a { color: #0033a0; }
+
+  /* Visually hidden — content stays in the accessibility tree. */
+  .sr-only {
+    position: absolute !important;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Reduced motion — disable every animation/transition. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+
+  /* Dark mode — keep the same contrast ratio, just inverted. Triggered
+     by the OS preference; visitors who don't want dark mode get light
+     either way. No JS toggle here on purpose — fewer moving parts. */
+  @media (prefers-color-scheme: dark) {
+    body { background: #0a0a0a; color: #f5f5f5; }
+    .lede, dl.meeting-data dt, section.day h2 .day-count, section.day .empty,
+    .search-row .hint, .search-row output, footer[role="contentinfo"] { color: #c8c8c8; }
+    a { color: #8ab4ff; }
+    a:hover, a:focus { color: #c0d4ff; }
+    header[role="banner"], section.day h2, footer[role="contentinfo"] { border-color: #f5f5f5; }
+    .skip-link { background: #f5f5f5; color: #0a0a0a; }
+    .search-row input[type="search"] { background: #1a1a1a; color: #f5f5f5; border-color: #f5f5f5; }
+    nav[aria-label="Jump to day"] a {
+      background: #1a1a1a; color: #f5f5f5; border-color: #f5f5f5;
+    }
+    nav[aria-label="Jump to day"] a[aria-current="date"] {
+      background: #f5f5f5; color: #0a0a0a;
+    }
+    ol.meetings > li { background: #131313; border-color: #c8c8c8; }
+    article.meeting h3 a { color: #f5f5f5; }
+    .meeting-actions a { background: #1a1a1a; color: #f5f5f5; border-color: #f5f5f5; }
+    .meeting-actions a.zoom { background: #f5f5f5; color: #0a0a0a; }
+    .live {
+      background: #2a2400;
+      border-color: #ffd700;
+      color: #fff8d6;
+    }
+    .live a { color: #fff8d6; }
+    :focus-visible { outline-color: #ffd700; }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to meeting list</a>
+
+<div class="wrap">
+  <header role="banner">
+    <h1>Hyperlist</h1>
+    <p class="lede">A plain-text, screen-reader-first index of every active meeting at {{ _site_title }}. {{ total_meetings }} meeting{{ '' if total_meetings == 1 else 's' }} listed, grouped by day. Use the day links below to jump, or press the slash key to filter the list.</p>
+  </header>
+
+  {% if live_meeting %}
+    {%- set _lm = live_meeting.meeting -%}
+    {%- set _ls = live_meeting.schedule -%}
+    <aside class="live" role="status" aria-live="polite" aria-label="Currently in session">
+      <h2>Currently in session</h2>
+      <p class="live-name">{{ _lm.name }}</p>
+      <p>
+        Started at <time datetime="{{ _ls.start_time }}">{{ _ls.start_time | fmt12h }}</time>;
+        ends at <time datetime="{{ _ls.end_time }}">{{ _ls.end_time | fmt12h }}</time>.
+      </p>
+      {% if live_meeting.join_url %}
+        <p><a href="{{ live_meeting.join_url }}" rel="noopener noreferrer">Join this meeting now (opens Zoom)</a></p>
+      {% endif %}
+      <p><a href="{{ url_for('frontend.meeting_detail', slug=_lm.public_slug) }}">Full details for {{ _lm.name }}</a></p>
+    </aside>
+  {% endif %}
+
+  <section class="controls" aria-labelledby="controls-heading">
+    <h2 id="controls-heading" class="sr-only">Filter and navigation controls</h2>
+
+    <div class="search-row">
+      <label for="hyperlist-search">Filter meetings</label>
+      <input type="search" id="hyperlist-search"
+             placeholder="Type a name, day, time, or location"
+             aria-describedby="hyperlist-search-hint"
+             autocomplete="off"
+             inputmode="search">
+      <span id="hyperlist-search-hint" class="hint">Press the slash key to focus this field. Press Escape to clear it. Filter is optional — without JavaScript every meeting stays visible.</span>
+      <output for="hyperlist-search" aria-live="polite" id="hyperlist-search-count"></output>
+    </div>
+
+    <nav aria-label="Jump to day">
+      <h2>Jump to day</h2>
+      <ul>
+        {% for bucket in meetings_by_day %}
+          <li>
+            <a href="#day-{{ bucket.day }}"
+               {% if bucket.day == today_dow %}aria-current="date"{% endif %}>
+              {{ bucket.label }}{% if bucket.day == today_dow %} (today){% endif %}
+              <span class="sr-only">— {{ bucket['items'] | length }} meeting{{ '' if (bucket['items'] | length) == 1 else 's' }}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </nav>
+  </section>
+
+  <main role="main" id="main" aria-label="Meetings by day">
+    {% for bucket in meetings_by_day %}
+      <section class="day" aria-labelledby="day-{{ bucket.day }}">
+        <h2 id="day-{{ bucket.day }}" tabindex="-1">
+          {{ bucket.label }}{% if bucket.day == today_dow %} <span class="sr-only">(today)</span>{% endif %}
+          <span class="day-count">— {{ bucket['items'] | length }} meeting{{ '' if (bucket['items'] | length) == 1 else 's' }}</span>
+        </h2>
+
+        {% if bucket['items'] %}
+          <ol class="meetings" aria-label="{{ bucket.label }} meetings">
+            {% for it in bucket['items'] %}
+              {%- set m = it.meeting -%}
+              {%- set s = it.schedule -%}
+              {%- set lr = it.location_record -%}
+              {%- set _type_label = ({'in_person': 'In person', 'online': 'Online (Zoom)', 'hybrid': 'Hybrid (in person and Zoom)'}).get(m.meeting_type, 'In person') -%}
+              {%- set _addr_lines = lr.address_lines() if lr else [] -%}
+              {# Resolve a Maps URL: prefer the saved Location's explicit
+                 maps_url; fall back to a Google Maps query built from
+                 the canonical Location.address (when a Location row
+                 matched) or the free-text meeting.location string.
+                 Skipped for online-only meetings. #}
+              {%- set _maps_url = '' -%}
+              {%- if m.meeting_type in ('in_person', 'hybrid') -%}
+                {%- if lr and lr.maps_url -%}
+                  {%- set _maps_url = lr.maps_url -%}
+                {%- elif lr and lr.address -%}
+                  {%- set _maps_url = 'https://www.google.com/maps/search/?api=1&query=' ~ (lr.address | urlencode) -%}
+                {%- elif m.location -%}
+                  {%- set _maps_url = 'https://www.google.com/maps/search/?api=1&query=' ~ (m.location | urlencode) -%}
+                {%- endif -%}
+              {%- endif -%}
+              <li data-meeting-row
+                  data-search="{{ (m.name ~ ' ' ~ (m.location or '') ~ ' ' ~ (_addr_lines | join(' ')) ~ ' ' ~ bucket.label ~ ' ' ~ _type_label ~ ' ' ~ (s.start_time | fmt12h)) | lower }}">
+                <article class="meeting" aria-labelledby="m-{{ s.id }}-name">
+                  <h3 id="m-{{ s.id }}-name">
+                    <a href="{{ url_for('frontend.meeting_detail', slug=m.public_slug) }}">{{ m.name }}</a>
+                  </h3>
+                  <dl class="meeting-data">
+                    <dt>Time</dt>
+                    <dd>
+                      <time datetime="{{ s.start_time }}">{{ s.start_time | fmt12h }}</time>
+                      to
+                      <time datetime="{{ s.end_time }}">{{ s.end_time | fmt12h }}</time>
+                      <span class="sr-only">on {{ bucket.label }}</span>
+                    </dd>
+
+                    <dt>Format</dt>
+                    <dd>{{ _type_label }}</dd>
+
+                    {% if m.meeting_type in ('in_person', 'hybrid') and (m.location or _addr_lines) %}
+                      <dt>Address</dt>
+                      <dd>
+                        {% if m.location %}<div class="loc-name">{{ m.location }}</div>{% endif %}
+                        {% if _addr_lines %}
+                          <address class="loc-address">
+                            {% for line in _addr_lines %}<div>{{ line }}</div>{% endfor %}
+                          </address>
+                        {% endif %}
+                      </dd>
+                    {% elif m.meeting_type == 'online' and m.location %}
+                      <dt>Notes</dt>
+                      <dd>{{ m.location }}</dd>
+                    {% endif %}
+
+                    {% if m.meeting_type in ('online', 'hybrid') and m.zoom_meeting_id %}
+                      <dt>Meeting ID</dt>
+                      <dd class="copy">{{ m.zoom_meeting_id }}</dd>
+                    {% endif %}
+
+                    {% if m.meeting_type in ('online', 'hybrid') and m.zoom_passcode %}
+                      <dt>Passcode</dt>
+                      <dd class="copy">{{ m.zoom_passcode }}</dd>
+                    {% endif %}
+                  </dl>
+
+                  <ul class="meeting-actions">
+                    <li><a href="{{ url_for('frontend.meeting_detail', slug=m.public_slug) }}">Full details<span class="sr-only"> for {{ m.name }}</span></a></li>
+                    {% if _maps_url %}
+                      <li><a href="{{ _maps_url }}" rel="noopener noreferrer">Open in Google Maps<span class="sr-only"> for {{ m.name }} (opens external site)</span></a></li>
+                    {% endif %}
+                    {% if m.zoom_link and m.meeting_type in ('online', 'hybrid') %}
+                      <li><a class="zoom" href="{{ m.zoom_link }}" rel="noopener noreferrer">Join Zoom<span class="sr-only"> for {{ m.name }} (opens external site)</span></a></li>
+                    {% endif %}
+                  </ul>
+                </article>
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <p class="empty">No meetings scheduled on {{ bucket.label }}.</p>
+        {% endif %}
+      </section>
+    {% endfor %}
+  </main>
+
+  <footer role="contentinfo">
+    <p>Hyperlist is the accessibility-first meeting index for {{ _site_title }}. The standard site has the full experience (events, posts, library, navigation).</p>
+    <ul>
+      <li><a href="{{ url_for('frontend.index') }}">Standard site home</a></li>
+      <li><a href="{{ url_for('frontend.meetings_list') }}">Standard meeting list</a></li>
+    </ul>
+  </footer>
+</div>
+
+<script>
+// Progressive enhancement only — the page is fully usable without JS.
+// What this adds: client-side filtering as you type, a slash-key shortcut
+// to focus the search input, and an aria-live announcement of how many
+// meetings match the current query. Everything degrades cleanly: with JS
+// disabled the input simply doesn't filter, every meeting stays visible.
+(function(){
+  var input  = document.getElementById('hyperlist-search');
+  var output = document.getElementById('hyperlist-search-count');
+  if (!input || !output) return;
+
+  var rows = Array.prototype.slice.call(document.querySelectorAll('[data-meeting-row]'));
+  var sections = Array.prototype.slice.call(document.querySelectorAll('section.day'));
+
+  function tokens(q) {
+    return (q || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+  }
+
+  function filter() {
+    var toks = tokens(input.value);
+    var visible = 0;
+    rows.forEach(function (row) {
+      var hay = row.getAttribute('data-search') || '';
+      var ok = toks.every(function (t) { return hay.indexOf(t) !== -1; });
+      row.hidden = !ok;
+      if (ok) visible++;
+    });
+    // Hide a day section if none of its meetings match — fewer empty
+    // headings to wade through with a screen reader.
+    sections.forEach(function (sec) {
+      var anyVisible = sec.querySelectorAll('[data-meeting-row]:not([hidden])').length > 0;
+      var hadAny = sec.querySelectorAll('[data-meeting-row]').length > 0;
+      sec.hidden = (toks.length > 0 && hadAny && !anyVisible);
+    });
+    if (toks.length === 0) {
+      output.textContent = '';
+    } else if (visible === 0) {
+      output.textContent = 'No meetings match this filter.';
+    } else if (visible === 1) {
+      output.textContent = '1 meeting matches.';
+    } else {
+      output.textContent = visible + ' meetings match.';
+    }
+  }
+
+  input.addEventListener('input', filter);
+
+  // `/` focuses the search input from anywhere on the page (unless the
+  // visitor is already typing in another input). Escape clears it.
+  document.addEventListener('keydown', function (e) {
+    if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      var t = e.target;
+      var typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+      if (!typing) {
+        e.preventDefault();
+        input.focus();
+        input.select();
+      }
+    }
+    if (e.key === 'Escape' && document.activeElement === input) {
+      input.value = '';
+      filter();
+    }
+  });
+
+  // Move focus to the day heading on jump so screen readers re-announce
+  // the section context. Headings carry tabindex="-1" so they accept
+  // programmatic focus without joining the tab order.
+  document.querySelectorAll('nav[aria-label="Jump to day"] a').forEach(function (a) {
+    a.addEventListener('click', function () {
+      var id = a.getAttribute('href').slice(1);
+      var heading = document.getElementById(id);
+      if (heading) {
+        // Defer one frame so the browser's own anchor-jump finishes
+        // first; then we move focus on top of it.
+        requestAnimationFrame(function () { heading.focus(); });
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>

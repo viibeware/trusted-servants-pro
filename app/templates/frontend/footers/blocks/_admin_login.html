@@ -1,0 +1,11 @@
+{# Admin login block — single pill anchor pointing visitors at the
+   backend sign-in. Reuses the .fe-footer-location-directions pill
+   styling so the surface, border, and hover behaviour match the
+   "Get directions" buttons in the meeting-locations block. The
+   auth.login view auto-redirects already-authenticated users to the
+   admin dashboard, so the same link is safe for every visitor. #}
+<div class="fe-footer-block fe-footer-block-admin-login">
+  <a class="fe-footer-admin-login" href="{{ url_for('auth.login') }}">
+    {{ icon('log-in') }}<span>Login</span>
+  </a>
+</div>

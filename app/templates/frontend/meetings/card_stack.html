@@ -5,7 +5,14 @@
   <div class="fe-meeting-stack-hero">
     <div class="fe-meeting-stack-hero-glow" aria-hidden="true"></div>
     <div class="fe-container fe-meeting-stack-hero-inner">
-      <a class="fe-meeting-stack-back" href="{{ url_for('frontend.index') }}#meetings">← Back</a>
+      <div class="fe-edit-bar">
+        <a class="fe-meeting-stack-back" href="{{ url_for('frontend.meetings_list') }}">← All meetings</a>
+        {% if current_user.is_authenticated and current_user.can_edit() %}
+        <a class="fe-edit-shortcut" href="{{ url_for('main.meeting_detail', slug=meeting.public_slug) }}">
+          {{ icon('edit-3') }} <span>Edit meeting</span>
+        </a>
+        {% endif %}
+      </div>
       {% if meeting.logo_filename %}
       <img class="fe-meeting-logo" src="{{ url_for('public.public_meeting_logo', mid=meeting.id) }}" alt="">
       {% endif %}
@@ -41,23 +48,29 @@
       </div>
       {% if meeting.zoom_link %}
       <a class="fe-btn fe-btn-primary fe-meeting-stack-cta" href="{{ meeting.zoom_link }}" target="_blank" rel="noopener">
-        {{ icon('video') }} <span>Join via Zoom</span> <em>↗</em>
+        {{ icon('video') }} <span>Join Zoom Meeting</span> <em>↗</em>
       </a>
       {% endif %}
       <dl class="fe-meeting-stack-creds">
         {% if meeting.zoom_meeting_id %}
         <div>
           <dt>Meeting ID</dt>
-          <dd><code>{{ meeting.zoom_meeting_id }}</code>
-            <button type="button" class="fe-copy-btn" data-copy="{{ meeting.zoom_meeting_id }}" title="Copy">{{ icon('copy') }}</button>
+          <dd>
+            <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ meeting.zoom_meeting_id }}" aria-label="Copy meeting ID">
+              <code>{{ meeting.zoom_meeting_id }}</code>
+              <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+            </button>
           </dd>
         </div>
         {% endif %}
         {% if meeting.zoom_passcode %}
         <div>
           <dt>Passcode</dt>
-          <dd><code>{{ meeting.zoom_passcode }}</code>
-            <button type="button" class="fe-copy-btn" data-copy="{{ meeting.zoom_passcode }}" title="Copy">{{ icon('copy') }}</button>
+          <dd>
+            <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ meeting.zoom_passcode }}" aria-label="Copy Zoom passcode">
+              <code>{{ meeting.zoom_passcode }}</code>
+              <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+            </button>
           </dd>
         </div>
         {% endif %}
@@ -75,9 +88,17 @@
     <div class="fe-meeting-stack-action fe-meeting-stack-action-soft">
       <div class="fe-meeting-stack-action-head">
         <span class="fe-meeting-stack-action-eyebrow">Where to find us</span>
-        <h2>{{ icon('map-pin') }} {{ meeting.location }}</h2>
+        {% if meeting_location_record %}
+          <h2>{{ icon('map-pin') }} {{ meeting_location_record.name }}</h2>
+          <p class="fe-meeting-stack-action-addr">
+            {% for line in meeting_location_record.address_lines() %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}
+          </p>
+        {% else %}
+          <h2>{{ icon('map-pin') }} {{ meeting.location }}</h2>
+        {% endif %}
       </div>
-      {% set _maps = "https://www.google.com/maps/search/?api=1&query=" ~ (meeting.location|urlencode) %}
+      {% set _maps_q = (meeting_location_record.address if meeting_location_record and meeting_location_record.address else meeting.location) %}
+      {% set _maps = "https://www.google.com/maps/search/?api=1&query=" ~ (_maps_q|urlencode) %}
       <a class="fe-btn fe-btn-ghost fe-meeting-stack-cta" href="{{ _maps }}" target="_blank" rel="noopener">
         {{ icon('map-pin') }} <span>Open in Maps</span> <em>↗</em>
       </a>
@@ -85,6 +106,7 @@
     {% endif %}
 
     {% include "frontend/meetings/_resources.html" %}
+    {% include "frontend/meetings/_extended.html" %}
 
     {% if meeting.description %}
     <article class="fe-meeting-stack-prose">

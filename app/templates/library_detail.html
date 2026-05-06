@@ -154,6 +154,25 @@
         {% endif %}
       </div>
       <div class="row-actions">
+        {# Public-visibility per-item toggle. Only renders when the
+           parent library is itself flagged public (otherwise the
+           toggle would be meaningless — items can't surface on
+           /library if their library isn't there). Posts via fetch
+           to a small JSON endpoint so the toggle is instant — no
+           page reload, no form save bar. Default state is `on` so
+           a library flipped to public publishes everything by
+           default; admins toggle individual rows off to hide. #}
+        {% if can_edit and library.public_visible %}
+        <label class="mode-toggle library-item-public-toggle"
+               title="Show this item on the public Literature Library page">
+          <input type="checkbox"
+                 data-library-item-public
+                 data-toggle-url="{{ url_for('main.library_item_public_toggle', rid=r.id) }}"
+                 {% if r.public_visible %}checked{% endif %}>
+          <span class="mode-track"><span class="mode-thumb"></span></span>
+          <span class="mode-toggle-label muted smaller">Public</span>
+        </label>
+        {% endif %}
         {% if r.stored_filename %}
         <button type="button" class="btn btn-sm btn-copy" data-copy-url="{{ url_for('public.public_file', filename=r.original_filename) }}">Copy Link</button>
         {% elif r.url %}
@@ -465,6 +484,15 @@
         </label>
         {% endif %}
         {% if current_user.is_admin() %}
+        <input type="hidden" name="public_visible_present" value="1">
+        <label class="check">
+          <input type="checkbox" name="public_visible" value="1"
+                 {% if library.public_visible %}checked{% endif %}>
+          Show on public Literature Library
+          <span class="muted smaller">— include this library and its items on <code>/library</code>. When on, the Files list below grows a per-item Public toggle so you can hide individual entries from the public page (every item defaults to visible).</span>
+        </label>
+        {% endif %}
+        {% if current_user.is_admin() %}
         <fieldset class="fieldset" data-ig-cat-editor>
           <legend>Categories <span class="muted smaller">(define the tags uploaders pick from)</span></legend>
           <input type="hidden" name="category_picker" value="1">
@@ -527,5 +555,47 @@
   <span class="fe-save-bar-msg">Unsaved changes</span>
   <button type="button" class="btn fe-save-bar-btn" id="library-reorder-save-btn">Save</button>
 </div>
+{% endif %}
+
+{% if library.public_visible %}
+<script>
+// Per-item public-visibility toggle for the Literature Library. Each
+// toggle posts a tiny JSON payload to its own URL the moment it
+// changes — no save bar, no page reload. The checkbox stays in sync
+// with whatever the server confirms; if the request fails we revert
+// the visual state and surface a small alert so the admin knows.
+(function () {
+  const csrf = document.querySelector('input[name="csrf_token"]');
+  const csrfToken = csrf ? csrf.value : '';
+  document.querySelectorAll('[data-library-item-public]').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const url = cb.getAttribute('data-toggle-url');
+      const want = cb.checked;
+      cb.disabled = true;
+      fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({ public_visible: want }),
+      })
+        .then((r) => {
+          if (!r.ok) throw new Error('save failed');
+          return r.json();
+        })
+        .then((data) => {
+          cb.checked = !!data.public_visible;
+        })
+        .catch(() => {
+          cb.checked = !want;
+          alert('Could not update visibility. Try again or refresh the page.');
+        })
+        .finally(() => { cb.disabled = false; });
+    });
+  });
+})();
+</script>
 {% endif %}
 {% endblock %}

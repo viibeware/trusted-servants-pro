@@ -11,24 +11,8 @@
 
 <header class="fe-header-recovery" id="fe-header"
         style="--fe-header-h: {{ _header_h }}px;">
-  {# ── Utility bar ─────────────────────────────────────────── #}
-  <div class="fe-recovery-util">
-    <div class="fe-recovery-util-inner{% if not _header_full %} fe-container{% endif %}"
-         {% if _header_full %}style="padding-left: {{ _header_pct }}%; padding-right: {{ _header_pct }}%;"{% else %}style="max-width: {{ _header_max }}px;"{% endif %}>
-      <a class="fe-recovery-util-link" href="#">Hyperlist (beta)</a>
-      <div class="fe-recovery-util-right">
-        <a class="fe-recovery-util-phone" href="tel:+18556384373">
-          <strong>CMA 24-Hour Helpline</strong>
-          <span class="fe-recovery-util-phone-num">855-METH-FREE</span>
-        </a>
-        <button type="button" class="fe-theme-toggle" data-fe-theme-toggle
-                aria-label="Toggle dark mode" title="Toggle dark mode">
-          <span class="fe-theme-toggle-icon fe-theme-toggle-sun">{{ icon('sun') }}</span>
-          <span class="fe-theme-toggle-icon fe-theme-toggle-moon">{{ icon('moon') }}</span>
-        </button>
-      </div>
-    </div>
-  </div>
+  {# ── Utility bar (admin-driven; renders only when there's content) ── #}
+  {% include "frontend/_utility_bar.html" %}
 
   {# ── Main nav row ─────────────────────────────────────────── #}
   <div class="fe-recovery-main">

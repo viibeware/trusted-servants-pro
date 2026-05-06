@@ -1,5 +1,15 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+{# Server-side seed for the bootstrap script:
+   - data-theme: the initial theme attribute. We bake the admin's chosen
+     default ('light' | 'dark') here so first paint matches the admin's
+     preference without waiting on JS. 'system' visitors render light
+     server-side (the JS may then flip them to dark below).
+   - data-fe-default-mode: the admin's choice ('light' | 'dark' | 'system').
+     The bootstrap script in the <head> consumes it to decide whether to
+     consult prefers-color-scheme. #}
+{%- set _fe_default_mode = (site.frontend_default_theme if site else 'system') or 'system' -%}
+{%- set _fe_initial_theme = 'dark' if _fe_default_mode == 'dark' else 'light' -%}
+<html lang="en" data-theme="{{ _fe_initial_theme }}" data-fe-default-mode="{{ _fe_default_mode }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -55,13 +65,28 @@
 {% endif %}
 <script src="{{ url_for('static', filename='js/login_fx.js', v=app_build_id) }}"></script>
 <script>
-  // Apply saved frontend theme before first paint so there's no flash.
+  // Apply the active frontend theme before first paint to avoid a flash.
+  // Resolution order:
+  //   1. localStorage 'fe-theme' (the visitor's saved toggle choice) wins
+  //      always — once a visitor has clicked the sun/moon, their pick
+  //      sticks across reloads regardless of the admin default.
+  //   2. Otherwise, fall back to the admin-configured default mode read
+  //      from `<html data-fe-default-mode="...">`:
+  //        - 'light' / 'dark': use that value as-is (already inline).
+  //        - 'system': consult prefers-color-scheme and switch to dark
+  //          if the OS reports dark.
   try {
-    var t = localStorage.getItem('fe-theme');
-    if (t === 'dark' || t === 'light') {
-      document.documentElement.setAttribute('data-theme', t);
-    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      document.documentElement.setAttribute('data-theme', 'dark');
+    var saved = localStorage.getItem('fe-theme');
+    if (saved === 'dark' || saved === 'light') {
+      document.documentElement.setAttribute('data-theme', saved);
+    } else {
+      var mode = document.documentElement.getAttribute('data-fe-default-mode') || 'system';
+      if (mode === 'system' && window.matchMedia &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+      // 'light' / 'dark' fall through — the inline data-theme already
+      // matches the admin's choice (set server-side above).
     }
   } catch (e) {}
 </script>
@@ -69,7 +94,8 @@
 {% set _fe_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
 {% set _font_vars = font_css_vars(site) %}
 {% set _design_vars = design_css_vars(site) %}
-<body class="frontend-body" data-fe-theme="{{ _fe_theme }}" style="{{ _font_vars }} {{ _design_vars }}">
+{%- set _footer_bg = (site.frontend_footer_bg_mode if site else 'dark') or 'dark' -%}
+<body class="frontend-body{% if _footer_bg == 'dark' %} fe-footer-force-dark{% endif %}" data-fe-theme="{{ _fe_theme }}" style="{{ _font_vars }} {{ _design_vars }}">
 {% if site and not site.frontend_enabled and current_user.is_authenticated and current_user.can_edit_frontend() %}
 <div class="fe-admin-preview-bar" role="status">
   <div class="fe-container fe-admin-preview-inner">
@@ -98,7 +124,12 @@
   {% endif %}
 {% endmacro %}
 
-{{ fe_alert_bar(site, 'top') }}
+{# Recovery Blue's header partial includes the utility bar itself so the
+   bar sits inside the sticky header element. Other themes render it
+   here, above the (separately sticky) header. #}
+{% if header_template_key != 'recovery-blue' %}
+  {% include "frontend/_utility_bar.html" %}
+{% endif %}
 
 {% include header_template_partial|default('frontend/headers/classic.html') %}
 
@@ -139,18 +170,56 @@
         header.classList.toggle('fe-nav-open');
       });
     }
-    const onScroll = () => {
+    // Header is `position: sticky; top: 0`. Past one viewport height of
+    // scroll, downward motion hides it (translates -100%) and any upward
+    // motion reveals it. While a megamenu / mobile nav is open, or while
+    // the user is still in the first viewport, the header is forced
+    // visible. Cumulative downward tracking handles fractional per-event
+    // dy (smooth-scroll trackpads often deliver < 1px/event).
+    const HIDE_DOWN_TOTAL = 10;
+    let lastY = window.scrollY;
+    let downAccum = 0;
+    const isMenuOpen = () =>
+      document.body.classList.contains('fe-megamenu-open') ||
+      (header && header.classList.contains('fe-nav-open'));
+    window.addEventListener('scroll', () => {
       if (!header) return;
-      header.classList.toggle('fe-header-scrolled', window.scrollY > 10);
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
+      const y = window.scrollY;
+      const dy = y - lastY;
+      if (isMenuOpen() || y <= window.innerHeight) {
+        header.classList.remove('fe-header-hidden');
+        downAccum = 0;
+      } else if (dy < 0) {
+        header.classList.remove('fe-header-hidden');
+        downAccum = 0;
+      } else if (dy > 0) {
+        downAccum += dy;
+        if (downAccum >= HIDE_DOWN_TOTAL) {
+          header.classList.add('fe-header-hidden');
+        }
+      }
+      lastY = y;
+    }, { passive: true });
 
-    // Measure where the header ends (viewport-relative) so mega-menu + backdrop
-    // drop right under it. We use rect.bottom rather than rect.height so the
-    // anchor accounts for anything above the sticky header (like the admin
-    // preview banner, flash messages, etc.) while the page is unscrolled —
-    // and collapses back to just the header's height once those scroll away.
+    // FAQ accordion — click a summary to toggle .is-open on its parent
+    // item. The grid-template-rows: 0fr → 1fr CSS transition handles the
+    // smooth expand/collapse; aria-expanded mirrors the visible state for
+    // assistive tech. Event delegation on document so dynamically-added
+    // FAQ blocks (admin preview, future templates) pick this up too.
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-faq-toggle]');
+      if (!btn) return;
+      const item = btn.closest('[data-faq-item]');
+      if (!item) return;
+      const open = item.classList.toggle('is-open');
+      btn.setAttribute('aria-expanded', String(open));
+    });
+
+    // Measure where the header ends in viewport coordinates so the megamenu
+    // panel + backdrop can drop directly under it. Re-measure on resize and
+    // on scroll, since anything above the sticky header (admin preview bar,
+    // alert bar, flash messages) shifts the header's viewport position as
+    // it scrolls away.
     (function measureHeader(){
       const h = document.getElementById('fe-header');
       if (!h) return;
@@ -165,31 +234,30 @@
       if (window.ResizeObserver) new ResizeObserver(setH).observe(h);
     })();
 
-    // Randomize hero-blob positions on every page load so the frosty bg
-    // never looks the same twice. Also re-derive hues if the admin opted
-    // into per-load randomness.
-    (function randomHeroBlobs(){
-      const wrap = document.querySelector('[data-hero-blobs]');
-      if (!wrap) return;
-      if (wrap.dataset.randomize === '1') {
-        const a = Math.floor(Math.random() * 360);
-        const b = (a + 140 + Math.floor(Math.random() * 80)) % 360;
-        wrap.style.setProperty('--fe-blob-hue-a', a);
-        wrap.style.setProperty('--fe-blob-hue-b', b);
-      }
-      // Each blob gets its own randomly placed center + animation phase so
-      // they orbit the hero from a fresh starting position every time.
-      wrap.querySelectorAll('[data-hero-blob]').forEach((b, i) => {
-        const xPct = (Math.random() * 90 - 15).toFixed(1);
-        const yPct = (Math.random() * 90 - 15).toFixed(1);
-        const dur  = (12 + Math.random() * 14).toFixed(1);
-        const delay = (-Math.random() * 18).toFixed(1);
-        b.style.left = xPct + '%';
-        b.style.top  = yPct + '%';
-        b.style.right = 'auto';
-        b.style.bottom = 'auto';
-        b.style.animationDuration = dur + 's';
-        b.style.animationDelay = delay + 's';
+    // Randomize blob positions on every page load so the frosty bg
+    // never looks the same twice. Multi-instance — both the hero AND
+    // the footer can have a frosty bg now, so iterate every container
+    // marked `data-hero-blobs` and randomize each independently.
+    (function randomBlobs(){
+      document.querySelectorAll('[data-hero-blobs]').forEach(wrap => {
+        if (wrap.dataset.randomize === '1') {
+          const a = Math.floor(Math.random() * 360);
+          const b = (a + 140 + Math.floor(Math.random() * 80)) % 360;
+          wrap.style.setProperty('--fe-blob-hue-a', a);
+          wrap.style.setProperty('--fe-blob-hue-b', b);
+        }
+        wrap.querySelectorAll('[data-hero-blob]').forEach((b, i) => {
+          const xPct = (Math.random() * 90 - 15).toFixed(1);
+          const yPct = (Math.random() * 90 - 15).toFixed(1);
+          const dur  = (12 + Math.random() * 14).toFixed(1);
+          const delay = (-Math.random() * 18).toFixed(1);
+          b.style.left = xPct + '%';
+          b.style.top  = yPct + '%';
+          b.style.right = 'auto';
+          b.style.bottom = 'auto';
+          b.style.animationDuration = dur + 's';
+          b.style.animationDelay = delay + 's';
+        });
       });
     })();
 
@@ -206,36 +274,75 @@
       v.play().catch(() => {});
     })();
 
-    // Hero particle overlay — reuses the login screen's canvas FX.
-    (function heroParticles(){
-      const canvas = document.querySelector('[data-hero-particles]');
-      if (!canvas || !window.initLoginFX) return;
+    // Particle overlay — reuses the login screen's canvas FX. Multi-
+    // instance: both the hero AND the footer can layer particles, so
+    // initialise every `data-hero-particles` canvas on the page.
+    (function particleCanvases(){
+      if (!window.initLoginFX) return;
       if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-      const effect = canvas.dataset.effect || 'stars';
-      if (effect === 'off') { canvas.remove(); return; }
-      const speed = parseInt(canvas.dataset.speed, 10) || 100;
-      const size = parseInt(canvas.dataset.size, 10) || 100;
-      window.initLoginFX(canvas, { effect, speed, size });
+      document.querySelectorAll('[data-hero-particles]').forEach(canvas => {
+        const effect = canvas.dataset.effect || 'stars';
+        if (effect === 'off') { canvas.remove(); return; }
+        const speed = parseInt(canvas.dataset.speed, 10) || 100;
+        const size = parseInt(canvas.dataset.size, 10) || 100;
+        window.initLoginFX(canvas, { effect, speed, size });
+      });
     })();
 
-    // Sinewave hero bg — reuses the login screen's gradient generator and
-    // dims/mutes the palette based on the active theme. Re-renders whenever
-    // the user toggles light/dark so the gradient never looks too vibrant
-    // on a dark background or too washed out on a light one.
-    (function heroSinewave(){
-      const section = document.querySelector('.fe-hero-bg-sinewave');
-      if (!section || !window.loginFxUtils) return;
-      let colors = null;
-      try { colors = JSON.parse(section.dataset.sinewaveColors || ''); } catch (_) {}
-      if (!colors || !colors.length) colors = ['#16c2ba', '#1883d5', '#5a1ce5'];
-      function paint(){
-        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        const adjusted = window.loginFxUtils.adjustPaletteForTheme(colors, isDark);
-        window.loginFxUtils.applyBackground(section, adjusted);
-      }
-      paint();
+    // Sinewave bg — reuses the login screen's gradient generator and
+    // dims/mutes the palette based on the active theme. Re-renders
+    // whenever the user toggles light/dark. Multi-instance — picks up
+    // both `.fe-hero-bg-sinewave` and `.fe-footer-bg-sinewave` so the
+    // hero AND the footer can carry sinewave gradients independently.
+    (function sinewaveBgs(){
+      if (!window.loginFxUtils) return;
+      const sections = document.querySelectorAll(
+        '.fe-hero-bg-sinewave, .fe-footer-bg-sinewave');
+      if (!sections.length) return;
+      const painters = [];
+      sections.forEach(section => {
+        // Footer sinewave honours the "Dark (always)" footer mode in
+        // addition to the page theme — the body carries
+        // `fe-footer-force-dark` whenever the admin set the footer to
+        // always-dark regardless of page theme. The hero, by contrast,
+        // only follows the page theme.
+        const isFooter = section.classList.contains('fe-footer-bg-sinewave');
+        // Per-load randomisation — palette and wave shape are each
+        // independent. Either flag, both, or neither may be set; the
+        // unset side falls back to the stored value.
+        const randomColors = section.dataset.sinewaveRandomizeColors === '1';
+        const randomWave   = section.dataset.sinewaveRandomizeWave === '1';
+        let storedColors = null;
+        try { storedColors = JSON.parse(section.dataset.sinewaveColors || ''); } catch (_) {}
+        let storedWave = null;
+        try { storedWave = JSON.parse(section.dataset.sinewaveWave || ''); } catch (_) {}
+        // Resolve the palette + wave once per painter invocation. With
+        // a randomise flag set we pick fresh on first paint and then
+        // reuse the same picks for subsequent theme-toggle repaints
+        // (so the gradient stays stable while the user flips dark mode).
+        let colors, wave;
+        function resolve(){
+          colors = randomColors
+            ? window.loginFxUtils.randomPalette(4)
+            : ((storedColors && storedColors.length) ? storedColors : ['#16c2ba', '#1883d5', '#5a1ce5']);
+          wave = randomWave
+            ? window.loginFxUtils.randomWaveParams()
+            : (storedWave || null);
+        }
+        resolve();
+        const paint = () => {
+          const themeDark = document.documentElement.getAttribute('data-theme') === 'dark';
+          const forcedDark = isFooter && document.body.classList.contains('fe-footer-force-dark');
+          const adjusted = window.loginFxUtils.adjustPaletteForTheme(colors, themeDark || forcedDark);
+          window.loginFxUtils.applyBackground(section, adjusted, { wave: wave || undefined });
+        };
+        paint();
+        painters.push(paint);
+      });
       const mo = new MutationObserver(records => {
-        for (const r of records) if (r.attributeName === 'data-theme') { paint(); break; }
+        for (const r of records) if (r.attributeName === 'data-theme') {
+          painters.forEach(p => p()); break;
+        }
       });
       mo.observe(document.documentElement, { attributes: true });
     })();
@@ -264,6 +371,21 @@
           p.classList.toggle('mega-active', p.dataset.megamenu === String(id));
         });
         if (backdrop) backdrop.classList.add('open');
+        // Compensate for the disappearing viewport scrollbar so the
+        // page doesn't shift when ``body { overflow: hidden }`` kicks in.
+        // ``window.innerWidth - documentElement.clientWidth`` is the
+        // scrollbar gutter width: positive on desktop with classic
+        // scrollbars, ~0 on mobile (overlay scrollbars) — so this is a
+        // no-op on mobile, matching the previous behaviour.
+        // Body padding-right keeps content in place; the --fe-mm-gutter
+        // CSS var is consumed by the position-fixed megamenu's ``right``
+        // property so the panel itself stops at the content edge instead
+        // of extending into the freed scrollbar gutter.
+        const gutter = window.innerWidth - document.documentElement.clientWidth;
+        if (gutter > 0) {
+          body.style.paddingRight = gutter + 'px';
+          body.style.setProperty('--fe-mm-gutter', gutter + 'px');
+        }
         body.classList.add('fe-megamenu-open');
         // Mobile: collapse the hamburger dropdown so the mega menu owns the screen.
         if (MOBILE_MQ.matches && header) header.classList.remove('fe-nav-open');
@@ -276,6 +398,8 @@
         parents.forEach(p => p.classList.remove('mega-active'));
         if (backdrop) backdrop.classList.remove('open');
         body.classList.remove('fe-megamenu-open');
+        body.style.paddingRight = '';
+        body.style.removeProperty('--fe-mm-gutter');
       }
       function scheduleClose() {
         clearTimeout(closeTimer);
@@ -325,6 +449,258 @@
     });
     syncThemeBtn();
   })();
+</script>
+
+{# Frontend-wide search modal — markup hidden until opened. JS below
+   handles the keyboard shortcut + live filter. #}
+{% include "frontend/_search_modal.html" %}
+
+<script>
+// ── FRONTEND-WIDE LIVE SEARCH ─────────────────────────────────────────
+// Cmd/Ctrl+K from anywhere on the public site (or the search trigger
+// in the utility bar) opens the modal. Index fetched once on first
+// open, cached for the rest of the page lifetime. Matching is
+// adaptive — strips text punctuation, expands singular/plural
+// variants, and resolves number↔word pairs (10 ↔ ten).
+(function feFrontendSearch(){
+  var modal = document.querySelector('[data-fe-search-modal]');
+  if (!modal) return;
+  var input = modal.querySelector('[data-fe-search-input]');
+  var resultsEl = modal.querySelector('[data-fe-search-results]');
+  var closers = modal.querySelectorAll('[data-fe-search-close]');
+
+  // Number ↔ word table covering the common range (0-31 covers days
+  // of the month + ages, plus a handful of larger round numbers). The
+  // matcher tries the alternate form whenever a token matches a key
+  // either way. Covers ordinal forms ("first" → 1) too so queries
+  // like "first wednesday" still resolve.
+  var NUMBER_WORDS = {
+    0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five',
+    6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten',
+    11: 'eleven', 12: 'twelve', 13: 'thirteen', 14: 'fourteen',
+    15: 'fifteen', 16: 'sixteen', 17: 'seventeen', 18: 'eighteen',
+    19: 'nineteen', 20: 'twenty', 21: 'twentyone', 22: 'twentytwo',
+    23: 'twentythree', 24: 'twentyfour', 25: 'twentyfive',
+    26: 'twentysix', 27: 'twentyseven', 28: 'twentyeight',
+    29: 'twentynine', 30: 'thirty', 31: 'thirtyone',
+    50: 'fifty', 100: 'hundred', 1000: 'thousand'
+  };
+  var WORD_TO_NUMBER = {};
+  Object.keys(NUMBER_WORDS).forEach(function (k) {
+    WORD_TO_NUMBER[NUMBER_WORDS[k]] = String(k);
+  });
+  // Ordinals → numbers
+  var ORDINALS = {
+    first: '1', second: '2', third: '3', fourth: '4', fifth: '5',
+    sixth: '6', seventh: '7', eighth: '8', ninth: '9', tenth: '10'
+  };
+  Object.keys(ORDINALS).forEach(function (k) { WORD_TO_NUMBER[k] = ORDINALS[k]; });
+
+  var PUNCT_RE = /[‘’'?!.,;"“”()\[\]{}]/g;
+
+  function expandToken(t) {
+    if (!t) return [];
+    var set = {}; set[t] = true;
+    // Singular / plural — naive 's' / 'es' / 'ies' handling. Skip
+    // tokens too short for inflection to be meaningful.
+    if (t.length > 3) {
+      if (t.slice(-3) === 'ies') set[t.slice(0, -3) + 'y'] = true;
+      else if (t.slice(-2) === 'es') set[t.slice(0, -2)] = true;
+      if (t.slice(-1) === 's') set[t.slice(0, -1)] = true;
+      else { set[t + 's'] = true; set[t + 'es'] = true; }
+    }
+    // Numbers ↔ words
+    if (/^\d+$/.test(t)) {
+      var w = NUMBER_WORDS[parseInt(t, 10)];
+      if (w) set[w] = true;
+    } else if (WORD_TO_NUMBER[t] !== undefined) {
+      set[WORD_TO_NUMBER[t]] = true;
+    }
+    return Object.keys(set);
+  }
+
+  function tokenise(q) {
+    return (q || '').toLowerCase().replace(PUNCT_RE, '').split(/\s+/).filter(Boolean);
+  }
+
+  // Matching: each query token must match the blob via at least one of
+  // its expansion variants. Returns a numeric score for ranking — name
+  // hits score higher than blob-only hits.
+  function score(item, tokens) {
+    if (!tokens.length) return 0;
+    var blob = item.search || '';
+    var titleLower = (item.title || '').toLowerCase().replace(PUNCT_RE, '');
+    var s = 0;
+    for (var i = 0; i < tokens.length; i++) {
+      var variants = expandToken(tokens[i]);
+      var matched = false;
+      var inTitle = false;
+      for (var j = 0; j < variants.length; j++) {
+        var v = variants[j];
+        if (titleLower.indexOf(v) !== -1) { matched = true; inTitle = true; break; }
+        if (blob.indexOf(v) !== -1) { matched = true; break; }
+      }
+      if (!matched) return 0;  // every token must match
+      s += inTitle ? 10 : 1;
+      if (titleLower.indexOf(tokens[i]) === 0) s += 5;  // title prefix bonus
+    }
+    return s;
+  }
+
+  // ---- Index loading -------------------------------------------------
+  var indexPromise = null;
+  function loadIndex() {
+    if (indexPromise) return indexPromise;
+    indexPromise = fetch('/api/search-index', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : { items: [] }; })
+      .then(function (data) { return (data && data.items) || []; })
+      .catch(function () { return []; });
+    return indexPromise;
+  }
+
+  // ---- Rendering -----------------------------------------------------
+  var KIND_LABELS = { meeting: 'Meeting', event: 'Event' };
+  var KIND_ICON = {
+    meeting: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+    event:   '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20"/><path d="m17 5-5-3-5 3"/><path d="m17 19-5 3-5-3"/><path d="M2 12h20"/><path d="m5 7-3 5 3 5"/><path d="m19 7 3 5-3 5"/></svg>'
+  };
+
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function render(items, tokens) {
+    if (!items.length) {
+      resultsEl.innerHTML = '<p class="fe-search-modal-empty muted small">No matches.</p>';
+      return;
+    }
+    var html = '';
+    var lastKind = null;
+    items.forEach(function (it, idx) {
+      if (it.kind !== lastKind) {
+        if (lastKind !== null) html += '</div>';
+        html += '<div class="fe-search-modal-group" data-fe-search-group="' + escHtml(it.kind) + '">' +
+                '<h3 class="fe-search-modal-group-head">' + escHtml(KIND_LABELS[it.kind] || it.kind) + '</h3>';
+        lastKind = it.kind;
+      }
+      var icon = KIND_ICON[it.kind] || '';
+      html += '<a class="fe-search-modal-result" role="option"' +
+              ' data-fe-search-result data-fe-search-idx="' + idx + '"' +
+              ' href="' + escHtml(it.url) + '">' +
+              '<span class="fe-search-modal-result-icon" aria-hidden="true">' + icon + '</span>' +
+              '<span class="fe-search-modal-result-text">' +
+              '<span class="fe-search-modal-result-title">' + escHtml(it.title) + '</span>';
+      if (it.subtitle) {
+        html += '<span class="fe-search-modal-result-sub">' + escHtml(it.subtitle) + '</span>';
+      }
+      html += '</span></a>';
+    });
+    if (lastKind !== null) html += '</div>';
+    resultsEl.innerHTML = html;
+    setActive(0);
+  }
+
+  function renderHint() {
+    resultsEl.innerHTML =
+      '<p class="fe-search-modal-hint muted small">' +
+      'Type to find meetings or events. Numbers + words match interchangeably ' +
+      '(<code>10</code> = <code>ten</code>); plurals + apostrophes are tolerant.</p>';
+  }
+
+  // ---- Active row + keyboard navigation ------------------------------
+  var activeIdx = -1;
+  function setActive(idx) {
+    var rows = resultsEl.querySelectorAll('[data-fe-search-result]');
+    if (!rows.length) { activeIdx = -1; return; }
+    if (idx < 0) idx = rows.length - 1;
+    if (idx >= rows.length) idx = 0;
+    activeIdx = idx;
+    rows.forEach(function (r, i) { r.classList.toggle('is-active', i === idx); });
+    var active = rows[idx];
+    if (active && active.scrollIntoView) {
+      active.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  // ---- Search lifecycle ----------------------------------------------
+  var index = [];
+  var debounceTimer = null;
+
+  function runQuery(q) {
+    var toks = tokenise(q);
+    if (!toks.length) { renderHint(); return; }
+    var matches = [];
+    for (var i = 0; i < index.length; i++) {
+      var s = score(index[i], toks);
+      if (s > 0) matches.push({ item: index[i], s: s, idx: i });
+    }
+    matches.sort(function (a, b) {
+      if (b.s !== a.s) return b.s - a.s;
+      // Stable secondary sort: keep meetings before events, then by title
+      var ka = a.item.kind, kb = b.item.kind;
+      if (ka !== kb) return ka < kb ? -1 : 1;
+      var ta = (a.item.title || '').toLowerCase(), tb = (b.item.title || '').toLowerCase();
+      return ta < tb ? -1 : (ta > tb ? 1 : 0);
+    });
+    render(matches.slice(0, 30).map(function (x) { return x.item; }), toks);
+  }
+
+  function open() {
+    modal.hidden = false;
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('fe-search-open');
+    requestAnimationFrame(function () { input.focus(); input.select(); });
+    // Lazy-load on first open. Once resolved, every subsequent open
+    // reuses the cached array.
+    loadIndex().then(function (items) {
+      index = items;
+      // If the user typed before the index loaded, kick the query
+      // immediately now that we have data.
+      if (input.value) runQuery(input.value);
+    });
+  }
+  function close() {
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('fe-search-open');
+    input.value = '';
+    activeIdx = -1;
+    renderHint();
+  }
+
+  closers.forEach(function (el) { el.addEventListener('click', close); });
+
+  input.addEventListener('input', function () {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(function () { runQuery(input.value); }, 60);
+  });
+
+  modal.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive(activeIdx + 1); return; }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); setActive(activeIdx - 1); return; }
+    if (e.key === 'Enter') {
+      var rows = resultsEl.querySelectorAll('[data-fe-search-result]');
+      var row = rows[activeIdx >= 0 ? activeIdx : 0];
+      if (row) { e.preventDefault(); window.location.assign(row.getAttribute('href')); }
+    }
+  });
+
+  // ---- Page-wide keyboard shortcut + utility-bar trigger -------------
+  document.addEventListener('keydown', function (e) {
+    // Cmd/Ctrl+K from anywhere — even inside an input — opens search.
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      open();
+    }
+  });
+
+  document.querySelectorAll('[data-fe-search-trigger]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) { e.preventDefault(); open(); });
+  });
+})();
 </script>
 </body>
 </html>

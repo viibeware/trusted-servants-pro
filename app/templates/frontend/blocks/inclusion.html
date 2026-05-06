@@ -1,0 +1,41 @@
+{# Inclusion-statement block. Content from site_blocks(site).inclusion:
+   {heading, body, tags[], icon, icon_size, link_label, link_url, alignment}.
+   Body is admin-authored Markdown (rendered + bleached via the markdown
+   filter). Heading uses safe_html so basic inline tags (<br>, <strong>,
+   <em>, <a>) work without forcing markdown syntax for short titles. Tags
+   render as small welcome chips. Icon (Lucide ref) inherits currentColor
+   so the theme's accent rule wins. #}
+{% set _inc = (block_content.inclusion if block_content else {}) or {} %}
+{% set _heading = _inc.get('heading') %}
+{% set _body    = _inc.get('body') %}
+{% set _tags    = _inc.get('tags') or [] %}
+{% set _icon    = _inc.get('icon') %}
+{% set _icolor  = _inc.get('icon_color') %}
+{% set _isize   = _inc.get('icon_size') %}
+{% set _lbl     = _inc.get('link_label') %}
+{% set _url     = _inc.get('link_url') %}
+{% set _align   = _inc.get('alignment') or 'center' %}
+<section class="fe-section fe-inclusion fe-inclusion--{{ _align }}" aria-label="Statement of inclusion">
+  <div class="fe-container">
+    <div class="fe-inclusion-card">
+      {% if _icon %}
+      <div class="fe-inclusion-icon"
+           style="{% if _icolor %}color: {{ _icolor }};{% endif %}{% if _isize %} --icon-size: {{ _isize }}px;{% endif %}">
+        {{ icon(_icon) }}
+      </div>
+      {% endif %}
+      {% if _heading %}<h2 class="fe-inclusion-heading">{{ _heading | safe_html }}</h2>{% endif %}
+      {% if _body %}<div class="fe-inclusion-body">{{ _body | markdown_block }}</div>{% endif %}
+      {% if _tags %}
+      <ul class="fe-inclusion-tags" aria-label="We welcome">
+        {% for t in _tags %}
+        <li class="fe-inclusion-tag">{{ t }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if _lbl and _url %}
+      <a class="fe-btn fe-btn-primary fe-inclusion-cta" href="{{ _url }}">{{ _lbl }}</a>
+      {% endif %}
+    </div>
+  </div>
+</section>

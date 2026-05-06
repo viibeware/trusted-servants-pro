@@ -1,0 +1,135 @@
+{# Announcements omni layout — modeled on the events omni layout. Two
+   panels rendered server-side, toggled by a pillbar at the top:
+   1. Cards (default) — full announcement cards.
+   2. GSR Summary — paper-styled, stripped-down list of titles +
+      summaries set in Libre Baskerville.
+   A separate Archive pill on the right links to /announcements/archive.
+   The visitor's view choice persists in localStorage. #}
+<section class="fe-section fe-announcements fe-announcements-list fe-announcements-list--w-{{ list_width_mode }}" id="announcements">
+  <div class="{% if list_width_mode == 'boxed' %}fe-container{% else %}fe-mlist-fullwrap{% endif %}"
+       {% if list_width_mode == 'boxed' %}style="max-width: {{ list_max_width }}px;"
+       {%- elif list_padding_pct %}style="padding-left: {{ list_padding_pct }}vw; padding-right: {{ list_padding_pct }}vw;"{% endif %}>
+    <header class="fe-mlist-head">
+      <h1>{{ list_heading or 'Announcements' }}</h1>
+      <p class="muted">{{ list_subheading or 'Fellowship news, service updates, and upcoming items. Switch to the GSR Summary view for a print-style overview.' }}</p>
+    </header>
+
+    {# Tab switcher row — two view tabs on the left, separated by an
+       auto-margin from the standalone Archive link on the right. #}
+    <div class="fe-events-omni-bar">
+      <nav class="fe-events-omni-tabs" data-fe-announcements-tabs role="tablist"
+           aria-label="Announcements view">
+        <button type="button" class="fe-events-omni-tab is-active"
+                data-announcements-tab="cards" role="tab" aria-selected="true">
+          <span class="fe-events-omni-tab-icon" aria-hidden="true">{{ icon('menu') }}</span>
+          <span>Cards</span>
+        </button>
+        <button type="button" class="fe-events-omni-tab"
+                data-announcements-tab="gsr" role="tab" aria-selected="false">
+          <span class="fe-events-omni-tab-icon" aria-hidden="true">{{ icon('file-text') }}</span>
+          <span>GSR Summary</span>
+        </button>
+      </nav>
+      <a class="fe-events-omni-archive"
+         href="{{ url_for('frontend.archive') }}">
+        <span class="fe-events-omni-archive-inner">
+          <span class="fe-events-omni-tab-icon" aria-hidden="true">{{ icon('inbox') }}</span>
+          <span>Archive</span>
+        </span>
+      </a>
+    </div>
+
+    <div class="fe-events-omni-panels">
+      <div class="fe-events-omni-panel fe-announcements-cards-panel"
+           data-announcements-panel="cards" role="tabpanel" aria-label="Cards view">
+        {% if not all_announcements %}
+        <p class="fe-events-empty muted">No announcements right now — check back soon.</p>
+        {% else %}
+        <div class="fe-announcements-stack">
+          {% for ann in all_announcements %}
+            {% include "frontend/announcements_list/_announcement_card.html" %}
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="fe-events-omni-panel fe-announcements-gsr-panel"
+           data-announcements-panel="gsr" role="tabpanel" aria-label="GSR Summary view" hidden>
+        {# Paper-styled stripped-down view: titles + summaries only,
+           Libre Baskerville set on a Surface-Alt sheet. Long-form body
+           is intentionally omitted — this is the GSR's read-aloud
+           digest, not the full content. #}
+        <div class="fe-announcements-gsr-paper">
+          <header class="fe-announcements-gsr-paper-head">
+            <h2>GSR Summary</h2>
+            <p>Fellowship news, in brief. Read aloud or print.</p>
+          </header>
+          {% if not all_announcements %}
+          <p class="fe-announcements-gsr-empty">No announcements right now.</p>
+          {% else %}
+          <ol class="fe-announcements-gsr-list">
+            {% for ann in all_announcements %}
+            <li class="fe-announcements-gsr-item">
+              <h3 class="fe-announcements-gsr-title">{{ ann.title }}</h3>
+              {% if ann.summary %}
+              <p class="fe-announcements-gsr-summary">{{ ann.summary }}</p>
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ol>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+(function () {
+  var tabs = document.querySelectorAll('[data-announcements-tab]');
+  var panels = document.querySelectorAll('[data-announcements-panel]');
+  if (!tabs.length || !panels.length) return;
+
+  var STORE_KEY = 'fe-announcements-view';
+  var VALID = { cards: 1, gsr: 1 };
+
+  function show(name) {
+    if (!VALID[name]) name = 'cards';
+    tabs.forEach(function (t) {
+      var active = t.getAttribute('data-announcements-tab') === name;
+      t.classList.toggle('is-active', active);
+      t.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    panels.forEach(function (p) {
+      p.hidden = p.getAttribute('data-announcements-panel') !== name;
+    });
+    try { localStorage.setItem(STORE_KEY, name); } catch (_) {}
+  }
+
+  // Hash wins over localStorage so an inbound link like
+  // /announcements#gsr (the utility bar's GSR pill) lands on the
+  // intended tab regardless of what the visitor saved last time.
+  // Falls through to the saved value when no usable hash is set.
+  var hash = (window.location.hash || '').replace(/^#/, '');
+  if (hash && VALID[hash]) {
+    show(hash);
+  } else {
+    var saved = null;
+    try { saved = localStorage.getItem(STORE_KEY); } catch (_) {}
+    if (saved && VALID[saved]) show(saved);
+  }
+
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () {
+      show(t.getAttribute('data-announcements-tab'));
+    });
+  });
+
+  // If the visitor navigates with the back/forward buttons or pastes a
+  // new hash into the URL bar, switch the active tab to match.
+  window.addEventListener('hashchange', function () {
+    var h = (window.location.hash || '').replace(/^#/, '');
+    if (h && VALID[h]) show(h);
+  });
+})();
+</script>

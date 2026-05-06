@@ -95,18 +95,32 @@
           {% set _tgt = ' target="_blank" rel="noopener"' if b.open_in_new_tab else '' %}
           {% set _bstyle = 'ghost' if b.style == 'ghost' else 'primary' %}
           {% set _cls = 'fe-btn fe-btn-' ~ _bstyle %}
-          {% set _btn_style = '' %}
+          {# Per-button colour customisations are carried as CSS custom
+             properties only — the actual `background: var(...)` /
+             `color: var(...)` declarations live in the stylesheet. That
+             keeps theme overrides (e.g. the dark-mode dim) winning by
+             selector specificity instead of needing !important on every
+             rule that fights an inline `background: <hex>`. #}
+          {% set _vars = [] %}
           {% if _bstyle == 'primary' %}
-            {% if b.custom_bg_color %}{% set _btn_style = _btn_style ~ 'background: ' ~ b.custom_bg_color ~ '; border-color: ' ~ b.custom_bg_color ~ '; ' %}{% endif %}
-            {% if b.custom_text_color %}{% set _btn_style = _btn_style ~ 'color: ' ~ b.custom_text_color ~ '; ' %}{% endif %}
+            {% if b.custom_bg_color %}{% set _ = _vars.append('--fe-btn-bg: ' ~ b.custom_bg_color) %}{% endif %}
+            {% if b.custom_text_color %}{% set _ = _vars.append('--fe-btn-text: ' ~ b.custom_text_color) %}{% endif %}
           {% endif %}
           <a href="{{ b.url or '#' }}"{{ _tgt|safe }} class="{{ _cls }}"
-             {% if _btn_style %}style="{{ _btn_style }}"{% endif %}>
-            {% if b.icon_before %}<span class="fe-btn-icon"
-              style="{% if b.icon_before_color %}color: {{ b.icon_before_color }};{% endif %}{% if b.icon_before_size %} --icon-size: {{ b.icon_before_size }}px;{% endif %}">{{ icon(b.icon_before) }}</span>{% endif %}
+             {% if _vars %}style="{{ _vars | join('; ') }};"{% endif %}>
+            {% if b.icon_before %}
+              {% set _ivars = [] %}
+              {% if b.icon_before_color %}{% set _ = _ivars.append('--fe-btn-icon-color: ' ~ b.icon_before_color) %}{% endif %}
+              {% if b.icon_before_size %}{% set _ = _ivars.append('--icon-size: ' ~ b.icon_before_size ~ 'px') %}{% endif %}
+              <span class="fe-btn-icon"{% if _ivars %} style="{{ _ivars | join('; ') }};"{% endif %}>{{ icon(b.icon_before) }}</span>
+            {% endif %}
             <span>{{ b.label }}</span>
-            {% if b.icon_after %}<span class="fe-btn-icon"
-              style="{% if b.icon_after_color %}color: {{ b.icon_after_color }};{% endif %}{% if b.icon_after_size %} --icon-size: {{ b.icon_after_size }}px;{% endif %}">{{ icon(b.icon_after) }}</span>{% endif %}
+            {% if b.icon_after %}
+              {% set _ivars = [] %}
+              {% if b.icon_after_color %}{% set _ = _ivars.append('--fe-btn-icon-color: ' ~ b.icon_after_color) %}{% endif %}
+              {% if b.icon_after_size %}{% set _ = _ivars.append('--icon-size: ' ~ b.icon_after_size ~ 'px') %}{% endif %}
+              <span class="fe-btn-icon"{% if _ivars %} style="{{ _ivars | join('; ') }};"{% endif %}>{{ icon(b.icon_after) }}</span>
+            {% endif %}
           </a>
         {% endfor %}
       {% else %}

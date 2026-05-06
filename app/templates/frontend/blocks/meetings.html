@@ -36,7 +36,12 @@
             {% for it in _group['items'] %}
             {% set m = it['meeting'] %}
             {% set sch = it['schedule'] %}
-            <div class="fe-meeting-card" style="--i: {{ _global_idx.n }};">
+            <div class="fe-meeting-card{% if m.logo_filename %} has-logo{% endif %}" style="--i: {{ _global_idx.n }};">
+              {% if m.logo_filename %}
+              <div class="fe-meeting-card-logo">
+                <img src="{{ url_for('public.public_meeting_logo', mid=m.id) }}" alt="">
+              </div>
+              {% endif %}
               {% if _show_chip %}
               <div class="fe-meeting-type fe-meeting-type-{{ m.meeting_type }}">
                 {% if m.meeting_type == 'in_person' %}In Person

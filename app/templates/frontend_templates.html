@@ -85,6 +85,50 @@
   </div>
 {% endmacro %}
 
+{# One row of the Pro Tips accordion editor. `idx` scopes the form
+   field names + hidden-input IDs; the JS swaps the literal string
+   `__INDEX__` with a fresh integer when cloning the empty template
+   for a new row. Mirrors the homepage FAQ row chrome (icon picker
+   trigger + question input + Markdown-capable answer textarea +
+   remove button) but skips the drag handle since we don't need
+   reorder yet — items render in document order from form-array
+   submission. #}
+{% macro _protip_item_row(idx, item) %}
+<div class="fe-protips-item-card" data-protips-item data-item-index="{{ idx }}">
+  <input type="hidden" name="protip_item_present" value="{{ idx }}">
+  <div class="fe-protips-item-icon{% if item and item.icon %} has-icon{% endif %}" data-icon-field>
+    <button type="button" class="icon-picker-trigger fe-protips-icon-trigger"
+            data-open-icon-picker
+            data-icon-target="#protip-item-{{ idx }}-icon"
+            data-color-target="#protip-item-{{ idx }}-icon-color"
+            data-size-target="#protip-item-{{ idx }}-icon-size"
+            title="Choose icon">
+      <span class="icon-picker-preview" data-icon-preview
+            {% if item and item.icon_size %}style="--icon-size: {{ item.icon_size }}px;"{% endif %}>
+        {% if item and item.icon %}{{ icon(item.icon) }}{% endif %}
+      </span>
+      <span class="icon-picker-trigger-empty" data-icon-empty>{{ icon('image') }}<span>Icon</span></span>
+    </button>
+    <input type="hidden" id="protip-item-{{ idx }}-icon"
+           name="protip_item_{{ idx }}_icon" value="{{ (item.icon if item else '') or '' }}">
+    <input type="hidden" id="protip-item-{{ idx }}-icon-color" value="">
+    <input type="hidden" id="protip-item-{{ idx }}-icon-size"
+           name="protip_item_{{ idx }}_icon_size" value="{{ (item.icon_size if item else '') or '' }}">
+  </div>
+  <div class="fe-protips-item-fields">
+    <input class="fe-protips-item-question" type="text"
+           name="protip_item_{{ idx }}_question"
+           value="{{ (item.question if item else '') or '' }}"
+           placeholder="Tip — e.g. Use a stable internet connection">
+    <textarea class="fe-protips-item-answer" rows="3"
+              name="protip_item_{{ idx }}_answer"
+              placeholder="Markdown supported. Plain text works too.">{{ (item.answer if item else '') or '' }}</textarea>
+  </div>
+  <button type="button" class="fe-protips-item-remove" data-protips-remove
+          title="Remove tip" aria-label="Remove tip">{{ icon('trash') }}</button>
+</div>
+{% endmacro %}
+
 {% macro tpl_section(title, blurb, kind, templates, active_key, action_url, settings) %}
 {% set _active_name = '' %}
 {% for t in templates if t.key == active_key %}{% set _active_name = t.name %}{% endfor %}
@@ -221,6 +265,257 @@
 </section>
 
 {{ tpl_section(
+     "Announcements / Events detail",
+     "Used for every announcement and event page (e.g. /event/spring-roundup-2026, /announcement/group-conscience).",
+     "event",
+     event_templates,
+     (site.frontend_event_template if site else 'classic') or 'classic',
+     url_for('main.frontend_event_template_save'),
+     event_active_settings) }}
+
+{# Announcements list picker — same chrome as the Events list section.
+   Currently a single 'omni' layout (Cards + GSR Summary) but the
+   catalog supports adding more layouts later. #}
+<section class="card fe-tplgrid-section">
+  <div class="card-head">
+    <h2>Announcements list (/announcements)</h2>
+    <span class="muted smaller">Picks the layout for the public announcements page. The default Omni layout pairs a full-card view with a paper-styled GSR Summary set in Libre Baskerville.</span>
+  </div>
+  <form class="form fe-tplgrid-form" method="post"
+        action="{{ url_for('main.frontend_announcements_list_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="fe-tplgrid">
+      {% for t in announcements_list_templates %}
+      <label class="fe-tplgrid-card{% if announcements_list_active_key == t.key %} active{% endif %}">
+        <input type="radio" name="frontend_announcements_list_template" value="{{ t.key }}"
+               {% if announcements_list_active_key == t.key %}checked{% endif %}>
+        <div class="fe-tplgrid-thumb fe-tplgrid-thumb-events-list fe-tplgrid-thumb-events-list-{{ t.key }}" aria-hidden="true">
+          {% if t.key == 'omni' %}
+            <span class="t-omni-tabs">
+              <span class="t-omni-tab is-active"></span>
+              <span class="t-omni-tab"></span>
+            </span>
+            <span class="t-omni-panel"></span>
+          {% endif %}
+        </div>
+        <div class="fe-tplgrid-info">
+          <div class="fe-tplgrid-name">
+            {{ t.name }}
+            <span class="fe-tplgrid-badge">Active</span>
+          </div>
+          <div class="fe-tplgrid-desc muted small">{{ t.description }}</div>
+        </div>
+      </label>
+      {% endfor %}
+    </div>
+    {%- set _awmode = (site.frontend_announcements_list_width_mode if site else None) or 'boxed' -%}
+    {%- set _awpad  = (site.frontend_announcements_list_padding_pct if site else 5) -%}
+    {%- set _awmax  = (site.frontend_announcements_list_max_width   if site else 1160) -%}
+    {%- set _awhead = (site.frontend_announcements_list_heading     if site else '') or '' -%}
+    {%- set _awsub  = (site.frontend_announcements_list_subheading  if site else '') or '' -%}
+    <fieldset class="fieldset fe-mlist-copy-fieldset">
+      <legend>Page heading</legend>
+      <p class="muted small" style="margin: 0 0 8px;">Override the title and subheading the public /announcements page shows above the layout. Leave blank to use the chosen layout's built-in copy.</p>
+      <label>Title
+        <input type="text" name="frontend_announcements_list_heading"
+               maxlength="200" value="{{ _awhead }}"
+               placeholder="Announcements">
+      </label>
+      <label>Subheading
+        <textarea name="frontend_announcements_list_subheading"
+                  rows="2" maxlength="500"
+                  placeholder="Fellowship news, service updates, and upcoming items.">{{ _awsub }}</textarea>
+      </label>
+    </fieldset>
+    <fieldset class="fieldset fe-mlist-width-fieldset">
+      <legend>Container width</legend>
+      <div class="fe-mlist-width-row">
+        <label class="check">
+          <input type="radio" name="frontend_announcements_list_width_mode" value="boxed"
+                 {% if _awmode == 'boxed' %}checked{% endif %}>
+          <span><b>Boxed</b> — caps at the max-width below and centers in the viewport.</span>
+        </label>
+        <label class="check">
+          <input type="radio" name="frontend_announcements_list_width_mode" value="full"
+                 {% if _awmode == 'full' %}checked{% endif %}>
+          <span><b>Full width</b> — spans the entire viewport with the side padding below applied as <code>vw</code> gutters.</span>
+        </label>
+      </div>
+      <div class="fe-mlist-width-controls">
+        <label class="fe-mlist-width-pad">
+          <span>Max width (px, boxed only)</span>
+          <input type="number" name="frontend_announcements_list_max_width"
+                 min="640" max="2400" step="10" value="{{ _awmax }}">
+        </label>
+        <label class="fe-mlist-width-pad">
+          <span>Side padding (% of viewport, full-width only)</span>
+          <input type="number" name="frontend_announcements_list_padding_pct"
+                 min="0" max="20" step="1" value="{{ _awpad }}">
+        </label>
+      </div>
+    </fieldset>
+    <div class="form-actions">
+      <a class="btn" href="{{ url_for('frontend.announcements_list') }}" target="_blank" rel="noopener">Preview /announcements ↗</a>
+      <button class="btn btn-primary">Save Announcements list</button>
+    </div>
+  </form>
+</section>
+
+{# Events list picker — same chrome as the Meetings list section.
+   Layout choices: cards / calendar / timeline / magazine. #}
+<section class="card fe-tplgrid-section">
+  <div class="card-head">
+    <h2>Events list (/events)</h2>
+    <span class="muted smaller">Picks the layout for the public all-events page. Calendar, timeline, magazine, and a default cards view — pick whichever shape fits the fellowship's calendar best.</span>
+  </div>
+  <form class="form fe-tplgrid-form" method="post"
+        action="{{ url_for('main.frontend_events_list_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="fe-tplgrid">
+      {% for t in events_list_templates %}
+      <label class="fe-tplgrid-card{% if events_list_active_key == t.key %} active{% endif %}">
+        <input type="radio" name="frontend_events_list_template" value="{{ t.key }}"
+               {% if events_list_active_key == t.key %}checked{% endif %}>
+        <div class="fe-tplgrid-thumb fe-tplgrid-thumb-events-list fe-tplgrid-thumb-events-list-{{ t.key }}" aria-hidden="true">
+          {% if t.key == 'cards' %}
+            <span class="t-row"></span><span class="t-row"></span>
+            <span class="t-row"></span><span class="t-row"></span>
+          {% elif t.key == 'calendar' %}
+            <span class="t-cal-toolbar"></span>
+            <span class="t-cal-grid">
+              <span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span>
+              <span class="dot"></span><span></span><span class="dot"></span><span></span>
+              <span></span><span class="dot"></span><span></span>
+            </span>
+          {% elif t.key == 'timeline' %}
+            <span class="t-tl-spine"></span>
+            <span class="t-tl-row t-tl-row-left"></span>
+            <span class="t-tl-row t-tl-row-right"></span>
+            <span class="t-tl-row t-tl-row-left"></span>
+          {% elif t.key == 'magazine' %}
+            <span class="t-mag-hero"></span>
+            <span class="t-mag-tile"></span>
+            <span class="t-mag-tile"></span>
+            <span class="t-mag-tile"></span>
+          {% elif t.key == 'omni' %}
+            <span class="t-omni-tabs">
+              <span class="t-omni-tab is-active"></span>
+              <span class="t-omni-tab"></span>
+              <span class="t-omni-tab"></span>
+              <span class="t-omni-tab"></span>
+            </span>
+            <span class="t-omni-panel"></span>
+          {% endif %}
+        </div>
+        <div class="fe-tplgrid-info">
+          <div class="fe-tplgrid-name">
+            {{ t.name }}
+            <span class="fe-tplgrid-badge">Active</span>
+          </div>
+          <div class="fe-tplgrid-desc muted small">{{ t.description }}</div>
+        </div>
+      </label>
+      {% endfor %}
+    </div>
+    {%- set _ewmode = (site.frontend_events_list_width_mode if site else None) or 'boxed' -%}
+    {%- set _ewpad  = (site.frontend_events_list_padding_pct if site else 5) -%}
+    {%- set _ewmax  = (site.frontend_events_list_max_width   if site else 1160) -%}
+    {%- set _ewhead = (site.frontend_events_list_heading     if site else '') or '' -%}
+    {%- set _ewsub  = (site.frontend_events_list_subheading  if site else '') or '' -%}
+    <fieldset class="fieldset fe-mlist-copy-fieldset">
+      <legend>Page heading</legend>
+      <p class="muted small" style="margin: 0 0 8px;">Override the title and subheading the public /events page shows above the layout. Leave blank to use the chosen layout's built-in copy.</p>
+      <label>Title
+        <input type="text" name="frontend_events_list_heading"
+               maxlength="200" value="{{ _ewhead }}"
+               placeholder="All events">
+      </label>
+      <label>Subheading
+        <textarea name="frontend_events_list_subheading"
+                  rows="2" maxlength="500"
+                  placeholder="Every upcoming event on the calendar. Tap a card for full details.">{{ _ewsub }}</textarea>
+      </label>
+    </fieldset>
+    <fieldset class="fieldset fe-mlist-width-fieldset">
+      <legend>Container width</legend>
+      <div class="fe-mlist-width-row">
+        <label class="check">
+          <input type="radio" name="frontend_events_list_width_mode" value="boxed"
+                 {% if _ewmode == 'boxed' %}checked{% endif %}>
+          <span><b>Boxed</b> — caps at the max-width below and centers in the viewport.</span>
+        </label>
+        <label class="check">
+          <input type="radio" name="frontend_events_list_width_mode" value="full"
+                 {% if _ewmode == 'full' %}checked{% endif %}>
+          <span><b>Full width</b> — spans the entire viewport with the side padding below applied as <code>vw</code> gutters.</span>
+        </label>
+      </div>
+      <div class="fe-mlist-width-controls">
+        <label class="fe-mlist-width-pad">
+          <span>Max width (px, boxed only)</span>
+          <input type="number" name="frontend_events_list_max_width"
+                 min="640" max="2400" step="10" value="{{ _ewmax }}">
+        </label>
+        <label class="fe-mlist-width-pad">
+          <span>Side padding (% of viewport, full-width only)</span>
+          <input type="number" name="frontend_events_list_padding_pct"
+                 min="0" max="20" step="1" value="{{ _ewpad }}">
+        </label>
+      </div>
+    </fieldset>
+    <div class="form-actions">
+      <a class="btn" href="{{ url_for('frontend.events_list') }}" target="_blank" rel="noopener">Preview /events ↗</a>
+      <button class="btn btn-primary">Save Events list</button>
+    </div>
+  </form>
+</section>
+
+{# Literature Library picker — single template today; the form gives
+   admins a one-stop preview link to the public page and a reminder
+   that per-library / per-item visibility lives on each library's
+   own edit modal, not here. #}
+<section class="card fe-tplgrid-section">
+  <div class="card-head">
+    <h2>Literature Library (/library)</h2>
+    <span class="muted smaller">Public-facing index of every library + every library item flagged public. Each library's edit modal carries the public-visibility toggle; once on, the library's row list grows a per-item Public toggle so you can hide individual entries from the public page.</span>
+  </div>
+  <form class="form fe-tplgrid-form" method="post"
+        action="{{ url_for('main.frontend_literature_library_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="fe-tplgrid">
+      {% for t in literature_library_templates %}
+      <label class="fe-tplgrid-card{% if literature_library_active_key == t.key %} active{% endif %}">
+        <input type="radio" name="frontend_literature_library_template" value="{{ t.key }}"
+               {% if literature_library_active_key == t.key %}checked{% endif %}>
+        <div class="fe-tplgrid-thumb fe-tplgrid-thumb-meetings-list" aria-hidden="true">
+          <span class="t-side"><span></span><span></span><span></span><span></span></span>
+          <span class="t-main">
+            <span class="t-row"></span>
+            <span class="t-row"></span>
+            <span class="t-row"></span>
+          </span>
+        </div>
+        <div class="fe-tplgrid-info">
+          <div class="fe-tplgrid-name">
+            {{ t.name }}
+            <span class="fe-tplgrid-badge">Active</span>
+          </div>
+          <div class="fe-tplgrid-desc muted small">{{ t.description }}</div>
+        </div>
+      </label>
+      {% endfor %}
+    </div>
+    <p class="muted small" style="margin: 12px 0 0;">Manage which libraries appear by toggling <b>Show on public Literature Library</b> on each library's edit modal in <a href="{{ url_for('main.libraries') }}">Libraries</a>; once enabled, per-item visibility toggles appear next to each row in that library's file list.</p>
+    <div class="form-actions">
+      <a class="btn" href="{{ url_for('frontend.literature_library') }}" target="_blank" rel="noopener">Preview /library ↗</a>
+      <a class="btn" href="{{ url_for('main.libraries') }}">Manage libraries</a>
+      <button class="btn btn-primary">Save Literature Library</button>
+    </div>
+  </form>
+</section>
+
+{{ tpl_section(
      "Meeting detail",
      "Used for every meeting page (e.g. /meeting/wednesday-night-online).",
      "meeting",
@@ -229,14 +524,225 @@
      url_for('main.frontend_meeting_template_save'),
      meeting_active_settings) }}
 
-{{ tpl_section(
-     "Event detail",
-     "Used for every event page (e.g. /event/spring-roundup-2026).",
-     "event",
-     event_templates,
-     (site.frontend_event_template if site else 'classic') or 'classic',
-     url_for('main.frontend_event_template_save'),
-     event_active_settings) }}
+{# Meetings list picker — slimmer than tpl_section because each
+   /meetings layout owns its own filter UI (sidebar / directory /
+   weekboard), so per-template font/bg overrides don't make sense
+   here yet. Same card grid + radio behaviour, no customize panel. #}
+<section class="card fe-tplgrid-section">
+  <div class="card-head">
+    <h2>Meetings list (/meetings)</h2>
+    <span class="muted smaller">Picks the layout for the public all-meetings page. Every layout shows full meeting info inline (schedule, address, Zoom) so visitors don't have to drill into individual pages.</span>
+  </div>
+  <form class="form fe-tplgrid-form" method="post"
+        action="{{ url_for('main.frontend_meetings_list_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="fe-tplgrid">
+      {% for t in meetings_list_templates %}
+      <label class="fe-tplgrid-card{% if meetings_list_active_key == t.key %} active{% endif %}">
+        <input type="radio" name="frontend_meetings_list_template" value="{{ t.key }}"
+               {% if meetings_list_active_key == t.key %}checked{% endif %}>
+        <div class="fe-tplgrid-thumb fe-tplgrid-thumb-meetings-list fe-tplgrid-thumb-meetings-list-{{ t.key }}" aria-hidden="true">
+          {% if t.key == 'sidebar' %}
+            <span class="t-side"><span></span><span></span><span></span><span></span></span>
+            <span class="t-main">
+              <span class="t-grid"><span></span><span></span><span></span><span></span></span>
+            </span>
+          {% elif t.key == 'directory' %}
+            <span class="t-toolbar"></span>
+            <span class="t-row"></span><span class="t-row"></span>
+            <span class="t-row"></span><span class="t-row"></span>
+          {% elif t.key == 'weekboard' %}
+            <span class="t-week">
+              <span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span>
+            </span>
+          {% endif %}
+        </div>
+        <div class="fe-tplgrid-info">
+          <div class="fe-tplgrid-name">
+            {{ t.name }}
+            <span class="fe-tplgrid-badge">Active</span>
+          </div>
+          <div class="fe-tplgrid-desc muted small">{{ t.description }}</div>
+        </div>
+      </label>
+      {% endfor %}
+    </div>
+    {# Width mode + padding share the same form so a single Save commits
+       both the layout choice and the container width. The padding input
+       only matters when 'full' is selected, but we don't disable it so
+       admins can tune the value before flipping the radio. #}
+    {%- set _wmode = (site.frontend_meetings_list_width_mode if site else None) or 'boxed' -%}
+    {%- set _wpad  = (site.frontend_meetings_list_padding_pct if site else 5) -%}
+    {%- set _wmax  = (site.frontend_meetings_list_max_width   if site else 1160) -%}
+    {%- set _whead = (site.frontend_meetings_list_heading     if site else '') or '' -%}
+    {%- set _wsub  = (site.frontend_meetings_list_subheading  if site else '') or '' -%}
+    <fieldset class="fieldset fe-mlist-copy-fieldset">
+      <legend>Page heading</legend>
+      <p class="muted small" style="margin: 0 0 8px;">Override the title and subheading the public /meetings page shows above the filter rail. Leave blank to use the layout's built-in copy.</p>
+      <label>Title
+        <input type="text" name="frontend_meetings_list_heading"
+               maxlength="200" value="{{ _whead }}"
+               placeholder="All meetings">
+      </label>
+      <label>Subheading
+        <textarea name="frontend_meetings_list_subheading"
+                  rows="2" maxlength="500"
+                  placeholder="Browse every active meeting. Filter by day on the left, or scan the full list to find what fits your week.">{{ _wsub }}</textarea>
+      </label>
+    </fieldset>
+    <fieldset class="fieldset fe-mlist-width-fieldset">
+      <legend>Container width</legend>
+      <div class="fe-mlist-width-row">
+        <label class="check">
+          <input type="radio" name="frontend_meetings_list_width_mode" value="boxed"
+                 {% if _wmode == 'boxed' %}checked{% endif %}>
+          <span><b>Boxed</b> — caps at the max-width below and centers in the viewport. Tune the cap if the site-wide reading width feels off for the meetings page specifically.</span>
+        </label>
+        <label class="check">
+          <input type="radio" name="frontend_meetings_list_width_mode" value="full"
+                 {% if _wmode == 'full' %}checked{% endif %}>
+          <span><b>Full width</b> — spans the entire viewport with the side padding below applied as <code>vw</code> gutters. Lets card grids breathe wider on big monitors.</span>
+        </label>
+      </div>
+      <div class="fe-mlist-width-controls">
+        <label class="fe-mlist-width-pad">
+          <span>Max width (px, boxed only)</span>
+          <input type="number" name="frontend_meetings_list_max_width"
+                 min="640" max="2400" step="10" value="{{ _wmax }}">
+        </label>
+        <label class="fe-mlist-width-pad">
+          <span>Side padding (% of viewport, full-width only)</span>
+          <input type="number" name="frontend_meetings_list_padding_pct"
+                 min="0" max="20" step="1" value="{{ _wpad }}">
+        </label>
+      </div>
+    </fieldset>
+    {%- set _pt = meetings_list_protips -%}
+    <fieldset class="fieldset fe-mlist-protips-fieldset">
+      <legend>Pro Tips section</legend>
+      <p class="muted small" style="margin: 0 0 8px;">An accordion panel below the meeting list with quick guidance for online attendees. Items default to a built-in list of online-meeting tips; override the JSON to customise them.</p>
+      <label class="check" style="margin-bottom: 8px;">
+        <input type="checkbox" name="protips_enabled" value="1" {% if _pt.enabled %}checked{% endif %}>
+        <span>Show the Pro Tips section on /meetings</span>
+      </label>
+      <div class="fe-mlist-protips-grid">
+        <label>Title
+          <input type="text" name="protips_heading" maxlength="200"
+                 value="{{ _pt.heading }}" placeholder="Pro Tips">
+        </label>
+        <label>Subheading
+          <input type="text" name="protips_subheading" maxlength="500"
+                 value="{{ _pt.subheading }}" placeholder="for a great online meeting">
+        </label>
+        {# Section-level icon — same icon-picker chrome as each tip's
+           icon. Picker JS writes to the hidden inputs via
+           `data-icon-target` etc.; the colour input below is its own
+           user-controlled <input type="color"> (the picker's color
+           target points at a vestigial hidden so the picker doesn't
+           overwrite the admin's chosen tint). #}
+        <label>Header icon
+          <div class="fe-protips-section-icon-field{% if _pt.icon %} has-icon{% endif %}" data-icon-field>
+            <button type="button" class="icon-picker-trigger fe-protips-icon-trigger fe-protips-section-icon-trigger"
+                    data-open-icon-picker
+                    data-icon-target="#protips-section-icon"
+                    data-color-target="#protips-section-icon-vestigial-color"
+                    data-size-target="#protips-section-icon-vestigial-size"
+                    title="Choose section icon">
+              <span class="icon-picker-preview" data-icon-preview>
+                {% if _pt.icon %}{{ icon(_pt.icon) }}{% endif %}
+              </span>
+              <span class="icon-picker-trigger-empty" data-icon-empty>{{ icon('image') }}<span>Icon</span></span>
+            </button>
+            <input type="hidden" id="protips-section-icon" name="protips_icon" value="{{ _pt.icon }}">
+            <input type="hidden" id="protips-section-icon-vestigial-color" value="">
+            <input type="hidden" id="protips-section-icon-vestigial-size" value="">
+          </div>
+        </label>
+        <label>Icon colour
+          <input type="color" name="protips_icon_color"
+                 value="{{ _pt.icon_color or '#3b82f6' }}">
+        </label>
+      </div>
+      <div class="fe-protips-items-editor" data-protips-editor>
+        <div class="fe-protips-items-head">
+          <span class="fe-protips-items-label">Accordion items</span>
+          <span class="muted smaller" data-protips-counter></span>
+        </div>
+        <div class="fe-protips-items-list" data-protips-list>
+          {% for item in _pt['items'] %}
+            {{ _protip_item_row(loop.index0, item) }}
+          {% endfor %}
+        </div>
+        {# Hidden empty-template row that the JS clones when adding a new
+           item. Kept inside the same <details>-free section so its
+           hidden inputs are siblings to the live ones — keeps the form
+           parser straightforward. #}
+        <template data-protips-template>
+          {{ _protip_item_row('__INDEX__', None) }}
+        </template>
+        <button type="button" class="btn btn-sm" data-protips-add>
+          {{ icon('plus') }} <span>Add tip</span>
+        </button>
+      </div>
+    </fieldset>
+    <div class="form-actions">
+      <a class="btn" href="{{ url_for('frontend.meetings_list') }}" target="_blank" rel="noopener">Preview /meetings ↗</a>
+      <button class="btn btn-primary">Save Meetings list</button>
+    </div>
+  </form>
+</section>
+
+{# Printlist picker — single template today, so no card grid. The
+   section is just the per-template configuration form (subheading,
+   website, page size). #}
+<section class="card fe-tplgrid-section">
+  <div class="card-head">
+    <h2>Printlist (/printlist)</h2>
+    <span class="muted smaller">Branded, printable meeting schedule. Visitors can print directly or download a PDF; the PDF is rendered server-side via WeasyPrint and uses the same layout as the screen view.</span>
+  </div>
+  <form class="form fe-tplgrid-form" method="post"
+        action="{{ url_for('main.frontend_printlist_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {%- set _plsub  = (site.frontend_printlist_subheading if site else '') or '' -%}
+    {%- set _plweb  = (site.frontend_printlist_website if site else '') or '' -%}
+    {%- set _plsize = (site.frontend_printlist_page_size if site else None) or 'letter' -%}
+    <fieldset class="fieldset fe-mlist-copy-fieldset">
+      <legend>Header content</legend>
+      <p class="muted small" style="margin: 0 0 8px;">The site logo and name already anchor the printed header. These two fields show below the title — use the subheading for context (e.g. "Weekly Meeting Schedule") and the website so visitors who pick up the printout can find your site online.</p>
+      <label>Subheading
+        <input type="text" name="frontend_printlist_subheading"
+               maxlength="500" value="{{ _plsub }}"
+               placeholder="Weekly Meeting Schedule">
+      </label>
+      <label>Website
+        <input type="text" name="frontend_printlist_website"
+               maxlength="200" value="{{ _plweb }}"
+               placeholder="dccma.org">
+      </label>
+    </fieldset>
+    <fieldset class="fieldset fe-mlist-width-fieldset">
+      <legend>Page size</legend>
+      <div class="fe-mlist-width-row">
+        <label class="check">
+          <input type="radio" name="frontend_printlist_page_size" value="letter"
+                 {% if _plsize == 'letter' %}checked{% endif %}>
+          <span><b>Letter</b> — 8.5 × 11 inches. The standard US printer paper size; targets 2 pages for a typical fellowship schedule.</span>
+        </label>
+        <label class="check">
+          <input type="radio" name="frontend_printlist_page_size" value="legal"
+                 {% if _plsize == 'legal' %}checked{% endif %}>
+          <span><b>Legal</b> — 8.5 × 14 inches. Use when you'd rather fit everything onto one tall page; otherwise stick with Letter.</span>
+        </label>
+      </div>
+    </fieldset>
+    <div class="form-actions">
+      <a class="btn" href="{{ url_for('frontend.printlist') }}" target="_blank" rel="noopener">Preview /printlist ↗</a>
+      <a class="btn" href="{{ url_for('frontend.printlist_pdf') }}" target="_blank" rel="noopener">Download PDF ↗</a>
+      <button class="btn btn-primary">Save Printlist</button>
+    </div>
+  </form>
+</section>
 
   </div>
 </div>
@@ -282,5 +788,92 @@
     toggle.addEventListener('change', sync);
     sync();
   });
+
+  // ---- Pro Tips item editor: add/remove row + counter -----------
+  // The empty template carries `__INDEX__` placeholders that the
+  // cloner replaces with a monotonically increasing integer; the
+  // form parser keys off `protip_item_present` so order = submission
+  // order. No drag-reorder yet — straight stack.
+  document.querySelectorAll('[data-protips-editor]').forEach(editor => {
+    const list = editor.querySelector('[data-protips-list]');
+    const tpl = editor.querySelector('[data-protips-template]');
+    const counter = editor.querySelector('[data-protips-counter]');
+    const addBtn = editor.querySelector('[data-protips-add]');
+    if (!list || !tpl || !addBtn) return;
+
+    let nextIdx = 0;
+    list.querySelectorAll('[data-protips-item]').forEach(card => {
+      const i = parseInt(card.dataset.itemIndex, 10);
+      if (Number.isFinite(i) && i >= nextIdx) nextIdx = i + 1;
+    });
+
+    const refreshCount = () => {
+      if (!counter) return;
+      const n = list.querySelectorAll('[data-protips-item]').length;
+      counter.textContent = n === 1 ? '1 tip' : n + ' tips';
+    };
+
+    const remove = (card) => { card.remove(); refreshCount(); };
+
+    list.addEventListener('click', e => {
+      const btn = e.target.closest('[data-protips-remove]');
+      if (!btn) return;
+      const card = btn.closest('[data-protips-item]');
+      if (card) remove(card);
+    });
+
+    addBtn.addEventListener('click', () => {
+      const idx = nextIdx++;
+      const html = tpl.innerHTML.replace(/__INDEX__/g, String(idx));
+      const wrap = document.createElement('div');
+      wrap.innerHTML = html.trim();
+      const card = wrap.firstElementChild;
+      list.appendChild(card);
+      refreshCount();
+      const q = card.querySelector('.fe-protips-item-question');
+      if (q) q.focus();
+    });
+
+    refreshCount();
+  });
 </script>
+
+{# Icon picker modal — wired up by the global handler in app.js when
+   any `[data-open-icon-picker]` button on this page is clicked.
+   Same markup as the homepage admin so the same JS resolves
+   `data-icon-target` / `data-color-target` / `data-size-target`
+   hidden-input pointers and writes the chosen icon back. #}
+<div class="modal icon-picker-modal" id="icon-picker-modal" aria-hidden="true"
+     data-catalog-url="{{ url_for('static', filename='vendor/lucide/icons.json') }}"
+     data-custom-list-url="{{ url_for('main.frontend_custom_icons_list') }}"
+     data-custom-upload-url="{{ url_for('main.frontend_custom_icon_upload') }}"
+     data-custom-delete-url="{{ url_for('main.frontend_custom_icon_delete', cid=0) }}"
+     data-csrf-token="{{ csrf_token() }}">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <div class="modal-head"><h2>Choose an icon</h2>
+      <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button></div>
+    <div class="modal-body icon-picker-body">
+      <div class="icon-picker-toolbar">
+        <input type="search" class="icon-picker-search" placeholder="Search icons…" data-icon-search autocomplete="off">
+        <label class="icon-picker-size-label">
+          <span class="muted smaller">Size <output data-icon-size-out>20</output>px</span>
+          <input type="range" min="12" max="64" step="1" value="20" data-icon-modal-size>
+        </label>
+        <label class="icon-picker-upload-btn btn btn-sm">
+          {{ icon('upload') }} <span>Upload</span>
+          <input type="file" accept=".svg,.png,image/svg+xml,image/png" data-icon-upload hidden>
+        </label>
+      </div>
+      <div class="icon-picker-catalog" data-icon-catalog>
+        <p class="muted smaller" style="padding: 16px;">Loading icons…</p>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" data-close>Cancel</button>
+      <button type="button" class="btn btn-danger" data-icon-picker-remove>Remove icon</button>
+      <button type="button" class="btn btn-primary" data-icon-picker-save disabled>Save</button>
+    </div>
+  </div>
+</div>
 {% endblock %}

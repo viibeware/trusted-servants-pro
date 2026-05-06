@@ -1,0 +1,118 @@
+{# Directory layout: sticky toolbar at the top with a search box, day
+   chips, and a meeting-type filter; below it a single-column list of
+   compact rows (each render of _meeting_card.html with `dense=true`).
+   All filtering is client-side and chained — typing into the search
+   intersects with the active day + type filters live. #}
+{%- set _days = [(0,'Mon'),(1,'Tue'),(2,'Wed'),(3,'Thu'),(4,'Fri'),(5,'Sat'),(6,'Sun')] -%}
+
+<section class="fe-section fe-mlist fe-mlist-directory fe-mlist--w-{{ list_width_mode }}" id="meetings">
+  <div class="{% if list_width_mode == 'boxed' %}fe-container{% else %}fe-mlist-fullwrap{% endif %}"
+       {% if list_width_mode == 'boxed' %}style="max-width: {{ list_max_width }}px;"
+       {%- elif list_padding_pct %}style="padding-left: {{ list_padding_pct }}vw; padding-right: {{ list_padding_pct }}vw;"{% endif %}>
+    <header class="fe-mlist-head">
+      <h1>{{ list_heading or 'Meeting directory' }}</h1>
+      <p class="muted">{{ list_subheading or "Search by name or location. Narrow by day or format. Every meeting's full schedule, address, and Zoom link are right here — no extra clicks." }}</p>
+    </header>
+
+    <div class="fe-mlist-toolbar" data-mlist-toolbar>
+      <label class="fe-mlist-search">
+        <span class="fe-mlist-search-icon" aria-hidden="true">{{ icon('search') }}</span>
+        <input type="search" placeholder="Search meetings…" data-mlist-search aria-label="Search meetings">
+      </label>
+
+      <div class="fe-mlist-toolbar-row">
+        <div class="fe-mlist-toolbar-group" role="tablist" aria-label="Day">
+          <button type="button" class="fe-mlist-chip is-active" data-mlist-day="all">All days</button>
+          {% for dnum, short in _days %}
+          <button type="button" class="fe-mlist-chip" data-mlist-day="{{ dnum }}">{{ short }}</button>
+          {% endfor %}
+        </div>
+
+        <div class="fe-mlist-toolbar-group" role="tablist" aria-label="Type">
+          <button type="button" class="fe-mlist-chip is-active" data-mlist-type="all">Any format</button>
+          <button type="button" class="fe-mlist-chip" data-mlist-type="in_person">In Person</button>
+          <button type="button" class="fe-mlist-chip" data-mlist-type="online">Online</button>
+          <button type="button" class="fe-mlist-chip" data-mlist-type="hybrid">Hybrid</button>
+        </div>
+      </div>
+    </div>
+
+    {% if not all_meetings %}
+    <p class="fe-mlist-empty muted">No active meetings on the calendar.</p>
+    {% else %}
+    <div class="fe-mlist-rows" data-mlist-results>
+      {% for m in all_meetings %}
+        {% with dense=true %}
+          {% include "frontend/meetings_list/_meeting_card.html" %}
+        {% endwith %}
+      {% endfor %}
+    </div>
+    <p class="fe-mlist-no-match muted" data-mlist-no-match hidden>No meetings match those filters.</p>
+    {% endif %}
+  </div>
+</section>
+
+<script>
+(function () {
+  var tb = document.querySelector('[data-mlist-toolbar]');
+  var results = document.querySelector('[data-mlist-results]');
+  if (!tb || !results) return;
+  var input = tb.querySelector('[data-mlist-search]');
+  var dayBtns = tb.querySelectorAll('[data-mlist-day]');
+  var typeBtns = tb.querySelectorAll('[data-mlist-type]');
+  var cards = results.querySelectorAll('[data-meeting-days]');
+  var noMatch = document.querySelector('[data-mlist-no-match]');
+
+  var state = { q: '', day: 'all', type: 'all' };
+
+  function pickActive(buttons) {
+    for (var i = 0; i < buttons.length; i++) {
+      if (buttons[i].classList.contains('is-active')) return buttons[i];
+    }
+    return null;
+  }
+
+  function setActive(buttons, btn) {
+    buttons.forEach(function (b) { b.classList.toggle('is-active', b === btn); });
+  }
+
+  function apply() {
+    var visible = 0;
+    cards.forEach(function (card) {
+      var name = card.getAttribute('data-meeting-name') || '';
+      var loc = card.getAttribute('data-meeting-location') || '';
+      var days = (card.getAttribute('data-meeting-days') || '').split(',').filter(Boolean);
+      var type = card.getAttribute('data-meeting-type') || '';
+
+      var matchQ = !state.q || name.indexOf(state.q) !== -1 || loc.indexOf(state.q) !== -1;
+      var matchDay = state.day === 'all' || days.indexOf(state.day) !== -1;
+      var matchType = state.type === 'all' || type === state.type;
+      var show = matchQ && matchDay && matchType;
+      card.hidden = !show;
+      if (show) visible++;
+    });
+    if (noMatch) noMatch.hidden = visible !== 0;
+  }
+
+  if (input) {
+    input.addEventListener('input', function () {
+      state.q = input.value.trim().toLowerCase();
+      apply();
+    });
+  }
+  dayBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      setActive(dayBtns, btn);
+      state.day = btn.getAttribute('data-mlist-day');
+      apply();
+    });
+  });
+  typeBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      setActive(typeBtns, btn);
+      state.type = btn.getAttribute('data-mlist-type');
+      apply();
+    });
+  });
+})();
+</script>

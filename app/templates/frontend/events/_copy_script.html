@@ -1,12 +1,50 @@
 <script>
-  document.querySelectorAll('.fe-copy-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const v = btn.getAttribute('data-copy') || '';
-      if (!v || !navigator.clipboard) return;
-      navigator.clipboard.writeText(v).then(() => {
-        btn.classList.add('is-copied');
-        setTimeout(() => btn.classList.remove('is-copied'), 1400);
+  // Copy-to-clipboard with a non-secure-context fallback. Mirrors the
+  // meetings template's handler — `navigator.clipboard.writeText`
+  // requires HTTPS or localhost, so when the public site is served on
+  // a LAN IP via plain HTTP the API is undefined; falls back to the
+  // legacy `document.execCommand('copy')` via a hidden textarea so
+  // the click still copies + the .is-copied flash + tooltip still
+  // fire. Both paths only trigger the visual confirmation on a
+  // confirmed successful copy.
+  (function () {
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '0'; ta.style.left = '0';
+      ta.style.opacity = '0';
+      ta.style.pointerEvents = 'none';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      return ok;
+    }
+
+    function copy(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text)
+          .then(function () { return true; })
+          .catch(function () { return fallbackCopy(text); });
+      }
+      return Promise.resolve(fallbackCopy(text));
+    }
+
+    function flash(btn) {
+      btn.classList.add('is-copied');
+      setTimeout(function () { btn.classList.remove('is-copied'); }, 1400);
+    }
+
+    document.querySelectorAll('.fe-copy-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var v = btn.getAttribute('data-copy') || '';
+        if (!v) return;
+        copy(v).then(function (ok) { if (ok) flash(btn); });
       });
     });
-  });
+  })();
 </script>

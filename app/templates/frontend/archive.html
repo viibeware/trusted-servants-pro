@@ -1,0 +1,254 @@
+{% extends "frontend/base.html" %}
+{% block title %}Archive · {{ frontend_title }}{% endblock %}
+{% block content %}
+{# Unified archive page — past announcements + events combined. Sticky
+   filter rail on the left (live search + type checkboxes + per-year
+   pills) over a card grid on the right that mixes both kinds. Each
+   card is wrapped in a <div data-archive-search data-archive-year
+   data-archive-kind> so the JS can filter by any combination of search
+   token / year pill / type checkbox. #}
+<section class="fe-section fe-mlist fe-mlist-sidebar fe-events fe-archive fe-mlist--w-{{ list_width_mode }}" id="archive">
+  <div class="{% if list_width_mode == 'boxed' %}fe-container{% else %}fe-mlist-fullwrap{% endif %} fe-mlist-shell"
+       {% if list_width_mode == 'boxed' %}style="max-width: {{ list_max_width }}px;"
+       {%- elif list_padding_pct %}style="padding-left: {{ list_padding_pct }}vw; padding-right: {{ list_padding_pct }}vw;"{% endif %}>
+    <div class="fe-mlist-grid">
+      <aside class="fe-mlist-rail" data-archive-rail>
+        <header class="fe-mlist-head">
+          <h1>Archive</h1>
+          <p class="muted">Past announcements and events, ordered newest first. Filter by year, search by title or location, or hide one kind to focus on the other.</p>
+          <p class="fe-events-archive-back">
+            <a href="{{ url_for('frontend.events_list') }}">{{ icon('arrow-left') }} <span>Upcoming events</span></a>
+          </p>
+          <p class="fe-events-archive-back">
+            <a href="{{ url_for('frontend.announcements_list') }}">{{ icon('arrow-left') }} <span>Announcements</span></a>
+          </p>
+        </header>
+        <div class="fe-mlist-rail-inner">
+          <label class="fe-mlist-search fe-mlist-rail-search">
+            <span class="fe-mlist-search-icon" aria-hidden="true">{{ icon('search') }}</span>
+            <input type="search" data-archive-search
+                   placeholder="Search past items…" autocomplete="off"
+                   aria-label="Search archive">
+            <kbd class="fe-mlist-search-kbd" aria-hidden="true">/</kbd>
+          </label>
+
+          {# Type checkboxes — both checked by default. Unchecking one
+             hides every card of that kind across all year sections.
+             Counts mirror the live totals so visitors know what the
+             toggle changes. #}
+          <fieldset class="fe-archive-types">
+            <legend class="fe-archive-types-legend">Show</legend>
+            <label class="fe-archive-type-check">
+              <input type="checkbox" data-archive-kind-toggle="event" checked>
+              <span class="fe-archive-type-check-label">Events</span>
+              <span class="fe-mlist-day-count">{{ archive_counts.get('event', 0) }}</span>
+            </label>
+            <label class="fe-archive-type-check">
+              <input type="checkbox" data-archive-kind-toggle="announcement" checked>
+              <span class="fe-archive-type-check-label">Announcements</span>
+              <span class="fe-mlist-day-count">{{ archive_counts.get('announcement', 0) }}</span>
+            </label>
+          </fieldset>
+
+          <ul class="fe-mlist-day-list" role="tablist">
+            <li>
+              <button type="button" class="fe-mlist-day-pill is-active"
+                      data-archive-filter="all" role="tab" aria-selected="true">
+                <span>All years</span>
+                <span class="fe-mlist-day-count">{{ archive_items|length }}</span>
+              </button>
+            </li>
+            {% if year_buckets %}
+            <li class="fe-mlist-rail-section" role="presentation">
+              <span>Filter by year</span>
+            </li>
+            {% for bucket in year_buckets %}
+            <li>
+              <button type="button" class="fe-mlist-day-pill"
+                      data-archive-filter="{{ bucket.year }}" role="tab" aria-selected="false">
+                <span>{{ bucket.year }}</span>
+                <span class="fe-mlist-day-count">{{ bucket['items']|length }}</span>
+              </button>
+            </li>
+            {% endfor %}
+            {% endif %}
+          </ul>
+        </div>
+      </aside>
+
+      <div class="fe-mlist-main" data-archive-results>
+        {% if not archive_items %}
+        <p class="fe-mlist-empty muted">Nothing in the archive yet.</p>
+        {% else %}
+        {% for bucket in year_buckets %}
+        <section class="fe-mlist-day-section fe-events-archive-year"
+                 data-archive-year-section="{{ bucket.year }}">
+          <h2 class="fe-mlist-day-section-heading">
+            <span>{{ bucket.year }}</span>
+            <span class="fe-mlist-day-section-count">{{ bucket['items']|length }}</span>
+          </h2>
+          <div class="fe-events-list-stack">
+            {% for it in bucket['items'] %}
+              <div class="fe-events-archive-card-wrap"
+                   data-archive-search="{{ search_blobs.get(it.post.id, '') }}"
+                   data-archive-year="{{ it.year }}"
+                   data-archive-kind="{{ it.kind }}">
+                {% if it.kind == 'event' %}
+                  {%- set ev = it.post -%}
+                  {% include "frontend/events_list/_event_card.html" %}
+                {% else %}
+                  {%- set ann = it.post -%}
+                  {% include "frontend/announcements_list/_announcement_card.html" %}
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </section>
+        {% endfor %}
+        <p class="fe-mlist-empty muted" data-archive-no-match hidden>No items match your filters.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+(function () {
+  var rail = document.querySelector('[data-archive-rail]');
+  var results = document.querySelector('[data-archive-results]');
+  if (!rail || !results) return;
+  var pills = rail.querySelectorAll('[data-archive-filter]');
+  var sections = results.querySelectorAll('[data-archive-year-section]');
+  var searchInput = rail.querySelector('[data-archive-search]');
+  var noMatch = results.querySelector('[data-archive-no-match]');
+  var kindToggles = rail.querySelectorAll('[data-archive-kind-toggle]');
+  var activeYear = 'all';
+
+  // Punctuation strip mirrors what the server uses to build the blob.
+  var PUNCT_RE = /[‘’'?!.,;"“”()\[\]{}]/g;
+  function tokens() {
+    return ((searchInput && searchInput.value) || '')
+      .toLowerCase()
+      .replace(PUNCT_RE, '')
+      .split(/\s+/)
+      .filter(Boolean);
+  }
+
+  function activeKinds() {
+    var set = {};
+    kindToggles.forEach(function (cb) {
+      if (cb.checked) set[cb.getAttribute('data-archive-kind-toggle')] = 1;
+    });
+    return set;
+  }
+
+  function applyFilter(value) {
+    activeYear = value;
+    var query = tokens();
+    var hasQuery = query.length > 0;
+    var kinds = activeKinds();
+
+    sections.forEach(function (sec) {
+      var year = sec.getAttribute('data-archive-year-section');
+      var yearMatches = hasQuery || value === 'all' || year === value;
+      if (!yearMatches) { sec.hidden = true; return; }
+
+      var anyVisible = false;
+      sec.querySelectorAll('[data-archive-search]').forEach(function (card) {
+        var kind = card.getAttribute('data-archive-kind');
+        if (!kinds[kind]) { card.hidden = true; return; }
+
+        if (!hasQuery) { card.hidden = false; anyVisible = true; return; }
+        var blob = card.getAttribute('data-archive-search') || '';
+        var ok = true;
+        for (var i = 0; i < query.length; i++) {
+          if (blob.indexOf(query[i]) === -1) { ok = false; break; }
+        }
+        card.hidden = !ok;
+        if (ok) anyVisible = true;
+      });
+
+      // Hide an entire year section when search/type filtering leaves
+      // it empty so visitors don't see a heading with no children.
+      if (hasQuery) {
+        sec.hidden = !anyVisible;
+      } else {
+        // No search — section visibility just depends on year-pill +
+        // whether at least one kind is checked has a card under it.
+        var anyCard = false;
+        sec.querySelectorAll('[data-archive-kind]').forEach(function (c) {
+          if (kinds[c.getAttribute('data-archive-kind')]) anyCard = true;
+        });
+        sec.hidden = !anyCard;
+      }
+    });
+
+    if (noMatch) {
+      var anyHit = false;
+      sections.forEach(function (sec) { if (!sec.hidden) anyHit = true; });
+      noMatch.hidden = anyHit;
+      var label = 'No items match your filters.';
+      if (!hasQuery && Object.keys(kinds).length === 0) {
+        label = 'Pick at least one type to display.';
+      } else if (hasQuery) {
+        label = 'No items match your search.';
+      }
+      noMatch.textContent = label;
+    }
+  }
+
+  pills.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      pills.forEach(function (b) {
+        b.classList.toggle('is-active', b === btn);
+        b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+      });
+      if (searchInput && searchInput.value) searchInput.value = '';
+      applyFilter(btn.getAttribute('data-archive-filter'));
+    });
+  });
+
+  kindToggles.forEach(function (cb) {
+    cb.addEventListener('change', function () { applyFilter(activeYear); });
+  });
+
+  if (searchInput) {
+    searchInput.addEventListener('input', function () {
+      var allPill = rail.querySelector('[data-archive-filter="all"]');
+      if (allPill && searchInput.value) {
+        pills.forEach(function (b) {
+          b.classList.toggle('is-active', b === allPill);
+          b.setAttribute('aria-selected', b === allPill ? 'true' : 'false');
+        });
+        activeYear = 'all';
+      }
+      applyFilter(activeYear);
+    });
+    searchInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && searchInput.value) {
+        e.preventDefault();
+        searchInput.value = '';
+        applyFilter(activeYear);
+      }
+    });
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (!searchInput) return;
+    var inField = e.target && /^(input|textarea|select)$/i.test(e.target.tagName) ||
+                   (e.target && e.target.isContentEditable);
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+      return;
+    }
+    if (e.key === '/' && !inField && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+    }
+  });
+})();
+</script>
+{% endblock %}

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_frontend_template_picker.html" import template_picker %}
 {% from "_frontend_layout_picker.html" import layout_picker %}
+{% from "_frontend_structure_card.html" import structure_card, structure_sequence %}
 {% set _active_hp = (site.frontend_homepage_template if site else 'classic') or 'classic' %}
 {% set _active_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
 {% block heading %}Homepage{% endblock %}
@@ -24,6 +25,17 @@
   {% include "_frontend_subnav.html" %}
   <div class="fe-admin-main">
 
+{# Hero editor lives in its own modal so it joins the same edit-via-pill
+   pattern as every other homepage block. The modal sits OUTSIDE the
+   main /frontend/save form because the hero owns its own
+   `<form id="hero-save-form">` (posts to /frontend/hero/save) and HTML
+   doesn't allow nested forms. The structure card's "Hero" pill opens
+   it via data-open-modal="homepage-hero-modal". #}
+<div class="modal fe-page-edit-modal fe-page-edit-modal--wide" id="homepage-hero-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel fe-page-edit-modal-panel" role="dialog" aria-modal="true">
+    <button type="button" class="icon-btn fe-page-edit-modal-close" data-close
+            aria-label="Close">{{ icon('x') }}</button>
 <section class="card hero-unified">
   <div class="card-head">
     <h2>Hero</h2>
@@ -460,6 +472,8 @@
     <button type="submit" form="hero-save-form" class="btn btn-primary">Save hero</button>
   </div>
 </section>
+  </div>{# /modal-panel #}
+</div>{# /homepage-hero-modal #}
 
 <form class="form" method="post" action="{{ url_for('main.frontend_save') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -467,26 +481,51 @@
   {# Editor cards are conditional on the active layout's block sequence —
      only show editors for the blocks that the chosen layout actually
      renders. `active_layout_blocks` is a list of block-type strings.
-     Each card has a visibility toggle in its head — flipping it off
-     hides the block on the public site without dropping it from the
-     layout. #}
+     Each editor lives inside its own modal, opened by clicking the
+     matching pill in the structure card at the top of the page. #}
   {% set _blocks = active_layout_blocks or [] %}
   {% set _splits = active_layout_splits or [] %}
-  {% set _vis = (block_content.get('_visibility', {}) if block_content else {}) %}
-  {# Block types that live inside any split's panel — used to skip them
-     in the standalone-editor pass below so we don't render their card
-     twice (once inside the split, once after it). #}
+  {# Block types that live inside any split's panel — collected here so
+     a block nested in a split still gets its modal rendered exactly
+     once, even though the structure card draws its pill inside the
+     split row. #}
   {% set _split_block_types = [] %}
   {% for sp in _splits %}{% for t in (sp.left or []) %}{% if _split_block_types.append(t) %}{% endif %}{% endfor %}{% for t in (sp.right or []) %}{% if _split_block_types.append(t) %}{% endif %}{% endfor %}{% endfor %}
   {% set _split_block_types = _split_block_types | unique | list %}
-  {% macro vis_toggle(block_type) %}
-    <input type="hidden" name="block_visible_present" value="{{ block_type }}">
-    <label class="mode-toggle fe-block-vis" title="Show this section on the public site">
-      <input type="checkbox" name="block_visible_{{ block_type }}" value="1"
-             {% if _vis.get(block_type, True) %}checked{% endif %}>
-      <span class="mode-track"><span class="mode-thumb"></span></span>
-    </label>
-  {% endmacro %}
+
+  {# Block-type metadata for the structure card pills. Pulled from the
+     server-side block catalog so the labels + icons stay in sync with
+     the layout-builder's palette without us having to mirror them
+     here. The 'split' entry is omitted because splits render as the
+     two-panel row container itself, not as a single pill. Hero IS
+     editable — its modal lives outside the main form (since the hero
+     owns its own /frontend/hero/save form) and is opened by the same
+     pill-clicks-to-modal pattern as every other block. #}
+  {% set _block_labels = {} %}
+  {% for _entry in (homepage_block_catalog or []) %}
+    {% if _entry.key != 'split' %}
+      {% if _block_labels.update({_entry.key: (_entry.name, _entry.icon)}) %}{% endif %}
+    {% endif %}
+  {% endfor %}
+  {% set _editable_types = ['hero', 'quick_links', 'features', 'cta', 'inclusion',
+                             'stats', 'testimonials', 'meetings', 'events',
+                             'about', 'faq', 'contact'] %}
+
+  {# ── Active layout structure ── always rendered first so the admin
+     sees the layout shape before the per-block editor modals. Each
+     block in the layout becomes a clickable pill that opens its own
+     content-edit modal further down the page. Splits render as a
+     two-column row with a Settings button that opens the per-split
+     width/padding/gap/background modal. #}
+  {% call structure_card("Active layout structure", active_layout, "homepage-builder-modal") %}
+    {% if active_layout_seq %}
+      {{ structure_sequence(active_layout_seq, "homepage", _block_labels,
+                             _editable_types,
+                             split_settings_modal_prefix="homepage-split-settings") }}
+    {% else %}
+      <p class="muted small">This layout has no editable content blocks.</p>
+    {% endif %}
+  {% endcall %}
 
   {# One macro per editor card. Called both at the top-level standalone
      position AND from inside a split panel, so a block that lives in a
@@ -497,7 +536,6 @@
     <div class="card-head">
       <h2>Quick links</h2>
       <span class="muted smaller">Four nav cards · one per line: <code>icon | title | body | href</code></span>
-      {{ vis_toggle('quick_links') }}
     </div>
     <label>Cards
       <textarea name="block_quick_links" rows="6" placeholder="◈ | Meetings | Find a meeting … | #meetings">{{ block_text.quick_links or '' }}</textarea>
@@ -505,16 +543,111 @@
   </section>
   {% endmacro %}
 
+  {% macro _feature_card_row(idx, item) %}
+  {# One editable card. `idx` is unique-within-the-form (used to scope
+     hidden field IDs and `name`s); the JS reuses the same indexing
+     scheme when cloning new cards from the empty template below. #}
+  <div class="fe-feat-card" data-features-card data-card-index="{{ idx }}">
+    <input type="hidden" name="feature_card_present" value="{{ idx }}" data-feat-present>
+    <div class="fe-feat-card-handle" aria-hidden="true">{{ icon('grip-vertical') }}</div>
+    <div class="fe-feat-card-icon{% if item and item.icon %} has-icon{% endif %}" data-icon-field>
+      <button type="button" class="icon-picker-trigger fe-feat-icon-trigger"
+              data-open-icon-picker
+              data-icon-target="#feat-card-{{ idx }}-icon"
+              data-color-target="#feat-card-{{ idx }}-icon-color"
+              data-size-target="#feat-card-{{ idx }}-icon-size"
+              title="Choose icon">
+        <span class="icon-picker-preview" data-icon-preview
+              {% if item and item.icon_size %}style="--icon-size: {{ item.icon_size }}px;"{% endif %}>
+          {% if item and item.icon %}{{ icon(item.icon) }}{% endif %}
+        </span>
+        <span class="icon-picker-trigger-empty" data-icon-empty>{{ icon('image') }}<span>Icon</span></span>
+      </button>
+      <input type="hidden" id="feat-card-{{ idx }}-icon"
+             name="feature_card_{{ idx }}_icon" value="{{ (item.icon if item else '') or '' }}">
+      <input type="hidden" id="feat-card-{{ idx }}-icon-color"
+             name="feature_card_{{ idx }}_icon_color" value="{{ (item.icon_color if item else '') or '' }}">
+      <input type="hidden" id="feat-card-{{ idx }}-icon-size"
+             name="feature_card_{{ idx }}_icon_size" value="{{ (item.icon_size if item else '') or '' }}">
+    </div>
+    <div class="fe-feat-card-fields">
+      <input class="fe-feat-card-title" type="text"
+             name="feature_card_{{ idx }}_title"
+             value="{{ (item.title if item else '') or '' }}"
+             placeholder="Card title">
+      <div class="md-editor md-editor-live fe-feat-card-md"
+           data-md-editor data-md-live="1" data-md-mode="block">
+        <div class="md-editor-pane md-editor-pane-write active">
+          <textarea class="fe-feat-card-body" rows="3"
+                    name="feature_card_{{ idx }}_body"
+                    placeholder="Short description — Markdown supported.">{{ (item.body if item else '') or '' }}</textarea>
+        </div>
+        <div class="md-editor-pane md-editor-pane-preview active">
+          <div class="md-editor-preview"><p class="muted smaller">Preview appears here.</p></div>
+        </div>
+      </div>
+      <div class="fe-feat-card-link-row">
+        <span class="fe-feat-card-link-icon" aria-hidden="true">{{ icon('link') }}</span>
+        <input class="fe-feat-card-href" type="text"
+               name="feature_card_{{ idx }}_href"
+               value="{{ (item.href if item else '') or '' }}"
+               placeholder="Link URL (optional) — e.g. /meetings or https://…">
+        <label class="fe-feat-card-newtab" title="Open in new tab">
+          <input type="checkbox" name="feature_card_{{ idx }}_new_tab" value="1"
+                 {% if item and item.open_in_new_tab %}checked{% endif %}>
+          <span>New tab</span>
+        </label>
+      </div>
+    </div>
+    <button type="button" class="fe-feat-card-remove" data-features-remove
+            title="Remove card" aria-label="Remove card">{{ icon('trash-2') }}</button>
+  </div>
+  {% endmacro %}
+
   {% macro editor_features() %}
-  <section class="card">
+  {% set _feat = (block_content.features if block_content else {}) or {} %}
+  {% set _feat_items = _feat.get('items') or [] %}
+  <section class="card fe-feat-editor"
+           data-features-editor
+           data-features-max="6">
     <div class="card-head">
       <h2>Features</h2>
-      <span class="muted smaller">Three feature columns · one per line: <code>icon-name | title | body</code></span>
-      {{ vis_toggle('features') }}
+      <span class="muted smaller">Up to six clickable cards. Drag to reorder. <b>Markdown</b> in card bodies (live preview on the right); inline HTML in headings &amp; titles.</span>
     </div>
-    <label>Items
-      <textarea name="block_features" rows="6" placeholder="calendar | Live schedule | Every meeting, every day…">{{ block_text.features or '' }}</textarea>
-    </label>
+    <input type="hidden" name="features_present" value="1">
+
+    <div class="fe-feat-head-grid">
+      <label>Heading
+        <input type="text" name="features_heading"
+               value="{{ _feat.heading or '' }}"
+               placeholder="What we offer">
+      </label>
+      <label>Subheading
+        <textarea name="features_subheading" rows="2"
+                  placeholder="A short line that frames the cards below.">{{ _feat.subheading or '' }}</textarea>
+      </label>
+    </div>
+
+    <div class="fe-feat-cards" data-features-list>
+      {% for item in _feat_items %}
+        {{ _feature_card_row(loop.index0, item) }}
+      {% endfor %}
+    </div>
+
+    <div class="fe-feat-actions">
+      <button type="button" class="btn btn-sm" data-features-add>
+        {{ icon('plus') }} <span>Add card</span>
+      </button>
+      <span class="muted smaller fe-feat-count" data-features-count></span>
+    </div>
+
+    {# Empty-card template cloned by the JS when "Add card" is clicked.
+       The `__IDX__` placeholder is rewritten to a unique counter value
+       so the cloned card's name="…" fields don't collide with existing
+       ones in the form. Wrapped in a <template> so it's inert. #}
+    <template data-features-card-template>
+      {{ _feature_card_row('__IDX__', None) }}
+    </template>
   </section>
   {% endmacro %}
 
@@ -522,7 +655,6 @@
   <section class="card">
     <div class="card-head">
       <h2>Call-to-action banner</h2>
-      {{ vis_toggle('cta') }}
     </div>
     {% set _cta = block_content.cta if block_content else {} %}
     <label>Heading
@@ -548,12 +680,124 @@
   </section>
   {% endmacro %}
 
+  {% macro editor_inclusion() %}
+  {% set _inc = (block_content.inclusion if block_content else {}) or {} %}
+  {% set _inc_tags = _inc.get('tags') or [] %}
+  {% set _inc_align = _inc.get('alignment') or 'center' %}
+  <section class="card fe-inc-editor">
+    <div class="card-head">
+      <h2>Statement of Inclusion</h2>
+      <span class="muted smaller">Body accepts <b>Markdown</b> — preview renders live. Heading accepts inline HTML (<code>&lt;br&gt;</code>, <code>&lt;strong&gt;</code>, <code>&lt;em&gt;</code>).</span>
+    </div>
+    <input type="hidden" name="inclusion_present" value="1">
+
+    <div class="fe-inc-head-row">
+      <div class="fe-inc-icon-cell" data-icon-field>
+        <span class="muted smaller">Icon</span>
+        <button type="button" class="icon-picker-trigger fe-inc-icon-trigger"
+                data-open-icon-picker
+                data-icon-target="#inclusion-icon"
+                data-color-target="#inclusion-icon-color"
+                data-size-target="#inclusion-icon-size"
+                title="Choose icon">
+          <span class="icon-picker-preview" data-icon-preview data-inc-icon-preview
+                style="{% if _inc.get('icon_color') %}color: {{ _inc.get('icon_color') }};{% endif %}{% if _inc.get('icon_size') %} --icon-size: {{ _inc.get('icon_size') }}px;{% endif %}">
+            {% if _inc.get('icon') %}{{ icon(_inc.get('icon')) }}{% endif %}
+          </span>
+          <span class="icon-picker-trigger-empty" data-icon-empty>{{ icon('image') }}<span>Icon</span></span>
+        </button>
+        <input type="hidden" id="inclusion-icon"
+               name="inclusion_icon" value="{{ _inc.get('icon') or '' }}">
+        {# Color is sourced from the per-block toggle below — the picker
+           still writes nothing into it (per the site-wide picker rule).
+           Kept hidden so the picker JS's color-target selector still
+           resolves to a real node. #}
+        <input type="hidden" id="inclusion-icon-color" name="inclusion_icon_color"
+               value="{{ _inc.get('icon_color') or '' }}" data-inc-color-hidden>
+        <input type="hidden" id="inclusion-icon-size"
+               name="inclusion_icon_size" value="{{ _inc.get('icon_size') or '' }}"
+               data-inc-size-hidden>
+      </div>
+      <label class="fe-inc-heading-cell">Heading
+        <input type="text" name="inclusion_heading"
+               value="{{ _inc.get('heading') or '' }}"
+               placeholder="All Are Welcome">
+      </label>
+    </div>
+
+    {% set _inc_color = _inc.get('icon_color') or '' %}
+    {% set _inc_size_int = (_inc.get('icon_size') or '') %}
+    <div class="fe-inc-icon-controls" data-inc-icon-controls>
+      <label class="fe-inc-icon-color-toggle">
+        <input type="checkbox" data-inc-color-toggle
+               {% if _inc_color %}checked{% endif %}>
+        <span>Custom icon color</span>
+      </label>
+      <input type="color" class="fe-inc-icon-color-swatch"
+             value="{{ _inc_color or '#5164ff' }}"
+             data-inc-color-swatch
+             aria-label="Custom icon color"
+             {% if not _inc_color %}disabled{% endif %}>
+
+      <label class="fe-inc-icon-size-label">
+        <span class="muted smaller">Icon size <output data-inc-size-out>{{ _inc_size_int or 'auto' }}</output>{% if _inc_size_int %}px{% endif %}</span>
+        <input type="range" min="20" max="96" step="2"
+               value="{{ _inc_size_int or '56' }}"
+               data-inc-size-slider
+               aria-label="Icon size in pixels">
+      </label>
+      <button type="button" class="btn btn-sm fe-inc-icon-size-reset"
+              data-inc-size-reset
+              title="Reset to theme default">Reset size</button>
+    </div>
+
+    <label>Body <span class="muted small">(Markdown supported — live preview on the right)</span></label>
+    <div class="md-editor md-editor-live" data-md-editor data-md-live="1" data-md-mode="block">
+      <div class="md-editor-pane md-editor-pane-write active">
+        <textarea name="inclusion_body" rows="8"
+                  placeholder="The only requirement for membership is a desire to stop using…&#10;&#10;**bold** · *italic* · # heading · - list">{{ _inc.get('body') or '' }}</textarea>
+      </div>
+      <div class="md-editor-pane md-editor-pane-preview active">
+        <div class="md-editor-preview"><p class="muted smaller">Preview appears here as you type.</p></div>
+      </div>
+    </div>
+
+    <label>Welcome chips <span class="muted small">(one per line — leave blank to hide)</span>
+      <textarea name="inclusion_tags" rows="4"
+                placeholder="LGBTQIA+&#10;All races&#10;All faiths&#10;All ages">{{ _inc_tags | join('\n') }}</textarea>
+    </label>
+
+    <div class="fe-inc-cta-row">
+      <label>CTA button label
+        <input type="text" name="inclusion_link_label"
+               value="{{ _inc.get('link_label') or '' }}"
+               placeholder="Find a meeting (optional)">
+      </label>
+      <label>CTA URL
+        <input type="text" name="inclusion_link_url"
+               value="{{ _inc.get('link_url') or '' }}"
+               placeholder="#meetings or https://…">
+      </label>
+    </div>
+
+    <div class="fe-inc-align-row">
+      <span class="muted smaller">Alignment</span>
+      {% for opt in [('left','Left'), ('center','Center'), ('right','Right')] %}
+      <label class="fe-inc-align-opt">
+        <input type="radio" name="inclusion_alignment" value="{{ opt[0] }}"
+               {% if _inc_align == opt[0] %}checked{% endif %}>
+        <span>{{ opt[1] }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </section>
+  {% endmacro %}
+
   {% macro editor_stats() %}
   <section class="card">
     <div class="card-head">
       <h2>Stats</h2>
       <span class="muted smaller">One per line: <code>number | label</code></span>
-      {{ vis_toggle('stats') }}
     </div>
     <label>Items
       <textarea name="block_stats" rows="5" placeholder="7 | Days a week">{{ block_text.stats or '' }}</textarea>
@@ -566,7 +810,6 @@
     <div class="card-head">
       <h2>Testimonials</h2>
       <span class="muted smaller">One per line: <code>quote | attribution</code></span>
-      {{ vis_toggle('testimonials') }}
     </div>
     <label>Items
       <textarea name="block_testimonials" rows="6" placeholder="My first meeting felt like coming home. | Member, four years sober">{{ block_text.testimonials or '' }}</textarea>
@@ -580,7 +823,6 @@
     <div class="card-head">
       <h2>Meetings list</h2>
       <span class="muted smaller">Pulls live from the admin DB. Filter + presentation are configured below.</span>
-      {{ vis_toggle('meetings') }}
     </div>
     <label>Section heading
       <input type="text" name="meetings_heading" value="{{ _ms.heading or '' }}" placeholder="Upcoming Meetings">
@@ -670,7 +912,6 @@
     <div class="card-head">
       <h2>Upcoming Events</h2>
       <span class="muted smaller">Cards built from the Announcements &amp; Events module. Past events drop off automatically.</span>
-      {{ vis_toggle('events') }}
     </div>
     <label>Section heading
       <input type="text" name="events_heading" value="{{ _es.heading or '' }}" placeholder="Upcoming Events">
@@ -738,7 +979,6 @@
   <section class="card">
     <div class="card-head">
       <h2>About section</h2>
-      {{ vis_toggle('about') }}
     </div>
     <label>Heading
       <input type="text" name="frontend_about_heading" value="{{ (site.frontend_about_heading if site else '') or '' }}" placeholder="About the Fellowship">
@@ -749,16 +989,86 @@
   </section>
   {% endmacro %}
 
+  {% macro _faq_item_row(idx, item) %}
+  {# One editable FAQ item. `idx` scopes the hidden field IDs and `name`s;
+     the JS reuses the same indexing scheme when cloning new items from
+     the empty template. #}
+  <div class="fe-faq-card" data-faq-item data-item-index="{{ idx }}">
+    <input type="hidden" name="faq_item_present" value="{{ idx }}">
+    <div class="fe-faq-card-handle" aria-hidden="true">{{ icon('grip-vertical') }}</div>
+    <div class="fe-faq-card-icon{% if item and item.icon %} has-icon{% endif %}" data-icon-field>
+      <button type="button" class="icon-picker-trigger fe-faq-icon-trigger"
+              data-open-icon-picker
+              data-icon-target="#faq-item-{{ idx }}-icon"
+              data-color-target="#faq-item-{{ idx }}-icon-color"
+              data-size-target="#faq-item-{{ idx }}-icon-size"
+              title="Choose icon">
+        <span class="icon-picker-preview" data-icon-preview
+              {% if item and item.icon_size %}style="--icon-size: {{ item.icon_size }}px;"{% endif %}>
+          {% if item and item.icon %}{{ icon(item.icon) }}{% endif %}
+        </span>
+        <span class="icon-picker-trigger-empty" data-icon-empty>{{ icon('image') }}<span>Icon</span></span>
+      </button>
+      <input type="hidden" id="faq-item-{{ idx }}-icon"
+             name="faq_item_{{ idx }}_icon" value="{{ (item.icon if item else '') or '' }}">
+      {# Color is vestigial — site-wide picker rule never writes it. Kept so
+         the picker JS's color-target selector resolves. #}
+      <input type="hidden" id="faq-item-{{ idx }}-icon-color" value="">
+      <input type="hidden" id="faq-item-{{ idx }}-icon-size"
+             name="faq_item_{{ idx }}_icon_size" value="{{ (item.icon_size if item else '') or '' }}">
+    </div>
+    <div class="fe-faq-card-fields">
+      <input class="fe-faq-card-question" type="text"
+             name="faq_item_{{ idx }}_question"
+             value="{{ (item.question if item else '') or '' }}"
+             placeholder="Question — e.g. Do I have to share?">
+      <div class="md-editor md-editor-live fe-faq-card-md"
+           data-md-editor data-md-live="1" data-md-mode="block">
+        <div class="md-editor-pane md-editor-pane-write active">
+          <textarea class="fe-faq-card-answer" rows="4"
+                    name="faq_item_{{ idx }}_answer"
+                    placeholder="Answer — Markdown supported.">{{ (item.answer if item else '') or '' }}</textarea>
+        </div>
+        <div class="md-editor-pane md-editor-pane-preview active">
+          <div class="md-editor-preview"><p class="muted smaller">Preview appears here.</p></div>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="fe-faq-card-remove" data-faq-remove
+            title="Remove item" aria-label="Remove item">{{ icon('trash-2') }}</button>
+  </div>
+  {% endmacro %}
+
   {% macro editor_faq() %}
-  <section class="card">
+  {% set _faq_items = (block_content.faq if block_content else []) or [] %}
+  <section class="card fe-faq-editor"
+           data-faq-editor
+           data-faq-max="20">
     <div class="card-head">
       <h2>FAQ</h2>
-      <span class="muted smaller">One per line: <code>question | answer</code></span>
-      {{ vis_toggle('faq') }}
+      <span class="muted smaller">Up to twenty accordion items. Drag to reorder. <b>Markdown</b> in answers (live preview on the right); inline HTML in questions.</span>
     </div>
-    <label>Items
-      <textarea name="block_faq" rows="6" placeholder="Do I have to share? | Never. Many newcomers attend …">{{ block_text.faq or '' }}</textarea>
-    </label>
+    <input type="hidden" name="faq_present" value="1">
+
+    <div class="fe-faq-cards" data-faq-list>
+      {% for item in _faq_items %}
+        {{ _faq_item_row(loop.index0, item) }}
+      {% endfor %}
+    </div>
+
+    <div class="fe-faq-actions">
+      <button type="button" class="btn btn-sm" data-faq-add>
+        {{ icon('plus') }} <span>Add item</span>
+      </button>
+      <span class="muted smaller fe-faq-count" data-faq-count></span>
+    </div>
+
+    {# Empty-item template cloned by the JS when "Add item" is clicked.
+       The `__IDX__` placeholder is rewritten to a unique counter so the
+       cloned item's name="…" fields don't collide with existing ones. #}
+    <template data-faq-item-template>
+      {{ _faq_item_row('__IDX__', None) }}
+    </template>
   </section>
   {% endmacro %}
 
@@ -766,7 +1076,6 @@
   <section class="card">
     <div class="card-head">
       <h2>Contact / help section</h2>
-      {{ vis_toggle('contact') }}
     </div>
     <label>Heading
       <input type="text" name="frontend_contact_heading" value="{{ (site.frontend_contact_heading if site else '') or '' }}" placeholder="Need Help Right Now?">
@@ -782,6 +1091,7 @@
     {%- if bt == 'quick_links' %}{{ editor_quick_links() }}
     {%- elif bt == 'features' %}{{ editor_features() }}
     {%- elif bt == 'cta' %}{{ editor_cta() }}
+    {%- elif bt == 'inclusion' %}{{ editor_inclusion() }}
     {%- elif bt == 'stats' %}{{ editor_stats() }}
     {%- elif bt == 'testimonials' %}{{ editor_testimonials() }}
     {%- elif bt == 'meetings' %}{{ editor_meetings() }}
@@ -792,146 +1102,164 @@
     {%- endif -%}
   {%- endmacro %}
 
-  {# Two-panel split sections from the active custom layout. One card per
-     split, in document order. Inner editor cards render INSIDE the
-     left/right panel boxes so the admin layout mirrors what the visitor
-     sees. The card's outer margin scales with the chosen `margin` so
-     loose vs. default vs. tight is visible right here on the admin too. #}
-  {% if _splits %}
-    {% for sp in _splits %}
-    {% set _i = sp.index %}
-    <section class="card fe-split-admin-card fe-split-admin-card--gt-{{ sp.gap_top }} fe-split-admin-card--gb-{{ sp.gap_bottom }}">
-      <div class="card-head">
-        <h2>Two-panel split</h2>
-        <span class="muted smaller">From the <b>{{ active_layout_key }}</b> layout · controls width, spacing, and background on the public site.</span>
-      </div>
+  {# ── Per-block editor modals ──
+     One modal per block type that the active layout uses (deduped
+     across standalone AND split-nested usage). Each modal wraps the
+     editor's existing <section class="card"> so we get a single source
+     of truth for editor markup and the same form fields keep posting
+     to /frontend/save unchanged. The structure card's pills target
+     these modals via `data-open-modal="homepage-{type}-modal"`. The
+     --wide modifier bumps the panel from 680→960 px for editors with
+     dense rows (features cards, FAQ items, MD editors). #}
 
-      <div class="fe-split-admin-preview" aria-label="Split preview"
-           {% if sp.bg_color %}style="background: {{ sp.bg_color }};"{% endif %}>
-        <div class="fe-split-admin-panel"
-             {% if sp.bg_color_left %}style="background: {{ sp.bg_color_left }};"{% endif %}>
-          <div class="fe-split-admin-panel-label muted smaller">Left panel</div>
-          {% if sp.left %}
-            {% for t in sp.left %}{{ editor_for(t) }}{% endfor %}
-          {% else %}
-            <div class="fe-split-admin-empty muted smaller">empty</div>
-          {% endif %}
-        </div>
-        <div class="fe-split-admin-panel"
-             {% if sp.bg_color_right %}style="background: {{ sp.bg_color_right }};"{% endif %}>
-          <div class="fe-split-admin-panel-label muted smaller">Right panel</div>
-          {% if sp.right %}
-            {% for t in sp.right %}{{ editor_for(t) }}{% endfor %}
-          {% else %}
-            <div class="fe-split-admin-empty muted smaller">empty</div>
-          {% endif %}
-        </div>
-      </div>
+  {% macro modal_wrap(block_type, wide=False) %}
+  <div class="modal fe-page-edit-modal{% if wide %} fe-page-edit-modal--wide{% endif %}"
+       id="homepage-{{ block_type }}-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel fe-page-edit-modal-panel" role="dialog" aria-modal="true">
+      <button type="button" class="icon-btn fe-page-edit-modal-close" data-close
+              aria-label="Close">{{ icon('x') }}</button>
+      {{ caller() }}
+    </div>
+  </div>
+  {% endmacro %}
 
-      <div class="fe-split-admin-settings">
-        {# Marker so the save endpoint knows this split was on the form
-           even if every select kept its default value. #}
-        <input type="hidden" name="split_present" value="{{ _i }}">
-
-        <label class="fe-split-admin-setting">
-          <span class="muted smaller">Width</span>
-          <select name="split_{{ _i }}_width">
-            <option value="boxed"{% if sp.width == 'boxed' %} selected{% endif %}>Boxed (matches site container)</option>
-            <option value="full"{% if sp.width == 'full' %} selected{% endif %}>Full width (edge-to-edge)</option>
-          </select>
-        </label>
-
-        <label class="fe-split-admin-setting">
-          <span class="muted smaller">Inner padding</span>
-          <select name="split_{{ _i }}_padding">
-            {% for v, lbl in [('none','None (0)'), ('tight','Tight'), ('default','Default'), ('loose','Loose')] %}
-            <option value="{{ v }}"{% if sp.padding == v %} selected{% endif %}>{{ lbl }}</option>
-            {% endfor %}
-          </select>
-        </label>
-
-        <label class="fe-split-admin-setting">
-          <span class="muted smaller">Gap between columns</span>
-          <select name="split_{{ _i }}_gap">
-            {% for v, lbl in [('none','None (flush)'), ('tight','Tight'), ('default','Default'), ('loose','Loose')] %}
-            <option value="{{ v }}"{% if sp.gap == v %} selected{% endif %}>{{ lbl }}</option>
-            {% endfor %}
-          </select>
-        </label>
-
-        <label class="fe-split-admin-setting">
-          <span class="muted smaller">Gap on top</span>
-          <select name="split_{{ _i }}_gap_top">
-            {% for v, lbl in [('none','None (flush)'), ('tight','Tight'), ('default','Default'), ('loose','Loose')] %}
-            <option value="{{ v }}"{% if sp.gap_top == v %} selected{% endif %}>{{ lbl }}</option>
-            {% endfor %}
-          </select>
-        </label>
-
-        <label class="fe-split-admin-setting">
-          <span class="muted smaller">Gap on bottom</span>
-          <select name="split_{{ _i }}_gap_bottom">
-            {% for v, lbl in [('none','None (flush)'), ('tight','Tight'), ('default','Default'), ('loose','Loose')] %}
-            <option value="{{ v }}"{% if sp.gap_bottom == v %} selected{% endif %}>{{ lbl }}</option>
-            {% endfor %}
-          </select>
-        </label>
-
-        <label class="fe-split-admin-setting fe-split-admin-bg">
-          <span class="muted smaller">Background — whole section</span>
-          <span class="fe-split-admin-bg-row">
-            <input type="checkbox" name="split_{{ _i }}_bg_color_enabled" value="1"
-                   {% if sp.bg_color %}checked{% endif %}
-                   title="Off = transparent">
-            <input type="color" name="split_{{ _i }}_bg_color"
-                   value="{{ sp.bg_color or '#ffffff' }}">
-          </span>
-        </label>
-
-        <label class="fe-split-admin-setting fe-split-admin-bg">
-          <span class="muted smaller">Background — left panel</span>
-          <span class="fe-split-admin-bg-row">
-            <input type="checkbox" name="split_{{ _i }}_bg_color_left_enabled" value="1"
-                   {% if sp.bg_color_left %}checked{% endif %}
-                   title="Off = transparent">
-            <input type="color" name="split_{{ _i }}_bg_color_left"
-                   value="{{ sp.bg_color_left or '#ffffff' }}">
-          </span>
-        </label>
-
-        <label class="fe-split-admin-setting fe-split-admin-bg">
-          <span class="muted smaller">Background — right panel</span>
-          <span class="fe-split-admin-bg-row">
-            <input type="checkbox" name="split_{{ _i }}_bg_color_right_enabled" value="1"
-                   {% if sp.bg_color_right %}checked{% endif %}
-                   title="Off = transparent">
-            <input type="color" name="split_{{ _i }}_bg_color_right"
-                   value="{{ sp.bg_color_right or '#ffffff' }}">
-          </span>
-        </label>
-
-        <label class="fe-split-admin-setting fe-split-admin-bg">
-          <span class="muted smaller">Dark-mode background</span>
-          <span class="fe-split-admin-bg-row">
-            <input type="checkbox" name="split_{{ _i }}_bg_dark_mode" value="1"
-                   {% if sp.bg_dark_mode %}checked{% endif %}>
-            <span class="muted smaller">Auto-derive a dark variant of each background for dark mode.</span>
-          </span>
-        </label>
-      </div>
-    </section>
-    {% endfor %}
-  {% endif %}
-
-  {# Standalone editors — render every block from the active layout that
-     ISN'T inside a split. Blocks inside splits already had their editor
-     rendered in the split's panel above, so we skip them here to avoid
-     duplicate `name="..."` form fields. #}
-  {% for bt in ['quick_links', 'features', 'cta', 'stats', 'testimonials',
+  {% set _wide_editors = ['features', 'inclusion', 'meetings', 'events', 'faq'] %}
+  {% set _all_used_blocks = (_blocks + _split_block_types) | unique | list %}
+  {% for bt in ['quick_links', 'features', 'cta', 'inclusion', 'stats', 'testimonials',
                 'meetings', 'events', 'about', 'faq', 'contact'] %}
-    {% if bt in _blocks and bt not in _split_block_types %}
-      {{ editor_for(bt) }}
+    {% if bt in _all_used_blocks %}
+      {% call modal_wrap(bt, wide=(bt in _wide_editors)) %}
+        {{ editor_for(bt) }}
+      {% endcall %}
     {% endif %}
+  {% endfor %}
+
+  {# ── Per-split settings modals ──
+     One modal per split in the active layout. The structure card's
+     "Settings" button on each split row opens the matching modal. The
+     hidden `split_present` marker tells the save endpoint which split
+     index this submission applies to. #}
+  {% for sp in _splits %}
+    {% set _i = sp.index %}
+    <div class="modal fe-page-edit-modal" id="homepage-split-settings-{{ _i }}" aria-hidden="true">
+      <div class="modal-backdrop" data-close></div>
+      <div class="modal-panel" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <h2>Two-panel split — settings</h2>
+          <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+        </div>
+        <div class="modal-body">
+          <p class="muted smaller">Width, spacing, and background for this split. Pills inside the structure card above open the editors for the blocks it contains.</p>
+          <input type="hidden" name="split_present" value="{{ _i }}">
+
+          <div class="fe-split-admin-settings">
+            <label class="fe-split-admin-setting">
+              <span class="muted smaller">Width</span>
+              <select name="split_{{ _i }}_width">
+                <option value="boxed"{% if sp.width == 'boxed' %} selected{% endif %}>Boxed (matches site container)</option>
+                <option value="full"{% if sp.width == 'full' %} selected{% endif %}>Full width (edge-to-edge)</option>
+              </select>
+            </label>
+
+            <label class="fe-split-admin-setting">
+              <span class="muted smaller">Inner padding</span>
+              <select name="split_{{ _i }}_padding">
+                {% for v, lbl in [('none','None (0)'), ('tight','Tight'), ('default','Default'), ('loose','Loose')] %}
+                <option value="{{ v }}"{% if sp.padding == v %} selected{% endif %}>{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </label>
+
+            <label class="fe-split-admin-setting">
+              <span class="muted smaller">Left padding (% of section width)</span>
+              <input type="number" name="split_{{ _i }}_pad_left_pct"
+                     min="0" max="50" step="1"
+                     value="{{ sp.pad_left_pct or 0 }}">
+            </label>
+
+            <label class="fe-split-admin-setting">
+              <span class="muted smaller">Right padding (% of section width)</span>
+              <input type="number" name="split_{{ _i }}_pad_right_pct"
+                     min="0" max="50" step="1"
+                     value="{{ sp.pad_right_pct or 0 }}">
+            </label>
+
+            <label class="fe-split-admin-setting">
+              <span class="muted smaller">Gap between columns</span>
+              <select name="split_{{ _i }}_gap">
+                {% for v, lbl in [('none','None (flush)'), ('tight','Tight'), ('default','Default'), ('loose','Loose')] %}
+                <option value="{{ v }}"{% if sp.gap == v %} selected{% endif %}>{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </label>
+
+            <label class="fe-split-admin-setting">
+              <span class="muted smaller">Gap on top</span>
+              <select name="split_{{ _i }}_gap_top">
+                {% for v, lbl in [('none','None (flush)'), ('tight','Tight'), ('default','Default'), ('loose','Loose')] %}
+                <option value="{{ v }}"{% if sp.gap_top == v %} selected{% endif %}>{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </label>
+
+            <label class="fe-split-admin-setting">
+              <span class="muted smaller">Gap on bottom</span>
+              <select name="split_{{ _i }}_gap_bottom">
+                {% for v, lbl in [('none','None (flush)'), ('tight','Tight'), ('default','Default'), ('loose','Loose')] %}
+                <option value="{{ v }}"{% if sp.gap_bottom == v %} selected{% endif %}>{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </label>
+
+            <label class="fe-split-admin-setting fe-split-admin-bg">
+              <span class="muted smaller">Background — whole section</span>
+              <span class="fe-split-admin-bg-row">
+                <input type="checkbox" name="split_{{ _i }}_bg_color_enabled" value="1"
+                       {% if sp.bg_color %}checked{% endif %}
+                       title="Off = transparent">
+                <input type="color" name="split_{{ _i }}_bg_color"
+                       value="{{ sp.bg_color or '#ffffff' }}">
+              </span>
+            </label>
+
+            <label class="fe-split-admin-setting fe-split-admin-bg">
+              <span class="muted smaller">Background — left panel</span>
+              <span class="fe-split-admin-bg-row">
+                <input type="checkbox" name="split_{{ _i }}_bg_color_left_enabled" value="1"
+                       {% if sp.bg_color_left %}checked{% endif %}
+                       title="Off = transparent">
+                <input type="color" name="split_{{ _i }}_bg_color_left"
+                       value="{{ sp.bg_color_left or '#ffffff' }}">
+              </span>
+            </label>
+
+            <label class="fe-split-admin-setting fe-split-admin-bg">
+              <span class="muted smaller">Background — right panel</span>
+              <span class="fe-split-admin-bg-row">
+                <input type="checkbox" name="split_{{ _i }}_bg_color_right_enabled" value="1"
+                       {% if sp.bg_color_right %}checked{% endif %}
+                       title="Off = transparent">
+                <input type="color" name="split_{{ _i }}_bg_color_right"
+                       value="{{ sp.bg_color_right or '#ffffff' }}">
+              </span>
+            </label>
+
+            <label class="fe-split-admin-setting fe-split-admin-bg">
+              <span class="muted smaller">Dark-mode background</span>
+              <span class="fe-split-admin-bg-row">
+                <input type="checkbox" name="split_{{ _i }}_bg_dark_mode" value="1"
+                       {% if sp.bg_dark_mode %}checked{% endif %}>
+                <span class="muted smaller">Auto-derive a dark variant of each background for dark mode.</span>
+              </span>
+            </label>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn" data-close>Close</button>
+        </div>
+      </div>
+    </div>
   {% endfor %}
 
   <div class="form-actions"><button class="btn btn-primary">Save Homepage</button></div>
@@ -949,6 +1277,289 @@
     if (!cb || !picker) return;
     picker.addEventListener('input', function () { cb.checked = true; });
   });
+})();
+
+// Features editor — add/remove/reorder cards. Each card carries a
+// `data-card-index` that scopes its hidden field IDs (icon picker
+// targets) and the `name="feature_card_<idx>_*"` posts. New cards
+// minted from the <template> get a fresh counter so the indices don't
+// collide with existing ones.
+(function () {
+  var editor = document.querySelector('[data-features-editor]');
+  if (!editor) return;
+  var list   = editor.querySelector('[data-features-list]');
+  var tmpl   = editor.querySelector('[data-features-card-template]');
+  var addBtn = editor.querySelector('[data-features-add]');
+  var count  = editor.querySelector('[data-features-count]');
+  var max    = parseInt(editor.getAttribute('data-features-max') || '6', 10);
+  if (!list || !tmpl || !addBtn) return;
+
+  // Seed the counter past whatever indices were rendered server-side.
+  var nextIdx = 0;
+  list.querySelectorAll('[data-features-card]').forEach(function (c) {
+    var i = parseInt(c.getAttribute('data-card-index') || '0', 10);
+    if (i + 1 > nextIdx) nextIdx = i + 1;
+  });
+
+  function refresh() {
+    var cards = list.querySelectorAll('[data-features-card]');
+    if (count) {
+      count.textContent = cards.length + ' / ' + max + ' card' + (max === 1 ? '' : 's');
+    }
+    addBtn.disabled = cards.length >= max;
+    addBtn.classList.toggle('is-disabled', cards.length >= max);
+  }
+
+  function addCard() {
+    var cards = list.querySelectorAll('[data-features-card]');
+    if (cards.length >= max) return;
+    var idx = nextIdx++;
+    // Clone the template content (a string-rewrite on the raw HTML lets
+    // us swap the placeholder index across `id`, `name`, and selector
+    // attributes in one shot — no per-attribute walking needed).
+    var html = tmpl.innerHTML.split('__IDX__').join(idx);
+    var holder = document.createElement('div');
+    holder.innerHTML = html.trim();
+    var node = holder.firstElementChild;
+    if (!node) return;
+    list.appendChild(node);
+    refresh();
+    // Wire up any [data-md-editor] inside the freshly-cloned card so its
+    // Write/Preview tabs work — page-load init has already run, so without
+    // this call, new cards' tabs would be inert.
+    if (window.tspInitMdEditors) window.tspInitMdEditors(node);
+    var titleInput = node.querySelector('.fe-feat-card-title');
+    if (titleInput) titleInput.focus();
+  }
+
+  list.addEventListener('click', function (e) {
+    var rm = e.target.closest('[data-features-remove]');
+    if (!rm) return;
+    e.preventDefault();
+    var card = rm.closest('[data-features-card]');
+    if (!card) return;
+    card.remove();
+    refresh();
+  });
+
+  addBtn.addEventListener('click', function (e) {
+    e.preventDefault();
+    addCard();
+  });
+
+  // Drag-to-reorder. Pointer-driven (works on touch + mouse) and
+  // intentionally minimal: we just move the row above/below its
+  // neighbour based on cursor Y. Form submission order follows DOM
+  // order, so reordering the DOM is enough.
+  var dragging = null;
+  list.addEventListener('pointerdown', function (e) {
+    var handle = e.target.closest('.fe-feat-card-handle');
+    if (!handle) return;
+    var card = handle.closest('[data-features-card]');
+    if (!card) return;
+    dragging = card;
+    card.classList.add('is-dragging');
+    handle.setPointerCapture(e.pointerId);
+  });
+  list.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    var siblings = Array.prototype.slice.call(
+      list.querySelectorAll('[data-features-card]:not(.is-dragging)'));
+    for (var i = 0; i < siblings.length; i++) {
+      var sib = siblings[i];
+      var r = sib.getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) {
+        list.insertBefore(dragging, sib);
+        return;
+      }
+    }
+    list.appendChild(dragging);
+  });
+  function endDrag() {
+    if (!dragging) return;
+    dragging.classList.remove('is-dragging');
+    dragging = null;
+  }
+  list.addEventListener('pointerup', endDrag);
+  list.addEventListener('pointercancel', endDrag);
+
+  refresh();
+})();
+
+// FAQ editor — same drag-reorder + add/remove + add-template-cloning
+// pattern as the features editor. Each item carries `data-item-index`
+// scoping its hidden field IDs and `name="faq_item_<idx>_*"` posts.
+// Newly cloned items go through `window.tspInitMdEditors(node)` so their
+// side-by-side Markdown preview wires up.
+(function () {
+  var editor = document.querySelector('[data-faq-editor]');
+  if (!editor) return;
+  var list   = editor.querySelector('[data-faq-list]');
+  var tmpl   = editor.querySelector('[data-faq-item-template]');
+  var addBtn = editor.querySelector('[data-faq-add]');
+  var count  = editor.querySelector('[data-faq-count]');
+  var max    = parseInt(editor.getAttribute('data-faq-max') || '20', 10);
+  if (!list || !tmpl || !addBtn) return;
+
+  var nextIdx = 0;
+  list.querySelectorAll('[data-faq-item]').forEach(function (c) {
+    var i = parseInt(c.getAttribute('data-item-index') || '0', 10);
+    if (i + 1 > nextIdx) nextIdx = i + 1;
+  });
+
+  function refresh() {
+    var items = list.querySelectorAll('[data-faq-item]');
+    if (count) {
+      count.textContent = items.length + ' / ' + max + ' item' + (max === 1 ? '' : 's');
+    }
+    addBtn.disabled = items.length >= max;
+    addBtn.classList.toggle('is-disabled', items.length >= max);
+  }
+
+  function addItem() {
+    var items = list.querySelectorAll('[data-faq-item]');
+    if (items.length >= max) return;
+    var idx = nextIdx++;
+    var html = tmpl.innerHTML.split('__IDX__').join(idx);
+    var holder = document.createElement('div');
+    holder.innerHTML = html.trim();
+    var node = holder.firstElementChild;
+    if (!node) return;
+    list.appendChild(node);
+    refresh();
+    if (window.tspInitMdEditors) window.tspInitMdEditors(node);
+    var qInput = node.querySelector('.fe-faq-card-question');
+    if (qInput) qInput.focus();
+  }
+
+  list.addEventListener('click', function (e) {
+    var rm = e.target.closest('[data-faq-remove]');
+    if (!rm) return;
+    e.preventDefault();
+    var item = rm.closest('[data-faq-item]');
+    if (!item) return;
+    item.remove();
+    refresh();
+  });
+
+  addBtn.addEventListener('click', function (e) {
+    e.preventDefault();
+    addItem();
+  });
+
+  // Drag-to-reorder. Same pointer-driven minimal DOM-shuffle as features.
+  var dragging = null;
+  list.addEventListener('pointerdown', function (e) {
+    var handle = e.target.closest('.fe-faq-card-handle');
+    if (!handle) return;
+    var item = handle.closest('[data-faq-item]');
+    if (!item) return;
+    dragging = item;
+    item.classList.add('is-dragging');
+    handle.setPointerCapture(e.pointerId);
+  });
+  list.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    var siblings = Array.prototype.slice.call(
+      list.querySelectorAll('[data-faq-item]:not(.is-dragging)'));
+    for (var i = 0; i < siblings.length; i++) {
+      var sib = siblings[i];
+      var r = sib.getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) {
+        list.insertBefore(dragging, sib);
+        return;
+      }
+    }
+    list.appendChild(dragging);
+  });
+  function endDrag() {
+    if (!dragging) return;
+    dragging.classList.remove('is-dragging');
+    dragging = null;
+  }
+  list.addEventListener('pointerup', endDrag);
+  list.addEventListener('pointercancel', endDrag);
+
+  refresh();
+})();
+
+// Inclusion editor — wires the per-block icon color toggle, the color
+// swatch, the size slider, and the reset-size button to the hidden
+// inputs that the save endpoint reads. Also syncs the trigger preview
+// (the small SVG above the editor) so the admin sees their choices
+// live without round-tripping through the server.
+(function () {
+  var ctrl = document.querySelector('[data-inc-icon-controls]');
+  if (!ctrl) return;
+  var colorToggle = ctrl.querySelector('[data-inc-color-toggle]');
+  var colorSwatch = ctrl.querySelector('[data-inc-color-swatch]');
+  var colorHidden = document.querySelector('[data-inc-color-hidden]');
+  var sizeSlider  = ctrl.querySelector('[data-inc-size-slider]');
+  var sizeOut     = ctrl.querySelector('[data-inc-size-out]');
+  var sizeReset   = ctrl.querySelector('[data-inc-size-reset]');
+  var sizeHidden  = document.querySelector('[data-inc-size-hidden]');
+  var preview     = document.querySelector('[data-inc-icon-preview]');
+
+  function applyColorToPreview() {
+    if (!preview) return;
+    preview.style.color = (colorHidden && colorHidden.value) || '';
+  }
+  function applySizeToPreview() {
+    if (!preview) return;
+    var v = sizeHidden && sizeHidden.value;
+    if (v) preview.style.setProperty('--icon-size', v + 'px');
+    else preview.style.removeProperty('--icon-size');
+  }
+  function syncSizeOut(val) {
+    if (!sizeOut) return;
+    sizeOut.textContent = val || 'auto';
+    // Toggle the px suffix only when there's a numeric value.
+    var span = sizeOut.parentElement;
+    if (!span) return;
+    var hasUnit = !!val;
+    span.dataset.unit = hasUnit ? 'px' : '';
+  }
+  function setColorActive(active) {
+    if (colorSwatch) colorSwatch.disabled = !active;
+    if (colorHidden) colorHidden.value = active ? colorSwatch.value : '';
+    applyColorToPreview();
+  }
+
+  if (colorToggle) {
+    colorToggle.addEventListener('change', function () {
+      setColorActive(colorToggle.checked);
+    });
+  }
+  if (colorSwatch) {
+    colorSwatch.addEventListener('input', function () {
+      if (colorToggle && !colorToggle.checked) {
+        colorToggle.checked = true;
+      }
+      if (colorHidden) colorHidden.value = colorSwatch.value;
+      applyColorToPreview();
+    });
+  }
+  if (sizeSlider) {
+    sizeSlider.addEventListener('input', function () {
+      var v = sizeSlider.value;
+      if (sizeHidden) sizeHidden.value = v;
+      syncSizeOut(v);
+      applySizeToPreview();
+    });
+  }
+  if (sizeReset) {
+    sizeReset.addEventListener('click', function () {
+      if (sizeHidden) sizeHidden.value = '';
+      syncSizeOut('');
+      applySizeToPreview();
+    });
+  }
+
+  // Initial paint — the rendered preview already reflects saved values
+  // (server-side inline style), but if the icon picker is later used to
+  // change the icon, our applyIconSelection wipes the inline color. Make
+  // sure the controls' values are the source of truth from page-load on.
+  applyColorToPreview();
 })();
 </script>
 
@@ -969,10 +1580,6 @@
     <div class="modal-body icon-picker-body">
       <div class="icon-picker-toolbar">
         <input type="search" class="icon-picker-search" placeholder="Search icons…" data-icon-search autocomplete="off">
-        <label class="icon-picker-color-label">
-          <span class="muted smaller">Color</span>
-          <input type="color" data-icon-modal-color value="#747474">
-        </label>
         <label class="icon-picker-size-label">
           <span class="muted smaller">Size <output data-icon-size-out>20</output>px</span>
           <input type="range" min="12" max="64" step="1" value="20" data-icon-modal-size>

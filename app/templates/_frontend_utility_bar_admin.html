@@ -1,0 +1,599 @@
+{# Admin editor for the public utility bar that sits above the header.
+   Two parallel item lists (left + right side), each holding any number
+   of links / pill buttons / plain text / standalone icons OR
+   *containers* — labelled groups that hold their own inner items so
+   related elements (e.g. a "Helpline:" label + a "855-METH-FREE" pill)
+   render as one unit on the public site and become a single mobile
+   swipe target. The Live Meetings Bar toggle lives at the bottom —
+   when on, the bar turns yellow whenever an online/hybrid meeting is
+   in session and the centre slot surfaces a Join button.
+
+   The form encoding switched to a JSON payload (utility_<side>_payload)
+   so the nested container shape round-trips cleanly. The legacy
+   parallel-arrays parser remains as a fallback in routes.py for
+   programmatic POSTs without JS. #}
+{% set _ub = utility_bar_admin(site) %}
+{% set _ub_left = _ub.left %}
+{% set _ub_right = _ub.right %}
+{% set _ub_icons = utility_bar_icon_choices() %}
+{% set _ub_mobile_default = _ub.mobile_default or '' %}
+
+{% macro render_leaf(it) -%}
+  {% if it.kind == 'theme_toggle' %}
+    {{ render_theme_toggle(it) }}
+  {% elif it.kind == 'search_trigger' %}
+    {{ render_search_trigger(it) }}
+  {% elif it.kind == 'gsr_summary' %}
+    {{ render_gsr_summary(it) }}
+  {% else %}
+    {% include "_utility_bar_item_row.html" %}
+  {% endif %}
+{%- endmacro %}
+
+{# Theme-toggle row — singleton, can be dragged but not removed and
+   has no editable fields. The row carries data-utility-kind="theme_toggle"
+   so the JS reader emits {kind: 'theme_toggle'} for it on save. #}
+{% macro render_theme_toggle(it) %}
+<div class="utility-bar-row utility-bar-row--theme-toggle"
+     data-utility-row data-utility-kind="theme_toggle"
+     draggable="true">
+  <button type="button" class="utility-bar-handle" data-utility-handle
+          aria-label="Drag to reorder"
+          title="Drag to reorder">{{ icon('grip-vertical') }}</button>
+  <div class="utility-bar-row-fields utility-bar-theme-toggle-fields">
+    <span class="utility-bar-theme-toggle-glyph" aria-hidden="true">{{ icon('sun') }}</span>
+    <span class="utility-bar-theme-toggle-label">Dark / light mode toggle</span>
+    <span class="utility-bar-theme-toggle-help muted small">Drag to move; this control can't be removed (the active header theme requires it).</span>
+  </div>
+</div>
+{% endmacro %}
+
+{# Search-trigger row — singleton like the theme toggle. Drag to
+   reposition; can't be removed (the public renderer auto-injects it
+   on every render so visitors always have a clickable affordance for
+   the global search modal). data-utility-kind="search_trigger" tells
+   the JS reader to emit {kind: 'search_trigger'} on save. #}
+{% macro render_search_trigger(it) %}
+<div class="utility-bar-row utility-bar-row--theme-toggle utility-bar-row--search-trigger"
+     data-utility-row data-utility-kind="search_trigger"
+     draggable="true">
+  <button type="button" class="utility-bar-handle" data-utility-handle
+          aria-label="Drag to reorder"
+          title="Drag to reorder">{{ icon('grip-vertical') }}</button>
+  <div class="utility-bar-row-fields utility-bar-theme-toggle-fields">
+    <span class="utility-bar-theme-toggle-glyph" aria-hidden="true">{{ icon('search') }}</span>
+    <span class="utility-bar-theme-toggle-label">Site search</span>
+    <span class="utility-bar-theme-toggle-help muted small">Drag to move; this control can't be removed. Opens the search modal (also reachable via Ctrl/Cmd+K).</span>
+  </div>
+</div>
+{% endmacro %}
+
+{# GSR Summary row — singleton pill. Drag to reposition; can't be
+   removed (auto-injected when posts are enabled and the saved items
+   don't carry one). data-utility-kind="gsr_summary" tells the JS
+   reader to emit {kind: 'gsr_summary'} on save. The glyph mirrors
+   the public render — three small letters in a teal pill — so the
+   admin sees what visitors will see. #}
+{% macro render_gsr_summary(it) %}
+<div class="utility-bar-row utility-bar-row--theme-toggle utility-bar-row--gsr-summary"
+     data-utility-row data-utility-kind="gsr_summary"
+     draggable="true">
+  <button type="button" class="utility-bar-handle" data-utility-handle
+          aria-label="Drag to reorder"
+          title="Drag to reorder">{{ icon('grip-vertical') }}</button>
+  <div class="utility-bar-row-fields utility-bar-theme-toggle-fields">
+    <span class="utility-bar-theme-toggle-glyph utility-bar-gsr-glyph" aria-hidden="true">GSR</span>
+    <span class="utility-bar-theme-toggle-label">GSR Summary</span>
+    <span class="utility-bar-theme-toggle-help muted small">Drag to move; this control can't be removed. Opens the announcements page on the GSR Summary tab.</span>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro render_container(it) %}
+<div class="utility-bar-container" data-utility-row data-utility-kind="container"
+     draggable="true">
+  {# Container head — single row: drag handle, group glyph, admin
+     label, the live-bar collapsed-icon picker, and the remove button.
+     The collapsed-icon picker lives inline (rather than on its own
+     row beneath) so the head reads as one compact strip. The full
+     explainer is on the picker's title tooltip; the visible inline
+     label "Collapsed icon" is enough orientation at a glance. #}
+  <div class="utility-bar-container-head">
+    <button type="button" class="utility-bar-handle" data-utility-handle
+            aria-label="Drag to reorder"
+            title="Drag to reorder">{{ icon('grip-vertical') }}</button>
+    <span class="utility-bar-container-glyph" aria-hidden="true">{{ icon('layers') }}</span>
+    <input type="text" data-utility-field="label" value="{{ it.label or '' }}"
+           maxlength="100" placeholder="Container label (admin only — not shown on public site)"
+           class="utility-bar-container-label-input">
+    <label class="utility-bar-container-collapsed-label"
+           title="When set, this container collapses to a single icon button while the live meetings bar is showing. Leave as &quot;No icon&quot; to always render the full content.">
+      <span>Collapsed icon</span>
+      <select data-utility-field="collapsed_icon">
+        {% for nn, nl in _ub_icons %}
+          <option value="{{ nn }}" {% if (it.collapsed_icon or '') == nn %}selected{% endif %}>{{ nl }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="button" class="icon-btn utility-bar-remove" data-utility-remove
+            aria-label="Remove container" title="Remove container">{{ icon('x') }}</button>
+  </div>
+  <div class="utility-bar-container-items" data-utility-container-items>
+    {# Use subscript rather than `it.items` — Jinja's attribute-then-key
+       lookup resolves `.items` to dict.items() first and chokes. #}
+    {% for inner in it['items'] %}
+      {{ render_leaf(inner) }}
+    {% endfor %}
+  </div>
+  <div class="utility-bar-container-add">
+    <button type="button" class="btn btn-sm" data-utility-add-into-container>+ Add item to this container</button>
+  </div>
+</div>
+{% endmacro %}
+
+<div class="fe-header-grid-item fe-header-grid-item-wide">
+  <h3 class="fe-header-grid-title">Utility bar</h3>
+  <p class="muted small fe-header-grid-blurb">A slim row built into every page's header for status text, secondary links, social icons, or call-to-action buttons. Anything you add to the left or right shows up at the matching edge. Group related items into a <i>container</i> so they render as one unit on the public site and become a single mobile swipe target.</p>
+
+  <form class="form" method="post" action="{{ url_for('main.frontend_utility_bar_save') }}" data-utility-bar-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {# JSON-encoded payloads built by JS on submit. Each carries the full
+       (containers + leaves) tree for that side. #}
+    <input type="hidden" name="utility_left_payload" data-utility-payload="left" value="">
+    <input type="hidden" name="utility_right_payload" data-utility-payload="right" value="">
+
+    <li class="special-page-row" style="list-style:none; padding: 1rem;">
+      <div class="special-page-info">
+        <div class="u-name">Show utility bar</div>
+        <p class="muted small">Hard off-switch. When off, the bar is hidden site-wide regardless of any items or the live-meeting toggle below — your saved content is preserved, just not displayed.</p>
+      </div>
+      <label class="mode-toggle">
+        <input type="checkbox" name="utility_bar_enabled" value="1" {% if _ub.enabled %}checked{% endif %}>
+        <span class="mode-track"><span class="mode-thumb"></span></span>
+      </label>
+    </li>
+
+    <div class="alert-bar-color-row">
+      <label>Background
+        <input type="color" name="utility_bar_bg_color" value="{{ _ub.bg_color or '#0b1220' }}">
+      </label>
+      <label>Text
+        <input type="color" name="utility_bar_text_color" value="{{ _ub.text_color or '#ffffff' }}">
+      </label>
+    </div>
+
+    {% for side, side_label, items in [('left', 'Left side', _ub_left), ('right', 'Right side', _ub_right)] %}
+    <fieldset class="fieldset utility-bar-side">
+      <legend>{{ side_label }}</legend>
+      <div class="utility-bar-items" data-utility-side="{{ side }}">
+        {% for it in items %}
+          {% if it.kind == 'container' %}
+            {{ render_container(it) }}
+          {% else %}
+            {{ render_leaf(it) }}
+          {% endif %}
+        {% endfor %}
+      </div>
+      <div class="utility-bar-add-row">
+        <button type="button" class="btn btn-sm" data-utility-add="{{ side }}">+ Add item</button>
+        <button type="button" class="btn btn-sm" data-utility-add-container="{{ side }}">+ Add container</button>
+      </div>
+    </fieldset>
+    {% endfor %}
+
+    <fieldset class="fieldset utility-bar-mobile-default">
+      <legend>Mobile collapsed default</legend>
+      <p class="muted small fe-header-grid-blurb">On narrow viewports the bar collapses to a horizontal swipe strip — visitors swipe left or right to reveal items that don't fit. Pick which item, container, or whole side shows by default. The Live Meetings Bar always pins above the strip when it's active.</p>
+      <div class="utility-bar-mobile-default-list" data-utility-mobile-default-list></div>
+    </fieldset>
+
+    <hr class="settings-sep">
+    <li class="special-page-row" style="list-style:none; padding: 1rem;">
+      <div class="special-page-info">
+        <div class="u-name">Live Meetings Bar</div>
+        <p class="muted small">When on, the utility bar turns yellow as soon as an online or hybrid meeting's open time is reached, and shows the meeting name plus a Join Zoom Meeting button until the meeting ends (or the next live meeting starts).</p>
+      </div>
+      <label class="mode-toggle">
+        <input type="checkbox" name="utility_bar_live_meetings" value="1" {% if _ub.show_live %}checked{% endif %}>
+        <span class="mode-track"><span class="mode-thumb"></span></span>
+      </label>
+    </li>
+
+    <div class="form-actions"><button class="btn btn-primary">Save Utility Bar</button></div>
+  </form>
+
+  {# Templates cloned by JS for new rows. Both inherit the rendered
+     defaults (kind=link, empty label/url, etc.) so they show up
+     usable straight away. #}
+  <template id="utility-bar-item-template">
+    {% set it = {'kind': 'link', 'label': '', 'url': '', 'icon': '', 'open_in_new_tab': False} %}
+    {{ render_leaf(it) }}
+  </template>
+  <template id="utility-bar-container-template">
+    {% set it = {'kind': 'container', 'label': '', 'collapsed_icon': '', 'items': []} %}
+    {{ render_container(it) }}
+  </template>
+</div>
+
+<script>
+(function(){
+  const form = document.querySelector('[data-utility-bar-form]');
+  if (!form) return;
+  const itemTpl      = document.getElementById('utility-bar-item-template');
+  const containerTpl = document.getElementById('utility-bar-container-template');
+  if (!itemTpl || !containerTpl) return;
+
+  const SAVED_MOBILE_DEFAULT = {{ _ub_mobile_default | tojson }};
+  const mobileList = form.querySelector('[data-utility-mobile-default-list]');
+
+  // ── Field-visibility per kind ──
+  function applyKindVisibility(row){
+    const sel = row.querySelector(':scope > .utility-bar-row-fields > .utility-bar-kind > [data-utility-field="kind"]')
+              || row.querySelector('[data-utility-field="kind"]');
+    if (!sel) return;
+    const kind = sel.value;
+    row.querySelectorAll('[data-utility-show-for]').forEach(field => {
+      const allowed = field.dataset.utilityShowFor.split(',');
+      field.hidden = !allowed.includes(kind);
+    });
+  }
+  form.addEventListener('change', e => {
+    const sel = e.target.closest('[data-utility-field="kind"]');
+    if (sel) applyKindVisibility(sel.closest('[data-utility-row][data-utility-kind="leaf"]'));
+  });
+
+  // ── Build the JSON payload from the DOM ──
+  // Walks each side, emitting either a leaf-item dict or a container
+  // dict with a nested items[] array. Empty containers (no inner
+  // items) survive the build but the server-side coercion drops them
+  // on save so they don't pollute the stored JSON.
+  function readLeaf(row){
+    const get = f => {
+      const el = row.querySelector(`:scope > .utility-bar-row-fields [data-utility-field="${f}"]`);
+      return el ? (el.value || '').trim() : '';
+    };
+    const cb = row.querySelector(':scope > .utility-bar-row-fields [data-utility-field="open_in_new_tab"]');
+    return {kind: get('kind') || 'link', label: get('label'),
+            url: get('url'), icon: get('icon'),
+            open_in_new_tab: !!(cb && cb.checked)};
+  }
+  function readRow(row){
+    const k = row.dataset.utilityKind;
+    if (k === 'container')      return readContainer(row);
+    if (k === 'theme_toggle')   return {kind: 'theme_toggle'};
+    if (k === 'search_trigger') return {kind: 'search_trigger'};
+    if (k === 'gsr_summary')    return {kind: 'gsr_summary'};
+    return readLeaf(row);
+  }
+  function readContainer(row){
+    const labelEl = row.querySelector(':scope > .utility-bar-container-head [data-utility-field="label"]');
+    const collapsedEl = row.querySelector(':scope > .utility-bar-container-head [data-utility-field="collapsed_icon"]');
+    const items = [];
+    const innerWrap = row.querySelector(':scope > .utility-bar-container-items');
+    if (innerWrap) {
+      innerWrap.querySelectorAll(':scope > [data-utility-row]').forEach(r => {
+        // Containers can't nest containers, but they CAN hold leaves
+        // and the singleton theme_toggle.
+        if (r.dataset.utilityKind === 'container') return;
+        items.push(readRow(r));
+      });
+    }
+    return {kind: 'container',
+            label: (labelEl ? (labelEl.value || '').trim() : ''),
+            collapsed_icon: (collapsedEl ? (collapsedEl.value || '').trim() : ''),
+            items};
+  }
+  function readSide(side){
+    const wrap = form.querySelector(`[data-utility-side="${side}"]`);
+    if (!wrap) return [];
+    const out = [];
+    wrap.querySelectorAll(':scope > [data-utility-row]').forEach(row => {
+      out.push(readRow(row));
+    });
+    return out;
+  }
+  function syncPayloads(){
+    ['left', 'right'].forEach(side => {
+      const hidden = form.querySelector(`[data-utility-payload="${side}"]`);
+      if (hidden) hidden.value = JSON.stringify(readSide(side));
+    });
+  }
+  // Sync on submit AND on the FormData constructor's "formdata" event so
+  // the save bar's `new FormData(form)` path picks up the live payload
+  // — that yellow-bar saver bypasses the normal submit flow and would
+  // otherwise serialise the still-empty initial hidden values, wiping
+  // the admin's items on save. Browser support: Chrome 77+, FF 72+,
+  // Safari 14+. We also sync continuously below as a belt-and-braces.
+  form.addEventListener('submit', syncPayloads);
+  form.addEventListener('formdata', syncPayloads);
+
+  // ── Mobile-default radio list ──
+  function itemSummary(it, side, i){
+    if (it.kind === 'container') {
+      const lab = it.label || (it.items && it.items.length ? `${it.items.length} item${it.items.length === 1 ? '' : 's'}` : '(empty)');
+      return `${side === 'left' ? 'Left' : 'Right'} #${i + 1} · Container · ${lab}`;
+    }
+    if (it.kind === 'theme_toggle') {
+      return `${side === 'left' ? 'Left' : 'Right'} #${i + 1} · Theme toggle`;
+    }
+    if (it.kind === 'search_trigger') {
+      return `${side === 'left' ? 'Left' : 'Right'} #${i + 1} · Site search`;
+    }
+    if (it.kind === 'gsr_summary') {
+      return `${side === 'left' ? 'Left' : 'Right'} #${i + 1} · GSR Summary`;
+    }
+    const k = ({link: 'Link', button: 'Pill', text: 'Text', icon: 'Icon'})[it.kind] || it.kind;
+    const lab = it.label || it.icon || '(blank)';
+    return `${side === 'left' ? 'Left' : 'Right'} #${i + 1} · ${k} · ${lab}`;
+  }
+  function pickChecked(left, right){
+    const valid = new Set(['left', 'right']);
+    left.forEach((_, i) => valid.add(`left:${i}`));
+    right.forEach((_, i) => valid.add(`right:${i}`));
+    const cur = (form.querySelector('input[name="utility_bar_mobile_default"]:checked') || {}).value;
+    if (cur && valid.has(cur)) return cur;
+    if (SAVED_MOBILE_DEFAULT && valid.has(SAVED_MOBILE_DEFAULT)) return SAVED_MOBILE_DEFAULT;
+    if (left.length)  return 'left:0';
+    if (right.length) return 'right:0';
+    return '';
+  }
+  function renderMobileDefaults(){
+    if (!mobileList) return;
+    const left  = readSide('left');
+    const right = readSide('right');
+    const picked = pickChecked(left, right);
+    const opts = [];
+    left.forEach((it, i)  => opts.push({v: `left:${i}`,  label: itemSummary(it, 'left', i)}));
+    right.forEach((it, i) => opts.push({v: `right:${i}`, label: itemSummary(it, 'right', i)}));
+    if (left.length)  opts.push({v: 'left',  label: 'All left-side items as a group'});
+    if (right.length) opts.push({v: 'right', label: 'All right-side items as a group'});
+    if (!opts.length) {
+      mobileList.innerHTML = '<p class="muted small">Add at least one item above to choose a mobile default.</p>';
+      return;
+    }
+    mobileList.innerHTML = opts.map(o =>
+      `<label class="check"><input type="radio" name="utility_bar_mobile_default" value="${o.v}"${o.v === picked ? ' checked' : ''}> <span>${o.label}</span></label>`
+    ).join('');
+  }
+
+  // ── Add / remove ──
+  function addItemToSide(side){
+    const wrap = form.querySelector(`[data-utility-side="${side}"]`);
+    if (!wrap) return;
+    const frag = itemTpl.content.cloneNode(true);
+    wrap.appendChild(frag);
+    bindRow(wrap.lastElementChild);
+    applyKindVisibility(wrap.lastElementChild);
+    syncPayloads();
+    renderMobileDefaults();
+  }
+  function addContainerToSide(side){
+    const wrap = form.querySelector(`[data-utility-side="${side}"]`);
+    if (!wrap) return;
+    const frag = containerTpl.content.cloneNode(true);
+    wrap.appendChild(frag);
+    bindRow(wrap.lastElementChild);
+    syncPayloads();
+    renderMobileDefaults();
+  }
+  function addItemToContainer(container){
+    const inner = container.querySelector(':scope > .utility-bar-container-items');
+    if (!inner) return;
+    const frag = itemTpl.content.cloneNode(true);
+    inner.appendChild(frag);
+    bindRow(inner.lastElementChild);
+    applyKindVisibility(inner.lastElementChild);
+    syncPayloads();
+    renderMobileDefaults();
+  }
+  form.addEventListener('click', e => {
+    const addItem = e.target.closest('[data-utility-add]');
+    if (addItem)      { addItemToSide(addItem.dataset.utilityAdd); return; }
+    const addCont = e.target.closest('[data-utility-add-container]');
+    if (addCont)      { addContainerToSide(addCont.dataset.utilityAddContainer); return; }
+    const addInner = e.target.closest('[data-utility-add-into-container]');
+    if (addInner)     { addItemToContainer(addInner.closest('.utility-bar-container')); return; }
+    const rm = e.target.closest('[data-utility-remove]');
+    if (rm) {
+      const row = rm.closest('[data-utility-row]');
+      if (row) row.remove();
+      syncPayloads();
+      renderMobileDefaults();
+    }
+  });
+  form.addEventListener('input', e => {
+    if (e.target.closest('[data-utility-row]')) {
+      syncPayloads();
+      renderMobileDefaults();
+    }
+  });
+  // Selection / kind changes also dirty the payload — input events alone
+  // miss <select> changes in some browsers when the change is via
+  // keyboard navigation rather than typing.
+  form.addEventListener('change', e => {
+    if (e.target.closest('[data-utility-row]')) {
+      syncPayloads();
+      renderMobileDefaults();
+    }
+  });
+
+  // ── Drag-and-drop (delegated, handle-gated) ──
+  //
+  // The utility bar nests draggable rows: leaves can sit at the side
+  // root or inside a container, and a container itself is also a
+  // draggable row. HTML5 `dragstart` bubbles, so a per-row listener
+  // at every level fires when a leaf inside a container starts
+  // dragging — the older code stamped `dragRow = <closure row>` in
+  // each handler, which silently overwrote the leaf with its parent
+  // container and broke moves. Two design choices fix this for good:
+  //
+  //   1. *Delegated* dragstart / dragover / drop / dragend on the
+  //      form. A single handler resolves the source row from
+  //      `e.target.closest('[data-utility-row]')` and stops
+  //      propagation, so even with nested draggable rows exactly one
+  //      dragstart handler runs per drag.
+  //   2. *Handle-gated* draggable. Rows start with draggable=false.
+  //      A pointerdown on the grip handle flips the targeted row's
+  //      draggable property to true (the "arm"); pointerup or
+  //      dragend flips it back. Inputs/selects stay fully usable
+  //      (drag-selecting text inside an input no longer triggers a
+  //      row drag) AND only the armed row can ever become the drag
+  //      source.
+  let dragRow = null;
+  let armedRow = null;
+
+  function isContainer(row){ return !!row && row.dataset.utilityKind === 'container'; }
+  function isContainerInner(zone){ return !!zone && zone.matches('[data-utility-container-items]'); }
+
+  function disarmRow(){
+    if (!armedRow) return;
+    armedRow.draggable = false;
+    armedRow = null;
+  }
+  function armRow(row){
+    if (armedRow === row) return;
+    disarmRow();
+    armedRow = row;
+    row.draggable = true;
+  }
+
+  function clearIndicators(){
+    form.querySelectorAll('.is-drop-target, .is-drop-before, .is-drop-after')
+        .forEach(n => n.classList.remove('is-drop-target', 'is-drop-before', 'is-drop-after'));
+  }
+
+  // Resolve the drop zone under the pointer. Falls back to
+  // elementFromPoint when e.target is the drag image / a detached
+  // node — Firefox in particular sometimes hands back a node that's
+  // not in the DOM tree mid-drag.
+  function resolveZone(e){
+    let el = e.target;
+    if (el && el.nodeType !== 1) el = el.parentElement;
+    let zone = el && el.closest('[data-utility-container-items], [data-utility-side]');
+    if (!zone) {
+      const point = document.elementFromPoint(e.clientX, e.clientY);
+      zone = point && point.closest('[data-utility-container-items], [data-utility-side]');
+    }
+    return zone;
+  }
+
+  // Find the row to insert before/after for the given Y coordinate.
+  // Returns null when the zone is empty (or only holds the dragged
+  // row), meaning "append at end".
+  function findInsertTarget(zone, clientY){
+    const rows = Array.from(zone.querySelectorAll(':scope > [data-utility-row]'))
+                      .filter(r => r !== dragRow);
+    for (const r of rows) {
+      const rect = r.getBoundingClientRect();
+      if (clientY < rect.top + rect.height / 2) return {row: r, after: false};
+    }
+    if (rows.length) return {row: rows[rows.length - 1], after: true};
+    return null;
+  }
+
+  // Templates ship with draggable="true" baked in so SSR markup
+  // matches what the editor renders. With the handle gate in charge,
+  // the only setup per row is forcing draggable back off — the gate
+  // flips it on for the duration of one drag.
+  function bindRow(row){
+    if (!row) return;
+    row.draggable = false;
+  }
+  form.querySelectorAll('[data-utility-row]').forEach(row => {
+    bindRow(row);
+    if (!isContainer(row)) applyKindVisibility(row);
+  });
+
+  // Pointerdown on a handle arms its row. Pointer events unify
+  // mouse / touch / pen and fire before mousedown without disturbing
+  // default text-selection behaviour inside inputs.
+  form.addEventListener('pointerdown', e => {
+    const handle = e.target.closest('[data-utility-handle]');
+    if (handle) {
+      const row = handle.closest('[data-utility-row]');
+      if (row) armRow(row);
+    } else if (!dragRow) {
+      // Press anywhere that isn't a handle clears a stale arm — only
+      // valid when no drag is in flight.
+      disarmRow();
+    }
+  });
+  // Releases without a follow-on drag clear the arm.
+  window.addEventListener('pointerup',     () => { if (!dragRow) disarmRow(); });
+  window.addEventListener('pointercancel', () => { if (!dragRow) disarmRow(); });
+
+  form.addEventListener('dragstart', e => {
+    const row = e.target.closest('[data-utility-row]');
+    if (!row || row !== armedRow) {
+      // Either the drag started on something that isn't a row, or
+      // the browser picked an ancestor row instead of the armed
+      // child. Cancel rather than commit to a wrong source.
+      e.preventDefault();
+      return;
+    }
+    e.stopPropagation();
+    dragRow = row;
+    row.classList.add('is-dragging');
+    try { e.dataTransfer.setData('text/plain', ''); } catch (_) {}
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  form.addEventListener('dragover', e => {
+    if (!dragRow) return;
+    const zone = resolveZone(e);
+    if (!zone) { clearIndicators(); return; }
+    // Containers can't nest inside another container's inner list.
+    if (isContainer(dragRow) && isContainerInner(zone)) {
+      clearIndicators();
+      return;
+    }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    clearIndicators();
+    const tgt = findInsertTarget(zone, e.clientY);
+    if (tgt) {
+      tgt.row.classList.add(tgt.after ? 'is-drop-after' : 'is-drop-before');
+    } else {
+      zone.classList.add('is-drop-target');
+    }
+  });
+
+  form.addEventListener('drop', e => {
+    if (!dragRow) return;
+    const zone = resolveZone(e);
+    if (!zone) { clearIndicators(); return; }
+    if (isContainer(dragRow) && isContainerInner(zone)) {
+      clearIndicators();
+      return;
+    }
+    e.preventDefault();
+    const tgt = findInsertTarget(zone, e.clientY);
+    if (tgt) {
+      tgt.row.parentNode.insertBefore(dragRow, tgt.after ? tgt.row.nextSibling : tgt.row);
+    } else {
+      zone.appendChild(dragRow);
+    }
+    clearIndicators();
+    syncPayloads();
+    renderMobileDefaults();
+  });
+
+  form.addEventListener('dragend', () => {
+    if (dragRow) dragRow.classList.remove('is-dragging');
+    clearIndicators();
+    dragRow = null;
+    disarmRow();
+    // Belt-and-braces resync — covers cancelled drags (Esc, drop
+    // outside) where `drop` never fired but the DOM is unchanged.
+    syncPayloads();
+    renderMobileDefaults();
+  });
+
+  // Initial sync — primes the hidden payload fields with the existing
+  // server-rendered items so a save with no edits still posts the full
+  // current state. Without this, the yellow save bar's `new FormData()`
+  // call would read the empty initial value and wipe everything.
+  syncPayloads();
+  renderMobileDefaults();
+})();
+</script>

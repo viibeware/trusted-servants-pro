@@ -1,0 +1,220 @@
+{# Shared partial: full inline info for one Meeting. Two render modes:
+
+   1. **Primary mode** (`primary_schedule` set, used by the day-grouped
+      sidebar layout). Renders a 3-column grid:
+         col 1 — large logo (or accent placeholder)
+         col 2 — type chip, name, start/end/opens times, duration chip,
+                 description body
+         col 3 — Zoom credentials (id + passcode), Join Zoom button,
+                 Get Directions button, View Meeting permalink
+
+   2. **Default mode** (no primary_schedule, used by directory + week-
+      board layouts). Renders the original column body: schedule pill
+      list, location row, zoom row, description, action row.
+
+   Args:
+     m                 — Meeting model
+     dense (bool)      — drop description body, narrow paddings
+                         (weekboard column tiles)
+     card_class        — extra class glued onto the article
+     primary_schedule  — MeetingSchedule to spotlight (switches to mode 1)
+#}
+{%- set _dense = dense if dense is defined else false -%}
+{%- set _card_class = card_class if card_class is defined else '' -%}
+{%- set _primary = primary_schedule if primary_schedule is defined else none -%}
+{%- set _has_zoom = m.meeting_type in ('online', 'hybrid') and m.zoom_link -%}
+{%- set _has_loc  = m.meeting_type in ('in_person', 'hybrid') and m.location -%}
+{%- set _maps_url = ('https://www.google.com/maps/search/?api=1&query=' ~ (m.location|urlencode)) if _has_loc else '' -%}
+{# `data-meeting-times` packs each schedule as "<day>:<HH:MM>" tokens so
+   the JS day filter can re-order visible cards by the start time on
+   the chosen day. `data-meeting-earliest` is the global earliest time. #}
+{%- set _times_tokens = [] -%}
+{%- set _earliest = namespace(t='99:99') -%}
+{%- for s in m.schedules -%}
+  {%- if s.start_time -%}
+    {%- set _ = _times_tokens.append(s.day_of_week ~ ':' ~ s.start_time) -%}
+    {%- if s.start_time < _earliest.t -%}{%- set _earliest.t = s.start_time -%}{%- endif -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- set _meeting_url = url_for('frontend.meeting_detail', slug=m.public_slug) -%}
+{%- set _search_blob = search_blob if search_blob is defined else '' -%}
+<article class="fe-mlist-card{% if _primary %} is-3col{% endif %}{% if m.logo_filename %} has-logo{% endif %}{% if _dense %} is-dense{% endif %}{% if _card_class %} {{ _card_class }}{% endif %}"
+         data-meeting-id="{{ m.id }}"
+         data-meeting-name="{{ m.name|lower }}"
+         data-meeting-location="{{ (m.location or '')|lower }}"
+         data-meeting-type="{{ m.meeting_type }}"
+         data-meeting-days="{% for s in m.schedules %}{{ s.day_of_week }}{% if not loop.last %},{% endif %}{% endfor %}"
+         data-meeting-times="{{ _times_tokens | join(' ') }}"
+         data-meeting-earliest="{{ _earliest.t }}"
+         data-meeting-search="{{ _search_blob }}">
+
+{%- if _primary -%}
+  {# ──────────────── 3-column day-grouped mode ──────────────── #}
+  {%- set _opens = _primary.opens_time or m.zoom_opens_time -%}
+
+  {# Column 1 — Logo (or soft accent placeholder when none uploaded) #}
+  <div class="fe-mlist-card-col fe-mlist-card-col-logo" aria-hidden="true">
+    {% if m.logo_filename %}
+    <img src="{{ url_for('public.public_meeting_logo', mid=m.id) }}" alt="">
+    {% endif %}
+  </div>
+
+  {# Column 2 — chip + name + times + duration + description #}
+  <div class="fe-mlist-card-col fe-mlist-card-col-info">
+    <span class="fe-meeting-type fe-meeting-type-{{ m.meeting_type }}">
+      {%- if m.meeting_type == 'in_person' -%}In Person
+      {%- elif m.meeting_type == 'online' -%}Online
+      {%- else -%}Hybrid{%- endif -%}
+    </span>
+    <h3 class="fe-mlist-card-name">
+      <a href="{{ _meeting_url }}">{{ m.name }}</a>
+    </h3>
+
+    <dl class="fe-mlist-card-times">
+      <div class="fe-mlist-card-times-cell">
+        <dt>Starts</dt>
+        <dd>{{ _primary.start_time|fmt12h }}</dd>
+      </div>
+      <div class="fe-mlist-card-times-cell">
+        <dt>Ends</dt>
+        <dd>{{ _primary.end_time|fmt12h }}</dd>
+      </div>
+      {% if _opens %}
+      <div class="fe-mlist-card-times-cell">
+        <dt>Opens</dt>
+        <dd>{{ _opens|fmt12h }}</dd>
+      </div>
+      {% endif %}
+      {% if _primary.duration_minutes %}
+      <div class="fe-mlist-card-times-cell fe-mlist-card-times-cell-dur">
+        <span class="fe-mlist-card-dur-chip">{{ _primary.duration_minutes }} min</span>
+      </div>
+      {% endif %}
+    </dl>
+
+    {%- set _other_days = m.schedules|rejectattr('id', 'equalto', _primary.id)|list -%}
+    {% if _other_days %}
+    <p class="fe-mlist-card-also muted small">
+      Also runs:
+      {% for s in _other_days %}<span class="fe-mlist-card-also-day">{{ s.day_name[:3] }} {{ s.start_time|fmt12h }}</span>{% if not loop.last %} · {% endif %}{% endfor %}
+    </p>
+    {% endif %}
+
+    {% if m.description %}
+    <p class="fe-mlist-card-desc muted">{{ m.description|truncate(280, True, '…') }}</p>
+    {% endif %}
+  </div>
+
+  {# Column 3 — Zoom credentials + actions + permalink #}
+  <div class="fe-mlist-card-col fe-mlist-card-col-actions">
+    {% if _has_zoom and (m.zoom_meeting_id or m.zoom_passcode) %}
+    <dl class="fe-mlist-card-zoom-creds">
+      {% if m.zoom_meeting_id %}
+      <div>
+        <dt>Meeting ID</dt>
+        <dd>
+          <button type="button" class="fe-copy-btn fe-mlist-copy"
+                  data-copy="{{ m.zoom_meeting_id }}"
+                  aria-label="Copy meeting ID">
+            <code>{{ m.zoom_meeting_id }}</code>
+            <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+          </button>
+        </dd>
+      </div>
+      {% endif %}
+      {% if m.zoom_passcode %}
+      <div>
+        <dt>Passcode</dt>
+        <dd>
+          <button type="button" class="fe-copy-btn fe-mlist-copy"
+                  data-copy="{{ m.zoom_passcode }}"
+                  aria-label="Copy Zoom passcode">
+            <code>{{ m.zoom_passcode }}</code>
+            <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+          </button>
+        </dd>
+      </div>
+      {% endif %}
+    </dl>
+    {% endif %}
+
+    <div class="fe-mlist-card-action-stack">
+      {% if _has_zoom %}
+      <a class="fe-btn fe-btn-primary"
+         href="{{ m.zoom_link }}" target="_blank" rel="noopener">Join Zoom Meeting</a>
+      {% endif %}
+      {% if _has_loc %}
+      <a class="fe-btn fe-btn-ghost"
+         href="{{ _maps_url }}" target="_blank" rel="noopener">Get Directions</a>
+      {% endif %}
+      <a class="fe-mlist-card-permalink" href="{{ _meeting_url }}">View Meeting →</a>
+    </div>
+  </div>
+
+{%- else -%}
+  {# ──────────────── Default mode (directory + weekboard) ──────────────── #}
+  {% if m.logo_filename %}
+  <div class="fe-mlist-card-logo" aria-hidden="true">
+    <img src="{{ url_for('public.public_meeting_logo', mid=m.id) }}" alt="">
+  </div>
+  {% endif %}
+
+  <div class="fe-mlist-card-body">
+  <header class="fe-mlist-card-head">
+    <span class="fe-meeting-type fe-meeting-type-{{ m.meeting_type }}">
+      {%- if m.meeting_type == 'in_person' -%}In Person
+      {%- elif m.meeting_type == 'online' -%}Online
+      {%- else -%}Hybrid{%- endif -%}
+    </span>
+    <h3 class="fe-mlist-card-name">
+      <a href="{{ _meeting_url }}">{{ m.name }}</a>
+    </h3>
+  </header>
+
+  {% if m.schedules %}
+  <ul class="fe-mlist-card-schedules" aria-label="Schedule">
+    {% for s in m.schedules %}
+    <li class="fe-mlist-card-sched" data-day="{{ s.day_of_week }}">
+      <span class="fe-mlist-card-sched-day">{{ s.day_name }}</span>
+      <span class="fe-mlist-card-sched-time">
+        {{ s.start_time|fmt12h }}{% if s.duration_minutes %} · {{ s.duration_minutes }}m{% endif %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if _has_loc %}
+  <div class="fe-mlist-card-row fe-mlist-card-row-loc">
+    <span class="fe-mlist-card-row-icon" aria-hidden="true">{{ icon('map-pin') }}</span>
+    <span class="fe-mlist-card-row-text">{{ m.location }}</span>
+  </div>
+  {% endif %}
+
+  {% if _has_zoom %}
+  <div class="fe-mlist-card-row fe-mlist-card-row-zoom">
+    <span class="fe-mlist-card-row-icon" aria-hidden="true">{{ icon('video') }}</span>
+    <span class="fe-mlist-card-row-text">
+      Zoom
+      {%- if m.zoom_meeting_id %} · ID <code>{{ m.zoom_meeting_id }}</code>{% endif -%}
+    </span>
+  </div>
+  {% endif %}
+
+  {% if not _dense and m.description %}
+  <p class="fe-mlist-card-desc muted">{{ m.description|truncate(220, True, '…') }}</p>
+  {% endif %}
+
+  <div class="fe-mlist-card-actions">
+    {% if _has_zoom %}
+    <a class="fe-btn fe-btn-primary" href="{{ m.zoom_link }}" target="_blank" rel="noopener">Join Zoom</a>
+    {% endif %}
+    {% if _has_loc %}
+    <a class="fe-btn fe-btn-ghost" href="{{ _maps_url }}" target="_blank" rel="noopener">Get Directions</a>
+    {% endif %}
+    <a class="fe-mlist-card-permalink" href="{{ _meeting_url }}">Open page →</a>
+  </div>
+  </div>
+
+{%- endif -%}
+</article>

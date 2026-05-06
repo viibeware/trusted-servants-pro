@@ -4,7 +4,14 @@
 <section class="fe-section fe-meeting-detail fe-meeting-classic" id="meeting"
          style="{{ tpl_style or '' }}">
   <div class="fe-container fe-meeting-detail-inner">
-    <a class="fe-meeting-detail-back" href="{{ url_for('frontend.index') }}#meetings">← Back to meetings</a>
+    <div class="fe-edit-bar">
+      <a class="fe-meeting-detail-back" href="{{ url_for('frontend.meetings_list') }}">← All meetings</a>
+      {% if current_user.is_authenticated and current_user.can_edit() %}
+      <a class="fe-edit-shortcut" href="{{ url_for('main.meeting_detail', slug=meeting.public_slug) }}">
+        {{ icon('edit-3') }} <span>Edit meeting</span>
+      </a>
+      {% endif %}
+    </div>
 
     <header class="fe-meeting-detail-head">
       {% if meeting.logo_filename %}
@@ -56,8 +63,16 @@
       {% if meeting.meeting_type in ('in_person', 'hybrid') and meeting.location %}
       <section class="fe-meeting-detail-card">
         <h3>{{ icon('map-pin') }} Location</h3>
-        <p class="fe-meeting-detail-location">{{ meeting.location }}</p>
-        {% set _maps = "https://www.google.com/maps/search/?api=1&query=" ~ (meeting.location|urlencode) %}
+        {% if meeting_location_record %}
+          <p class="fe-meeting-detail-location">
+            <span class="fe-meeting-detail-loc-name">{{ meeting_location_record.name }}</span>
+            {% for line in meeting_location_record.address_lines() %}<br>{{ line }}{% endfor %}
+          </p>
+        {% else %}
+          <p class="fe-meeting-detail-location">{{ meeting.location }}</p>
+        {% endif %}
+        {% set _maps_q = (meeting_location_record.address if meeting_location_record and meeting_location_record.address else meeting.location) %}
+        {% set _maps = "https://www.google.com/maps/search/?api=1&query=" ~ (_maps_q|urlencode) %}
         <a class="fe-btn fe-btn-ghost" href="{{ _maps }}" target="_blank" rel="noopener">Open in Maps ↗</a>
       </section>
       {% endif %}
@@ -66,21 +81,25 @@
       <section class="fe-meeting-detail-card fe-meeting-detail-zoom">
         <h3>{{ icon('video') }} Zoom</h3>
         {% if meeting.zoom_link %}
-        <a class="fe-btn fe-btn-primary" href="{{ meeting.zoom_link }}" target="_blank" rel="noopener">Join via Zoom ↗</a>
+        <a class="fe-btn fe-btn-primary" href="{{ meeting.zoom_link }}" target="_blank" rel="noopener">Join Zoom Meeting ↗</a>
         {% endif %}
         <dl class="fe-meeting-detail-creds">
           {% if meeting.zoom_meeting_id %}
           <dt>Meeting ID</dt>
           <dd>
-            <code>{{ meeting.zoom_meeting_id }}</code>
-            <button type="button" class="fe-copy-btn" data-copy="{{ meeting.zoom_meeting_id }}" title="Copy">{{ icon('copy') }}</button>
+            <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ meeting.zoom_meeting_id }}" aria-label="Copy meeting ID">
+              <code>{{ meeting.zoom_meeting_id }}</code>
+              <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+            </button>
           </dd>
           {% endif %}
           {% if meeting.zoom_passcode %}
           <dt>Passcode</dt>
           <dd>
-            <code>{{ meeting.zoom_passcode }}</code>
-            <button type="button" class="fe-copy-btn" data-copy="{{ meeting.zoom_passcode }}" title="Copy">{{ icon('copy') }}</button>
+            <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ meeting.zoom_passcode }}" aria-label="Copy Zoom passcode">
+              <code>{{ meeting.zoom_passcode }}</code>
+              <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+            </button>
           </dd>
           {% endif %}
           {% if meeting.zoom_opens_time %}
@@ -93,6 +112,11 @@
 
       {% include "frontend/meetings/_resources.html" %}
     </div>
+    {# Extended-content blocks live OUTSIDE the detail grid so they
+       span the full container width (the grid wraps them as auto-fit
+       columns otherwise). Stacked vertically below the schedule /
+       zoom / files cards. #}
+    {% include "frontend/meetings/_extended.html" %}
   </div>
 </section>
 

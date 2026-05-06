@@ -1,0 +1,33 @@
+{# Frontend-wide search modal — opens via Cmd/Ctrl+K from anywhere on
+   the public site (and via the search button in the utility bar).
+   Markup is included once at the bottom of frontend/base.html so it's
+   available on every public page; JS lives inline in base.html
+   alongside other site-wide handlers. #}
+<div class="fe-search-modal" data-fe-search-modal hidden aria-hidden="true">
+  <div class="fe-search-modal-backdrop" data-fe-search-close></div>
+  <div class="fe-search-modal-panel" role="dialog" aria-modal="true"
+       aria-label="Search the site">
+    <label class="fe-search-modal-input-row">
+      <span class="fe-search-modal-icon" aria-hidden="true">{{ icon('search') }}</span>
+      <input type="search" class="fe-search-modal-input"
+             data-fe-search-input
+             placeholder="Search meetings, events…"
+             autocomplete="off" autocorrect="off" spellcheck="false"
+             aria-label="Search the site">
+      <kbd class="fe-search-modal-kbd" aria-hidden="true">Esc</kbd>
+    </label>
+    <div class="fe-search-modal-results" data-fe-search-results
+         role="listbox" aria-label="Search results">
+      <p class="fe-search-modal-hint muted small">
+        Type to find meetings or events. Numbers + words match
+        interchangeably (<code>10</code> = <code>ten</code>); plurals + apostrophes
+        are tolerant.
+      </p>
+    </div>
+    <div class="fe-search-modal-foot muted smaller">
+      <span><kbd>↑</kbd> <kbd>↓</kbd> navigate</span>
+      <span><kbd>↵</kbd> open</span>
+      <span><kbd>Esc</kbd> close</span>
+    </div>
+  </div>
+</div>

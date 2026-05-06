@@ -3,7 +3,9 @@
    block render-collapses naturally — no wrapper is emitted. #}
 {% set _meeting_slug = meeting.public_slug %}
 {% set _public_files = meeting.public_files() %}
-{% set _public_library_items = meeting.public_library_items %}
+{# Effective list combines whole-library opt-ins (MeetingLibrary.public_visible
+   in 'all' mode) with per-item granular flags. #}
+{% set _public_library_items = meeting.effective_public_library_items() %}
 {% if _public_files or _public_library_items %}
 <section class="fe-meeting-resources" aria-labelledby="meeting-resources-head">
   <h3 id="meeting-resources-head">{{ icon('file-text') }} Files &amp; Readings</h3>

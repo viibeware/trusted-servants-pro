@@ -88,6 +88,38 @@
                    value="{{ site.frontend_mega_radius_br if site else 18 }}">
           </label>
         </div>
+        {# Heading + link font-size sliders, expressed as a percentage
+           of the active theme's default (Recovery Blue: 2 rem heading +
+           1.2 rem link; Classic: 0.875 rem heading + 0.9375 rem link).
+           Centered at 100 % — the middle position means "no override"
+           and saves as NULL so the theme's baked CSS base re-engages.
+           50 % halves the default, 200 % doubles it. #}
+        {% set _h_pct = site.frontend_megamenu_heading_size if site and site.frontend_megamenu_heading_size else 100 %}
+        {% set _sh_pct = site.frontend_megamenu_subheading_size if site and site.frontend_megamenu_subheading_size else 100 %}
+        <div class="mega-animate-speed-row">
+          <label class="mega-animate-speed-label">
+            <div class="mega-animate-speed-head">
+              <span>Heading font size</span>
+              <output data-mm-heading-out>{{ _h_pct }}%{% if _h_pct == 100 %} · theme default{% endif %}</output>
+            </div>
+            <input type="range" name="frontend_megamenu_heading_size"
+                   min="50" max="200" step="5" value="{{ _h_pct }}"
+                   data-mm-heading-input>
+            <p class="muted smaller">100 % = the active theme's default heading size. Slide left to shrink, right to grow — the multiplier applies to every mega-menu block title.</p>
+          </label>
+        </div>
+        <div class="mega-animate-speed-row">
+          <label class="mega-animate-speed-label">
+            <div class="mega-animate-speed-head">
+              <span>Link font size</span>
+              <output data-mm-subheading-out>{{ _sh_pct }}%{% if _sh_pct == 100 %} · theme default{% endif %}</output>
+            </div>
+            <input type="range" name="frontend_megamenu_subheading_size"
+                   min="50" max="200" step="5" value="{{ _sh_pct }}"
+                   data-mm-subheading-input>
+            <p class="muted smaller">100 % = the theme default. The multiplier applies to every link inside the mega menu (per-link small / large modifiers still override individual rows).</p>
+          </label>
+        </div>
         <li class="special-page-row" style="list-style:none; margin-top: 12px;">
           <div class="special-page-info">
             <div class="u-name">Staggered reveal animation</div>
@@ -167,9 +199,22 @@
   document.querySelectorAll('[data-nav-item-form]').forEach(form => {
     const radios = form.querySelectorAll('input[name="style"]');
     const panes = form.querySelectorAll('[data-nav-style-pane]');
+    // Several panes (text / button / button-rounded / two-line) each define
+    // their own `<input name="label">` (and the two-line pane has line1 +
+    // line2). When a pane is hidden via the `hidden` attribute its inputs
+    // still post — so `request.form.get("label")` would pick up whichever
+    // pane comes first in DOM order, not the one the admin just edited.
+    // Disabling the inactive panes' fields stops them from submitting and
+    // makes the active pane the single source of truth on save.
     const apply = () => {
       const v = [...radios].find(r => r.checked)?.value || 'text';
-      panes.forEach(p => p.hidden = p.dataset.navStylePane !== v);
+      panes.forEach(p => {
+        const match = p.dataset.navStylePane === v;
+        p.hidden = !match;
+        p.querySelectorAll('input, textarea, select').forEach(el => {
+          el.disabled = !match;
+        });
+      });
     };
     radios.forEach(r => r.addEventListener('change', apply));
     apply();
@@ -187,6 +232,25 @@
     if (toggle && row) {
       toggle.addEventListener('change', () => { row.hidden = !toggle.checked; });
     }
+  })();
+
+  // Heading / link size sliders: live percentage readout. The slider
+  // is centered at 100 — that position saves as NULL (theme default
+  // re-engages) and the readout flags that with " · theme default".
+  // Other positions render plain "X%".
+  (function(){
+    function wire(inputSel, outSel){
+      const input = document.querySelector(inputSel);
+      const out = document.querySelector(outSel);
+      if (!input || !out) return;
+      const fmt = (v) => {
+        const n = parseInt(v, 10) || 100;
+        return n + '%' + (n === 100 ? ' · theme default' : '');
+      };
+      input.addEventListener('input', () => { out.textContent = fmt(input.value); });
+    }
+    wire('[data-mm-heading-input]', '[data-mm-heading-out]');
+    wire('[data-mm-subheading-input]', '[data-mm-subheading-out]');
   })();
 </script>
 {% endblock %}

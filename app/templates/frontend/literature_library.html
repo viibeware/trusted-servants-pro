@@ -1,0 +1,251 @@
+{% extends "frontend/base.html" %}
+{% block title %}Literature Library · {{ frontend_title }}{% endblock %}
+{% block content %}
+{# Public Literature Library — every Library flagged public + each
+   library's public-marked items, grouped by library. Layout mirrors
+   /archive: sticky filter rail on the left (live search + per-library
+   filter pills) over a stacked card grid on the right. Each item card
+   is wrapped in a <div data-library-search data-library-id> so the JS
+   can filter by either search token or library pill. The visual
+   chrome reuses the .fe-mlist-rail / .fe-mlist-day-pill classes from
+   the archive so the two pages read as siblings — same rail
+   geometry, same pill colours, same search input shape. #}
+<section class="fe-section fe-mlist fe-mlist-sidebar fe-events fe-archive fe-library fe-mlist--w-{{ list_width_mode }}" id="library">
+  <div class="{% if list_width_mode == 'boxed' %}fe-container{% else %}fe-mlist-fullwrap{% endif %} fe-mlist-shell"
+       {% if list_width_mode == 'boxed' %}style="max-width: {{ list_max_width }}px;"
+       {%- elif list_padding_pct %}style="padding-left: {{ list_padding_pct }}vw; padding-right: {{ list_padding_pct }}vw;"{% endif %}>
+    <div class="fe-mlist-grid">
+      <aside class="fe-mlist-rail" data-library-rail>
+        <header class="fe-mlist-head">
+          <h1>Literature Library</h1>
+          <p class="muted">Recovery literature and supporting documents the fellowship has made publicly available. Search by title or filter by library to narrow the list.</p>
+        </header>
+        <div class="fe-mlist-rail-inner">
+          <label class="fe-mlist-search fe-mlist-rail-search">
+            <span class="fe-mlist-search-icon" aria-hidden="true">{{ icon('search') }}</span>
+            <input type="search" data-library-search
+                   placeholder="Search literature…" autocomplete="off"
+                   aria-label="Search literature library">
+            <kbd class="fe-mlist-search-kbd" aria-hidden="true">/</kbd>
+          </label>
+
+          <ul class="fe-mlist-day-list" role="tablist">
+            <li>
+              <button type="button" class="fe-mlist-day-pill is-active"
+                      data-library-filter="all" role="tab" aria-selected="true">
+                <span>All libraries</span>
+                <span class="fe-mlist-day-count">{{ total_items }}</span>
+              </button>
+            </li>
+            {% if library_buckets %}
+            <li class="fe-mlist-rail-section" role="presentation">
+              <span>Filter by library</span>
+            </li>
+            {% for bucket in library_buckets %}
+            <li>
+              <button type="button" class="fe-mlist-day-pill"
+                      data-library-filter="{{ bucket.id }}" role="tab" aria-selected="false">
+                <span>{{ bucket.name }}</span>
+                <span class="fe-mlist-day-count">{{ bucket['items']|length }}</span>
+              </button>
+            </li>
+            {% endfor %}
+            {% endif %}
+          </ul>
+        </div>
+      </aside>
+
+      <div class="fe-mlist-main" data-library-results>
+        {% if not library_buckets %}
+        <p class="fe-mlist-empty muted">No public literature available yet.</p>
+        {% else %}
+        {% for bucket in library_buckets %}
+        <section class="fe-mlist-day-section fe-library-section"
+                 data-library-section="{{ bucket.id }}">
+          <h2 class="fe-mlist-day-section-heading">
+            <span>{{ bucket.name }}</span>
+            <span class="fe-mlist-day-section-count">{{ bucket['items']|length }}</span>
+          </h2>
+          {% if bucket.description %}
+            <p class="fe-library-section-desc muted small">{{ bucket.description }}</p>
+          {% endif %}
+          <ul class="fe-library-list">
+            {% for it in bucket['items'] %}
+              {%- set _ft = it|file_type -%}
+              {%- set _has_file = it.stored_filename and it.original_filename -%}
+              {%- set _has_url = it.url -%}
+              {%- set _has_body = it.body and not _has_file and not _has_url -%}
+              {# Resolve the link target in priority order: uploaded
+                 file (public route), external URL, or — when the
+                 item is body-only — fall through with no anchor. The
+                 surrounding card gracefully renders the title as
+                 plain text in that case so curated text-only entries
+                 don't disappear. #}
+              {%- if _has_file -%}
+                {%- set _href = url_for('public.public_file', filename=it.original_filename) -%}
+                {%- set _ext_target = '_blank' -%}
+              {%- elif _has_url -%}
+                {%- set _href = it.url -%}
+                {%- set _ext_target = '_blank' -%}
+              {%- else -%}
+                {%- set _href = '' -%}
+                {%- set _ext_target = '' -%}
+              {%- endif -%}
+              <li class="fe-library-item"
+                  data-library-search="{{ search_blobs.get(it.id, '') }}"
+                  data-library-id="{{ bucket.id }}">
+                {% if it.thumbnail_filename %}
+                  <span class="fe-library-thumb">
+                    <img src="{{ url_for('main.reading_thumbnail', rid=it.id) }}" alt="" loading="lazy">
+                  </span>
+                {% else %}
+                  <span class="fe-library-ftype" aria-hidden="true">{{ _ft|upper }}</span>
+                {% endif %}
+                <div class="fe-library-item-body">
+                  <h3 class="fe-library-item-title">
+                    {% if _href %}
+                      <a href="{{ _href }}" {% if _ext_target %}target="{{ _ext_target }}" rel="noopener"{% endif %}>{{ it.title }}</a>
+                    {% else %}
+                      {{ it.title }}
+                    {% endif %}
+                  </h3>
+                  {% if it.original_filename %}
+                    <div class="fe-library-item-sub muted small">{{ it.original_filename }}</div>
+                  {% elif it.url %}
+                    <div class="fe-library-item-sub muted small trunc">{{ it.url }}</div>
+                  {% elif _has_body %}
+                    <div class="fe-library-item-sub muted small">Text document · {{ it.body|length }} chars</div>
+                  {% endif %}
+                  {% if it.categories %}
+                    <div class="fe-library-item-cats">
+                      {% for c in it.categories %}<span class="fe-library-item-cat">{{ c.name }}</span>{% endfor %}
+                    </div>
+                  {% endif %}
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        </section>
+        {% endfor %}
+        <p class="fe-mlist-empty muted" data-library-no-match hidden>No items match your filters.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+(function () {
+  var rail = document.querySelector('[data-library-rail]');
+  var results = document.querySelector('[data-library-results]');
+  if (!rail || !results) return;
+  var pills = rail.querySelectorAll('[data-library-filter]');
+  var sections = results.querySelectorAll('[data-library-section]');
+  var searchInput = rail.querySelector('[data-library-search]');
+  var noMatch = results.querySelector('[data-library-no-match]');
+  var activeLib = 'all';
+
+  // Same punctuation strip the server uses to build the per-item
+  // search blob, so apostrophes / question marks / commas in the
+  // query don't unmatch a perfectly-good blob token.
+  var PUNCT_RE = /[‘’'?!.,;"“”()\[\]{}]/g;
+  function tokens() {
+    return ((searchInput && searchInput.value) || '')
+      .toLowerCase()
+      .replace(PUNCT_RE, '')
+      .split(/\s+/)
+      .filter(Boolean);
+  }
+
+  function applyFilter(value) {
+    activeLib = value;
+    var query = tokens();
+    var hasQuery = query.length > 0;
+
+    sections.forEach(function (sec) {
+      var libId = sec.getAttribute('data-library-section');
+      var libMatches = hasQuery || value === 'all' || libId === value;
+      if (!libMatches) { sec.hidden = true; return; }
+
+      var anyVisible = false;
+      sec.querySelectorAll('[data-library-search]').forEach(function (item) {
+        if (!hasQuery) { item.hidden = false; anyVisible = true; return; }
+        var blob = item.getAttribute('data-library-search') || '';
+        var ok = true;
+        for (var i = 0; i < query.length; i++) {
+          if (blob.indexOf(query[i]) === -1) { ok = false; break; }
+        }
+        item.hidden = !ok;
+        if (ok) anyVisible = true;
+      });
+
+      // Hide a library section whose items all got search-filtered
+      // out so visitors don't see a heading with no children.
+      sec.hidden = hasQuery && !anyVisible;
+    });
+
+    if (noMatch) {
+      var anyHit = false;
+      sections.forEach(function (sec) { if (!sec.hidden) anyHit = true; });
+      noMatch.hidden = anyHit;
+      noMatch.textContent = hasQuery
+        ? 'No items match your search.'
+        : 'No items match your filters.';
+    }
+  }
+
+  pills.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      pills.forEach(function (b) {
+        b.classList.toggle('is-active', b === btn);
+        b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+      });
+      if (searchInput && searchInput.value) searchInput.value = '';
+      applyFilter(btn.getAttribute('data-library-filter'));
+    });
+  });
+
+  if (searchInput) {
+    searchInput.addEventListener('input', function () {
+      // Typing in search auto-flips the active pill back to "all
+      // libraries" so the query runs across every section.
+      var allPill = rail.querySelector('[data-library-filter="all"]');
+      if (allPill && searchInput.value) {
+        pills.forEach(function (b) {
+          b.classList.toggle('is-active', b === allPill);
+          b.setAttribute('aria-selected', b === allPill ? 'true' : 'false');
+        });
+        activeLib = 'all';
+      }
+      applyFilter(activeLib);
+    });
+    searchInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && searchInput.value) {
+        e.preventDefault();
+        searchInput.value = '';
+        applyFilter(activeLib);
+      }
+    });
+  }
+
+  // `/` and Cmd/Ctrl+K both focus the search field — same convention
+  // as the archive page.
+  document.addEventListener('keydown', function (e) {
+    if (!searchInput) return;
+    var inField = e.target && /^(input|textarea|select)$/i.test(e.target.tagName) ||
+                   (e.target && e.target.isContentEditable);
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+      return;
+    }
+    if (e.key === '/' && !inField && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+    }
+  });
+})();
+</script>
+{% endblock %}

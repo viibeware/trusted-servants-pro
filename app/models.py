@@ -51,6 +51,10 @@ class MeetingLibrary(db.Model):
     meeting_id = db.Column(db.Integer, db.ForeignKey("meeting.id", ondelete="CASCADE"), primary_key=True)
     library_id = db.Column(db.Integer, db.ForeignKey("library.id", ondelete="CASCADE"), primary_key=True)
     mode = db.Column(db.String(16), nullable=False, default="all")  # 'all' | 'granular'
+    # Whole-library public toggle. When True AND mode='all', every item in
+    # the library is shown on the public meeting page; ignored when mode
+    # is 'granular' (per-item flags on `meeting_reading_public` win there).
+    public_visible = db.Column(db.Boolean, nullable=False, default=False)
 
     meeting = db.relationship("Meeting", back_populates="library_assocs")
     library = db.relationship("Library", back_populates="meeting_assocs")
@@ -265,6 +269,13 @@ class Meeting(db.Model):
     day_of_week = db.Column(db.String(32))  # legacy, unused by new UI
     time = db.Column(db.String(32))         # legacy, unused by new UI
     location = db.Column(db.String(255))
+    location_notes = db.Column(db.Text)  # admin-only context shown alongside the address
+    # Optional extended-content section rendered on the public meeting
+    # detail page below the schedule/zoom/files blocks. JSON list of
+    # {title, body} dicts; body is Markdown. Gated by the boolean
+    # toggle so admins can park draft content without exposing it.
+    extended_content_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    extended_blocks_json = db.Column(db.Text)
     zoom_meeting_id = db.Column(db.String(64))
     zoom_passcode = db.Column(db.String(128))
     zoom_link = db.Column(db.String(1000))
@@ -324,6 +335,82 @@ class Meeting(db.Model):
         sel_ids = {r.id for r in self.selected_library_items}
         return [r.id for r in library.items if r.id in sel_ids]
 
+    def extended_blocks(self):
+        """Decode the per-meeting extended-content blocks. Returns a list
+        of {title, body} dicts; non-list/malformed payloads collapse to
+        an empty list. Empty entries (no title and no body) are
+        filtered so the public renderer's "do we have anything?" check
+        is just a truthiness test."""
+        import json as _json
+        raw = (self.extended_blocks_json or "").strip()
+        if not raw:
+            return []
+        try:
+            data = _json.loads(raw)
+        except (ValueError, TypeError):
+            return []
+        if not isinstance(data, list):
+            return []
+        out = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            title = (item.get("title") or "").strip()
+            body = (item.get("body") or "").strip()
+            if not (title or body):
+                continue
+            out.append({"title": title, "body": body})
+        return out
+
+    def public_library_visible(self, library):
+        """Whole-library public toggle for `library`. Only meaningful when
+        the meeting's mode for that library is 'all' — granular mode falls
+        back to the per-item flags on `meeting_reading_public`."""
+        for a in self.library_assocs:
+            if a.library_id == library.id:
+                return bool(a.public_visible)
+        return False
+
+    def effective_public_library_items(self):
+        """Resolved list of LibraryItems to show on the public meeting page.
+
+        Combines:
+          * granular per-item flags from `meeting_reading_public` (used in
+            'granular' mode), plus
+          * every item from libraries whose `MeetingLibrary.public_visible`
+            is True AND whose mode is 'all' (whole-library opt-in).
+
+        De-duplicated by id, ordered to follow each library's own
+        `Library.items` sequence so the public page reads in the same
+        order the librarian curated."""
+        per_item_ids = {r.id for r in self.public_library_items}
+        whole_library_ids = []
+        for a in self.library_assocs:
+            if a.public_visible and (a.mode or "all") == "all":
+                whole_library_ids.append(a.library_id)
+        if not per_item_ids and not whole_library_ids:
+            return []
+        # Walk the included libraries in order; within each library walk
+        # the items in the library's own item ordering.
+        out = []
+        seen = set()
+        for a in self.library_assocs:
+            lib = a.library
+            if not lib:
+                continue
+            if a.library_id in whole_library_ids:
+                for r in lib.items:
+                    if r.id not in seen:
+                        seen.add(r.id)
+                        out.append(r)
+                continue
+            # Granular case — pick only the per-item-flagged readings.
+            for r in lib.items:
+                if r.id in per_item_ids and r.id not in seen:
+                    seen.add(r.id)
+                    out.append(r)
+        return out
+
 
 class MeetingSchedule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -358,9 +445,56 @@ class Location(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False, unique=True)
     location_type = db.Column(db.String(16), nullable=False, default="in_person")
+    # Legacy single-line address — kept for backward compat. New saves
+    # populate the split fields below; legacy rows still read out of
+    # `address` as a fallback. The combine helper rebuilds `address`
+    # from the split fields on save so callers that read `address`
+    # continue to see the canonical string.
     address = db.Column(db.String(500))
+    street = db.Column(db.String(255))
+    city = db.Column(db.String(120))
+    state = db.Column(db.String(64))
+    zip_code = db.Column(db.String(20))
     maps_url = db.Column(db.String(1000))
+    website_url = db.Column(db.String(1000))
+    notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def address_lines(self):
+        """Return the address as a 2-line list ([street], [city, ST zip])
+        with empty parts dropped. Used by templates that want to show
+        the address split across lines without doing the joining
+        themselves. Falls back to the legacy single-line `address` when
+        none of the split fields are populated — and applies a smart
+        first-comma split so even legacy "1638 R St NW, Washington, DC
+        20009" shapes render with city/state/zip on the second line
+        instead of running together with the street."""
+        if any((self.street, self.city, self.state, self.zip_code)):
+            line1 = (self.street or "").strip()
+            csz_parts = []
+            if self.city: csz_parts.append(self.city.strip())
+            tail = " ".join(p for p in [(self.state or "").strip(),
+                                        (self.zip_code or "").strip()] if p)
+            line2 = ", ".join([p for p in [", ".join(csz_parts), tail] if p]) \
+                    if csz_parts and tail \
+                    else (csz_parts[0] if csz_parts else tail)
+            return [line for line in [line1, line2] if line]
+        if self.address:
+            # Honour explicit newlines in legacy data first.
+            nl_lines = [line.strip() for line in self.address.splitlines() if line.strip()]
+            if len(nl_lines) > 1:
+                return nl_lines
+            # Single-line legacy address: split on the first comma so
+            # the street stays on line 1 and city/state/zip drops to
+            # line 2 (e.g. "1638 R St NW, Washington, DC 20009" →
+            # ["1638 R St NW", "Washington, DC 20009"]). Addresses
+            # without any commas just render as a single line.
+            text = nl_lines[0] if nl_lines else self.address.strip()
+            head, sep, tail = text.partition(",")
+            if sep and tail.strip():
+                return [head.strip(), tail.strip()]
+            return [text] if text else []
+        return []
 
 
 class NavLink(db.Model):
@@ -547,6 +681,53 @@ class SiteSetting(db.Model):
     # event detail page rendered from dynamic content. Pickers live on the
     # admin's "Templates" page.
     frontend_meeting_template = db.Column(db.String(64), nullable=False, default="classic")
+    # Picks the layout for the public /meetings list page (filter sidebar
+    # vs directory toolbar vs week-grid). See MEETINGS_LIST_TEMPLATES in
+    # app/frontend.py for the catalog.
+    frontend_meetings_list_template = db.Column(db.String(64), nullable=False, default="sidebar")
+    # Picks the layout for the public /events list page (cards / calendar
+    # / timeline / magazine). See EVENTS_LIST_TEMPLATES.
+    frontend_events_list_template = db.Column(db.String(64), nullable=False, default="cards")
+    frontend_events_list_width_mode = db.Column(db.String(16), nullable=False, default="boxed")
+    frontend_events_list_max_width = db.Column(db.Integer, nullable=False, default=1160)
+    frontend_events_list_padding_pct = db.Column(db.Integer, nullable=False, default=5)
+    frontend_events_list_heading = db.Column(db.String(200))
+    frontend_events_list_subheading = db.Column(db.String(500))
+    # Picks the layout for the public /announcements page. See
+    # ANNOUNCEMENTS_LIST_TEMPLATES in app/frontend.py for the catalog.
+    frontend_announcements_list_template = db.Column(db.String(64), nullable=False, default="omni")
+    frontend_announcements_list_width_mode = db.Column(db.String(16), nullable=False, default="boxed")
+    frontend_announcements_list_max_width = db.Column(db.Integer, nullable=False, default=1160)
+    frontend_announcements_list_padding_pct = db.Column(db.Integer, nullable=False, default=5)
+    frontend_announcements_list_heading = db.Column(db.String(200))
+    frontend_announcements_list_subheading = db.Column(db.String(500))
+    # Printlist (/printlist) — printable schedule. Subheading sits under
+    # the page title; website appears in the header band; page_size
+    # drives both the @page CSS rule and the on-screen paper aspect.
+    frontend_printlist_subheading = db.Column(db.String(500))
+    frontend_printlist_website = db.Column(db.String(200))
+    frontend_printlist_page_size = db.Column(db.String(16), nullable=False, default="letter")
+    # Literature Library (/library) — public-facing index of every
+    # public-marked Library + its public-marked items. Single layout
+    # today; the column gives the picker a place to land if a second
+    # layout is added later.
+    frontend_literature_library_template = db.Column(db.String(64), nullable=False, default="classic")
+    # Container width for the /meetings page: 'boxed' uses the max-width
+    # below to cap the content column; 'full' spans the viewport with the
+    # padding % below applied to each side as `Nvw` gutters.
+    frontend_meetings_list_width_mode = db.Column(db.String(16), nullable=False, default="boxed")
+    frontend_meetings_list_max_width = db.Column(db.Integer, nullable=False, default=1160)
+    frontend_meetings_list_padding_pct = db.Column(db.Integer, nullable=False, default=5)
+    # Customisable title + subheading for the public /meetings page;
+    # rendered above the filter rail on every layout. Empty defaults
+    # fall back to the layout-supplied copy in the templates.
+    frontend_meetings_list_heading = db.Column(db.String(200))
+    frontend_meetings_list_subheading = db.Column(db.String(500))
+    # "Pro Tips" FAQ-style section rendered at the bottom of /meetings.
+    # JSON blob with: enabled, heading, subheading, icon, icon_color,
+    # bg_color, items[]. NULL = use defaults from
+    # `meetings_list_protips_defaults()` in app/frontend.py.
+    frontend_meetings_list_protips_json = db.Column(db.Text)
     frontend_event_template = db.Column(db.String(64), nullable=False, default="classic")
     # Per-template appearance overrides. JSON dict keyed by content type +
     # template key, e.g. {"meeting": {"card_stack": {"bg": "#fff", ...}}}.
@@ -557,6 +738,41 @@ class SiteSetting(db.Model):
     # template_* fields above act as overrides when the user picks a layout
     # different from the active theme on a specific page.
     frontend_theme = db.Column(db.String(64), nullable=False, default="classic")
+    # Default appearance mode for first-time visitors: 'light', 'dark',
+    # or 'system' (follows the visitor's OS preference). A returning
+    # visitor's localStorage choice always wins over this default.
+    frontend_default_theme = db.Column(db.String(16), nullable=False, default="system")
+    # Footer container dimensions — mirrors header_width_mode pattern.
+    frontend_footer_width_mode = db.Column(db.String(16), nullable=False, default="boxed")  # 'boxed' | 'full'
+    frontend_footer_max_width = db.Column(db.Integer, nullable=False, default=1160)
+    frontend_footer_padding_pct = db.Column(db.Integer, nullable=False, default=5)
+    # Structured footer content. JSON-encoded dict of:
+    #   {brand: {show: bool, show_logo: bool, tagline: str},
+    #    columns: [{title, links: [{label, url, open_in_new_tab}]}],
+    #    social:  [{icon, label, url}],   // small icon row
+    #    secondary_nav: [{label, url}],   // optional bottom-row legal links
+    #    copyright: str}                   // markdown supported
+    frontend_footer_blocks_json = db.Column(db.Text)
+    # Brand-block custom logo for the public footer. The brand block can
+    # use either the header logo (`frontend_logo_filename`) or this
+    # dedicated custom logo, toggled via the brand-block's `logo_source`
+    # field stored inside `frontend_footer_blocks_json`.
+    frontend_brand_logo_filename = db.Column(db.String(500))
+    # Footer background mode. 'dark' (default) → footer always renders
+    # against the dark palette regardless of the page-level light/dark
+    # theme. 'light' → footer follows the page theme (light when page is
+    # in light mode, dark when page is in dark mode). Picked from the
+    # Footer admin's Background section.
+    frontend_footer_bg_mode = db.Column(db.String(16), nullable=False, default="dark")
+    # Minimum footer height in vh — admin-tunable so the footer can be a
+    # punchy full-bleed band (e.g. 50vh) or stay tight to its content
+    # (default 0 = no min-height; just whatever the content needs).
+    frontend_footer_min_height_vh = db.Column(db.Integer, nullable=False, default=0)
+    # Footer text scaling (50-200%) — desktop-first; child rules use
+    # `em` so descendants automatically inherit the scaled base size.
+    # Mobile media queries cap how high the scale can climb so a
+    # 200% desktop setting doesn't blow out a phone viewport.
+    frontend_footer_font_scale = db.Column(db.Integer, nullable=False, default=100)
     # Per-section font overrides. JSON dict like
     # {"display": "fraunces", "heading": "inter", "body": "inter"}.
     # Empty / missing keys fall back to the active theme's defaults.
@@ -576,15 +792,41 @@ class SiteSetting(db.Model):
     frontend_megamenu_animate = db.Column(db.Boolean, nullable=False, default=True)
     # Duration of each block's reveal animation, in milliseconds.
     frontend_megamenu_animate_ms = db.Column(db.Integer, nullable=False, default=320)
+    # Optional size overrides for the mega-menu block-title heading and
+    # the link rows below it, expressed as integer percentages where
+    # 100 = the theme's baked default. Sliders run 50 – 200 (half-size
+    # to double-size) with 100 in the middle. Nullable: when unset (or
+    # set to exactly 100) the CSS falls back to each theme's baked
+    # base — Recovery Blue's 2 rem heading + 1.2 rem link, Classic's
+    # 0.875 rem heading + 0.9375 rem link — multiplied by 1.
+    frontend_megamenu_heading_size = db.Column(db.Integer)
+    frontend_megamenu_subheading_size = db.Column(db.Integer)
     frontend_logo_filename = db.Column(db.String(500))
     frontend_logo_width = db.Column(db.Integer, nullable=False, default=40)
-    # Top alert bar (above header)
-    top_alert_enabled = db.Column(db.Boolean, nullable=False, default=False)
-    top_alert_message = db.Column(db.Text)
-    top_alert_bg_color = db.Column(db.String(16))
-    top_alert_text_color = db.Column(db.String(16))
-    top_alert_icon = db.Column(db.String(32))
-    top_alert_icon_position = db.Column(db.String(8), nullable=False, default="before")  # 'before' | 'after'
+    # Utility bar (above header). Sits at the very top of every public
+    # page. ``utility_bar_left_json`` / ``utility_bar_right_json`` each
+    # hold an ordered list of items: {kind: 'link'|'button'|'text'|'icon',
+    # label, url, icon, open_in_new_tab}. Kind 'icon' renders just the
+    # icon glyph; 'text' is plain text; 'link' is a styled anchor; and
+    # 'button' is a pill button. ``utility_bar_enabled`` is a hard
+    # off-switch — when False the bar is hidden site-wide regardless of
+    # other settings. ``utility_bar_live_meetings`` toggles the centre
+    # live-meeting badge — when a hybrid/online meeting is currently
+    # running, the bar turns yellow and surfaces a Join button.
+    utility_bar_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    utility_bar_bg_color = db.Column(db.String(16))
+    utility_bar_text_color = db.Column(db.String(16))
+    utility_bar_left_json = db.Column(db.Text)
+    utility_bar_right_json = db.Column(db.Text)
+    utility_bar_live_meetings = db.Column(db.Boolean, nullable=False, default=False)
+    # Which item shows by default on mobile when the bar collapses to a
+    # horizontal swipe strip. Format: "<side>:<index>" where side is
+    # 'left' or 'right' and index is 0-based within that side's list
+    # (e.g. 'right:0' for the first right-side item). Empty string =
+    # let the renderer default to the first available item. When the
+    # live-meeting bar is showing it always pins to the top of the
+    # mobile bar regardless of this setting.
+    utility_bar_mobile_default = db.Column(db.String(32))
     # Under-header alert bar
     header_alert_enabled = db.Column(db.Boolean, nullable=False, default=False)
     header_alert_message = db.Column(db.Text)
@@ -593,6 +835,11 @@ class SiteSetting(db.Model):
     header_alert_icon = db.Column(db.String(32))
     header_alert_icon_position = db.Column(db.String(8), nullable=False, default="before")
     setup_complete = db.Column(db.Boolean, nullable=False, default=False)
+    # IANA timezone name (e.g. "America/Los_Angeles"). Used to resolve
+    # "today" / "now" for meetings display and other time-dependent
+    # rendering, so what the server thinks is "right now" matches the
+    # fellowship's wall clock regardless of where the host runs.
+    timezone = db.Column(db.String(64), nullable=False, default="UTC")
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
@@ -679,6 +926,13 @@ class Library(db.Model):
     # the generic /libraries list, and it appears in the Intergroup
     # sidebar subsection. Toggling this flag is admin-only.
     is_intergroup = db.Column(db.Boolean, nullable=False, default=False)
+    # Whole-library opt-in for the public Literature Library page
+    # (/library). When True, this library and its items become eligible
+    # to render on the public page; per-item visibility is then
+    # controlled via ``LibraryItem.public_visible``. When False, the
+    # library is invisible to the public page regardless of any
+    # individual item flags.
+    public_visible = db.Column(db.Boolean, nullable=False, default=False)
     # When True, uploads to this library must pick at least one
     # ``LibraryCategory``; when False, categories are still selectable
     # but optional. Surfaced on the library-edit modal as a toggle. Only
@@ -781,6 +1035,11 @@ class LibraryItem(db.Model):
     original_filename = db.Column(db.String(500))
     thumbnail_filename = db.Column(db.String(500))
     position = db.Column(db.Integer, nullable=False, default=0)
+    # Per-item visibility on the public Literature Library page. Default
+    # is True (show) so an admin who flips a library to public sees every
+    # item appear without having to click each one on; toggling False
+    # hides this specific item even when its parent library is public.
+    public_visible = db.Column(db.Boolean, nullable=False, default=True)
     # User who created the library item. Drives the per-item deletion
     # gate for the Editor role (Editors may only delete items whose
     # creator was an editor-tier user — admin-created content is
@@ -865,7 +1124,14 @@ class FrontendNavLink(db.Model):
     icon_after_color = db.Column(db.String(16))
     icon_before_size = db.Column(db.Integer)  # px; None = theme default
     icon_after_size = db.Column(db.Integer)
-    link_size = db.Column(db.String(16))  # 'small' | 'large' | None (template default)
+    link_size = db.Column(db.String(16))  # legacy (deprecated; replaced by link_size_pct)
+    # Per-link override of the mega-menu link font size, expressed as
+    # an integer percentage where 100 = the active theme's default.
+    # NULL means "inherit the global Link font size slider in Mega menu
+    # appearance"; a value scopes a custom scale to this one link via an
+    # inline ``--fe-mm-link-scale`` on the rendered <a>, beating the
+    # cascaded value from the megamenu root.
+    link_size_pct = db.Column(db.Integer)
     override_color = db.Column(db.Boolean, nullable=False, default=False)
     custom_color = db.Column(db.String(16))
     button_style = db.Column(db.String(16), nullable=False, default="pill")  # pill | rounded

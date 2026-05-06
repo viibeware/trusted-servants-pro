@@ -16,26 +16,28 @@
         <div class="card-head-actions">
           <form method="post" action="{{ url_for('main.frontend_nav_column_new', nid=item.id) }}"
                 style="display:inline; margin:0"
-                data-add-column-form data-target="#megamenu-editor">
+                data-add-column-form data-target="#megamenu-editor"
+                data-fe-skip-save-bar>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm">+ Add column</button>
           </form>
-          <button type="button" class="btn btn-sm btn-primary"
-                  data-save-megamenu-for="#megamenu-editor"
-                  data-save-url="{{ url_for('main.frontend_nav_megamenu_save_all', nid=item.id) }}">
-            Save changes
-          </button>
         </div>
       </div>
-      <p class="muted small">A mega menu can have up to three columns side-by-side. Add a <b>Title</b> block inside a column to show a heading on the frontend.</p>
+      <p class="muted small">A mega menu can have up to three columns side-by-side. Add a <b>Title</b> block inside a column to show a heading on the frontend. Edits commit through the yellow save bar.</p>
 
       {% if not item.columns %}
       <p class="muted">No columns yet. Add one to get started.</p>
       {% else %}
       <p class="muted smaller">Drag the handle to reorder columns, or the handle on each link to reorder links within a column.</p>
+      {# `data-bulk-save-url` flags this editor for the bulk-save IIFE in
+         app.js. Editing any field in the editor flips the global
+         `#fe-save-bar` (yellow) into "Unsaved changes" mode; clicking
+         Save serializes every block via collectBlocks() and POSTs them
+         to this URL in one shot. #}
       <div id="megamenu-editor" class="nav-megamenu-editor file-list-sortable"
            data-reorder-url="{{ url_for('main.frontend_nav_columns_reorder', nid=item.id) }}"
-           data-reorder-toast="Column order">
+           data-reorder-toast="Column order"
+           data-bulk-save-url="{{ url_for('main.frontend_nav_megamenu_save_all', nid=item.id) }}">
         {% for col in item.columns %}
           {% include "_nav_megacol.html" %}
         {% endfor %}
@@ -62,10 +64,6 @@
     <div class="modal-body icon-picker-body">
       <div class="icon-picker-toolbar">
         <input type="search" class="icon-picker-search" placeholder="Search icons…" data-icon-search autocomplete="off">
-        <label class="icon-picker-color-label">
-          <span class="muted smaller">Color</span>
-          <input type="color" data-icon-modal-color value="#747474">
-        </label>
         <label class="icon-picker-size-label">
           <span class="muted smaller">Size <output data-icon-size-out>20</output>px</span>
           <input type="range" min="12" max="64" step="1" value="20" data-icon-modal-size>

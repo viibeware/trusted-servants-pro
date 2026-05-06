@@ -1,23 +1,63 @@
-{# "Classic" footer — three-column layout with brand/links/copyright. #}
-<footer class="fe-footer">
-  <div class="fe-container fe-footer-inner">
-    <div class="fe-footer-brand">
-      {% if site and site.footer_logo_filename %}
-      <img src="{{ url_for('public.site_footer_logo') }}" alt="" class="fe-footer-logo">
+{# "Classic" footer — three-column: brand on the left, link columns in
+   the middle, copyright on the right. Bottom row carries a thin
+   secondary nav + the social icon row when set. Reads structured
+   content from footer_content(site); width/padding from site.* #}
+{% from "frontend/footers/_footer_helpers.html" import footer_inner_attrs, footer_copyright_text, footer_link %}
+{% from "frontend/footers/_footer_bg.html" import footer_bg_class, footer_bg_style, footer_bg_data_attrs, footer_bg_inner %}
+{% set _f = footer_content(site) %}
+{% set _bg = _f.bg %}
+{% set _min_h = (site.frontend_footer_min_height_vh if site else 0) or 0 %}
+{% set _font_scale = (site.frontend_footer_font_scale if site else 100) or 100 %}
+<footer class="fe-footer fe-footer-classic {{ footer_bg_class(_bg) }}"
+        {% set _bgs = footer_bg_style(_bg, _min_h, _font_scale) %}{% if _bgs %}style="{{ _bgs }}"{% endif %}
+        {{ footer_bg_data_attrs(_bg) }}>
+  {{ footer_bg_inner(_bg) }}
+  <div {{ footer_inner_attrs(site) }}>
+    <div class="fe-footer-classic-grid">
+
+      {# Brand panel — delegated to the shared block partial so the
+         logo source toggle (header / custom) and width slider on the
+         Brand modal apply to every prebuilt layout uniformly. #}
+      {% include "frontend/footers/blocks/_brand.html" %}
+
+      {% if _f.columns %}
+      <div class="fe-footer-cols">
+        {% for col in _f.columns %}
+        <div class="fe-footer-col">
+          {% if col.title %}<div class="fe-footer-col-title">{{ col.title }}</div>{% endif %}
+          <ul class="fe-footer-link-list">
+            {% for l in col.links %}
+            <li>{{ footer_link(l) }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endfor %}
+      </div>
       {% endif %}
-      <div>
-        <div class="fe-footer-name">{{ frontend_title }}</div>
-        {% if frontend_tagline %}<div class="fe-footer-tagline">{{ frontend_tagline }}</div>{% endif %}
+
+      <div class="fe-footer-copy">
+        {{ footer_copyright_text(_f.copyright, site) | safe_html }}
       </div>
     </div>
-    <div class="fe-footer-links">
-      <a href="{{ url_for('frontend.index') }}#meetings">Meetings</a>
-      <a href="{{ url_for('frontend.index') }}#about">About</a>
-      <a href="{{ url_for('frontend.index') }}#contact">Help</a>
-      <a href="{{ url_for('auth.login') }}">Sign in</a>
+
+    {% if _f.social or _f.secondary_nav %}
+    <div class="fe-footer-bottom">
+      {% if _f.secondary_nav %}
+      <ul class="fe-footer-secondary-nav">
+        {% for l in _f.secondary_nav %}
+        <li><a href="{{ l.url or '#' }}">{{ l.label or '' }}</a></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if _f.social %}
+      <ul class="fe-footer-social">
+        {% for s in _f.social %}
+        <li><a href="{{ s.url or '#' }}" aria-label="{{ s.label or s.icon or 'Social link' }}"
+               target="_blank" rel="noopener">{{ icon(s.icon or 'link') }}</a></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
     </div>
-    <div class="fe-footer-copy">
-      {% if frontend_footer_text %}{{ frontend_footer_text|safe_html }}{% else %}&copy; {{ frontend_title }}.{% endif %}
-    </div>
+    {% endif %}
   </div>
 </footer>

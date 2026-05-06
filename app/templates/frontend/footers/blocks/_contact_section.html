@@ -1,0 +1,17 @@
+{# Contact section block — N panes side-by-side, each with a heading +
+   Markdown body. Reads from footer_content(site).contact_section.panes.
+   1 pane → centered single column; 2+ panes → grid that auto-fits to
+   the layout column it's placed inside. Markdown so admins can drop
+   in `[link text](url)` and inline emphasis without escaping. #}
+{% set _cs = footer_content(site).contact_section %}
+{% if _cs.panes %}
+<div class="fe-footer-block fe-footer-block-contact fe-footer-contact-grid"
+     data-pane-count="{{ _cs.panes | length }}">
+  {% for p in _cs.panes %}
+  <div class="fe-footer-contact-pane">
+    {% if p.heading %}<h3 class="fe-footer-contact-heading">{{ p.heading }}</h3>{% endif %}
+    {% if p.body %}<div class="fe-footer-contact-body">{{ p.body | markdown_block }}</div>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

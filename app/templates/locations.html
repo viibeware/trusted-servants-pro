@@ -23,7 +23,7 @@
         <td data-label="Type">{{ 'Online' if l.location_type == 'online' else 'In-Person' }}</td>
         <td data-label="Address">
           {% if l.location_type == 'in_person' %}
-            {% if l.address %}<div>{{ l.address }}</div>{% endif %}
+            {% for line in l.address_lines() %}<div>{{ line }}</div>{% endfor %}
             {% if l.maps_url %}<a href="{{ l.maps_url }}" target="_blank" rel="noopener" class="smaller">Open in Maps</a>{% endif %}
           {% else %}
             <span class="muted smaller">—</span>
@@ -70,9 +70,16 @@
           </div>
         </fieldset>
         <div class="loc-in-person-fields">
-          <label>Address<input name="address" placeholder="Street, City, State"></label>
-          <label>Google Maps Link<input name="maps_url" type="url" placeholder="https://maps.google.com/..."></label>
+          <label>Street<input name="street"></label>
+          <div class="loc-csz-row">
+            <label class="loc-csz-city">City<input name="city"></label>
+            <label class="loc-csz-state">State<input name="state"></label>
+            <label class="loc-csz-zip">ZIP<input name="zip_code"></label>
+          </div>
+          <label>Google Maps Link<input name="maps_url" type="url"></label>
         </div>
+        <label>Website URL <span class="muted smaller">(optional)</span><input name="website_url" type="url"></label>
+        <label>Notes <span class="muted smaller">(shown italicized under the address on the public footer)</span><textarea name="notes" rows="2"></textarea></label>
       </div>
       <div class="modal-foot">
         <button type="button" class="btn" data-close>Cancel</button>
@@ -104,9 +111,16 @@
           </div>
         </fieldset>
         <div class="loc-in-person-fields" {% if l.location_type == 'online' %}style="display:none"{% endif %}>
-          <label>Address<input name="address" value="{{ l.address or '' }}" placeholder="Street, City, State"></label>
-          <label>Google Maps Link<input name="maps_url" type="url" value="{{ l.maps_url or '' }}" placeholder="https://maps.google.com/..."></label>
+          <label>Street<input name="street" value="{{ l.street or '' }}"></label>
+          <div class="loc-csz-row">
+            <label class="loc-csz-city">City<input name="city" value="{{ l.city or '' }}"></label>
+            <label class="loc-csz-state">State<input name="state" value="{{ l.state or '' }}"></label>
+            <label class="loc-csz-zip">ZIP<input name="zip_code" value="{{ l.zip_code or '' }}"></label>
+          </div>
+          <label>Google Maps Link<input name="maps_url" type="url" value="{{ l.maps_url or '' }}"></label>
         </div>
+        <label>Website URL <span class="muted smaller">(optional)</span><input name="website_url" type="url" value="{{ l.website_url or '' }}"></label>
+        <label>Notes <span class="muted smaller">(shown italicized under the address on the public footer)</span><textarea name="notes" rows="2">{{ l.notes or '' }}</textarea></label>
       </div>
       <div class="modal-foot">
         <button type="button" class="btn" data-close>Cancel</button>

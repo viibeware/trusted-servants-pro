@@ -1,0 +1,7 @@
+{% extends "frontend/base.html" %}
+{% block title %}{{ list_heading or 'All events' }} · {{ frontend_title }}{% endblock %}
+{# Dispatcher: each layout (cards / calendar / timeline / magazine)
+   lives in frontend/events_list/<key>.html and is selected on the
+   admin's Templates page (SiteSetting.frontend_events_list_template).
+   Every layout receives the same `all_events` list. #}
+{% block content %}{% include list_partial %}{% endblock %}

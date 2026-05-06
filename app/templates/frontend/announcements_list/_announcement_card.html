@@ -1,0 +1,48 @@
+{# Shared partial: a full announcement card with optional cover thumbnail
+   + title + body + a "View Details" link to /announcement/<slug>. The
+   summary is intentionally omitted (the body carries the full content;
+   the GSR Summary view is where summaries live).
+
+   Args:
+     ann — Post model with is_announcement=True
+#}
+{%- set _has_image = ann.featured_image_filename -%}
+{%- set _posted = ann.created_at -%}
+{%- set _detail_url = post_url(ann) -%}
+<article class="fe-announcements-card{% if _has_image %} has-cover{% endif %}">
+  {% if _has_image %}
+  <div class="fe-announcements-card-cover" aria-hidden="true">
+    <img src="{{ url_for('public.post_featured_image', pid=ann.id) }}"
+         alt="" loading="lazy">
+  </div>
+  {% endif %}
+
+  <div class="fe-announcements-card-body">
+    <h3 class="fe-announcements-card-title">
+      <a href="{{ _detail_url }}">{{ ann.title }}</a>
+    </h3>
+    {% if _posted %}
+    <div class="fe-announcements-card-meta">
+      <span class="fe-announcements-card-meta-row">
+        <span class="fe-announcements-card-meta-icon" aria-hidden="true">{{ icon('calendar') }}</span>
+        <span>Posted {{ _posted.strftime('%b %-d, %Y') }}</span>
+      </span>
+      {% if ann.contact_name %}
+      <span class="fe-announcements-card-meta-row">
+        <span class="fe-announcements-card-meta-icon" aria-hidden="true">{{ icon('user') }}</span>
+        <span>{{ ann.contact_name }}</span>
+      </span>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% if ann.body %}
+    <div class="fe-announcements-card-fulltext">{{ ann.body|markdown_block }}</div>
+    {% endif %}
+    <div class="fe-announcements-card-actions">
+      <a class="fe-announcements-card-cta" href="{{ _detail_url }}">
+        <span>View details</span>
+        <span class="fe-announcements-card-cta-icon" aria-hidden="true">{{ icon('arrow-right') }}</span>
+      </a>
+    </div>
+  </div>
+</article>

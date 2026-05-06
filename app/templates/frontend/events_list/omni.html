@@ -1,0 +1,109 @@
+{# Omni layout — composes all four event-list styles into a single
+   page with a tab switcher centered above the content. The visitor's
+   choice is stored in localStorage (`fe-events-omni-view`) so it
+   persists across visits and across pages on the same browser. The
+   four bodies are all rendered server-side; CSS hides the inactive
+   panels via the `[hidden]` attribute. #}
+<section class="fe-section fe-events fe-events-list-omni fe-events-list--w-{{ list_width_mode }}" id="events">
+  <div class="{% if list_width_mode == 'boxed' %}fe-container{% else %}fe-mlist-fullwrap{% endif %}"
+       {% if list_width_mode == 'boxed' %}style="max-width: {{ list_max_width }}px;"
+       {%- elif list_padding_pct %}style="padding-left: {{ list_padding_pct }}vw; padding-right: {{ list_padding_pct }}vw;"{% endif %}>
+    <header class="fe-mlist-head">
+      <h1>{{ list_heading or 'Upcoming events' }}</h1>
+      <p class="muted">{{ list_subheading or 'Switch between views — the page remembers your choice for next time.' }}</p>
+    </header>
+
+    {# Tab switcher row — segmented control of view tabs on the left,
+       separated by an auto-margin from the standalone Archive link on
+       the right. The Archive link is a sibling of the tab strip rather
+       than a tab itself: it doesn't toggle a panel, it leaves /events
+       and goes to /events/archive. Styled to visually rhyme with the
+       active tab pill so the bar reads as one continuous strip. #}
+    <div class="fe-events-omni-bar">
+      <nav class="fe-events-omni-tabs" data-fe-events-omni-tabs role="tablist"
+           aria-label="Events view">
+        <button type="button" class="fe-events-omni-tab is-active"
+                data-omni-tab="magazine" role="tab" aria-selected="true">
+          <span class="fe-events-omni-tab-icon" aria-hidden="true">{{ icon('image') }}</span>
+          <span>Overview</span>
+        </button>
+        <button type="button" class="fe-events-omni-tab"
+                data-omni-tab="cards" role="tab" aria-selected="false">
+          <span class="fe-events-omni-tab-icon" aria-hidden="true">{{ icon('menu') }}</span>
+          <span>Cards</span>
+        </button>
+        <button type="button" class="fe-events-omni-tab"
+                data-omni-tab="calendar" role="tab" aria-selected="false">
+          <span class="fe-events-omni-tab-icon" aria-hidden="true">{{ icon('calendar') }}</span>
+          <span>Calendar</span>
+        </button>
+        <button type="button" class="fe-events-omni-tab"
+                data-omni-tab="timeline" role="tab" aria-selected="false">
+          <span class="fe-events-omni-tab-icon" aria-hidden="true">{{ icon('clock') }}</span>
+          <span>Timeline</span>
+        </button>
+      </nav>
+      <a class="fe-events-omni-archive"
+         href="{{ url_for('frontend.archive') }}">
+        <span class="fe-events-omni-archive-inner">
+          <span class="fe-events-omni-tab-icon" aria-hidden="true">{{ icon('inbox') }}</span>
+          <span>Archive</span>
+        </span>
+      </a>
+    </div>
+
+    <div class="fe-events-omni-panels">
+      <div class="fe-events-omni-panel fe-events-list-magazine"
+           data-omni-panel="magazine" role="tabpanel" aria-label="Overview view">
+        {% include "frontend/events_list/_magazine_body.html" %}
+      </div>
+      <div class="fe-events-omni-panel fe-events-list-cards"
+           data-omni-panel="cards" role="tabpanel" aria-label="Cards view" hidden>
+        {% include "frontend/events_list/_cards_body.html" %}
+      </div>
+      <div class="fe-events-omni-panel fe-events-list-calendar"
+           data-omni-panel="calendar" role="tabpanel" aria-label="Calendar view" hidden>
+        {% include "frontend/events_list/_calendar_body.html" %}
+      </div>
+      <div class="fe-events-omni-panel fe-events-list-timeline"
+           data-omni-panel="timeline" role="tabpanel" aria-label="Timeline view" hidden>
+        {% include "frontend/events_list/_timeline_body.html" %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+(function () {
+  var tabs = document.querySelectorAll('[data-omni-tab]');
+  var panels = document.querySelectorAll('[data-omni-panel]');
+  if (!tabs.length || !panels.length) return;
+
+  var STORE_KEY = 'fe-events-omni-view';
+  var VALID = { cards: 1, calendar: 1, timeline: 1, magazine: 1 };
+
+  function show(name) {
+    if (!VALID[name]) name = 'magazine';
+    tabs.forEach(function (t) {
+      var active = t.getAttribute('data-omni-tab') === name;
+      t.classList.toggle('is-active', active);
+      t.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    panels.forEach(function (p) {
+      p.hidden = p.getAttribute('data-omni-panel') !== name;
+    });
+    try { localStorage.setItem(STORE_KEY, name); } catch (_) {}
+  }
+
+  // Restore the saved view on first paint.
+  var saved = null;
+  try { saved = localStorage.getItem(STORE_KEY); } catch (_) {}
+  if (saved && VALID[saved]) show(saved);
+
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () {
+      show(t.getAttribute('data-omni-tab'));
+    });
+  });
+})();
+</script>

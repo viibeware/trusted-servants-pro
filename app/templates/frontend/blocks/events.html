@@ -30,7 +30,7 @@
       {%- set _start = ev.event_starts_at -%}
       {%- set _end = ev.event_ends_at -%}
       {%- set _has_image = _show_image and ev.featured_image_filename -%}
-      {%- set _detail_url = url_for('frontend.event_detail', slug=ev.title|slugify) -%}
+      {%- set _detail_url = post_url(ev) -%}
       <li class="fe-event-row" style="--fe-event-i: {{ loop.index0 }};">
         {% if _start %}
         <div class="fe-event-date" aria-label="Event date">
@@ -79,6 +79,10 @@
       </li>
       {% endfor %}
     </ol>
+
+    <div class="fe-events-foot">
+      <a class="fe-btn fe-btn-ghost" href="{{ url_for('frontend.events_list') }}">See all events</a>
+    </div>
     {% endif %}
   </div>
 </section>

@@ -176,13 +176,11 @@
       </form>
     </div>
 
-    {{ alert_bar_form(site, 'top', 'Top alert bar',
-       'Displayed at the very top of every frontend page, above the header.',
-       url_for('main.frontend_top_alert_save')) }}
-
     {{ alert_bar_form(site, 'header', 'Under-header alert bar',
        'Displayed directly below the header on every frontend page.',
        url_for('main.frontend_header_alert_save')) }}
+
+    {% include "_frontend_utility_bar_admin.html" %}
 
   </div>
   <p class="muted small fe-header-grid-foot">

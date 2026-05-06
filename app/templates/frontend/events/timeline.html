@@ -3,7 +3,26 @@
 {% block content %}
 <section class="fe-event-time" id="event" style="{{ tpl_style or '' }}">
   <div class="fe-container fe-event-time-inner">
-    <a class="fe-event-time-back" href="{{ url_for('frontend.index') }}#events">← Back to events</a>
+    <div class="fe-edit-bar">
+      {# Adaptive back link(s) — see classic.html for the rule. #}
+      <div class="fe-event-detail-back-stack">
+      {% if is_in_archive %}
+      <a class="fe-event-time-back" href="{{ url_for('frontend.archive') }}">← Archive</a>
+      {% else %}
+        {% if event.is_announcement %}
+        <a class="fe-event-time-back" href="{{ url_for('frontend.announcements_list') }}">← All announcements</a>
+        {% endif %}
+        {% if event.is_event %}
+        <a class="fe-event-time-back" href="{{ url_for('frontend.events_list') }}">← All events</a>
+        {% endif %}
+      {% endif %}
+      </div>
+      {% if current_user.is_authenticated and current_user.can_edit() %}
+      <a class="fe-edit-shortcut" href="{{ url_for('main.post_edit', pid=event.id) }}">
+        {{ icon('edit-3') }} <span>Edit event</span>
+      </a>
+      {% endif %}
+    </div>
 
     <div class="fe-event-time-row">
       {% if event.event_starts_at %}
@@ -20,6 +39,7 @@
           {% if event.is_event %}<span>Event</span>{% endif %}
           {% if event.is_announcement %}<span>Announcement</span>{% endif %}
           {% if event.is_online %}<span class="online">Online</span>{% endif %}
+          {% if is_in_archive %}<span class="archived">Archived</span>{% endif %}
         </div>
 
         <h1>{{ event.title }}</h1>
@@ -60,7 +80,7 @@
           <li>
             <span class="fe-event-time-meta-icon">{{ icon('video') }}</span>
             <span>
-              <a class="fe-event-time-link fe-event-time-link-strong" href="{{ event.zoom_url }}" target="_blank" rel="noopener">Join via Zoom ↗</a>
+              <a class="fe-event-time-link fe-event-time-link-strong" href="{{ event.zoom_url }}" target="_blank" rel="noopener">Join Zoom Meeting ↗</a>
             </span>
           </li>
           {% endif %}
@@ -81,14 +101,20 @@
         <dl class="fe-event-time-creds">
           {% if event.zoom_meeting_id %}
           <dt>Meeting ID</dt>
-          <dd><code>{{ event.zoom_meeting_id }}</code>
-            <button type="button" class="fe-copy-btn" data-copy="{{ event.zoom_meeting_id }}" title="Copy">{{ icon('copy') }}</button>
+          <dd>
+            <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ event.zoom_meeting_id }}" aria-label="Copy meeting ID">
+              <code>{{ event.zoom_meeting_id }}</code>
+              <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+            </button>
           </dd>
           {% endif %}
           {% if event.zoom_passcode %}
           <dt>Passcode</dt>
-          <dd><code>{{ event.zoom_passcode }}</code>
-            <button type="button" class="fe-copy-btn" data-copy="{{ event.zoom_passcode }}" title="Copy">{{ icon('copy') }}</button>
+          <dd>
+            <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ event.zoom_passcode }}" aria-label="Copy Zoom passcode">
+              <code>{{ event.zoom_passcode }}</code>
+              <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+            </button>
           </dd>
           {% endif %}
         </dl>

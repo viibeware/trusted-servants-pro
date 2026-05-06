@@ -1,0 +1,24 @@
+{# Extended-content blocks rendered below the schedule / zoom / files
+   cards on every meeting detail template. Each block is a full-width
+   card with an optional title heading and a Markdown-rendered body.
+   Skipped wholesale when the toggle is off or no non-empty blocks
+   are saved. #}
+{%- if meeting.extended_content_enabled -%}
+{%- set _ext_blocks = meeting.extended_blocks() -%}
+{%- if _ext_blocks -%}
+<div class="fe-meeting-extended" data-meeting-extended>
+  {% for blk in _ext_blocks %}
+  <article class="fe-meeting-extended-card">
+    {% if blk.title %}
+    <h3 class="fe-meeting-extended-title">{{ blk.title }}</h3>
+    {% endif %}
+    {# `markdown_block` auto-inserts the blank line Python-Markdown
+       needs before a list/heading/blockquote when the user types one
+       directly under a paragraph — so `intro⏎- item` renders as a
+       proper list without requiring an explicit empty line. #}
+    <div class="fe-meeting-extended-body">{{ blk.body | markdown_block }}</div>
+  </article>
+  {% endfor %}
+</div>
+{%- endif -%}
+{%- endif -%}

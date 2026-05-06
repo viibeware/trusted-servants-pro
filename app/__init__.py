@@ -137,6 +137,63 @@ def create_app():
                                protocols=SAFE_PROTOCOLS, strip=True)
         return Markup(cleaned)
 
+    import re as _re
+
+    _MD_FENCE_RE = _re.compile(r"^(?:```|~~~)")
+    _MD_LIST_RE  = _re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)")
+    _MD_HEAD_RE  = _re.compile(r"^#{1,6}\s")
+    _MD_BQ_RE    = _re.compile(r"^>\s?")
+
+    def _markdown_block_breaks(text):
+        """Insert blank lines before list items, headings, and blockquotes
+        when they directly follow a non-blank line that isn't already the
+        same kind of marker. Python-Markdown requires that blank line for
+        the block to be recognized as a list/heading/quote — we add it for
+        the user so typing `intro⏎- item` "just works". Fenced code blocks
+        are passed through untouched."""
+        out = []
+        in_fence = False
+        for line in text.split("\n"):
+            if _MD_FENCE_RE.match(line):
+                in_fence = not in_fence
+                out.append(line); continue
+            if in_fence:
+                out.append(line); continue
+            prev = out[-1] if out else ""
+            prev_blank = prev.strip() == ""
+            is_list = bool(_MD_LIST_RE.match(line))
+            is_head = bool(_MD_HEAD_RE.match(line))
+            is_bq   = bool(_MD_BQ_RE.match(line))
+            if (is_list or is_head or is_bq) and prev and not prev_blank:
+                same_kind = (
+                    (is_list and _MD_LIST_RE.match(prev)) or
+                    (is_head and _MD_HEAD_RE.match(prev)) or
+                    (is_bq   and _MD_BQ_RE.match(prev))
+                )
+                if not same_kind:
+                    out.append("")
+            out.append(line)
+        return "\n".join(out)
+
+    @app.template_filter("markdown_block")
+    def markdown_block_filter(value):
+        """Block-friendly markdown rendering for admin-authored prose. Same
+        allowlist as `markdown` but auto-inserts the blank line Python-
+        Markdown requires before a list/heading/blockquote when the user
+        types one directly under a paragraph. Hard line-breaks within a
+        paragraph still work (nl2br stays on). Use this filter for fields
+        where the user types `paragraph⏎- item` and expects a list. The
+        standard `markdown` filter is left intact for legacy fields whose
+        persisted content was authored against the no-preprocessing
+        behaviour."""
+        if not value:
+            return ""
+        prepped = _markdown_block_breaks(str(value))
+        html = md_lib.markdown(prepped, extensions=["extra", "nl2br", "sane_lists"])
+        cleaned = bleach.clean(html, tags=SAFE_RICH_TAGS, attributes=SAFE_RICH_ATTRS,
+                               protocols=SAFE_PROTOCOLS, strip=True)
+        return Markup(cleaned)
+
     @app.template_filter("from_json")
     def from_json_filter(value):
         import json
@@ -242,7 +299,9 @@ def create_app():
         _migrate_sqlite(app)
         _seed_admin(app)
         _seed_custom_layouts(app)
+        _seed_footer_layouts(app)
         _backfill_media(app)
+        _migrate_unique_post_slugs(app)
         # Boot-time recycle-bin sweep. The Delete Log page also runs
         # this lazily on every visit; the boot sweep covers installs
         # whose admin doesn't routinely open the page.
@@ -305,6 +364,76 @@ def create_app():
     # threading it through every render_template call.
     from .frontend import THEMES as _THEMES
     app.jinja_env.globals["frontend_themes"] = _THEMES
+
+    # Canonical post URL — picks /archive/<slug> for archived posts and
+    # the live /event/<slug> or /announcement/<slug> URL otherwise. Cards
+    # and other list templates call this so a single archive flip on a
+    # post propagates to every link without each partial re-deriving the
+    # URL itself.
+    from .frontend import _post_url as _post_url_helper
+    app.jinja_env.globals["post_url"] = _post_url_helper
+
+    # IANA timezone names + a "now in tz" helper for the Settings → Timezone
+    # tab. Cached at module level — the zone list never changes at runtime.
+    from .timezone import available_timezone_names as _tz_names, now_in_name as _now_in_name
+    app.jinja_env.globals["available_timezone_names"] = _tz_names
+    app.jinja_env.globals["now_in_timezone"] = _now_in_name
+
+    from .utility_bar import utility_bar_context as _utility_bar_context
+    app.jinja_env.globals["utility_bar_admin"] = _utility_bar_context
+    app.jinja_env.globals["utility_bar_icon_choices"] = lambda: [
+        ("", "No icon"),
+        ("phone", "Phone"),
+        ("mail", "Mail"),
+        ("info", "Info"),
+        ("alert-triangle", "Warning"),
+        ("bell", "Bell"),
+        ("megaphone", "Megaphone"),
+        ("calendar", "Calendar"),
+        ("clock", "Clock"),
+        ("camera", "Camera"),
+        ("video", "Video"),
+        ("users", "Users"),
+        ("user", "User"),
+        ("heart", "Heart"),
+        ("star", "Star"),
+        ("zap", "Zap"),
+        ("help-circle", "Help"),
+        ("globe", "Globe"),
+        ("map-pin", "Map pin"),
+        ("facebook", "Facebook"),
+        ("instagram", "Instagram"),
+        ("twitter", "Twitter"),
+        ("youtube", "YouTube"),
+        ("github", "GitHub"),
+    ]
+
+    # `footer_content(site)` resolves the structured footer content
+    # (brand / columns / social / secondary nav / copyright) for any
+    # template that includes a footer partial. Exposed as a global so
+    # we don't have to thread it through every render_template call.
+    from .blocks import footer_content as _footer_content
+    app.jinja_env.globals["footer_content"] = _footer_content
+
+    # `lookup_locations_by_ids(ids)` — bulk fetch Location rows for the
+    # meeting_locations footer block's `predefined_ids`. Returned in
+    # arbitrary order (the partial re-orders to the admin's checklist
+    # order). Returns [] when given an empty/falsy iterable so the
+    # partial's `{% if %}` guard works without surprises.
+    def _lookup_locations_by_ids(ids):
+        if not ids:
+            return []
+        from .models import Location
+        return Location.query.filter(Location.id.in_(ids)).all()
+    app.jinja_env.globals["lookup_locations_by_ids"] = _lookup_locations_by_ids
+
+    # `now_year()` — small convenience for the footer copyright `{year}`
+    # placeholder substitution. Computed at render time so a long-running
+    # process doesn't get stuck on last year's value.
+    def _now_year():
+        from datetime import datetime
+        return datetime.utcnow().year
+    app.jinja_env.globals["now_year"] = _now_year
 
     # Font helpers — resolve_fonts/font_css_vars are used by the public
     # base template to set semantic --fe-font-* CSS variables per theme.
@@ -398,6 +527,44 @@ def create_app():
     return app
 
 
+def _migrate_unique_post_slugs(app):
+    """Idempotent sweep: walk every Post in id order and disambiguate
+    public_slug collisions by appending ``-2``, ``-3``, ... onto later
+    duplicates. Stores the resolved slug explicitly on Post.slug and
+    logs each rename to EntitySlugHistory so old URLs continue to 301
+    via the history-based redirect path. Runs on every boot — cheap
+    against the small post table and safe to repeat (no-op when nothing
+    collides)."""
+    from .models import Post, EntitySlugHistory
+    used = set()
+    renamed = 0
+    for p in Post.query.order_by(Post.id).all():
+        current = p.public_slug
+        if current and current not in used:
+            used.add(current)
+            continue
+        # Collision (or empty) — rebuild from a stable base.
+        base = current or "post"
+        n = 2
+        candidate = f"{base}-{n}"
+        while candidate in used:
+            n += 1
+            candidate = f"{base}-{n}"
+        old_slug = current
+        p.slug = candidate
+        used.add(candidate)
+        if old_slug and old_slug != candidate:
+            db.session.add(EntitySlugHistory(
+                entity_type="post", entity_id=p.id,
+                old_slug=old_slug, new_slug=candidate,
+                changed_by=None,
+            ))
+        renamed += 1
+    if renamed:
+        db.session.commit()
+        app.logger.info(f"Disambiguated {renamed} post slug(s)")
+
+
 def _backfill_media(app):
     """Index any stored_filenames referenced by MeetingFile/LibraryItem into MediaItem."""
     upload_dir = app.config["UPLOAD_FOLDER"]
@@ -465,11 +632,15 @@ def _migrate_sqlite(app):
                          ("public_alert_message", "TEXT"),
                          ("slug", "VARCHAR(255)"),
                          ("archived_at", "DATETIME"),
-                         ("show_otp", "BOOLEAN NOT NULL DEFAULT 1")):
+                         ("show_otp", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("location_notes", "TEXT"),
+                         ("extended_content_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("extended_blocks_json", "TEXT")):
             add("meeting", col, ddl)
         for col, ddl in (("alert_message", "TEXT"),
                          ("is_intergroup", "BOOLEAN NOT NULL DEFAULT 0"),
-                         ("categories_required", "BOOLEAN NOT NULL DEFAULT 1")):
+                         ("categories_required", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("public_visible", "BOOLEAN NOT NULL DEFAULT 0")):
             add("library", col, ddl)
         # On the boot that first added is_intergroup, flag the two
         # pre-existing default Intergroup libraries so the permission
@@ -498,7 +669,8 @@ def _migrate_sqlite(app):
         conn.execute(text(
             "UPDATE site_setting SET frontend_module_required_role = 'admin' "
             "WHERE frontend_module_required_role = 'frontend_editor'"))
-        for col, ddl in (("mode", "VARCHAR(16) NOT NULL DEFAULT 'all'"),):
+        for col, ddl in (("mode", "VARCHAR(16) NOT NULL DEFAULT 'all'"),
+                         ("public_visible", "BOOLEAN NOT NULL DEFAULT 0")):
             add("meeting_libraries", col, ddl)
         for col, ddl in (("position", "INTEGER NOT NULL DEFAULT 0"),
                          ("public_visible", "BOOLEAN NOT NULL DEFAULT 0")):
@@ -507,7 +679,13 @@ def _migrate_sqlite(app):
             add("meeting_schedule", col, ddl)
         for col, ddl in (("location_type", "VARCHAR(16) NOT NULL DEFAULT 'in_person'"),
                          ("address", "VARCHAR(500)"),
-                         ("maps_url", "VARCHAR(1000)")):
+                         ("maps_url", "VARCHAR(1000)"),
+                         ("street", "VARCHAR(255)"),
+                         ("city", "VARCHAR(120)"),
+                         ("state", "VARCHAR(64)"),
+                         ("zip_code", "VARCHAR(20)"),
+                         ("website_url", "VARCHAR(1000)"),
+                         ("notes", "TEXT")):
             add("location", col, ddl)
         for col, ddl in (("footer_logo_filename", "VARCHAR(500)"),
                          ("footer_logo_url", "VARCHAR(1000)"),
@@ -600,9 +778,41 @@ def _migrate_sqlite(app):
                          ("frontend_homepage_template", "VARCHAR(64) NOT NULL DEFAULT 'classic'"),
                          ("frontend_megamenu_template", "VARCHAR(64) NOT NULL DEFAULT 'recovery-blue'"),
                          ("frontend_meeting_template", "VARCHAR(64) NOT NULL DEFAULT 'classic'"),
+                         ("frontend_meetings_list_template", "VARCHAR(64) NOT NULL DEFAULT 'sidebar'"),
+                         ("frontend_meetings_list_width_mode", "VARCHAR(16) NOT NULL DEFAULT 'boxed'"),
+                         ("frontend_meetings_list_max_width", "INTEGER NOT NULL DEFAULT 1160"),
+                         ("frontend_meetings_list_padding_pct", "INTEGER NOT NULL DEFAULT 5"),
+                         ("frontend_meetings_list_heading", "VARCHAR(200)"),
+                         ("frontend_meetings_list_subheading", "VARCHAR(500)"),
+                         ("frontend_meetings_list_protips_json", "TEXT"),
+                         ("frontend_events_list_template", "VARCHAR(64) NOT NULL DEFAULT 'cards'"),
+                         ("frontend_events_list_width_mode", "VARCHAR(16) NOT NULL DEFAULT 'boxed'"),
+                         ("frontend_events_list_max_width", "INTEGER NOT NULL DEFAULT 1160"),
+                         ("frontend_events_list_padding_pct", "INTEGER NOT NULL DEFAULT 5"),
+                         ("frontend_events_list_heading", "VARCHAR(200)"),
+                         ("frontend_events_list_subheading", "VARCHAR(500)"),
+                         ("frontend_announcements_list_template", "VARCHAR(64) NOT NULL DEFAULT 'omni'"),
+                         ("frontend_announcements_list_width_mode", "VARCHAR(16) NOT NULL DEFAULT 'boxed'"),
+                         ("frontend_announcements_list_max_width", "INTEGER NOT NULL DEFAULT 1160"),
+                         ("frontend_announcements_list_padding_pct", "INTEGER NOT NULL DEFAULT 5"),
+                         ("frontend_announcements_list_heading", "VARCHAR(200)"),
+                         ("frontend_announcements_list_subheading", "VARCHAR(500)"),
+                         ("frontend_printlist_subheading", "VARCHAR(500)"),
+                         ("frontend_printlist_website", "VARCHAR(200)"),
+                         ("frontend_printlist_page_size", "VARCHAR(16) NOT NULL DEFAULT 'letter'"),
+                         ("frontend_literature_library_template", "VARCHAR(64) NOT NULL DEFAULT 'classic'"),
                          ("frontend_event_template", "VARCHAR(64) NOT NULL DEFAULT 'classic'"),
                          ("frontend_template_settings_json", "TEXT"),
                          ("frontend_theme", "VARCHAR(64) NOT NULL DEFAULT 'classic'"),
+                         ("frontend_default_theme", "VARCHAR(16) NOT NULL DEFAULT 'system'"),
+                         ("frontend_footer_width_mode", "VARCHAR(16) NOT NULL DEFAULT 'boxed'"),
+                         ("frontend_footer_max_width", "INTEGER NOT NULL DEFAULT 1160"),
+                         ("frontend_footer_padding_pct", "INTEGER NOT NULL DEFAULT 5"),
+                         ("frontend_footer_blocks_json", "TEXT"),
+                         ("frontend_brand_logo_filename", "VARCHAR(500)"),
+                         ("frontend_footer_bg_mode", "VARCHAR(16) NOT NULL DEFAULT 'dark'"),
+                         ("frontend_footer_min_height_vh", "INTEGER NOT NULL DEFAULT 0"),
+                         ("frontend_footer_font_scale", "INTEGER NOT NULL DEFAULT 100"),
                          ("frontend_fonts_json", "TEXT"),
                          ("frontend_blocks_json", "TEXT"),
                          ("frontend_mega_bg_color", "VARCHAR(16) NOT NULL DEFAULT '#0B5CFF'"),
@@ -611,6 +821,8 @@ def _migrate_sqlite(app):
                          ("frontend_mega_radius_br", "INTEGER NOT NULL DEFAULT 18"),
                          ("frontend_megamenu_animate", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("frontend_megamenu_animate_ms", "INTEGER NOT NULL DEFAULT 320"),
+                         ("frontend_megamenu_heading_size", "INTEGER"),
+                         ("frontend_megamenu_subheading_size", "INTEGER"),
                          ("frontend_tagline_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("frontend_hero_heading_font", "VARCHAR(32) NOT NULL DEFAULT 'fraunces'"),
                          ("frontend_hero_heading_size", "INTEGER NOT NULL DEFAULT 100"),
@@ -651,14 +863,23 @@ def _migrate_sqlite(app):
                          ("header_alert_text_color", "VARCHAR(16)"),
                          ("header_alert_icon", "VARCHAR(32)"),
                          ("header_alert_icon_position", "VARCHAR(8) NOT NULL DEFAULT 'before'"),
-                         ("setup_complete", "BOOLEAN NOT NULL DEFAULT 0")):
+                         ("setup_complete", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("timezone", "VARCHAR(64) NOT NULL DEFAULT 'UTC'"),
+                         ("utility_bar_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("utility_bar_bg_color", "VARCHAR(16)"),
+                         ("utility_bar_text_color", "VARCHAR(16)"),
+                         ("utility_bar_left_json", "TEXT"),
+                         ("utility_bar_right_json", "TEXT"),
+                         ("utility_bar_live_meetings", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("utility_bar_mobile_default", "VARCHAR(32)")):
             add("site_setting", col, ddl)
         for col, ddl in (("url", "VARCHAR(1000)"),
                          ("stored_filename", "VARCHAR(500)"),
                          ("original_filename", "VARCHAR(500)"),
                          ("thumbnail_filename", "VARCHAR(500)"),
                          ("position", "INTEGER NOT NULL DEFAULT 0"),
-                         ("created_by", "INTEGER REFERENCES user(id)")):
+                         ("created_by", "INTEGER REFERENCES user(id)"),
+                         ("public_visible", "BOOLEAN NOT NULL DEFAULT 1")):
             add("reading", col, ddl)
         for col, ddl in (("dash_show_stats", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_intergroup", "BOOLEAN NOT NULL DEFAULT 1"),
@@ -696,6 +917,7 @@ def _migrate_sqlite(app):
                          ("icon_before_size", "INTEGER"),
                          ("icon_after_size", "INTEGER"),
                          ("link_size", "VARCHAR(16)"),
+                         ("link_size_pct", "INTEGER"),
                          ("override_color", "BOOLEAN NOT NULL DEFAULT 0"),
                          ("custom_color", "VARCHAR(16)")):
             add("frontend_nav_link", col, ddl)
@@ -725,6 +947,42 @@ def _migrate_sqlite(app):
             "frontend_homepage_template = CASE WHEN frontend_homepage_template = 'dccma' THEN 'recovery-blue' ELSE frontend_homepage_template END, "
             "frontend_megamenu_template = CASE WHEN frontend_megamenu_template = 'dccma' THEN 'recovery-blue' ELSE frontend_megamenu_template END"
         ))
+
+        # Seed the dynamic utility-bar columns from the Recovery Blue
+        # header's hardcoded content (Hyperlist beta link on the left,
+        # 24-hour helpline on the right, blue-on-white palette). The
+        # update runs only on Recovery Blue installs whose utility-bar
+        # fields are still entirely null — so once an admin saves their
+        # own bar config, this stops touching anything. Safe to re-run
+        # every boot: the WHERE clause makes it a no-op past the first
+        # successful seed.
+        import json as _ub_json
+        _ub_left = _ub_json.dumps([
+            {"kind": "link", "label": "Hyperlist (beta)", "url": "#",
+             "icon": "", "open_in_new_tab": False},
+        ])
+        _ub_right = _ub_json.dumps([
+            {"kind": "text",   "label": "CMA 24-Hour Helpline",
+             "url": "", "icon": "phone", "open_in_new_tab": False},
+            {"kind": "button", "label": "855-METH-FREE",
+             "url": "tel:+18556384373",
+             "icon": "", "open_in_new_tab": False},
+        ])
+        # "Empty" matches both NULL and the literal '[]' the save route
+        # writes for an empty list — so the seed runs whether the install
+        # never touched the form or saved a blank one before the seed
+        # was wired up.
+        _ub_res = conn.execute(text(
+            "UPDATE site_setting "
+            "SET utility_bar_bg_color    = '#0B5CFF', "
+            "    utility_bar_text_color  = '#ffffff', "
+            "    utility_bar_left_json   = :left, "
+            "    utility_bar_right_json  = :right "
+            "WHERE frontend_header_template = 'recovery-blue' "
+            "  AND COALESCE(utility_bar_left_json, '[]')  = '[]' "
+            "  AND COALESCE(utility_bar_right_json, '[]') = '[]'"
+        ), {"left": _ub_left, "right": _ub_right})
+        app.logger.info("utility_bar seed rowcount=%s", _ub_res.rowcount)
 
 
 def _seed_admin(app):
@@ -803,3 +1061,48 @@ def _seed_custom_layouts(app):
             row.description = p["description"]
             row.blocks_json = blocks_json
     db.session.commit()
+
+
+def _seed_footer_layouts(app):
+    """Seed the editable Recovery Blue footer as a CustomLayout
+    (kind='footer', is_prebuilt=False) on first boot. Unlike the
+    homepage layouts above (is_prebuilt=True, locked from edits) this
+    one is intentionally editable — admins can rearrange its blocks in
+    the layout builder, and the corresponding admin content sections
+    on the Footer page populate the block content. The other footer
+    presets (classic / minimal / stacked / mega) stay non-editable in
+    FOOTER_TEMPLATES with their own Jinja files.
+
+    The seed only inserts when the row is missing (idempotent at boot);
+    once seeded, edits stick and we never overwrite. If the admin
+    deletes the seeded row, it WILL come back on next boot — that's
+    intentional so a wiped footer can always be restored to a known
+    starting point."""
+    import json
+    from .models import CustomLayout
+    KEY = "recovery-blue"
+    if CustomLayout.query.filter_by(key=KEY).first():
+        return  # Already seeded (or admin-customised) — leave alone.
+    blocks = [
+        {"type": "row", "cols": 1, "columns": [
+            [{"type": "meeting_locations"}],
+        ]},
+        {"type": "row", "cols": 1, "columns": [
+            [{"type": "contact_section"}],
+        ]},
+        {"type": "row", "cols": 3, "columns": [
+            [{"type": "brand"}],
+            [{"type": "copyright"}],
+            [{"type": "secondary_nav"}],
+        ]},
+    ]
+    db.session.add(CustomLayout(
+        key=KEY, name="Recovery Blue",
+        description=("Fellowship-style footer: meeting-location cards, a contact "
+                     "section, then brand + copyright + secondary nav at the bottom. "
+                     "Editable — drag blocks around in the layout builder."),
+        blocks_json=json.dumps(blocks),
+        kind="footer", is_prebuilt=False,
+    ))
+    db.session.commit()
+    app.logger.info("Seeded Recovery Blue footer CustomLayout")

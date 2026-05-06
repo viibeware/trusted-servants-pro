@@ -103,6 +103,54 @@
   {% include "_frontend_subnav.html" %}
   <div class="fe-admin-main">
 
+{# ---------- Default appearance mode (separate form so it doesn't share
+   submit state with the design-tokens form below) ---------- #}
+{% set _def_theme = (site.frontend_default_theme if site else 'system') or 'system' %}
+<form class="form" method="post" action="{{ url_for('main.frontend_default_theme_save') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <section class="card">
+    <div class="card-head">
+      <h2>Default appearance</h2>
+      <span class="muted smaller">First-time visitors see this. Returning visitors keep the choice they made via the theme toggle (stored in their browser).</span>
+    </div>
+    <div class="fe-default-theme-grid">
+      {% for opt in [
+        ('light',  'Light',         'sun',   'Always start in light mode.'),
+        ('dark',   'Dark',          'moon',  'Always start in dark mode.'),
+        ('system', 'Follow system', 'users', "Match the visitor's OS preference (light or dark)."),
+      ] %}
+      <label class="fe-default-theme-opt{% if _def_theme == opt[0] %} is-active{% endif %}">
+        <input type="radio" name="frontend_default_theme" value="{{ opt[0] }}"
+               {% if _def_theme == opt[0] %}checked{% endif %}>
+        <span class="fe-default-theme-icon" aria-hidden="true">{{ icon(opt[2]) }}</span>
+        <span class="fe-default-theme-name">{{ opt[1] }}</span>
+        <span class="fe-default-theme-desc muted smaller">{{ opt[3] }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <div class="form-actions"><button class="btn btn-primary">Save Default Theme</button></div>
+  </section>
+</form>
+
+<script>
+  // Live `is-active` toggle for the default-theme radio cards. Without
+  // this, the card only highlights server-side from the saved value, so
+  // clicking a different option doesn't visually reflect the new choice
+  // until after a save + reload.
+  (function () {
+    const opts = document.querySelectorAll('.fe-default-theme-opt');
+    if (!opts.length) return;
+    const sync = () => opts.forEach(o => {
+      const r = o.querySelector('input[type="radio"]');
+      o.classList.toggle('is-active', !!(r && r.checked));
+    });
+    opts.forEach(o => {
+      const r = o.querySelector('input[type="radio"]');
+      if (r) r.addEventListener('change', sync);
+    });
+  })();
+</script>
+
 <form class="form" method="post" action="{{ url_for('main.frontend_design_save') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 

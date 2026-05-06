@@ -1,0 +1,58 @@
+{# Generic footer dispatcher — walks `footer_blocks`, a list of:
+     {"type": "row", "cols": 1-4,
+      "columns": [[{type: <block-type>}, ...], ...]}
+   Each row renders as a CSS grid with N columns; each column renders
+   its block sequence top-to-bottom. The shared container styling
+   (boxed/full width, padding, max width) comes from the same
+   _footer_helpers macros as the prebuilt footer templates so custom
+   layouts pick up the admin's container settings for free.
+
+   Block-type → partial mapping (must stay in sync with
+   _FOOTER_BLOCK_TYPES in routes.py + FOOTER_BLOCK_CATALOG in frontend.py):
+     brand          → blocks/_brand.html
+     link_columns   → blocks/_link_columns.html
+     social_row     → blocks/_social_row.html
+     secondary_nav  → blocks/_secondary_nav.html
+     copyright      → blocks/_copyright.html
+     divider        → blocks/_divider.html
+     spacer         → blocks/_spacer.html
+     admin_login    → blocks/_admin_login.html
+#}
+{% from "frontend/footers/_footer_helpers.html" import footer_inner_attrs %}
+{% from "frontend/footers/_footer_bg.html" import footer_bg_class, footer_bg_style, footer_bg_data_attrs, footer_bg_inner %}
+{% set _bg = footer_content(site).bg %}
+{% set _min_h = (site.frontend_footer_min_height_vh if site else 0) or 0 %}
+{% set _font_scale = (site.frontend_footer_font_scale if site else 100) or 100 %}
+<footer class="fe-footer fe-footer-custom {{ footer_bg_class(_bg) }}"
+        {% set _bgs = footer_bg_style(_bg, _min_h, _font_scale) %}{% if _bgs %}style="{{ _bgs }}"{% endif %}
+        {{ footer_bg_data_attrs(_bg) }}>
+  {{ footer_bg_inner(_bg) }}
+  <div {{ footer_inner_attrs(site) }}>
+    <div class="fe-footer-custom-stack">
+      {% for row in (footer_blocks or []) %}
+        {%- set _cols = row.cols or 1 -%}
+        <div class="fe-footer-custom-row fe-footer-custom-row--cols-{{ _cols }}">
+          {% for col_blocks in (row.columns or []) %}
+          <div class="fe-footer-custom-col">
+            {% for _b in col_blocks %}
+              {%- set _t = _b.type if _b.type is defined else _b.get('type', '') -%}
+              {%- if _t == 'brand' %}{% include "frontend/footers/blocks/_brand.html" %}
+              {%- elif _t == 'link_columns' %}{% include "frontend/footers/blocks/_link_columns.html" %}
+              {%- elif _t == 'social_row' %}{% include "frontend/footers/blocks/_social_row.html" %}
+              {%- elif _t == 'secondary_nav' %}{% include "frontend/footers/blocks/_secondary_nav.html" %}
+              {%- elif _t == 'copyright' %}{% include "frontend/footers/blocks/_copyright.html" %}
+              {%- elif _t == 'meeting_locations' %}{% include "frontend/footers/blocks/_meeting_locations.html" %}
+              {%- elif _t == 'contact_section' %}{% include "frontend/footers/blocks/_contact_section.html" %}
+              {%- elif _t == 'divider' %}{% include "frontend/footers/blocks/_divider.html" %}
+              {%- elif _t == 'spacer' %}{% include "frontend/footers/blocks/_spacer.html" %}
+              {%- elif _t == 'powered_by' %}{% include "frontend/footers/blocks/_powered_by.html" %}
+              {%- elif _t == 'admin_login' %}{% include "frontend/footers/blocks/_admin_login.html" %}
+              {%- endif %}
+            {% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</footer>

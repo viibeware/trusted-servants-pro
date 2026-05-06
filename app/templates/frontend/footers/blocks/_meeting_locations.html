@@ -1,0 +1,156 @@
+{# Meeting locations block — heading + responsive card grid. The
+   admin's `predefined_ids` list resolves to live `Location` rows from
+   Settings → Meeting Locations (so a single edit there propagates
+   here); inline `items` are one-off custom entries authored directly
+   in the footer modal. Predefined cards render first then custom.
+   Each card uses the stretched-link pattern: an absolutely-positioned
+   <a> covers the whole card so the entire surface is clickable when a
+   url is set, while the inline "Get directions" button stays
+   interactive (its z-index sits above the stretched link). The note
+   field on custom entries is rendered as Markdown via the shared
+   `markdown_block` filter. #}
+{% set _ml = footer_content(site).meeting_locations %}
+{# Predefined Location lookup — bulk fetch the IDs the admin checked
+   off, ordered by the admin's checklist order, not the table's. #}
+{%- set _pre_records = [] -%}
+{%- if _ml.predefined_ids -%}
+  {%- set _by_id = {} -%}
+  {%- for r in lookup_locations_by_ids(_ml.predefined_ids) -%}
+    {%- set _ = _by_id.update({r.id: r}) -%}
+  {%- endfor -%}
+  {%- for lid in _ml.predefined_ids -%}
+    {%- if lid in _by_id -%}{%- set _ = _pre_records.append(_by_id[lid]) -%}{%- endif -%}
+  {%- endfor -%}
+{%- endif -%}
+{# `_ml.items` would resolve to the dict's `.items()` method in Jinja —
+   use bracket access or .get() for the actual `items` key. #}
+{% set _ml_items = _ml['items'] %}
+{% if _pre_records or _ml_items %}
+<div class="fe-footer-block fe-footer-block-locations">
+  {% if _ml.heading %}<h3 class="fe-footer-locations-heading">{{ _ml.heading }}</h3>{% endif %}
+  <div class="fe-footer-locations-grid">
+
+    {# Predefined cards — sourced from Settings → Meeting Locations.
+       Card-link priority: website URL first (where most visitors want
+       to land); falls back to Google Maps if there's no website. The
+       Get directions pill always points at the maps URL specifically. #}
+    {% for loc in _pre_records %}
+      {% set _card_url = loc.website_url or loc.maps_url %}
+      <article class="fe-footer-location-card{% if _card_url %} fe-footer-location-card--linked{% endif %}">
+        {% if _card_url %}
+        <a class="fe-footer-location-card-link" href="{{ _card_url }}"
+           target="_blank" rel="noopener"
+           aria-label="{{ loc.name or 'Open meeting location' }}"></a>
+        {% endif %}
+        <div class="fe-footer-location-icon" aria-hidden="true">{{ icon('map-pin') }}</div>
+        <div class="fe-footer-location-body">
+          {% if loc.name %}<div class="fe-footer-location-name">{{ loc.name }}</div>{% endif %}
+          {% set _addr_lines = loc.address_lines() %}
+          {% if _addr_lines %}
+          <div class="fe-footer-location-addr">
+            {% for line in _addr_lines %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}
+          </div>
+          {% endif %}
+          {% if loc.notes %}
+          <div class="fe-footer-location-note">{{ loc.notes }}</div>
+          {% endif %}
+          {% if loc.website_url %}
+          {%- set _site_label = loc.website_url
+                | replace('https://', '')
+                | replace('http://', '')
+                | replace('www.', '')
+                | trim -%}
+          {%- if _site_label.endswith('/') %}{% set _site_label = _site_label[:-1] %}{% endif -%}
+          <a class="fe-footer-location-website" href="{{ loc.website_url }}"
+             target="_blank" rel="noopener">
+            {{ _site_label }} <span aria-hidden="true" class="fe-footer-location-website-arrow">→</span>
+          </a>
+          {% endif %}
+          {% if loc.maps_url %}
+          <a class="fe-footer-location-directions" href="{{ loc.maps_url }}"
+             target="_blank" rel="noopener">
+            {{ icon('map-pin') }}<span>Get directions</span>
+          </a>
+          {% endif %}
+        </div>
+      </article>
+    {% endfor %}
+
+    {# Custom one-off cards — authored inline in the footer modal.
+       Same fieldset as the predefined cards above (split address +
+       website + notes + maps), so the visual treatment is uniform.
+       Legacy `url` field is honoured as a fallback for `website_url`
+       when older saves are still on disk. #}
+    {% for it in _ml_items %}
+      {%- set _it_website = it.website_url or it.url or '' -%}
+      {%- set _it_card_url = _it_website or it.maps_url -%}
+      {# Build the 2-line address: prefer split fields, then fall back
+         to legacy `address` (split on \n then on the first comma). #}
+      {%- set _addr_lines = [] -%}
+      {%- if it.street or it.city or it.state or it.zip_code -%}
+        {%- if it.street %}{% set _ = _addr_lines.append(it.street) %}{% endif -%}
+        {%- set _csz_parts = [] -%}
+        {%- if it.city %}{% set _ = _csz_parts.append(it.city) %}{% endif -%}
+        {%- set _tail_parts = [] -%}
+        {%- if it.state %}{% set _ = _tail_parts.append(it.state) %}{% endif -%}
+        {%- if it.zip_code %}{% set _ = _tail_parts.append(it.zip_code) %}{% endif -%}
+        {%- set _tail = _tail_parts | join(' ') -%}
+        {%- set _csz = _csz_parts | join(', ') -%}
+        {%- set _line2 = (_csz ~ (', ' if _csz and _tail else '') ~ _tail) -%}
+        {%- if _line2 %}{% set _ = _addr_lines.append(_line2) %}{% endif -%}
+      {%- elif it.address and '\n' in it.address -%}
+        {%- for line in it.address.split('\n') -%}
+          {%- if line.strip() %}{% set _ = _addr_lines.append(line.strip()) %}{% endif -%}
+        {%- endfor -%}
+      {%- elif it.address -%}
+        {%- set _head, _sep, _tail = it.address.partition(',') -%}
+        {%- if _sep and _tail.strip() -%}
+          {%- set _ = _addr_lines.append(_head.strip()) -%}
+          {%- set _ = _addr_lines.append(_tail.strip()) -%}
+        {%- else -%}
+          {%- set _ = _addr_lines.append(it.address.strip()) -%}
+        {%- endif -%}
+      {%- endif -%}
+      <article class="fe-footer-location-card{% if _it_card_url %} fe-footer-location-card--linked{% endif %}">
+        {% if _it_card_url %}
+        <a class="fe-footer-location-card-link" href="{{ _it_card_url }}"
+           target="_blank" rel="noopener"
+           aria-label="{{ it.name or 'Open meeting location link' }}"></a>
+        {% endif %}
+        {% if it.icon %}
+        <div class="fe-footer-location-icon" aria-hidden="true">{{ icon(it.icon) }}</div>
+        {% else %}
+        <div class="fe-footer-location-icon" aria-hidden="true">{{ icon('map-pin') }}</div>
+        {% endif %}
+        <div class="fe-footer-location-body">
+          {% if it.name %}<div class="fe-footer-location-name">{{ it.name }}</div>{% endif %}
+          {% if _addr_lines %}
+          <div class="fe-footer-location-addr">
+            {% for line in _addr_lines %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}
+          </div>
+          {% endif %}
+          {% if it.note %}<div class="fe-footer-location-note">{{ it.note }}</div>{% endif %}
+          {% if _it_website %}
+          {%- set _site_label = _it_website
+                | replace('https://', '')
+                | replace('http://', '')
+                | replace('www.', '')
+                | trim -%}
+          {%- if _site_label.endswith('/') %}{% set _site_label = _site_label[:-1] %}{% endif -%}
+          <a class="fe-footer-location-website" href="{{ _it_website }}"
+             target="_blank" rel="noopener">
+            {{ _site_label }} <span aria-hidden="true" class="fe-footer-location-website-arrow">→</span>
+          </a>
+          {% endif %}
+          {% if it.maps_url %}
+          <a class="fe-footer-location-directions" href="{{ it.maps_url }}"
+             target="_blank" rel="noopener">
+            {{ icon('map-pin') }}<span>Get directions</span>
+          </a>
+          {% endif %}
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}

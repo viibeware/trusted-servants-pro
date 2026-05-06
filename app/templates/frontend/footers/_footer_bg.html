@@ -1,0 +1,67 @@
+{# Shared footer background renderer. Reuses the hero's bg vocabulary
+   (frosty / solid / gradient / sinewave + optional particle overlay).
+   Emits the matching markup inside whatever positioned container
+   includes it. The container should be `position: relative;
+   overflow: hidden;` so blobs/particles are clipped to its bounds.
+
+   Macros:
+     footer_bg_class(bg)   — the modifier class to put on the container
+                              ("fe-footer-bg-frosty" etc.) so the right
+                              CSS rules pick up.
+     footer_bg_style(bg, site) — inline `style="..."` for solid/gradient.
+     footer_bg_data_attrs(bg) — extra `data-sinewave-colors` etc. attrs.
+     footer_bg_inner(bg)   — the markup that goes INSIDE the footer
+                              container (blobs / particle canvas).
+#}
+
+{%- macro footer_bg_class(bg) -%}
+fe-footer-bg-{{ (bg.style or 'solid') }}
+{%- endmacro -%}
+
+{%- macro footer_bg_style(bg, min_h, font_scale=100) -%}
+  {%- set _parts = [] -%}
+  {%- if bg.style == 'solid' and bg.color -%}{% set _ = _parts.append('background: ' ~ bg.color) %}{%- endif -%}
+  {%- if bg.style == 'gradient' -%}
+    {%- set _g1 = bg.color or '#ffffff' -%}
+    {%- set _g2 = bg.color_2 or '#e0e7ff' -%}
+    {%- set _ang = bg.gradient_angle or 180 -%}
+    {%- set _ = _parts.append('background: linear-gradient(' ~ _ang ~ 'deg, ' ~ _g1 ~ ', ' ~ _g2 ~ ')') -%}
+  {%- endif -%}
+  {%- if min_h and min_h > 0 -%}{% set _ = _parts.append('min-height: ' ~ min_h ~ 'vh') %}{%- endif -%}
+  {# Font-scale CSS var — descendants whose font-size is declared in
+     `em` automatically inherit the scaled base. Always emitted so the
+     variable's available even at default 100%. #}
+  {%- set _ = _parts.append('--fe-footer-scale: ' ~ ((font_scale or 100) / 100.0)) -%}
+  {%- if _parts %}{{ _parts | join('; ') }}{%- endif -%}
+{%- endmacro -%}
+
+{%- macro footer_bg_data_attrs(bg) -%}
+  {%- if bg.style == 'sinewave' and bg.sinewave_colors -%}
+    data-sinewave-colors='{{ bg.sinewave_colors | tojson }}'
+    {%- if bg.sinewave_wave %} data-sinewave-wave='{{ bg.sinewave_wave | tojson }}'{%- endif -%}
+    {%- if bg.sinewave_randomize_colors %} data-sinewave-randomize-colors="1"{%- endif -%}
+    {%- if bg.sinewave_randomize_wave %} data-sinewave-randomize-wave="1"{%- endif -%}
+  {%- endif -%}
+{%- endmacro -%}
+
+{# Markup inserted INSIDE the footer container, before the regular
+   footer content. Frosty blobs + particle canvas live here. Sinewave
+   gets its background applied in JS via loginFxUtils — no extra DOM. #}
+{%- macro footer_bg_inner(bg) -%}
+  {% if bg.style == 'frosty' %}
+  <div class="fe-hero-bg fe-footer-bg-effects" aria-hidden="true" data-hero-blobs
+       {% if bg.randomize %}data-randomize="1"{% endif %}
+       style="--fe-blob-hue-a: {{ bg.hue }}; --fe-blob-hue-b: {{ bg.hue_2 }}; --fe-blob-blur: {{ bg.blur }}px; --fe-blob-op: {{ (bg.opacity or 45) / 100 }};">
+    <div class="fe-hero-blob fe-hero-blob-a" data-hero-blob></div>
+    <div class="fe-hero-blob fe-hero-blob-b" data-hero-blob></div>
+    <div class="fe-hero-blob fe-hero-blob-c" data-hero-blob></div>
+  </div>
+  {% endif %}
+  {% if bg.particle_enabled and bg.particle_effect != 'off' %}
+  <canvas class="fe-hero-particles fe-footer-particles" aria-hidden="true"
+          data-hero-particles
+          data-effect="{{ bg.particle_effect }}"
+          data-speed="{{ bg.particle_speed }}"
+          data-size="{{ bg.particle_size }}"></canvas>
+  {% endif %}
+{%- endmacro -%}

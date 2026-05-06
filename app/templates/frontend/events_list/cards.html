@@ -1,0 +1,14 @@
+{# Cards layout — vertical stack of full event cards in chronological
+   order. Body extracted to `_cards_body.html` so the omni layout can
+   compose it without duplicating markup. #}
+<section class="fe-section fe-events fe-events-list-cards fe-events-list--w-{{ list_width_mode }}" id="events">
+  <div class="{% if list_width_mode == 'boxed' %}fe-container{% else %}fe-mlist-fullwrap{% endif %}"
+       {% if list_width_mode == 'boxed' %}style="max-width: {{ list_max_width }}px;"
+       {%- elif list_padding_pct %}style="padding-left: {{ list_padding_pct }}vw; padding-right: {{ list_padding_pct }}vw;"{% endif %}>
+    <header class="fe-mlist-head">
+      <h1>{{ list_heading or 'All events' }}</h1>
+      <p class="muted">{{ list_subheading or 'Every upcoming event on the calendar. Tap a card for full details.' }}</p>
+    </header>
+    {% include "frontend/events_list/_cards_body.html" %}
+  </div>
+</section>

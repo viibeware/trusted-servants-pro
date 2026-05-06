@@ -1,0 +1,12 @@
+{# Copyright block — single text line from the Footer admin → Copyright
+   field. {year} and {site_name} placeholders are substituted by the
+   shared footer_copyright_text helper. Basic HTML allowed via the
+   safe_html filter (the same allowlist the Inclusion / Features
+   blocks use for their inline-text fields). #}
+{% from "frontend/footers/_footer_helpers.html" import footer_copyright_text %}
+{% set _f = footer_content(site) %}
+{% if _f.copyright %}
+<div class="fe-footer-copy fe-footer-block fe-footer-block-copy">
+  {{ footer_copyright_text(_f.copyright, site) | safe_html }}
+</div>
+{% endif %}

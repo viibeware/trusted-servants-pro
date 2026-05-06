@@ -1,0 +1,36 @@
+{# Shared helpers consumed by every footer template variant.
+
+   `footer_inner_attrs(site)` emits the class + inline-style block for the
+   inner `<div>` so a footer template can do:
+
+       <div {{ footer_inner_attrs(site) }}>...</div>
+
+   In `boxed` mode the inner div picks up `.fe-container` (the global
+   responsive max-width). In `full` mode it spans edge-to-edge with the
+   admin-configured horizontal padding percent.
+
+   `footer_copyright_text(text, site)` substitutes the {year} and
+   {site_name} placeholders so admin can write
+   `© {year} {site_name}` and have it render as `© 2026 DCCMA`.
+#}
+
+{%- macro footer_inner_attrs(site) -%}
+  {%- set _w = (site.frontend_footer_width_mode if site else 'boxed') or 'boxed' -%}
+  {%- set _max = (site.frontend_footer_max_width if site else 1160) or 1160 -%}
+  {%- set _pct = (site.frontend_footer_padding_pct if site else 5) -%}
+  {%- if _w == 'full' -%}
+    class="fe-footer-inner" style="padding-left: {{ _pct }}%; padding-right: {{ _pct }}%;"
+  {%- else -%}
+    class="fe-container fe-footer-inner" style="max-width: {{ _max }}px;"
+  {%- endif -%}
+{%- endmacro -%}
+
+{%- macro footer_copyright_text(text, site) -%}
+  {%- set _name = (site.frontend_title if site else 'Trusted Servants') or 'Trusted Servants' -%}
+  {%- set _year = now_year() if now_year is defined else 2026 -%}
+  {{- (text or '') | replace('{site_name}', _name) | replace('{year}', _year|string) -}}
+{%- endmacro -%}
+
+{%- macro footer_link(l) -%}
+  <a href="{{ (l.url or '#') }}"{% if l.open_in_new_tab %} target="_blank" rel="noopener"{% endif %}>{{ l.label or '' }}</a>
+{%- endmacro -%}

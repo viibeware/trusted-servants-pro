@@ -12,11 +12,15 @@
 {% set _mega_br = (site.frontend_mega_radius_br if site else 18) %}
 {% set _animate = site and site.frontend_megamenu_animate %}
 {% set _animate_ms = (site.frontend_megamenu_animate_ms if site and site.frontend_megamenu_animate_ms else 320) %}
+{% set _mm_h_pct = site.frontend_megamenu_heading_size if site and site.frontend_megamenu_heading_size else None %}
+{% set _mm_sh_pct = site.frontend_megamenu_subheading_size if site and site.frontend_megamenu_subheading_size else None %}
 <div class="fe-megamenu fe-megamenu-recovery-blue{% if _animate %} fe-megamenu-animate{% endif %}" data-megamenu-panel="{{ ni.id }}" aria-hidden="true"
      style="background: {{ _mega_bg }}; color: {{ _mega_fg }};
             border-bottom-left-radius: {{ _mega_bl }}px;
             border-bottom-right-radius: {{ _mega_br }}px;
-            --fe-mm-reveal-ms: {{ _animate_ms }}ms;">
+            --fe-mm-reveal-ms: {{ _animate_ms }}ms;{% if _mm_h_pct %}
+            --fe-mm-heading-scale: {{ '%.2f'|format(_mm_h_pct / 100) }};{% endif %}{% if _mm_sh_pct %}
+            --fe-mm-link-scale: {{ '%.2f'|format(_mm_sh_pct / 100) }};{% endif %}">
   <div class="fe-megamenu-inner">
     {% for col in ni.columns[:3] %}
     <div class="fe-megamenu-col">
@@ -50,10 +54,10 @@
             </a>
           {% else %}
             {% set _link_cls = 'fe-megamenu-link' %}
-            {% if link.link_size == 'small' %}{% set _link_cls = _link_cls ~ ' fe-megamenu-link-small' %}
-            {% elif link.link_size == 'large' %}{% set _link_cls = _link_cls ~ ' fe-megamenu-link-large' %}
-            {% endif %}
             {% set _link_style = '--i: ' ~ _i ~ ';' %}
+            {% if link.link_size_pct %}
+              {% set _link_style = _link_style ~ ' --fe-mm-link-scale: ' ~ ('%.2f'|format(link.link_size_pct / 100)) ~ ';' %}
+            {% endif %}
             {% if link.override_color and link.custom_color %}
               {% set _link_cls = _link_cls ~ ' fe-megamenu-link-colored' %}
               {% set _link_style = _link_style ~ ' --link-color-light: ' ~ link.custom_color ~ '; --link-color-dark: ' ~ (link.custom_color | dark_variant) ~ ';' %}

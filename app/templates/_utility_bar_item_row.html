@@ -1,0 +1,46 @@
+{# One leaf-item row in the utility-bar editor (link / button / text /
+   icon). Containers are rendered separately in the admin template
+   itself. Each row carries a drag handle so it can be reordered
+   within its parent OR dragged into a container's inner list. The
+   visual fields are data-attributed but not HTML-form-named — on
+   submit the admin's JS walks the DOM and builds a single
+   utility_<side>_payload JSON field instead of relying on the form's
+   parallel-arrays encoding.
+
+   Required context:
+     `it` — dict with keys: kind, label, url, icon, open_in_new_tab.
+     `_ub_icons` — list of (name, label) tuples for the icon picker. #}
+<div class="utility-bar-row" data-utility-row data-utility-kind="leaf"
+     draggable="true">
+  <button type="button" class="utility-bar-handle" data-utility-handle
+          aria-label="Drag to reorder or move to a container"
+          title="Drag to reorder or move into a container">{{ icon('grip-vertical') }}</button>
+  <div class="utility-bar-row-fields">
+    <label class="utility-bar-kind">Type
+      <select data-utility-field="kind">
+        {% for kk, kl in [('link', 'Link'), ('button', 'Pill button'), ('text', 'Text'), ('icon', 'Icon')] %}
+          <option value="{{ kk }}" {% if it.kind == kk %}selected{% endif %}>{{ kl }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label data-utility-show-for="link,button,text,icon">Label
+      <input type="text" data-utility-field="label" value="{{ it.label or '' }}" maxlength="100" placeholder="Visit our forum">
+    </label>
+    <label data-utility-show-for="link,button,icon">URL
+      <input type="url" data-utility-field="url" value="{{ it.url or '' }}" placeholder="https://example.com">
+    </label>
+    <label data-utility-show-for="link,button,text,icon">Icon
+      <select data-utility-field="icon">
+        {% for nn, nl in _ub_icons %}
+          <option value="{{ nn }}" {% if (it.icon or '') == nn %}selected{% endif %}>{{ nl }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="check utility-bar-newtab" data-utility-show-for="link,button,icon">
+      <input type="checkbox" data-utility-field="open_in_new_tab" value="0" {% if it.open_in_new_tab %}checked{% endif %}>
+      <span>Open in new tab</span>
+    </label>
+  </div>
+  <button type="button" class="icon-btn utility-bar-remove" data-utility-remove
+          aria-label="Remove item" title="Remove item">{{ icon('x') }}</button>
+</div>

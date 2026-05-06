@@ -1,4 +1,9 @@
-{# Accordion FAQ. Content from site_blocks(site).faq. #}
+{# Accordion FAQ. Content from site_blocks(site).faq, normalized to a
+   list of {question, answer, icon, icon_size}. Custom button + grid-rows
+   animated body wrapper instead of native <details> so we get a smooth
+   expand/collapse. Question through safe_html (single-line); answer
+   through markdown_block (lists, headings, etc. work without leading
+   blank lines). #}
 {% set _faq = (block_content.faq if block_content else []) %}
 <section class="fe-section fe-faq" aria-label="Frequently asked questions">
   <div class="fe-container">
@@ -6,12 +11,25 @@
       <h2>Frequently asked questions</h2>
       <p>Common questions from people who are about to attend their first meeting.</p>
     </div>
-    <div class="fe-faq-list">
+    <div class="fe-faq-list" data-faq-list>
       {% for q in _faq %}
-      <details class="fe-faq-item">
-        <summary>{{ q.question }}</summary>
-        <p>{{ q.answer }}</p>
-      </details>
+      <div class="fe-faq-item" data-faq-item>
+        <button type="button" class="fe-faq-summary"
+                data-faq-toggle aria-expanded="false">
+          {% if q.icon %}
+          <span class="fe-faq-summary-icon"
+                {% if q.icon_size %}style="--icon-size: {{ q.icon_size }}px;"{% endif %}
+                aria-hidden="true">
+            {{ icon(q.icon) }}
+          </span>
+          {% endif %}
+          <span class="fe-faq-summary-q">{{ q.question | safe_html }}</span>
+          <span class="fe-faq-summary-chevron" aria-hidden="true">{{ icon('chevron-down') }}</span>
+        </button>
+        <div class="fe-faq-body">
+          <div class="fe-faq-body-inner">{{ q.answer | markdown_block }}</div>
+        </div>
+      </div>
       {% endfor %}
     </div>
   </div>

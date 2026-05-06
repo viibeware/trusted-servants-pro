@@ -50,6 +50,7 @@ SHADOW_KEYS = list(SHADOW_SCALE.keys())
 WEIGHT_KEYS = ["400", "500", "600", "700", "800"]
 TEXT_TRANSFORM_KEYS = ["none", "uppercase"]
 LINK_DECORATION_KEYS = ["none", "underline", "dotted"]
+ON_OFF_KEYS = ["on", "off"]
 
 
 # ----- Theme defaults — what each token resolves to per theme -------
@@ -85,6 +86,13 @@ THEME_DEFAULTS = {
         "btn_weight":         "600",
         "btn_text_transform": "none",
         "btn_decoration":     "none",
+        # Primary-button effects — default-on across all themes so the
+        # existing visual language (drop shadow at rest, lift + glow on
+        # hover) is preserved. Admins can dial any of them off in the
+        # Design tokens page.
+        "btn_shadow":           "on",
+        "btn_hover_transform":  "on",
+        "btn_hover_glow":       "on",
 
         "link_decoration":       "none",
         "link_decoration_hover": "underline",
@@ -124,6 +132,12 @@ THEME_DEFAULTS = {
         "btn_weight":         "700",
         "btn_text_transform": "uppercase",
         "btn_decoration":     "none",
+        # Recovery Blue gets the meeting-page Zoom button recipe by
+        # default — the user singled this look out as the preferred
+        # primary-button feel for this theme.
+        "btn_shadow":           "on",
+        "btn_hover_transform":  "on",
+        "btn_hover_glow":       "on",
 
         "link_decoration":       "underline",
         "link_decoration_hover": "underline",
@@ -194,6 +208,15 @@ DESIGN_FIELDS = [
     {"key": "btn_decoration", "kind": "select", "choices": LINK_DECORATION_KEYS,
      "group": "Buttons", "label": "Text decoration",
      "help": "Off (`none`) keeps anchor-styled buttons free of underline."},
+    {"key": "btn_shadow", "kind": "select", "choices": ON_OFF_KEYS,
+     "group": "Buttons", "label": "Primary — drop shadow",
+     "help": "Soft shadow under primary buttons at rest. Off makes the button sit flat on the page."},
+    {"key": "btn_hover_transform", "kind": "select", "choices": ON_OFF_KEYS,
+     "group": "Buttons", "label": "Primary — hover lift",
+     "help": "Slight upward translate on hover that gives primary buttons a lift cue."},
+    {"key": "btn_hover_glow", "kind": "select", "choices": ON_OFF_KEYS,
+     "group": "Buttons", "label": "Primary — hover glow",
+     "help": "Larger coloured shadow on hover that reads as an outer glow."},
 
     # ----- Links -----
     {"key": "link_decoration",       "kind": "select", "choices": LINK_DECORATION_KEYS,
@@ -377,6 +400,15 @@ def design_css_vars(site):
     parts.append(f"--fe-btn-weight: {chosen['btn_weight']};")
     parts.append(f"--fe-btn-text-transform: {chosen['btn_text_transform']};")
     parts.append(f"--fe-btn-decoration: {chosen['btn_decoration']};")
+    # Primary-button effect tokens — empty/`none` when disabled so the
+    # CSS rule's `box-shadow: var(--fe-btn-shadow)` resolves to no
+    # shadow / no transform without needing a separate disabled rule.
+    _shadow = "0 8px 20px rgba(15, 23, 42, 0.18)" if chosen.get("btn_shadow") != "off" else "none"
+    _hover_t = "translateY(-1px)" if chosen.get("btn_hover_transform") != "off" else "none"
+    _hover_g = "0 10px 28px rgba(81, 100, 255, 0.32)" if chosen.get("btn_hover_glow") != "off" else "none"
+    parts.append(f"--fe-btn-shadow: {_shadow};")
+    parts.append(f"--fe-btn-hover-transform: {_hover_t};")
+    parts.append(f"--fe-btn-hover-glow: {_hover_g};")
 
     # Links.
     parts.append(f"--fe-link-decoration: {chosen['link_decoration']};")

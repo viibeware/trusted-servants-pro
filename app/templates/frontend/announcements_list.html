@@ -1,0 +1,7 @@
+{% extends "frontend/base.html" %}
+{% block title %}{{ list_heading or 'Announcements' }} · {{ frontend_title }}{% endblock %}
+{# Dispatcher: each layout (currently only `omni`) lives in
+   frontend/announcements_list/<key>.html and is selected on the
+   admin's Templates page (SiteSetting.frontend_announcements_list_template).
+   Every layout receives the same `all_announcements` list. #}
+{% block content %}{% include list_partial %}{% endblock %}

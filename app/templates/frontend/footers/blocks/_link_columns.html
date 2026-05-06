@@ -1,0 +1,21 @@
+{# Link columns block — renders every admin-defined column from the
+   Footer admin → Link columns editor as a responsive grid. Each column
+   shows its title (small caps, muted) followed by the link list.
+   Auto-fits 160-px-min tracks so 2-column-wide and 4-column-wide
+   layouts both look right. #}
+{% from "frontend/footers/_footer_helpers.html" import footer_link %}
+{% set _cols = footer_content(site).columns %}
+{% if _cols %}
+<div class="fe-footer-cols fe-footer-block fe-footer-block-cols">
+  {% for col in _cols %}
+  <div class="fe-footer-col">
+    {% if col.title %}<div class="fe-footer-col-title">{{ col.title }}</div>{% endif %}
+    <ul class="fe-footer-link-list">
+      {% for l in col.links %}
+      <li>{{ footer_link(l) }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

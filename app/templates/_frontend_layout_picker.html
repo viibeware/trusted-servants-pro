@@ -11,7 +11,7 @@
      blocks_catalog — list of {key, name, desc} block types the builder offers
      save_layout_url — endpoint the builder POSTs new layouts to (JSON)
 #}
-{% macro layout_picker(layouts, active_key, action_url, radio_name, modal_id, builder_modal_id, blocks_catalog, save_layout_url) -%}
+{% macro layout_picker(layouts, active_key, action_url, radio_name, modal_id, builder_modal_id, blocks_catalog, save_layout_url, kind='homepage') -%}
   {# Find the active layout's display name. {% set %} inside {% for %} is
      loop-scoped in Jinja, so we use a namespace object whose attribute
      mutations DO escape the loop. #}
@@ -92,6 +92,7 @@
        data-delete-layout-url="{{ url_for('main.frontend_custom_layout_delete', key='__KEY__') }}"
        data-activate-url="{{ action_url }}"
        data-activate-field="{{ radio_name }}"
+       data-layout-kind="{{ kind }}"
        data-csrf-token="{{ csrf_token() }}">
     <div class="modal-backdrop" data-close></div>
     <div class="modal-panel fe-layout-builder-panel" role="dialog" aria-modal="true">

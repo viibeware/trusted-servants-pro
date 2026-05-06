@@ -1,0 +1,423 @@
+{# Printlist — branded, print-optimized meeting schedule.
+
+   This template renders both the screen view and the PDF body. The
+   `is_pdf` flag from the route flips a couple of things: the on-screen
+   action bar (Print + Download PDF buttons) is hidden from print and
+   from the PDF render; the @page rules apply identically in both
+   contexts so a "Print to PDF" from the browser produces the same
+   document as the WeasyPrint-rendered /printlist.pdf.
+
+   Layout: two-column flow inside each @page. Letter target is 2 pages
+   for a typical fellowship schedule; legal compresses the same content
+   onto a single tall page when the admin prefers that.
+
+   Header band relies on the site logo as the primary brand mark — the
+   site title appears as a small label beside the logo, freeing up the
+   title-line for the admin-tunable subheading (e.g. "Weekly Meeting
+   Schedule"). The website (admin-tunable) sits as a meta line on the
+   right next to the date and meeting count.
+
+   Typography is single-family Inter end-to-end. Numerics use
+   `font-variant-numeric: tabular-nums` for column alignment. Monospace
+   (Zoom credentials) falls back through the OS-stack — still Inter
+   first if the visitor has it, then a generic monospace fallback. #}
+{%- set _title = frontend_title or 'Meeting Schedule' -%}
+{%- set _accent = (site.utility_bar_bg_color if site else None) or '#0b3d91' -%}
+{%- set _page_size = printlist_page_size or 'letter' -%}
+{%- set _page_dims_w = 8.5 -%}
+{%- set _page_dims_h = 14 if _page_size == 'legal' else 11 -%}
+{%- set _page_size_css = 'Legal' if _page_size == 'legal' else 'Letter' -%}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ _title }} — Meeting Schedule</title>
+<meta name="description" content="Printable meeting schedule for {{ _title }}.">
+<meta name="robots" content="noindex">
+{% if site and site.frontend_favicon_filename %}
+<link rel="icon" href="{{ url_for('public.site_frontend_favicon') }}">
+{% else %}
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+{% endif %}
+<style>
+  /* Print-first stylesheet. The @page rules apply for browser print
+     AND for the WeasyPrint-rendered PDF; the screen view simulates
+     the same paper size with a centered card so what you see on screen
+     is what you'll print/download. */
+  @page {
+    size: {{ _page_size_css }};
+    margin: 0.55in 0.55in 0.7in;
+    @bottom-left {
+      content: "{{ _title|replace('"', '\\"') }} — Meeting Schedule";
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 8pt;
+      color: #888;
+    }
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 8pt;
+      color: #888;
+    }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.4;
+    color: #111;
+    background: #ececec;
+    -webkit-font-smoothing: antialiased;
+    --accent: {{ _accent }};
+    --page-w: {{ _page_dims_w }}in;
+    --page-h: {{ _page_dims_h }}in;
+  }
+
+  /* Screen-only chrome: action bar at the top + a paper-shaped frame
+     around the printable content so it preview-looks like the printed
+     page. The @media print rules below strip every bit of this. */
+  .pl-actions {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #1a1a1a;
+    color: #fff;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  .pl-actions p { margin: 0; font-size: 0.875rem; opacity: 0.85; }
+  .pl-actions p strong { font-weight: 600; }
+  .pl-actions .pl-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--accent);
+    color: #fff;
+    text-decoration: none;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    border-radius: 4px;
+    border: 0;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .pl-actions .pl-btn:hover, .pl-actions .pl-btn:focus { filter: brightness(1.1); }
+  .pl-actions .pl-btn--ghost {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.4);
+  }
+
+  /* Paper-card wrapper — only on screen. Width fixed at the chosen
+     page width; height is left to flow with content (so a 2-page
+     worth of meetings shows as a tall card with the proper width
+     proportion). The narrow-width visual cue is what makes the page
+     read as "letter shape" or "legal shape" rather than a square. */
+  .paper {
+    width: var(--page-w);
+    max-width: calc(100vw - 2rem);
+    margin: 1.5rem auto;
+    background: #fff;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    padding: 0.55in;
+  }
+
+  /* Header band — logo as the brand anchor. The compact label "MEETING
+     SCHEDULE · {site title}" replaces the previous big serif H1. The
+     subheading (admin-tunable) reads as the document's working title.
+     Right side stacks meta lines (count, date, website). */
+  .pl-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 3px solid var(--accent);
+    margin-bottom: 0.5rem;
+  }
+  .pl-head-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    min-width: 0;
+    flex: 1;
+  }
+  .pl-head-brand img {
+    max-height: 0.71in;
+    max-width: 1.35in;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+  .pl-head-text { min-width: 0; }
+  .pl-head-text .pl-eyebrow {
+    margin: 0;
+    font-size: 7.75pt;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .pl-head-text .pl-eyebrow .pl-eyebrow-sep {
+    color: #c0c0c0;
+    margin: 0 0.4em;
+    font-weight: 500;
+  }
+  .pl-head-text .pl-subheading {
+    margin: 0.15rem 0 0;
+    font-size: 13pt;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    color: #0a0a0a;
+  }
+  .pl-head-text .pl-tagline {
+    margin: 0.15rem 0 0;
+    font-size: 8.5pt;
+    color: #555;
+    font-weight: 400;
+  }
+  .pl-head-meta {
+    text-align: right;
+    font-size: 8.25pt;
+    color: #555;
+    line-height: 1.5;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .pl-head-meta .pl-meta-strong { color: #0a0a0a; font-weight: 700; }
+  .pl-head-meta .pl-meta-website {
+    color: var(--accent);
+    font-weight: 600;
+    word-break: break-all;
+  }
+
+  /* Intro line */
+  .pl-intro {
+    font-size: 8.25pt;
+    color: #555;
+    margin: 0 0 0.55rem;
+    text-align: center;
+  }
+
+  /* Two-column flow — meetings flow naturally between columns, then
+     overflow onto page 2 (letter) or stay on page 1 (legal). Day
+     sections are kept atomic so a header never sits at the bottom
+     of a column with no rows under it. */
+  .pl-body {
+    column-count: 2;
+    column-gap: 0.4in;
+    column-rule: 0.5pt solid #ddd;
+  }
+
+  .pl-day { break-inside: avoid-column; margin: 0 0 0.4rem; }
+  .pl-day:first-child { margin-top: 0; }
+  .pl-day-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0 0 0.25rem;
+    padding: 0.22rem 0.45rem;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 2px;
+  }
+  .pl-day-head h2 {
+    margin: 0;
+    font-family: inherit;
+    font-size: 10.5pt;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    flex: 1;
+  }
+  .pl-day-head .pl-day-count {
+    font-size: 8pt;
+    opacity: 0.85;
+    font-weight: 500;
+  }
+  .pl-day-empty {
+    font-size: 8.5pt;
+    color: #888;
+    margin: 0 0 0.4rem 0.4rem;
+  }
+
+  .pl-mtg {
+    break-inside: avoid;
+    padding: 0.2rem 0.4rem 0.3rem;
+    border-bottom: 0.5pt solid #e3e3e3;
+    page-break-inside: avoid;
+  }
+  .pl-mtg:last-child { border-bottom: 0; }
+  .pl-mtg-row1 {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0;
+  }
+  .pl-mtg-name {
+    font-weight: 700;
+    font-size: 9.5pt;
+    color: #0a0a0a;
+    line-height: 1.25;
+    flex: 1;
+    min-width: 0;
+    word-wrap: break-word;
+  }
+  .pl-mtg-time {
+    font-weight: 700;
+    font-size: 9pt;
+    color: var(--accent);
+    white-space: nowrap;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.005em;
+  }
+  .pl-mtg-meta {
+    margin: 0.1rem 0 0;
+    font-size: 8.25pt;
+    color: #555;
+    line-height: 1.35;
+  }
+  .pl-mtg-meta .pl-format {
+    display: inline-block;
+    padding: 0 0.3rem;
+    font-size: 7.25pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    border: 0.5pt solid var(--accent);
+    border-radius: 2px;
+    margin-right: 0.35rem;
+    vertical-align: 1pt;
+  }
+  .pl-mtg-zoom {
+    margin: 0.1rem 0 0;
+    font-size: 7.75pt;
+    color: #444;
+    font-family: 'Inter', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    line-height: 1.4;
+    font-variant-numeric: tabular-nums;
+  }
+  .pl-mtg-zoom .pl-z-label {
+    font-size: 7pt;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #888;
+    font-weight: 600;
+    margin-right: 0.2rem;
+  }
+  .pl-mtg-zoom span + .pl-z-label { margin-left: 0.5rem; }
+
+  /* Print rules — strip every bit of screen chrome. */
+  @media print {
+    body { background: #fff; }
+    .pl-actions { display: none; }
+    .paper {
+      width: auto;
+      max-width: none;
+      margin: 0;
+      box-shadow: none;
+      padding: 0;
+    }
+  }
+</style>
+</head>
+<body>
+{# Action bar — never rendered in the PDF. The two buttons cover both
+   workflows: Print sends the page through the browser's print dialog
+   (the @page rules above shape the output), Download PDF hits the
+   /printlist.pdf endpoint that runs WeasyPrint server-side. #}
+{% if not is_pdf %}
+<div class="pl-actions" role="toolbar" aria-label="Document actions">
+  <p>Optimised for printing on US {{ _page_size_css }} paper. <strong>Use Print to send to a printer or save via your browser, or Download PDF for a server-rendered copy.</strong></p>
+  <button type="button" class="pl-btn" onclick="window.print()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+    Print
+  </button>
+  <a class="pl-btn pl-btn--ghost" href="{{ url_for('frontend.printlist_pdf') }}">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Download PDF
+  </a>
+</div>
+{% endif %}
+
+<div class="paper">
+  <header class="pl-head">
+    <div class="pl-head-brand">
+      {% if site and site.frontend_logo_filename %}
+        <img src="{{ url_for('public.site_frontend_logo') }}" alt="{{ frontend_title }}">
+      {% endif %}
+      <div class="pl-head-text">
+        <p class="pl-eyebrow">Meeting Schedule<span class="pl-eyebrow-sep">·</span>{{ frontend_title }}</p>
+        {% if printlist_subheading %}
+          <p class="pl-subheading">{{ printlist_subheading }}</p>
+        {% endif %}
+        {% if frontend_tagline %}<p class="pl-tagline">{{ frontend_tagline }}</p>{% endif %}
+      </div>
+    </div>
+    <div class="pl-head-meta">
+      <div><span class="pl-meta-strong">{{ total_meetings }}</span> meeting{{ '' if total_meetings == 1 else 's' }}</div>
+      <div>Updated {{ generated_at.strftime('%B %-d, %Y') }}</div>
+      {% if printlist_website %}
+        <div class="pl-meta-website">{{ printlist_website }}</div>
+      {% endif %}
+    </div>
+  </header>
+
+  <p class="pl-intro">All times listed in the local timezone. Meetings grouped by day of week, sorted by start time.</p>
+
+  <div class="pl-body">
+    {% for bucket in meetings_by_day %}
+      <section class="pl-day">
+        <div class="pl-day-head">
+          <h2>{{ bucket.label }}</h2>
+          <span class="pl-day-count">{{ bucket['items'] | length }} meeting{{ '' if (bucket['items'] | length) == 1 else 's' }}</span>
+        </div>
+        {% if bucket['items'] %}
+          {% for it in bucket['items'] %}
+            {%- set m = it.meeting -%}
+            {%- set s = it.schedule -%}
+            {%- set lr = it.location_record -%}
+            {%- set _addr_lines = lr.address_lines() if lr else [] -%}
+            {%- set _format_label = ({'in_person': 'In person', 'online': 'Online', 'hybrid': 'Hybrid'}).get(m.meeting_type, 'In person') -%}
+            <article class="pl-mtg">
+              <div class="pl-mtg-row1">
+                <span class="pl-mtg-name">{{ m.name }}</span>
+                <span class="pl-mtg-time">{{ s.start_time | fmt12h }}</span>
+              </div>
+              <p class="pl-mtg-meta">
+                <span class="pl-format">{{ _format_label }}</span>
+                {% if m.meeting_type in ('in_person', 'hybrid') %}
+                  {% if m.location %}{{ m.location }}{% endif %}
+                  {% if _addr_lines %}{% if m.location %} · {% endif %}{{ _addr_lines | join(', ') }}{% endif %}
+                {% elif m.location %}
+                  {{ m.location }}
+                {% endif %}
+              </p>
+              {% if m.meeting_type in ('online', 'hybrid') and (m.zoom_meeting_id or m.zoom_passcode) %}
+                <p class="pl-mtg-zoom">
+                  {% if m.zoom_meeting_id %}<span class="pl-z-label">Zoom Meeting</span><span>{{ m.zoom_meeting_id }}</span>{% endif %}
+                  {% if m.zoom_passcode %}<span class="pl-z-label">Pass</span><span>{{ m.zoom_passcode }}</span>{% endif %}
+                </p>
+              {% endif %}
+            </article>
+          {% endfor %}
+        {% else %}
+          <p class="pl-day-empty">No meetings scheduled.</p>
+        {% endif %}
+      </section>
+    {% endfor %}
+  </div>
+</div>
+
+</body>
+</html>

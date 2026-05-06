@@ -1,0 +1,181 @@
+{# Body-only partial for the Calendar layout. Standalone calendar.html
+   wraps this in a section + header; omni.html includes it directly.
+   Expects `all_events` in scope. The script is bundled here so it
+   travels with the body — the calendar JS scopes all queries to
+   `[data-fe-events-cal]` so multiple includes wouldn't conflict, but
+   we only use this in one place at a time anyway. #}
+{%- set _ns = namespace(buckets={}) -%}
+{%- for ev in (all_events or []) -%}
+  {%- if ev.event_starts_at -%}
+    {%- set _key = ev.event_starts_at.strftime('%Y-%m') -%}
+    {%- if _key not in _ns.buckets -%}
+      {%- set _ = _ns.buckets.update({_key: []}) -%}
+    {%- endif -%}
+    {%- set _ = _ns.buckets[_key].append(ev) -%}
+  {%- endif -%}
+{%- endfor -%}
+
+{% if not all_events %}
+<p class="fe-events-empty muted">No upcoming events — check back soon.</p>
+{% else %}
+<div class="fe-events-cal" data-fe-events-cal>
+  <div class="fe-events-cal-toolbar">
+    <button type="button" class="fe-events-cal-nav" data-cal-prev aria-label="Previous month">
+      {{ icon('chevron-left') }}
+    </button>
+    <h2 class="fe-events-cal-title" data-cal-title aria-live="polite">…</h2>
+    <button type="button" class="fe-events-cal-nav" data-cal-next aria-label="Next month">
+      {{ icon('chevron-right') }}
+    </button>
+  </div>
+  <div class="fe-events-cal-grid" data-cal-grid role="grid" aria-label="Month calendar"></div>
+  <div class="fe-events-cal-list" data-cal-list></div>
+</div>
+
+<script type="application/json" data-fe-events-cal-data>
+{
+  "buckets": {
+    {%- set _bucket_keys = (_ns.buckets.keys() | list) -%}
+    {% for _k in _bucket_keys %}"{{ _k }}": [
+      {% for _ev in _ns.buckets[_k] %}{
+        "id": {{ _ev.id }},
+        "title": {{ _ev.title|tojson }},
+        "summary": {{ (_ev.summary or '')|tojson }},
+        "url": {{ post_url(_ev)|tojson }},
+        "start_iso": {{ _ev.event_starts_at.strftime('%Y-%m-%dT%H:%M')|tojson }},
+        "end_iso": {{ (_ev.event_ends_at.strftime('%Y-%m-%dT%H:%M') if _ev.event_ends_at else '')|tojson }},
+        "is_online": {{ 'true' if _ev.is_online else 'false' }},
+        "location_name": {{ (_ev.location_name or '')|tojson }}
+      }{% if not loop.last %},{% endif %}{% endfor %}
+    ]{% if not loop.last %},{% endif %}
+    {% endfor %}
+  },
+  "first_event_month": {{ (all_events[0].event_starts_at.strftime('%Y-%m')|tojson) if all_events and all_events[0].event_starts_at else '""' }}
+}
+</script>
+
+<script>
+(function () {
+  var root = document.querySelector('[data-fe-events-cal]');
+  if (!root) return;
+  var dataEl = document.querySelector('[data-fe-events-cal-data]');
+  var data = {};
+  try { data = JSON.parse(dataEl.textContent); } catch (e) { return; }
+  var buckets = data.buckets || {};
+  var titleEl = root.querySelector('[data-cal-title]');
+  var gridEl = root.querySelector('[data-cal-grid]');
+  var listEl = root.querySelector('[data-cal-list]');
+
+  var initStr = (data.first_event_month || '').slice(0, 7);
+  var now = new Date();
+  var year, month;
+  if (/^\d{4}-\d{2}$/.test(initStr)) {
+    year = parseInt(initStr.slice(0, 4), 10);
+    month = parseInt(initStr.slice(5, 7), 10) - 1;
+  } else {
+    year = now.getFullYear();
+    month = now.getMonth();
+  }
+
+  var DAY_HEAD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var MONTH_NAME = ['January', 'February', 'March', 'April', 'May', 'June',
+                    'July', 'August', 'September', 'October', 'November', 'December'];
+
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+  function bucketKey(y, m) { return y + '-' + pad2(m + 1); }
+  function fmtTime(iso) {
+    if (!iso) return '';
+    var t = iso.split('T')[1] || '';
+    var hh = parseInt(t.slice(0, 2), 10);
+    var mm = parseInt(t.slice(3, 5), 10);
+    if (isNaN(hh)) return '';
+    var ampm = hh < 12 ? 'am' : 'pm';
+    var h12 = hh % 12 || 12;
+    return mm ? (h12 + ':' + pad2(mm) + ' ' + ampm) : (h12 + ' ' + ampm);
+  }
+
+  function eventsByDay(y, m) {
+    var key = bucketKey(y, m);
+    var rows = buckets[key] || [];
+    var byDay = {};
+    rows.forEach(function (ev) {
+      var d = parseInt((ev.start_iso || '').slice(8, 10), 10);
+      if (!d) return;
+      if (!byDay[d]) byDay[d] = [];
+      byDay[d].push(ev);
+    });
+    return byDay;
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function render() {
+    titleEl.textContent = MONTH_NAME[month] + ' ' + year;
+    var html = '';
+    DAY_HEAD.forEach(function (d) {
+      html += '<div class="fe-events-cal-head" role="columnheader">' + d + '</div>';
+    });
+    var first = new Date(year, month, 1);
+    var startDow = first.getDay();
+    var daysInMonth = new Date(year, month + 1, 0).getDate();
+    var todayKey = pad2(now.getFullYear()) + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate());
+    var byDay = eventsByDay(year, month);
+    for (var i = 0; i < startDow; i++) {
+      html += '<div class="fe-events-cal-cell is-out" role="gridcell"></div>';
+    }
+    for (var d = 1; d <= daysInMonth; d++) {
+      var thisKey = year + '-' + pad2(month + 1) + '-' + pad2(d);
+      var isToday = thisKey === todayKey;
+      var evs = byDay[d] || [];
+      html += '<div class="fe-events-cal-cell' + (isToday ? ' is-today' : '') +
+              (evs.length ? ' has-events' : '') + '" role="gridcell">' +
+              '<span class="fe-events-cal-cell-num">' + d + '</span>';
+      evs.slice(0, 3).forEach(function (ev) {
+        html += '<a class="fe-events-cal-chip' + (ev.is_online ? ' is-online' : '') +
+                '" href="' + escapeHtml(ev.url) + '" title="' + escapeHtml(ev.title) + '">' +
+                '<span class="fe-events-cal-chip-time">' + escapeHtml(fmtTime(ev.start_iso)) + '</span>' +
+                '<span class="fe-events-cal-chip-title">' + escapeHtml(ev.title) + '</span>' +
+                '</a>';
+      });
+      if (evs.length > 3) {
+        html += '<span class="fe-events-cal-more">+' + (evs.length - 3) + ' more</span>';
+      }
+      html += '</div>';
+    }
+    gridEl.innerHTML = html;
+
+    var rows = buckets[bucketKey(year, month)] || [];
+    if (!rows.length) {
+      listEl.innerHTML = '<p class="fe-events-cal-list-empty muted">No events this month.</p>';
+    } else {
+      var listHtml = '<h3 class="fe-events-cal-list-head">Events this month</h3><ul class="fe-events-cal-list-items">';
+      rows.forEach(function (ev) {
+        var d = parseInt((ev.start_iso || '').slice(8, 10), 10);
+        listHtml += '<li class="fe-events-cal-list-item">' +
+                    '<a href="' + escapeHtml(ev.url) + '">' +
+                    '<span class="fe-events-cal-list-day">' + (d || '') + '</span>' +
+                    '<span class="fe-events-cal-list-time">' + escapeHtml(fmtTime(ev.start_iso)) + '</span>' +
+                    '<span class="fe-events-cal-list-title">' + escapeHtml(ev.title) + '</span>' +
+                    (ev.is_online ? '<span class="fe-events-cal-list-tag">Online</span>' :
+                     (ev.location_name ? '<span class="fe-events-cal-list-tag">' + escapeHtml(ev.location_name) + '</span>' : '')) +
+                    '</a></li>';
+      });
+      listHtml += '</ul>';
+      listEl.innerHTML = listHtml;
+    }
+  }
+
+  root.querySelector('[data-cal-prev]').addEventListener('click', function () {
+    month--; if (month < 0) { month = 11; year--; } render();
+  });
+  root.querySelector('[data-cal-next]').addEventListener('click', function () {
+    month++; if (month > 11) { month = 0; year++; } render();
+  });
+  render();
+})();
+</script>
+{% endif %}

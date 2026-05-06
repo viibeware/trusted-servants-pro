@@ -4,36 +4,72 @@
 <section class="fe-section fe-event-detail fe-event-classic" id="event"
          style="{{ tpl_style or '' }}">
   <div class="fe-container fe-event-detail-inner">
-    <a class="fe-event-detail-back" href="{{ url_for('frontend.index') }}#events">← Back to events</a>
-
-    {% if event.featured_image_filename %}
-    <div class="fe-event-detail-cover">
-      <img src="{{ url_for('public.post_featured_image', pid=event.id) }}"
-           alt="" loading="lazy">
-    </div>
-    {% endif %}
-
-    <header class="fe-event-detail-head">
-      <div class="fe-event-detail-chips">
-        {% if event.is_event %}
-        <span class="fe-meeting-type fe-meeting-type-online">Event</span>
-        {% endif %}
+    <div class="fe-edit-bar">
+      {# Adaptive back link(s):
+         - Archived / past → single "Archive" link
+         - Event-only       → "All events"
+         - Announcement-only → "All announcements"
+         - Both              → both links rendered stacked #}
+      <div class="fe-event-detail-back-stack">
+      {% if is_in_archive %}
+      <a class="fe-event-detail-back" href="{{ url_for('frontend.archive') }}">← Archive</a>
+      {% else %}
         {% if event.is_announcement %}
-        <span class="fe-meeting-type fe-meeting-type-hybrid">Announcement</span>
+        <a class="fe-event-detail-back" href="{{ url_for('frontend.announcements_list') }}">← All announcements</a>
         {% endif %}
-        {% if event.is_online %}
-        <span class="fe-meeting-type fe-meeting-type-in_person">Online</span>
+        {% if event.is_event %}
+        <a class="fe-event-detail-back" href="{{ url_for('frontend.events_list') }}">← All events</a>
         {% endif %}
+      {% endif %}
       </div>
-      <h1>{{ event.title }}</h1>
-      {% if event.summary %}<p class="fe-event-detail-summary">{{ event.summary }}</p>{% endif %}
-    </header>
-
-    {% if event.body %}
-    <div class="fe-event-detail-desc">
-      {{ event.body|markdown }}
+      {% if current_user.is_authenticated and current_user.can_edit() %}
+      <a class="fe-edit-shortcut" href="{{ url_for('main.post_edit', pid=event.id) }}">
+        {{ icon('edit-3') }} <span>Edit event</span>
+      </a>
+      {% endif %}
     </div>
-    {% endif %}
+
+    {# Hero row: featured image on the LEFT (320 px tall × 4:3 wide on
+       desktop), chips + heading + summary on the RIGHT. Below the
+       lg breakpoint the hero collapses to a single column with the
+       image stacked above the head. The cover img is a button-styled
+       trigger that opens a full-screen lightbox of the same image. #}
+    {% set _has_cover = event.featured_image_filename %}
+    {% set _cover_url = url_for('public.post_featured_image', pid=event.id) if _has_cover else '' %}
+    <div class="fe-event-detail-hero{% if _has_cover %} has-cover{% endif %}">
+      {% if _has_cover %}
+      <button type="button" class="fe-event-detail-cover"
+              data-img-lightbox-src="{{ _cover_url }}"
+              data-img-lightbox-alt="{{ event.title }}"
+              aria-label="Open featured image full screen">
+        <img src="{{ _cover_url }}" alt="" loading="lazy">
+        <span class="fe-event-detail-cover-zoom" aria-hidden="true">{{ icon('maximize') }}</span>
+      </button>
+      {% endif %}
+
+      <header class="fe-event-detail-head">
+        <div class="fe-event-detail-chips">
+          {% if event.is_event %}
+          <span class="fe-meeting-type fe-meeting-type-online">Event</span>
+          {% endif %}
+          {% if event.is_announcement %}
+          <span class="fe-meeting-type fe-meeting-type-hybrid">Announcement</span>
+          {% endif %}
+          {% if event.is_online %}
+          <span class="fe-meeting-type fe-meeting-type-in_person">Online</span>
+          {% endif %}
+          {% if is_in_archive %}
+          <span class="fe-meeting-type fe-meeting-type-archived">Archived</span>
+          {% endif %}
+        </div>
+        <h1>{{ event.title }}</h1>
+        {% if event.body %}
+        <div class="fe-event-detail-desc">
+          {{ event.body|markdown }}
+        </div>
+        {% endif %}
+      </header>
+    </div>
 
     <div class="fe-event-detail-grid">
       {% if event.event_starts_at %}
@@ -67,21 +103,25 @@
       <section class="fe-event-detail-card fe-event-detail-zoom">
         <h3>{{ icon('video') }} Zoom</h3>
         {% if event.zoom_url %}
-        <a class="fe-btn fe-btn-primary" href="{{ event.zoom_url }}" target="_blank" rel="noopener">Join via Zoom ↗</a>
+        <a class="fe-btn fe-btn-primary" href="{{ event.zoom_url }}" target="_blank" rel="noopener">Join Zoom Meeting ↗</a>
         {% endif %}
         <dl class="fe-event-detail-creds">
           {% if event.zoom_meeting_id %}
           <dt>Meeting ID</dt>
           <dd>
-            <code>{{ event.zoom_meeting_id }}</code>
-            <button type="button" class="fe-copy-btn" data-copy="{{ event.zoom_meeting_id }}" title="Copy">{{ icon('copy') }}</button>
+            <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ event.zoom_meeting_id }}" aria-label="Copy meeting ID">
+              <code>{{ event.zoom_meeting_id }}</code>
+              <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+            </button>
           </dd>
           {% endif %}
           {% if event.zoom_passcode %}
           <dt>Passcode</dt>
           <dd>
-            <code>{{ event.zoom_passcode }}</code>
-            <button type="button" class="fe-copy-btn" data-copy="{{ event.zoom_passcode }}" title="Copy">{{ icon('copy') }}</button>
+            <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ event.zoom_passcode }}" aria-label="Copy Zoom passcode">
+              <code>{{ event.zoom_passcode }}</code>
+              <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+            </button>
           </dd>
           {% endif %}
         </dl>
@@ -119,6 +159,58 @@
     </div>
   </div>
 </section>
+
+{# Image lightbox — full-screen overlay with the featured image at its
+   natural size (capped to 92vw / 92vh). Hidden by default; opened by
+   any element with [data-img-lightbox-src]; closed by clicking the
+   backdrop, the X button, or pressing Escape. The same handler can
+   serve any future image trigger on the public site. #}
+<div class="fe-img-lightbox" data-img-lightbox aria-hidden="true">
+  <div class="fe-img-lightbox-backdrop" data-img-lightbox-close></div>
+  <button type="button" class="fe-img-lightbox-close" data-img-lightbox-close
+          aria-label="Close">{{ icon('x') }}</button>
+  <img class="fe-img-lightbox-img" data-img-lightbox-img alt="">
+</div>
+<script>
+(function () {
+  var lb = document.querySelector('[data-img-lightbox]');
+  if (!lb) return;
+  var img = lb.querySelector('[data-img-lightbox-img]');
+
+  function open(src, alt) {
+    if (!src) return;
+    img.src = src;
+    img.alt = alt || '';
+    lb.classList.add('is-open');
+    lb.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+  function close() {
+    lb.classList.remove('is-open');
+    lb.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    // Defer src clear so the close transition doesn't show a broken-image
+    // flash on the way out.
+    setTimeout(function () { if (!lb.classList.contains('is-open')) img.src = ''; }, 220);
+  }
+
+  document.addEventListener('click', function (e) {
+    var trigger = e.target.closest('[data-img-lightbox-src]');
+    if (trigger) {
+      e.preventDefault();
+      open(trigger.getAttribute('data-img-lightbox-src'),
+           trigger.getAttribute('data-img-lightbox-alt'));
+      return;
+    }
+    if (e.target.closest('[data-img-lightbox-close]')) {
+      close();
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && lb.classList.contains('is-open')) close();
+  });
+})();
+</script>
 
 {% include "frontend/events/_copy_script.html" %}
 {% endblock %}

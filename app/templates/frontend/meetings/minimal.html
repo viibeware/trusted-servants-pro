@@ -3,7 +3,14 @@
 {% block content %}
 <section class="fe-meeting-min" id="meeting" style="{{ tpl_style or '' }}">
   <div class="fe-container fe-meeting-min-inner">
-    <a class="fe-meeting-min-back" href="{{ url_for('frontend.index') }}#meetings">← back</a>
+    <div class="fe-edit-bar">
+      <a class="fe-meeting-min-back" href="{{ url_for('frontend.meetings_list') }}">← All meetings</a>
+      {% if current_user.is_authenticated and current_user.can_edit() %}
+      <a class="fe-edit-shortcut" href="{{ url_for('main.meeting_detail', slug=meeting.public_slug) }}">
+        {{ icon('edit-3') }} <span>Edit</span>
+      </a>
+      {% endif %}
+    </div>
 
     {% if meeting.logo_filename %}
     <div class="fe-meeting-logo-wrap fe-meeting-logo-wrap-center">
@@ -49,8 +56,14 @@
       {% if meeting.meeting_type in ('in_person', 'hybrid') and meeting.location %}
       <dt>Where</dt>
       <dd>
-        {{ meeting.location }}
-        {% set _maps = "https://www.google.com/maps/search/?api=1&query=" ~ (meeting.location|urlencode) %}
+        {% if meeting_location_record %}
+          {{ meeting_location_record.name }}
+          {% for line in meeting_location_record.address_lines() %}<br>{{ line }}{% endfor %}
+        {% else %}
+          {{ meeting.location }}
+        {% endif %}
+        {% set _maps_q = (meeting_location_record.address if meeting_location_record and meeting_location_record.address else meeting.location) %}
+        {% set _maps = "https://www.google.com/maps/search/?api=1&query=" ~ (_maps_q|urlencode) %}
         <a class="fe-meeting-min-link" href="{{ _maps }}" target="_blank" rel="noopener">map →</a>
       </dd>
       {% endif %}
@@ -64,15 +77,19 @@
         {% if meeting.zoom_meeting_id %}
         <div class="fe-meeting-min-cred">
           <span class="muted">ID</span>
-          <code>{{ meeting.zoom_meeting_id }}</code>
-          <button type="button" class="fe-copy-btn" data-copy="{{ meeting.zoom_meeting_id }}" title="Copy">{{ icon('copy') }}</button>
+          <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ meeting.zoom_meeting_id }}" aria-label="Copy meeting ID">
+            <code>{{ meeting.zoom_meeting_id }}</code>
+            <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+          </button>
         </div>
         {% endif %}
         {% if meeting.zoom_passcode %}
         <div class="fe-meeting-min-cred">
           <span class="muted">Passcode</span>
-          <code>{{ meeting.zoom_passcode }}</code>
-          <button type="button" class="fe-copy-btn" data-copy="{{ meeting.zoom_passcode }}" title="Copy">{{ icon('copy') }}</button>
+          <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ meeting.zoom_passcode }}" aria-label="Copy Zoom passcode">
+            <code>{{ meeting.zoom_passcode }}</code>
+            <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+          </button>
         </div>
         {% endif %}
       </dd>
@@ -80,6 +97,7 @@
     </dl>
 
     {% include "frontend/meetings/_resources.html" %}
+    {% include "frontend/meetings/_extended.html" %}
   </div>
 </section>
 

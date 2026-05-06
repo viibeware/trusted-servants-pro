@@ -4,6 +4,10 @@
   {% if meeting.archived_at %}<span class="chip chip-archived">Archived</span>{% endif %}
 {% endblock %}
 {% block top_actions %}
+  {% if site and site.frontend_enabled %}
+  <a class="btn" href="{{ url_for('frontend.meeting_detail', slug=meeting.public_slug) }}"
+     target="_blank" rel="noopener">View on Frontend ↗</a>
+  {% endif %}
   {% if current_user.can_edit() %}
   <button type="button" class="btn" data-open-modal="meeting-edit-modal">Edit</button>
   {% if current_user.is_admin() %}
@@ -77,12 +81,40 @@
 
     <div class="detail-block">
       {% if meeting.location %}
+      {# Try to resolve the meeting's free-text location to a Location row
+         so we can render the full split address (name / street /
+         city/state/zip) on three lines. Custom locations that don't
+         match any saved Location fall back to the legacy single-line
+         render. `set` inside `for` is loop-scoped in Jinja, so use a
+         namespace to capture the match across the loop boundary.
+         Match is case-insensitive + trimmed so minor inconsistencies
+         in legacy data still resolve. #}
+      {%- set _loc_state = namespace(record=none) -%}
+      {%- set _meeting_loc_norm = (meeting.location or '').strip().lower() -%}
+      {%- for _l in locations -%}
+        {%- if _meeting_loc_norm and _l.name and _l.name.strip().lower() == _meeting_loc_norm -%}
+          {%- set _loc_state.record = _l -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- set _loc_record = _loc_state.record -%}
       <div class="detail-label">Location</div>
-      <div>{{ meeting.location|safe_html }}</div>
+      {% if _loc_record %}
+        <div class="loc-block">
+          <div class="loc-name">{{ _loc_record.name }}</div>
+          {% for line in _loc_record.address_lines() %}
+            <div class="loc-line">{{ line }}</div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div>{{ meeting.location|safe_html }}</div>
+      {% endif %}
+      {% if meeting.location_notes %}
+      <div class="loc-notes muted small">{{ meeting.location_notes }}</div>
+      {% endif %}
       {% endif %}
 
       {% if meeting.zoom_meeting_id or meeting.zoom_passcode or meeting.zoom_account or meeting.zoom_link %}
-      <div class="detail-label" style="margin-top: 12px;">Zoom</div>
+      <div class="detail-label detail-section-divider">Zoom</div>
       <dl class="zoom-info">
         {% if meeting.zoom_meeting_id %}
         <dt>Meeting ID</dt>

@@ -1,0 +1,56 @@
+{# "Mega" footer — four-column wall: brand + tagline + social row in
+   the first column, three link columns to the right. Bottom row carries
+   copyright + secondary nav. Best for sites with lots of pages. #}
+{% from "frontend/footers/_footer_helpers.html" import footer_inner_attrs, footer_copyright_text, footer_link %}
+{% set _f = footer_content(site) %}
+{% from "frontend/footers/_footer_bg.html" import footer_bg_class, footer_bg_style, footer_bg_data_attrs, footer_bg_inner %}
+{% set _bg = _f.bg %}
+{% set _min_h = (site.frontend_footer_min_height_vh if site else 0) or 0 %}
+{% set _font_scale = (site.frontend_footer_font_scale if site else 100) or 100 %}
+<footer class="fe-footer fe-footer-mega {{ footer_bg_class(_bg) }}"
+        {% set _bgs = footer_bg_style(_bg, _min_h, _font_scale) %}{% if _bgs %}style="{{ _bgs }}"{% endif %}
+        {{ footer_bg_data_attrs(_bg) }}>
+  {{ footer_bg_inner(_bg) }}
+  <div {{ footer_inner_attrs(site) }}>
+    <div class="fe-footer-mega-grid">
+
+      {# Brand panel — shared block partial. Mega keeps its inline
+         social row beneath the brand for visual density, since this
+         layout's defining feature is the wide brand-on-the-left
+         column with social right below. #}
+      <div class="fe-footer-mega-brand">
+        {% include "frontend/footers/blocks/_brand.html" %}
+        {% if _f.social %}
+        <ul class="fe-footer-social">
+          {% for s in _f.social %}
+          <li><a href="{{ s.url or '#' }}" aria-label="{{ s.label or s.icon or 'Social link' }}"
+                 target="_blank" rel="noopener">{{ icon(s.icon or 'link') }}</a></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+
+      {% for col in _f.columns %}
+      <div class="fe-footer-col">
+        {% if col.title %}<div class="fe-footer-col-title">{{ col.title }}</div>{% endif %}
+        <ul class="fe-footer-link-list">
+          {% for l in col.links %}
+          <li>{{ footer_link(l) }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="fe-footer-bottom">
+      <div class="fe-footer-copy">{{ footer_copyright_text(_f.copyright, site) | safe_html }}</div>
+      {% if _f.secondary_nav %}
+      <ul class="fe-footer-secondary-nav">
+        {% for l in _f.secondary_nav %}
+        <li><a href="{{ l.url or '#' }}">{{ l.label or '' }}</a></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+  </div>
+</footer>

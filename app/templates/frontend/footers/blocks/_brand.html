@@ -1,0 +1,30 @@
+{# Brand block — logo (in place of the text site name) + tagline.
+   Reads from footer_content(site).brand:
+     {logo_source, logo_width, tagline}.
+   `logo_source='header'` resolves to `site.frontend_logo_filename`
+   (the public-site header logo); `'custom'` resolves to
+   `site.frontend_brand_logo_filename` (the dedicated brand-block
+   custom logo uploaded from the Footer admin → Brand modal). When
+   neither file exists the block falls back to the text site name so
+   nothing renders blank. Width is admin-tunable via the Brand modal's
+   slider (40-600 px). #}
+{% set _b = footer_content(site).brand %}
+{% set _w = _b.logo_width or 180 %}
+{% if _b.logo_source == 'custom' and site and site.frontend_brand_logo_filename %}
+  {% set _logo_url = url_for('public.site_frontend_brand_logo') %}
+{% elif site and site.frontend_logo_filename %}
+  {% set _logo_url = url_for('public.site_frontend_logo') %}
+{% else %}
+  {% set _logo_url = '' %}
+{% endif %}
+<div class="fe-footer-brand fe-footer-block fe-footer-block-brand">
+  {% if _logo_url %}
+  <img src="{{ _logo_url }}" alt="{{ frontend_title }}"
+       class="fe-footer-logo" style="width: {{ _w }}px; height: auto;">
+  {% else %}
+  {# No logo file present — fall back so the block isn't empty. #}
+  <div class="fe-footer-name">{{ frontend_title }}</div>
+  {% endif %}
+  {% set _tag = _b.tagline or frontend_tagline %}
+  {% if _tag %}<div class="fe-footer-tagline">{{ _tag }}</div>{% endif %}
+</div>

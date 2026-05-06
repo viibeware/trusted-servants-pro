@@ -3,7 +3,14 @@
 {% block content %}
 <section class="fe-meeting-mag" id="meeting" style="{{ tpl_style or '' }}">
   <div class="fe-container fe-meeting-mag-inner">
-    <a class="fe-meeting-mag-back" href="{{ url_for('frontend.index') }}#meetings">← Back to meetings</a>
+    <div class="fe-edit-bar">
+      <a class="fe-meeting-mag-back" href="{{ url_for('frontend.meetings_list') }}">← All meetings</a>
+      {% if current_user.is_authenticated and current_user.can_edit() %}
+      <a class="fe-edit-shortcut" href="{{ url_for('main.meeting_detail', slug=meeting.public_slug) }}">
+        {{ icon('edit-3') }} <span>Edit meeting</span>
+      </a>
+      {% endif %}
+    </div>
 
     {% if meeting.logo_filename %}
     <div class="fe-meeting-logo-wrap">
@@ -61,8 +68,16 @@
         {% if meeting.meeting_type in ('in_person', 'hybrid') and meeting.location %}
         <section class="fe-meeting-mag-side-card">
           <span class="fe-meeting-mag-side-label">{{ icon('map-pin') }} Location</span>
-          <p class="fe-meeting-mag-side-addr">{{ meeting.location }}</p>
-          {% set _maps = "https://www.google.com/maps/search/?api=1&query=" ~ (meeting.location|urlencode) %}
+          {% if meeting_location_record %}
+            <p class="fe-meeting-mag-side-addr">
+              <span class="fe-meeting-mag-loc-name">{{ meeting_location_record.name }}</span>
+              {% for line in meeting_location_record.address_lines() %}<br>{{ line }}{% endfor %}
+            </p>
+          {% else %}
+            <p class="fe-meeting-mag-side-addr">{{ meeting.location }}</p>
+          {% endif %}
+          {% set _maps_q = (meeting_location_record.address if meeting_location_record and meeting_location_record.address else meeting.location) %}
+          {% set _maps = "https://www.google.com/maps/search/?api=1&query=" ~ (_maps_q|urlencode) %}
           <a class="fe-meeting-mag-side-link" href="{{ _maps }}" target="_blank" rel="noopener">
             View map <span aria-hidden="true">→</span>
           </a>
@@ -80,14 +95,20 @@
           <dl class="fe-meeting-mag-side-creds">
             {% if meeting.zoom_meeting_id %}
             <dt>ID</dt>
-            <dd><code>{{ meeting.zoom_meeting_id }}</code>
-              <button type="button" class="fe-copy-btn" data-copy="{{ meeting.zoom_meeting_id }}" title="Copy">{{ icon('copy') }}</button>
+            <dd>
+              <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ meeting.zoom_meeting_id }}" aria-label="Copy meeting ID">
+                <code>{{ meeting.zoom_meeting_id }}</code>
+                <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+              </button>
             </dd>
             {% endif %}
             {% if meeting.zoom_passcode %}
             <dt>Passcode</dt>
-            <dd><code>{{ meeting.zoom_passcode }}</code>
-              <button type="button" class="fe-copy-btn" data-copy="{{ meeting.zoom_passcode }}" title="Copy">{{ icon('copy') }}</button>
+            <dd>
+              <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ meeting.zoom_passcode }}" aria-label="Copy Zoom passcode">
+                <code>{{ meeting.zoom_passcode }}</code>
+                <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+              </button>
             </dd>
             {% endif %}
             {% if meeting.zoom_opens_time %}
@@ -101,6 +122,9 @@
         {% include "frontend/meetings/_resources.html" %}
       </aside>
     </div>
+    {# Extended-content blocks live OUTSIDE the magazine grid so they
+       span the full inner width below the article + sidebar. #}
+    {% include "frontend/meetings/_extended.html" %}
   </div>
 </section>
 

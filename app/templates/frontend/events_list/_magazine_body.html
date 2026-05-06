@@ -1,0 +1,56 @@
+{# Body-only partial for the Magazine layout. Standalone magazine.html
+   wraps this in a section + header; omni.html includes it directly.
+   Expects `all_events` in scope. #}
+{% if not all_events %}
+<p class="fe-events-empty muted">No upcoming events — check back soon.</p>
+{% else %}
+{%- set _hero = all_events[0] -%}
+{%- set _rest = all_events[1:] -%}
+{%- set _hero_url = post_url(_hero) -%}
+{%- set _has_cover = _hero.featured_image_filename -%}
+
+<article class="fe-events-mag-hero{% if _has_cover %} has-cover{% endif %}">
+  {% if _has_cover %}
+  <a class="fe-events-mag-hero-cover" href="{{ _hero_url }}" tabindex="-1" aria-hidden="true">
+    <img src="{{ url_for('public.post_featured_image', pid=_hero.id) }}" alt="" loading="lazy">
+  </a>
+  {% endif %}
+  <div class="fe-events-mag-hero-body">
+    <span class="fe-events-mag-hero-eyebrow">Next up</span>
+    {% if _hero.event_starts_at %}
+    <div class="fe-events-mag-hero-date">
+      <span class="fe-events-mag-hero-day">{{ _hero.event_starts_at.strftime('%A, %b %-d') }}</span>
+      <span class="fe-events-mag-hero-time">
+        {{ _hero.event_starts_at.strftime('%-I:%M %p') }}
+        {%- if _hero.event_ends_at %} – {{ _hero.event_ends_at.strftime('%-I:%M %p') }}{% endif %}
+      </span>
+    </div>
+    {% endif %}
+    <h2 class="fe-events-mag-hero-title">
+      <a href="{{ _hero_url }}">{{ _hero.title }}</a>
+    </h2>
+    {% if _hero.summary %}
+    <p class="fe-events-mag-hero-summary">{{ _hero.summary|truncate(280, True, '…') }}</p>
+    {% endif %}
+    <div class="fe-events-mag-hero-meta">
+      {% if _hero.is_online %}
+      <span class="fe-events-mag-hero-tag">{{ icon('video') }} Online event</span>
+      {% elif _hero.location_name %}
+      <span class="fe-events-mag-hero-tag">{{ icon('map-pin') }} {{ _hero.location_name }}</span>
+      {% endif %}
+      <a class="fe-btn fe-btn-primary" href="{{ _hero_url }}">View event</a>
+    </div>
+  </div>
+</article>
+
+{% if _rest %}
+<h2 class="fe-events-mag-rest-head">More events</h2>
+<div class="fe-events-mag-grid">
+  {% for ev in _rest %}
+    {% with compact=false, summary_chars=110 %}
+      {% include "frontend/events_list/_event_card.html" %}
+    {% endwith %}
+  {% endfor %}
+</div>
+{% endif %}
+{% endif %}

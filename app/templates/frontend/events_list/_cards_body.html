@@ -1,0 +1,12 @@
+{# Body-only partial for the Cards layout. Standalone `cards.html`
+   wraps this in a section + header; the `omni.html` switcher panel
+   includes it directly. Expects `all_events` in scope. #}
+{% if not all_events %}
+<p class="fe-events-empty muted">No upcoming events — check back soon.</p>
+{% else %}
+<div class="fe-events-list-stack">
+  {% for ev in all_events %}
+    {% include "frontend/events_list/_event_card.html" %}
+  {% endfor %}
+</div>
+{% endif %}

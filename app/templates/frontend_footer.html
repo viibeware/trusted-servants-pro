@@ -1,10 +1,27 @@
 {% extends "base.html" %}
 {% from "_frontend_template_picker.html" import template_picker %}
-{% set _active = (site.frontend_footer_template if site else 'classic') or 'classic' %}
+{% from "_frontend_layout_picker.html" import layout_picker %}
+{% from "_frontend_structure_card.html" import structure_card, structure_rows, structure_flat %}
 {% set _active_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
+{% set _active_footer = (site.frontend_footer_template if site else 'classic') or 'classic' %}
+{% set _w_mode = (site.frontend_footer_width_mode if site else 'boxed') or 'boxed' %}
+{% set _max = (site.frontend_footer_max_width if site else 1160) or 1160 %}
+{% set _pad = site.frontend_footer_padding_pct if site and site.frontend_footer_padding_pct is not none else 5 %}
+{% set _bg_mode = (site.frontend_footer_bg_mode if site else 'dark') or 'dark' %}
+{% set _min_h = site.frontend_footer_min_height_vh if site and site.frontend_footer_min_height_vh is not none else 0 %}
+{% set _font_scale = site.frontend_footer_font_scale if site and site.frontend_footer_font_scale is not none else 100 %}
+{% set _f = footer_content(site) %}
+{% set _bg = _f.bg %}
 {% block heading %}Footer{% endblock %}
-{% block heading_help %}Edit the footer text shown beneath every page on the public frontend.{% endblock %}
+{% block heading_help %}Pick a footer layout and fill in the brand block, link columns, copyright, social row, and secondary nav. The same content renders in every layout — switch layouts any time without re-entering text.{% endblock %}
 {% block top_actions %}
+{{ layout_picker(footer_layouts, _active_footer,
+                  url_for('main.frontend_footer_template_save'),
+                  "frontend_footer_template",
+                  "footer-layout-modal", "footer-builder-modal",
+                  footer_block_catalog,
+                  url_for('main.frontend_custom_layout_save'),
+                  kind='footer') }}
 {{ template_picker(frontend_themes, _active_theme,
                     "frontend_theme",
                     url_for('main.frontend_theme_save'),
@@ -12,27 +29,1491 @@
 <a class="btn" href="{{ url_for('frontend.index') }}" target="_blank" rel="noopener">View frontend ↗</a>
 {% endblock %}
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/frontend.css', v=app_build_id) }}">
 <div class="fe-admin-layout">
   {% include "_frontend_subnav.html" %}
   <div class="fe-admin-main">
 
-<section class="card">
-  <div class="card-head"><h2>Footer text</h2></div>
-  <form class="form" method="post" action="{{ url_for('main.frontend_footer_save') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>Text <span class="muted small">(Markdown / basic HTML sanitized; leave blank for the default)</span>
-      <textarea name="frontend_footer_text" rows="4" placeholder="© {{ site.frontend_title if site and site.frontend_title else 'Trusted Servants' }}. All rights reserved.">{{ (site.frontend_footer_text if site else '') or '' }}</textarea>
-    </label>
-    <div class="form-actions"><button class="btn btn-primary">Save Footer</button></div>
-  </form>
-</section>
+{# Block-type metadata — used by the structure card pills + the modal
+   heads. The shared structure-card partial reads `_block_labels` and
+   `_editable_types` to render clickable pills (editable types) vs.
+   static label-only pills (divider / spacer — no content to edit). #}
+{% set _block_labels = {
+  'brand': ('Brand', 'star'),
+  'link_columns': ('Link columns', 'layout-grid'),
+  'social_row': ('Social icons', 'share-2'),
+  'secondary_nav': ('Secondary nav', 'list'),
+  'copyright': ('Copyright', 'copyright'),
+  'meeting_locations': ('Meeting locations', 'map-pin'),
+  'contact_section': ('Contact section', 'mail'),
+  'divider': ('Divider', 'minus'),
+  'spacer': ('Spacer', 'move-vertical'),
+  'powered_by': ('Powered by', 'github'),
+} %}
+{% set _editable_types = ['brand', 'link_columns', 'social_row', 'secondary_nav',
+                           'copyright', 'meeting_locations', 'contact_section'] %}
 
-<section class="card">
-  <div class="card-head"><h2>Footer links</h2></div>
-  <p class="muted">
-    Configurable footer link columns are coming soon. For now the footer mirrors the header navigation.
-  </p>
-</section>
+<form class="form" method="post" action="{{ url_for('main.frontend_footer_save') }}" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="footer_blocks_present" value="1">
+
+  {# ── Active layout structure ── always rendered first so the admin
+     sees the layout shape before anything else. Each pill opens its
+     content-edit modal further down the page. Custom layouts use the
+     rows × cols visualisation; prebuilts (like Recovery Blue) use the
+     flat pill row since their structure is fixed in the Jinja file. #}
+  {% call structure_card("Active layout structure", active_layout, "footer-builder-modal") %}
+    {% if active_layout_rows %}
+      {{ structure_rows(active_layout_rows, "footer", _block_labels, _editable_types) }}
+    {% elif active_block_order %}
+      {{ structure_flat(active_block_order, "footer", _block_labels, _editable_types) }}
+    {% else %}
+      <p class="muted small">This layout has no editable content blocks.</p>
+    {% endif %}
+  {% endcall %}
+
+  {# ── Footer settings ── width mode + max width / padding / min-height
+     / font scale, plus the page-theme bg-mode toggle. The font-scale
+     slider sets the desktop base size; mobile media queries cap how
+     high it can climb so a 200% setting doesn't blow out narrow
+     viewports. #}
+  <section class="card">
+    <div class="card-head">
+      <h2>Footer settings</h2>
+      <span class="muted smaller">Container width, min-height, base font scale, and the page-theme bg mode. Boxed caps to the max width below; full-width uses the side-padding percentage instead.</span>
+    </div>
+    <div class="fe-footer-width-grid">
+      <label class="fe-footer-width-opt{% if _w_mode == 'boxed' %} is-active{% endif %}">
+        <input type="radio" name="frontend_footer_width_mode" value="boxed" {% if _w_mode == 'boxed' %}checked{% endif %}>
+        <span class="fe-footer-width-icon" aria-hidden="true">{{ icon('square') }}</span>
+        <span class="fe-footer-width-name">Boxed</span>
+        <span class="fe-footer-width-desc muted smaller">Capped at the max width below.</span>
+      </label>
+      <label class="fe-footer-width-opt{% if _w_mode == 'full' %} is-active{% endif %}">
+        <input type="radio" name="frontend_footer_width_mode" value="full" {% if _w_mode == 'full' %}checked{% endif %}>
+        <span class="fe-footer-width-icon" aria-hidden="true">{{ icon('maximize') }}</span>
+        <span class="fe-footer-width-name">Full width</span>
+        <span class="fe-footer-width-desc muted smaller">Stretches to the viewport edge.</span>
+      </label>
+    </div>
+    <div class="fe-footer-width-numbers">
+      <label>Max width <span class="muted smaller">(boxed mode, px)</span>
+        <input type="number" name="frontend_footer_max_width" value="{{ _max }}" min="640" max="2400" step="20">
+      </label>
+      <label>Side padding <span class="muted smaller">(full mode, %)</span>
+        <input type="number" name="frontend_footer_padding_pct" value="{{ _pad }}" min="0" max="20" step="1">
+      </label>
+      <label>Min height <span class="muted smaller">(vh, 0 = auto)</span>
+        <span class="fe-footer-minh-row">
+          <input type="range" name="frontend_footer_min_height_vh" min="0" max="100" step="5"
+                 value="{{ _min_h }}" data-footer-minh-slider>
+          <output data-footer-minh-out>{{ _min_h }}</output><span class="muted smaller">vh</span>
+        </span>
+      </label>
+      <label>Font scale <span class="muted smaller">(%, desktop — auto-scales down on mobile)</span>
+        <span class="fe-footer-minh-row">
+          <input type="range" name="frontend_footer_font_scale" min="50" max="200" step="5"
+                 value="{{ _font_scale }}" data-footer-fontscale-slider>
+          <output data-footer-fontscale-out>{{ _font_scale }}</output><span class="muted smaller">%</span>
+        </span>
+      </label>
+    </div>
+    {# Background mode — Dark (default; footer always renders dark
+       regardless of the page's light/dark theme) vs Light (footer
+       follows the page theme: light when page is light, dark when page
+       is dark). Same radio-card pattern as the width selector above. #}
+    <div class="fe-footer-bg-grid">
+      <label class="fe-footer-bg-opt{% if _bg_mode == 'dark' %} is-active{% endif %}">
+        <input type="radio" name="frontend_footer_bg_mode" value="dark" {% if _bg_mode == 'dark' %}checked{% endif %}>
+        <span class="fe-footer-bg-icon" aria-hidden="true">{{ icon('moon') }}</span>
+        <span class="fe-footer-bg-name">Dark (always)</span>
+        <span class="fe-footer-bg-desc muted smaller">Footer is always dark, regardless of page theme.</span>
+      </label>
+      <label class="fe-footer-bg-opt{% if _bg_mode == 'light' %} is-active{% endif %}">
+        <input type="radio" name="frontend_footer_bg_mode" value="light" {% if _bg_mode == 'light' %}checked{% endif %}>
+        <span class="fe-footer-bg-icon" aria-hidden="true">{{ icon('sun-moon') }}</span>
+        <span class="fe-footer-bg-name">Follow page</span>
+        <span class="fe-footer-bg-desc muted smaller">Light when page is light, dark when page is dark.</span>
+      </label>
+    </div>
+  </section>
+
+  {# ── Background ── inline section mirroring the hero admin pattern.
+     Live preview at top, segmented style picker, per-style panels with
+     controls, and a particle overlay row that applies on top of any
+     style. Form posts via the parent form so the existing parser path
+     in `_normalize_footer_bg` still consumes these fields. #}
+  {% from "frontend/footers/_footer_bg.html" import footer_bg_class, footer_bg_style, footer_bg_data_attrs %}
+  <section class="card fe-footer-bg-section" data-footer-bg-editor>
+    <div class="card-head">
+      <h2>Background</h2>
+      <span class="muted smaller">Pick a style and tweak it. Layer particles on top of any style if you like.</span>
+    </div>
+    <input type="hidden" name="footer_bg_section_present" value="1">
+
+    {# Live preview — mini footer-shaped panel showing the bg in real
+       time. Updates from the same form fields below. #}
+    <div class="fe-footer-preview-clip" data-footer-preview-clip>
+      <p class="fe-footer-preview-label muted smaller">Live preview</p>
+      <div class="fe-footer-preview frontend-body{% if _bg_mode == 'dark' %} fe-footer-force-dark{% endif %}"
+           data-footer-preview>
+        {%- set _pv_style_attr = footer_bg_style(_bg, _min_h, _font_scale) -%}
+        <footer class="fe-footer fe-footer-{{ _active_footer }} {{ footer_bg_class(_bg) }}"
+                id="footer-preview-section"
+                data-footer-preview-section
+                {% if _pv_style_attr %}style="{{ _pv_style_attr }}"{% endif %}
+                {{ footer_bg_data_attrs(_bg) }}>
+          <div class="fe-hero-bg fe-footer-bg-effects" id="footer-preview-blobs" aria-hidden="true"
+               {% if _bg.style != 'frosty' %}hidden{% endif %}
+               style="--fe-blob-hue-a: {{ _bg.hue }}; --fe-blob-hue-b: {{ _bg.hue_2 }}; --fe-blob-blur: {{ _bg.blur }}px; --fe-blob-op: {{ (_bg.opacity or 45) / 100 }};">
+            <div class="fe-hero-blob fe-hero-blob-a"></div>
+            <div class="fe-hero-blob fe-hero-blob-b"></div>
+            <div class="fe-hero-blob fe-hero-blob-c"></div>
+          </div>
+          <canvas class="fe-hero-particles fe-footer-particles" id="footer-preview-particles" aria-hidden="true"
+                  {% if not _bg.particle_enabled %}hidden{% endif %}
+                  data-effect="{{ _bg.particle_effect }}"
+                  data-speed="{{ _bg.particle_speed }}"
+                  data-size="{{ _bg.particle_size }}"></canvas>
+          <div class="fe-footer-preview-content">
+            <span class="fe-footer-preview-brand">{{ (site.frontend_title if site else 'Your site') or 'Your site' }}</span>
+            <span class="fe-footer-preview-copy muted smaller">{{ _f.copyright or '© Your site' }}</span>
+          </div>
+        </footer>
+      </div>
+    </div>
+
+    {# Style picker — segmented radios (same shape as the hero admin's
+       background-style segment). #}
+    <div class="nav-megalink-field fe-footer-bg-style-row">
+      <span class="nav-megalink-field-lbl">Style</span>
+      <div class="nav-megalink-seg">
+        {% for _k, _lbl in [('frosty','Frosty'),('solid','Solid'),('gradient','Gradient'),('sinewave','Sinewave')] %}
+        <label class="nav-megalink-seg-opt">
+          <input type="radio" name="footer_bg_style" value="{{ _k }}"
+                 data-bg-style-radio {% if _bg.style == _k %}checked{% endif %}>
+          <span>{{ _lbl }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# Per-style panels — only the panel matching the selected style is
+       visible. The hidden panels keep their values so switching back
+       restores the saved settings. #}
+    <div class="hero-bg-panels fe-footer-bg-panels">
+
+      {# Frosty pane #}
+      <div class="hero-bg-panel" data-bg-panel="frosty"{% if _bg.style != 'frosty' %} hidden{% endif %}>
+        <p class="muted smaller">Animated soft blobs over a wash. Adjust hue / blur / intensity.</p>
+        <div class="hero-bg-grid">
+          <div class="nav-megalink-field hero-slider-field">
+            <span class="nav-megalink-field-lbl">Primary hue <output data-slider-out>{{ _bg.hue }}</output>°</span>
+            <input type="range" name="footer_bg_hue" min="0" max="360" step="5"
+                   value="{{ _bg.hue }}" data-slider-input data-bg-live="hue">
+          </div>
+          <div class="nav-megalink-field hero-slider-field">
+            <span class="nav-megalink-field-lbl">Accent hue <output data-slider-out>{{ _bg.hue_2 }}</output>°</span>
+            <input type="range" name="footer_bg_hue_2" min="0" max="360" step="5"
+                   value="{{ _bg.hue_2 }}" data-slider-input data-bg-live="hue_2">
+          </div>
+          <div class="nav-megalink-field hero-slider-field">
+            <span class="nav-megalink-field-lbl">Blur <output data-slider-out>{{ _bg.blur }}</output>px</span>
+            <input type="range" name="footer_bg_blur" min="0" max="200" step="5"
+                   value="{{ _bg.blur }}" data-slider-input data-bg-live="blur">
+          </div>
+          <div class="nav-megalink-field hero-slider-field">
+            <span class="nav-megalink-field-lbl">Intensity <output data-slider-out>{{ _bg.opacity }}</output>%</span>
+            <input type="range" name="footer_bg_opacity" min="0" max="100" step="5"
+                   value="{{ _bg.opacity }}" data-slider-input data-bg-live="opacity">
+          </div>
+        </div>
+        <li class="special-page-row" style="list-style:none; margin-top: 12px;">
+          <div class="special-page-info">
+            <div class="u-name">Randomise hues + blob positions on every page load</div>
+            <p class="muted small">Picks fresh hues each time the public page renders so it never looks the same twice.</p>
+          </div>
+          <label class="mode-toggle">
+            <input type="checkbox" name="footer_bg_randomize" value="1" {% if _bg.randomize %}checked{% endif %}>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+          </label>
+        </li>
+      </div>
+
+      {# Solid pane #}
+      <div class="hero-bg-panel" data-bg-panel="solid"{% if _bg.style != 'solid' %} hidden{% endif %}>
+        <p class="muted smaller">A single flat colour behind the footer.</p>
+        <div class="nav-megalink-field">
+          <span class="nav-megalink-field-lbl">Background colour</span>
+          <input type="color" class="nav-megalink-color-input"
+                 name="footer_bg_color" value="{{ _bg.color or '#0b1026' }}"
+                 data-bg-live="color">
+        </div>
+      </div>
+
+      {# Gradient pane #}
+      <div class="hero-bg-panel" data-bg-panel="gradient"{% if _bg.style != 'gradient' %} hidden{% endif %}>
+        <p class="muted smaller">A two-colour linear gradient at the chosen angle.</p>
+        <div class="hero-bg-grid">
+          <div class="nav-megalink-field">
+            <span class="nav-megalink-field-lbl">Start colour</span>
+            <input type="color" class="nav-megalink-color-input"
+                   name="footer_bg_color" value="{{ _bg.color or '#0b1026' }}"
+                   data-bg-live="color">
+          </div>
+          <div class="nav-megalink-field">
+            <span class="nav-megalink-field-lbl">End colour</span>
+            <input type="color" class="nav-megalink-color-input"
+                   name="footer_bg_color_2" value="{{ _bg.color_2 or '#1f2a44' }}"
+                   data-bg-live="color_2">
+          </div>
+          <div class="nav-megalink-field hero-slider-field">
+            <span class="nav-megalink-field-lbl">Angle <output data-slider-out>{{ _bg.gradient_angle or 180 }}</output>°</span>
+            <input type="range" name="footer_bg_gradient_angle" min="0" max="360" step="5"
+                   value="{{ _bg.gradient_angle or 180 }}" data-slider-input data-bg-live="gradient_angle">
+          </div>
+        </div>
+      </div>
+
+      {# Sinewave pane — 4 colour pickers + Random palette / Random
+         wave / Reset buttons + a "randomise on every page load" toggle.
+         Dark/Follow mode auto-mutes the palette via loginFxUtils so the
+         gradient never reads as neon over a dark surface. #}
+      {% set _sw_defaults = ['#16c2ba', '#1883d5', '#5a1ce5', '#0a3eb5'] %}
+      {% set _sw = _bg.sinewave_colors or [] %}
+      <div class="hero-bg-panel" data-bg-panel="sinewave"{% if _bg.style != 'sinewave' %} hidden{% endif %}>
+        <p class="muted smaller">A flowing multi-colour sine-wave gradient. Pick 2-4 colours; the palette auto-adapts to the footer's light / dark mode.</p>
+        <div class="hero-bg-grid">
+          {% for i in range(1, 5) %}
+          <div class="nav-megalink-field">
+            <span class="nav-megalink-field-lbl">Colour {{ i }}</span>
+            <input type="color" class="nav-megalink-color-input"
+                   name="footer_bg_sinewave_c{{ i }}"
+                   value="{{ _sw[i-1] if _sw|length >= i else _sw_defaults[i-1] }}"
+                   data-sinewave-input>
+          </div>
+          {% endfor %}
+        </div>
+
+        {# Hidden input carrying the JSON-serialised wave shape so the
+           parser can persist it. Empty string = use the canonical wave.
+           Updated by the Randomize / Reset buttons in JS below. #}
+        <input type="hidden" name="footer_bg_sinewave_wave"
+               value="{{ _bg.sinewave_wave | tojson if _bg.sinewave_wave else '' }}"
+               data-sinewave-wave-input>
+
+        <div class="fe-footer-sw-actions">
+          <button type="button" class="btn btn-sm" data-sinewave-randomize>
+            {{ icon('shuffle') }} <span>Random palette</span>
+          </button>
+          <button type="button" class="btn btn-sm" data-sinewave-randomize-wave>
+            {{ icon('waves') }} <span>Random wave pattern</span>
+          </button>
+          <button type="button" class="btn btn-sm" data-sinewave-reset>
+            {{ icon('rotate-ccw') }} <span>Reset to default</span>
+          </button>
+        </div>
+
+        <li class="special-page-row" style="list-style:none; margin-top: 12px;">
+          <div class="special-page-info">
+            <div class="u-name">Randomise palette on every page load</div>
+            <p class="muted small">When on, every public page render picks a fresh palette. The colours above act as the saved fallback for when this is off.</p>
+          </div>
+          <label class="mode-toggle">
+            <input type="checkbox" name="footer_bg_sinewave_randomize_colors" value="1"
+                   {% if _bg.sinewave_randomize_colors %}checked{% endif %}
+                   data-sinewave-randomize-colors-toggle>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+          </label>
+        </li>
+        <li class="special-page-row" style="list-style:none; margin-top: 8px;">
+          <div class="special-page-info">
+            <div class="u-name">Randomise wave pattern on every page load</div>
+            <p class="muted small">When on, every public page render picks a fresh wave shape — so the gradient never flows the same way twice. The saved wave above is the fallback for when this is off.</p>
+          </div>
+          <label class="mode-toggle">
+            <input type="checkbox" name="footer_bg_sinewave_randomize_wave" value="1"
+                   {% if _bg.sinewave_randomize_wave %}checked{% endif %}
+                   data-sinewave-randomize-wave-toggle>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+          </label>
+        </li>
+      </div>
+
+    </div>
+
+    {# Particle overlay — applies on top of any style. The toggle
+       switch reveals the effect / speed / size controls when on; same
+       mode-toggle pattern used elsewhere in the admin. #}
+    <div class="fe-footer-bg-particles">
+      <li class="special-page-row" style="list-style:none;">
+        <div class="special-page-info">
+          <div class="u-name">Enable particle overlay</div>
+          <p class="muted small">Layer animated particles (stars, snow, bubbles, etc.) on top of the bg style above.</p>
+        </div>
+        <label class="mode-toggle">
+          <input type="checkbox" name="footer_bg_particle_enabled" value="1"
+                 {% if _bg.particle_enabled %}checked{% endif %}
+                 data-bg-particle-toggle data-bg-live="particle_enabled">
+          <span class="mode-track"><span class="mode-thumb"></span></span>
+        </label>
+      </li>
+      <div class="fe-footer-bg-particles-fields"{% if not _bg.particle_enabled %} hidden{% endif %} data-bg-particle-fields>
+        <label>Effect
+          <select name="footer_bg_particle_effect" data-bg-live="particle_effect">
+            {% for v in ['network','stars','fireflies','bubbles','snow','waves','orbits','rain'] %}
+            <option value="{{ v }}"{% if _bg.particle_effect == v %} selected{% endif %}>{{ v|capitalize }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Speed <span class="muted smaller">(%)</span>
+          <input type="number" name="footer_bg_particle_speed" min="10" max="400" step="10"
+                 value="{{ _bg.particle_speed }}" data-bg-live="particle_speed">
+        </label>
+        <label>Size <span class="muted smaller">(%)</span>
+          <input type="number" name="footer_bg_particle_size" min="10" max="400" step="10"
+                 value="{{ _bg.particle_size }}" data-bg-live="particle_size">
+        </label>
+      </div>
+    </div>
+  </section>
+
+  {# ── Brand block ── only render when the active layout uses it. The
+     card's content still posts to the form when shown; when hidden the
+     stored brand values persist untouched in the JSON column so a later
+     layout switch reveals the editor with the saved values intact. #}
+  {% if 'brand' in active_block_types %}
+  <div class="modal fe-page-edit-modal" id="footer-brand-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <h2>Brand block</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" name="footer_brand_present" value="1">
+        <p class="muted smaller">The logo replaces the site name in the brand block. Tagline shows below; falls back to the site-wide tagline if blank.</p>
+
+        {# Logo source toggle — header (default) vs custom upload. The
+           toggle uses the standard `mode-toggle` switch styling. The
+           custom-logo upload + width slider always render so the admin
+           can prepare a custom logo even while header source is active. #}
+        {% set _b = _f.brand %}
+        {% set _custom_active = _b.logo_source == 'custom' %}
+        <div class="fe-footer-brand-source-row">
+          <span class="fe-footer-brand-source-label">Use header logo</span>
+          <label class="mode-toggle fe-footer-brand-source-toggle">
+            <input type="hidden" name="footer_brand_logo_source" value="{{ 'custom' if _custom_active else 'header' }}" data-brand-logo-source-input>
+            <input type="checkbox" data-brand-logo-source-toggle {% if _custom_active %}checked{% endif %}>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+          </label>
+          <span class="fe-footer-brand-source-label">Use custom logo</span>
+        </div>
+
+        {# Live preview of the active source's logo (header by default,
+           custom when the toggle is on). #}
+        <div class="fe-footer-brand-logo-preview" data-brand-logo-preview>
+          {% set _hdr = site and site.frontend_logo_filename %}
+          {% set _cus = site and site.frontend_brand_logo_filename %}
+          <div class="fe-footer-brand-preview-pane{% if _custom_active %} is-hidden{% endif %}" data-brand-preview-source="header">
+            {% if _hdr %}
+              <img src="{{ url_for('public.site_frontend_logo') }}" alt="" style="width: {{ _b.logo_width }}px;">
+            {% else %}
+              <p class="muted smaller">No header logo uploaded — set one in Branding &amp; SEO. The brand block falls back to the site name text.</p>
+            {% endif %}
+          </div>
+          <div class="fe-footer-brand-preview-pane{% if not _custom_active %} is-hidden{% endif %}" data-brand-preview-source="custom">
+            {% if _cus %}
+              <img src="{{ url_for('public.site_frontend_brand_logo') }}" alt="" style="width: {{ _b.logo_width }}px;">
+            {% else %}
+              <p class="muted smaller">No custom logo uploaded yet. Upload one below.</p>
+            {% endif %}
+          </div>
+        </div>
+
+        {# Custom logo upload — only meaningful when source = custom but
+           always rendered so the admin can upload before flipping the
+           toggle. #}
+        <div class="fe-footer-brand-upload-row">
+          <label>Custom logo file
+            <input type="file" name="frontend_brand_logo" accept="image/*">
+          </label>
+          {% if site and site.frontend_brand_logo_filename %}
+          <label class="check">
+            <input type="checkbox" name="clear_brand_logo" value="1">
+            <span>Remove uploaded custom logo</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <label class="fe-footer-brand-width-label">Logo width
+          <span class="fe-footer-brand-width-row">
+            <input type="range" name="footer_brand_logo_width" min="40" max="600" step="10"
+                   value="{{ _b.logo_width }}" data-brand-width-slider>
+            <output data-brand-width-out>{{ _b.logo_width }}</output><span class="muted smaller">px</span>
+          </span>
+        </label>
+
+        <label>Tagline <span class="muted smaller">(blank → use the site-wide tagline)</span>
+          <input type="text" name="footer_brand_tagline" value="{{ _b.tagline or '' }}"
+                 placeholder="{{ frontend_tagline if frontend_tagline is defined else 'A recovery fellowship portal.' }}">
+        </label>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Close</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Link columns ── #}
+  {% if 'link_columns' in active_block_types %}
+  <div class="modal fe-page-edit-modal fe-page-edit-modal--wide" id="footer-link_columns-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel fe-footer-cols-editor" role="dialog" aria-modal="true"
+         data-footer-cols-editor data-cols-max="6" data-links-max="12">
+      <input type="hidden" name="footer_cols_section_present" value="1">
+      <div class="modal-head">
+        <h2>Link columns</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted smaller">Up to six columns. Drag the column header to reorder; drag a link's handle to reorder within a column.</p>
+
+    <div class="fe-footer-cols-list" data-footer-cols-list>
+      {% for col in _f.columns %}
+      {% set _ci = loop.index0 %}
+      <div class="fe-footer-col-card" data-footer-col data-col-index="{{ _ci }}">
+        <input type="hidden" name="footer_col_present" value="{{ _ci }}">
+        <div class="fe-footer-col-card-head">
+          <button type="button" class="fe-footer-col-handle" aria-hidden="true">{{ icon('grip-vertical') }}</button>
+          <input type="text" class="fe-footer-col-title-input" name="footer_col_{{ _ci }}_title"
+                 value="{{ col.title or '' }}" placeholder="Column heading (e.g. Resources)">
+          <button type="button" class="fe-footer-col-remove" data-footer-col-remove
+                  title="Remove column" aria-label="Remove column">{{ icon('trash-2') }}</button>
+        </div>
+        <ul class="fe-footer-link-rows" data-footer-link-list>
+          {% for l in col.links %}
+          {% set _li = loop.index0 %}
+          <li class="fe-footer-link-row" data-footer-link data-link-index="{{ _li }}">
+            <input type="hidden" name="footer_col_{{ _ci }}_link_present" value="{{ _li }}">
+            <button type="button" class="fe-footer-link-handle" aria-hidden="true">{{ icon('grip-vertical') }}</button>
+            <input type="text" name="footer_col_{{ _ci }}_link_{{ _li }}_label"
+                   value="{{ l.label or '' }}" placeholder="Label">
+            <input type="text" name="footer_col_{{ _ci }}_link_{{ _li }}_url"
+                   value="{{ l.url or '' }}" placeholder="URL">
+            <label class="fe-footer-link-newtab" title="Open in new tab">
+              <input type="checkbox" name="footer_col_{{ _ci }}_link_{{ _li }}_new_tab" value="1"
+                     {% if l.open_in_new_tab %}checked{% endif %}>
+              <span>New tab</span>
+            </label>
+            <button type="button" class="fe-footer-link-remove" data-footer-link-remove
+                    title="Remove link" aria-label="Remove link">{{ icon('x') }}</button>
+          </li>
+          {% endfor %}
+        </ul>
+        <button type="button" class="btn btn-sm fe-footer-link-add" data-footer-link-add>
+          {{ icon('plus') }} <span>Add link</span>
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="fe-footer-cols-actions">
+      <button type="button" class="btn btn-sm" data-footer-col-add>
+        {{ icon('plus') }} <span>Add column</span>
+      </button>
+      <span class="muted smaller fe-footer-cols-count" data-footer-cols-count></span>
+    </div>
+
+    <template data-footer-col-template>
+      <div class="fe-footer-col-card" data-footer-col data-col-index="__CIDX__">
+        <input type="hidden" name="footer_col_present" value="__CIDX__">
+        <div class="fe-footer-col-card-head">
+          <button type="button" class="fe-footer-col-handle" aria-hidden="true">{{ icon('grip-vertical') }}</button>
+          <input type="text" class="fe-footer-col-title-input" name="footer_col___CIDX___title"
+                 value="" placeholder="Column heading (e.g. Resources)">
+          <button type="button" class="fe-footer-col-remove" data-footer-col-remove
+                  title="Remove column" aria-label="Remove column">{{ icon('trash-2') }}</button>
+        </div>
+        <ul class="fe-footer-link-rows" data-footer-link-list></ul>
+        <button type="button" class="btn btn-sm fe-footer-link-add" data-footer-link-add>
+          {{ icon('plus') }} <span>Add link</span>
+        </button>
+      </div>
+    </template>
+
+    <template data-footer-link-template>
+      <li class="fe-footer-link-row" data-footer-link data-link-index="__LIDX__">
+        <input type="hidden" name="footer_col___CIDX___link_present" value="__LIDX__">
+        <button type="button" class="fe-footer-link-handle" aria-hidden="true">{{ icon('grip-vertical') }}</button>
+        <input type="text" name="footer_col___CIDX___link___LIDX___label" value="" placeholder="Label">
+        <input type="text" name="footer_col___CIDX___link___LIDX___url" value="" placeholder="URL">
+        <label class="fe-footer-link-newtab" title="Open in new tab">
+          <input type="checkbox" name="footer_col___CIDX___link___LIDX___new_tab" value="1">
+          <span>New tab</span>
+        </label>
+        <button type="button" class="fe-footer-link-remove" data-footer-link-remove
+                title="Remove link" aria-label="Remove link">{{ icon('x') }}</button>
+      </li>
+    </template>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Close</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Social row ── #}
+  {% if 'social_row' in active_block_types %}
+  <div class="modal fe-page-edit-modal" id="footer-social_row-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel fe-footer-social-editor" role="dialog" aria-modal="true"
+         data-footer-social-editor data-social-max="10">
+      <input type="hidden" name="footer_social_section_present" value="1">
+      <div class="modal-head">
+        <h2>Social icons</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted smaller">Small icon row. Pick a Lucide icon (e.g. <code>instagram</code>, <code>facebook</code>, <code>youtube</code>, <code>twitter</code>, <code>github</code>, <code>linkedin</code>, <code>mail</code>).</p>
+    <div class="fe-footer-social-list" data-footer-social-list>
+      {% for s in _f.social %}
+      {% set _si = loop.index0 %}
+      <div class="fe-footer-social-row" data-footer-social-row data-social-index="{{ _si }}">
+        <input type="hidden" name="footer_social_present" value="{{ _si }}">
+        <input type="text" class="fe-footer-social-icon-input"
+               name="footer_social_{{ _si }}_icon" value="{{ s.icon or '' }}"
+               placeholder="Lucide icon name">
+        <input type="text" name="footer_social_{{ _si }}_label" value="{{ s.label or '' }}"
+               placeholder="Accessible label (e.g. Instagram)">
+        <input type="text" name="footer_social_{{ _si }}_url" value="{{ s.url or '' }}"
+               placeholder="https://…">
+        <button type="button" class="fe-footer-social-remove" data-footer-social-remove
+                title="Remove" aria-label="Remove social link">{{ icon('x') }}</button>
+      </div>
+      {% endfor %}
+    </div>
+    <button type="button" class="btn btn-sm" data-footer-social-add>
+      {{ icon('plus') }} <span>Add social link</span>
+    </button>
+    <template data-footer-social-template>
+      <div class="fe-footer-social-row" data-footer-social-row data-social-index="__SIDX__">
+        <input type="hidden" name="footer_social_present" value="__SIDX__">
+        <input type="text" class="fe-footer-social-icon-input"
+               name="footer_social___SIDX___icon" value="" placeholder="Lucide icon name">
+        <input type="text" name="footer_social___SIDX___label" value=""
+               placeholder="Accessible label (e.g. Instagram)">
+        <input type="text" name="footer_social___SIDX___url" value="" placeholder="https://…">
+        <button type="button" class="fe-footer-social-remove" data-footer-social-remove
+                title="Remove" aria-label="Remove social link">{{ icon('x') }}</button>
+      </div>
+    </template>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Close</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Secondary nav ── #}
+  {% if 'secondary_nav' in active_block_types %}
+  <div class="modal fe-page-edit-modal" id="footer-secondary_nav-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel fe-footer-secnav-editor" role="dialog" aria-modal="true"
+         data-footer-secnav-editor data-secnav-max="8">
+      <input type="hidden" name="footer_secnav_section_present" value="1">
+      <div class="modal-head">
+        <h2>Secondary nav</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted smaller">Small inline links shown next to the copyright (privacy, terms, etc.).</p>
+        <div class="fe-footer-secnav-list" data-footer-secnav-list>
+      {% for l in _f.secondary_nav %}
+      {% set _ni = loop.index0 %}
+      <div class="fe-footer-secnav-row" data-footer-secnav-row data-secnav-index="{{ _ni }}">
+        <input type="hidden" name="footer_nav_present" value="{{ _ni }}">
+        <input type="text" name="footer_nav_{{ _ni }}_label" value="{{ l.label or '' }}"
+               placeholder="Label">
+        <input type="text" name="footer_nav_{{ _ni }}_url" value="{{ l.url or '' }}"
+               placeholder="URL">
+        <button type="button" class="fe-footer-secnav-remove" data-footer-secnav-remove
+                title="Remove" aria-label="Remove secondary nav link">{{ icon('x') }}</button>
+      </div>
+      {% endfor %}
+    </div>
+    <button type="button" class="btn btn-sm" data-footer-secnav-add>
+      {{ icon('plus') }} <span>Add link</span>
+    </button>
+    <template data-footer-secnav-template>
+      <div class="fe-footer-secnav-row" data-footer-secnav-row data-secnav-index="__NIDX__">
+        <input type="hidden" name="footer_nav_present" value="__NIDX__">
+        <input type="text" name="footer_nav___NIDX___label" value="" placeholder="Label">
+        <input type="text" name="footer_nav___NIDX___url" value="" placeholder="URL">
+        <button type="button" class="fe-footer-secnav-remove" data-footer-secnav-remove
+                title="Remove" aria-label="Remove secondary nav link">{{ icon('x') }}</button>
+      </div>
+    </template>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Close</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Meeting locations (Recovery Blue block content) ── #}
+  {% if 'meeting_locations' in active_block_types %}
+  {% set _ml = _f.meeting_locations %}
+  <div class="modal fe-page-edit-modal fe-page-edit-modal--wide" id="footer-meeting_locations-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel fe-footer-loc-editor" role="dialog" aria-modal="true"
+         data-footer-loc-editor data-loc-max="12">
+      <input type="hidden" name="footer_loc_section_present" value="1">
+      <div class="modal-head">
+        <h2>Meeting locations</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted smaller">Card grid for the <code>meeting_locations</code> block. Heading, then any in-person meeting locations from <b>Settings → Meeting Locations</b> you'd like to surface (checked rows below), then any one-off custom locations.</p>
+        <label>Heading
+          <input type="text" name="footer_loc_heading" value="{{ _ml.heading or '' }}"
+                 placeholder="Search Meeting Locations">
+        </label>
+
+        {# ── From Settings — checkbox list of in-person Locations.
+           Each checked row resolves to a live `Location` lookup at
+           render time, so future address / maps-link edits in
+           Settings propagate automatically. The Edit pencil opens
+           Settings → Meeting Locations in a new tab. #}
+        {% set _checked_ids = (_ml.predefined_ids or []) | map('int') | list %}
+        <div class="fe-footer-loc-predefined">
+          <div class="fe-footer-loc-predefined-head">
+            <span class="u-name">From Settings → Meeting Locations</span>
+            <a class="btn btn-sm" href="{{ url_for('main.locations') }}" target="_blank" rel="noopener"
+               title="Open the Meeting Locations tab in Settings">
+              {{ icon('edit') }} <span>Manage in Settings</span>
+            </a>
+          </div>
+          {% if all_locations %}
+          <p class="muted smaller">Tick the locations to include. Edit a location's address / maps link in Settings — changes propagate here automatically.</p>
+          <ul class="fe-footer-loc-predefined-list">
+            {% for loc in all_locations %}
+            <li class="fe-footer-loc-predefined-row">
+              <label class="fe-footer-loc-predefined-check">
+                <input type="checkbox" name="footer_loc_predefined_id" value="{{ loc.id }}"
+                       {% if loc.id in _checked_ids %}checked{% endif %}>
+                <span class="fe-footer-loc-predefined-name">{{ loc.name }}</span>
+                {% set _addr_lines = loc.address_lines() %}
+                {% if _addr_lines %}
+                <span class="fe-footer-loc-predefined-addr muted smaller">
+                  {% for line in _addr_lines %}{{ line }}{% if not loop.last %} · {% endif %}{% endfor %}
+                </span>
+                {% endif %}
+              </label>
+              <a class="fe-footer-loc-predefined-edit btn btn-sm"
+                 href="{{ url_for('main.locations') }}" target="_blank" rel="noopener"
+                 title="Edit in Settings">
+                {{ icon('edit') }} <span>Edit</span>
+              </a>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="muted smaller">No locations defined yet. <a href="{{ url_for('main.locations') }}" target="_blank" rel="noopener">Add one in Settings →</a></p>
+          {% endif %}
+        </div>
+
+        {# ── Custom locations — one-off entries with full inline
+           editing (icon, address, maps link, Markdown note). Use these
+           when the entry doesn't belong in your global Meeting
+           Locations list (e.g. a sister fellowship's address). #}
+        <div class="fe-footer-loc-section-head">
+          <span class="u-name">Custom locations</span>
+          <span class="muted smaller">One-off entries that don't live in Settings.</span>
+        </div>
+        <div class="fe-footer-loc-list" data-footer-loc-list>
+      {# `_ml.items` clashes with dict.items() in Jinja — bracket access. #}
+      {% for it in _ml['items'] %}
+      {% set _li = loop.index0 %}
+      <div class="fe-footer-loc-row fe-footer-loc-card" data-footer-loc-row data-loc-index="{{ _li }}">
+        <input type="hidden" name="footer_loc_present" value="{{ _li }}">
+
+        {# Top row: icon picker + name + remove button #}
+        <div class="fe-footer-loc-card-head">
+          <div class="fe-footer-loc-icon-cell" data-icon-field>
+            <button type="button" class="icon-picker-trigger fe-footer-loc-icon-trigger"
+                    data-open-icon-picker
+                    data-icon-target="#footer-loc-{{ _li }}-icon"
+                    title="Choose icon">
+              <span class="icon-picker-preview" data-icon-preview>
+                {% if it.icon %}{{ icon(it.icon) }}{% endif %}
+              </span>
+              <span class="icon-picker-trigger-empty" data-icon-empty>{{ icon('image') }}<span>Icon</span></span>
+            </button>
+            <input type="hidden" id="footer-loc-{{ _li }}-icon"
+                   name="footer_loc_{{ _li }}_icon" value="{{ it.icon or '' }}">
+          </div>
+          <label class="fe-footer-loc-field-grow">Name
+            <input type="text" name="footer_loc_{{ _li }}_name" value="{{ it.name or '' }}"
+                   class="fe-footer-loc-name">
+          </label>
+          <button type="button" class="fe-footer-loc-remove" data-footer-loc-remove
+                  title="Remove" aria-label="Remove location">{{ icon('x') }}</button>
+        </div>
+
+        <label>Street
+          <input type="text" name="footer_loc_{{ _li }}_street" value="{{ it.street or '' }}">
+        </label>
+        <div class="loc-csz-row">
+          <label class="loc-csz-city">City
+            <input type="text" name="footer_loc_{{ _li }}_city" value="{{ it.city or '' }}">
+          </label>
+          <label class="loc-csz-state">State
+            <input type="text" name="footer_loc_{{ _li }}_state" value="{{ it.state or '' }}">
+          </label>
+          <label class="loc-csz-zip">ZIP
+            <input type="text" name="footer_loc_{{ _li }}_zip_code" value="{{ it.zip_code or '' }}">
+          </label>
+        </div>
+        <label>Google Maps Link
+          <input type="url" name="footer_loc_{{ _li }}_maps_url" value="{{ it.maps_url or '' }}">
+        </label>
+        <label>Website URL <span class="muted smaller">(optional)</span>
+          <input type="url" name="footer_loc_{{ _li }}_website_url" value="{{ it.website_url or '' }}">
+        </label>
+        <label>Notes <span class="muted smaller">(shown italicized under the address on the public footer)</span>
+          <textarea name="footer_loc_{{ _li }}_note" rows="2">{{ it.note or '' }}</textarea>
+        </label>
+      </div>
+      {% endfor %}
+    </div>
+    <button type="button" class="btn btn-sm" data-footer-loc-add>
+      {{ icon('plus') }} <span>Add location</span>
+    </button>
+    <template data-footer-loc-template>
+      <div class="fe-footer-loc-row fe-footer-loc-card" data-footer-loc-row data-loc-index="__LOCIDX__">
+        <input type="hidden" name="footer_loc_present" value="__LOCIDX__">
+        <div class="fe-footer-loc-card-head">
+          <div class="fe-footer-loc-icon-cell" data-icon-field>
+            <button type="button" class="icon-picker-trigger fe-footer-loc-icon-trigger"
+                    data-open-icon-picker
+                    data-icon-target="#footer-loc-__LOCIDX__-icon"
+                    title="Choose icon">
+              <span class="icon-picker-preview" data-icon-preview></span>
+              <span class="icon-picker-trigger-empty" data-icon-empty>{{ icon('image') }}<span>Icon</span></span>
+            </button>
+            <input type="hidden" id="footer-loc-__LOCIDX__-icon"
+                   name="footer_loc___LOCIDX___icon" value="">
+          </div>
+          <label class="fe-footer-loc-field-grow">Name
+            <input type="text" name="footer_loc___LOCIDX___name" value="" class="fe-footer-loc-name">
+          </label>
+          <button type="button" class="fe-footer-loc-remove" data-footer-loc-remove
+                  title="Remove" aria-label="Remove location">{{ icon('x') }}</button>
+        </div>
+        <label>Street
+          <input type="text" name="footer_loc___LOCIDX___street" value="">
+        </label>
+        <div class="loc-csz-row">
+          <label class="loc-csz-city">City
+            <input type="text" name="footer_loc___LOCIDX___city" value="">
+          </label>
+          <label class="loc-csz-state">State
+            <input type="text" name="footer_loc___LOCIDX___state" value="">
+          </label>
+          <label class="loc-csz-zip">ZIP
+            <input type="text" name="footer_loc___LOCIDX___zip_code" value="">
+          </label>
+        </div>
+        <label>Google Maps Link
+          <input type="url" name="footer_loc___LOCIDX___maps_url" value="">
+        </label>
+        <label>Website URL <span class="muted smaller">(optional)</span>
+          <input type="url" name="footer_loc___LOCIDX___website_url" value="">
+        </label>
+        <label>Notes <span class="muted smaller">(shown italicized under the address on the public footer)</span>
+          <textarea name="footer_loc___LOCIDX___note" rows="2"></textarea>
+        </label>
+      </div>
+    </template>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Close</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Contact section panes (Recovery Blue block content) ── #}
+  {% if 'contact_section' in active_block_types %}
+  {% set _cs = _f.contact_section %}
+  <div class="modal fe-page-edit-modal fe-page-edit-modal--wide" id="footer-contact_section-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel fe-footer-contact-editor" role="dialog" aria-modal="true"
+         data-footer-contact-editor data-contact-max="4">
+      <input type="hidden" name="footer_contact_section_present" value="1">
+      <div class="modal-head">
+        <h2>Contact section</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted smaller">1-4 panes side-by-side for the <code>contact_section</code> block. Body accepts <b>Markdown</b>.</p>
+        <div class="fe-footer-contact-list" data-footer-contact-list>
+      {% for p in _cs.panes %}
+      {% set _ci = loop.index0 %}
+      <div class="fe-footer-contact-row" data-footer-contact-row data-contact-index="{{ _ci }}">
+        <input type="hidden" name="footer_contact_present" value="{{ _ci }}">
+        <input type="text" name="footer_contact_{{ _ci }}_heading" value="{{ p.heading or '' }}" placeholder="Heading (e.g. Contact Us)">
+        <textarea rows="3" name="footer_contact_{{ _ci }}_body" placeholder="Markdown supported.">{{ p.body or '' }}</textarea>
+        <button type="button" class="fe-footer-contact-remove" data-footer-contact-remove
+                title="Remove" aria-label="Remove pane">{{ icon('x') }}</button>
+      </div>
+      {% endfor %}
+    </div>
+    <button type="button" class="btn btn-sm" data-footer-contact-add>
+      {{ icon('plus') }} <span>Add pane</span>
+    </button>
+    <template data-footer-contact-template>
+      <div class="fe-footer-contact-row" data-footer-contact-row data-contact-index="__CTIDX__">
+        <input type="hidden" name="footer_contact_present" value="__CTIDX__">
+        <input type="text" name="footer_contact___CTIDX___heading" value="" placeholder="Heading">
+        <textarea rows="3" name="footer_contact___CTIDX___body" placeholder="Markdown supported."></textarea>
+        <button type="button" class="fe-footer-contact-remove" data-footer-contact-remove
+                title="Remove" aria-label="Remove pane">{{ icon('x') }}</button>
+      </div>
+    </template>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Close</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Copyright ── #}
+  {% if 'copyright' in active_block_types %}
+  <div class="modal fe-page-edit-modal" id="footer-copyright-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel" role="dialog" aria-modal="true">
+      <input type="hidden" name="footer_copyright_present" value="1">
+      <div class="modal-head">
+        <h2>Copyright</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted smaller">Use <code>{year}</code> and <code>{site_name}</code> placeholders. Basic HTML allowed.</p>
+        <label>Copyright text
+          <input type="text" name="footer_copyright" value="{{ _f.copyright or '' }}"
+                 placeholder="© {year} {site_name}. All rights reserved.">
+        </label>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Close</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="form-actions"><button class="btn btn-primary">Save Footer</button></div>
+</form>
+
   </div>
 </div>
+
+<script>
+// Footer editor — drag-reorderable columns, drag-reorderable links per
+// column, add/remove all the way down. Same template-clone + counter
+// pattern used by the features / FAQ editors. Per-row indices ensure
+// the parser's `name="footer_col_<ci>_link_<li>_..."` posts don't
+// collide.
+(function () {
+  // ── Width radio sync ──
+  document.querySelectorAll('.fe-footer-width-opt input[type="radio"]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.querySelectorAll('.fe-footer-width-opt').forEach(o => {
+        const inp = o.querySelector('input[type="radio"]');
+        o.classList.toggle('is-active', !!(inp && inp.checked));
+      });
+    });
+  });
+  // ── Background-mode radio sync (same pattern). ──
+  document.querySelectorAll('.fe-footer-bg-opt input[type="radio"]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.querySelectorAll('.fe-footer-bg-opt').forEach(o => {
+        const inp = o.querySelector('input[type="radio"]');
+        o.classList.toggle('is-active', !!(inp && inp.checked));
+      });
+    });
+  });
+  // ── Min-height vh readout + live preview sync. ──
+  const minhSlider = document.querySelector('[data-footer-minh-slider]');
+  const minhOut    = document.querySelector('[data-footer-minh-out]');
+  if (minhSlider && minhOut) {
+    const apply = () => {
+      minhOut.textContent = minhSlider.value;
+      const sec = document.querySelector('[data-footer-preview-section]');
+      if (sec) {
+        // Preview clip caps actual height; just hint the proportion.
+        const v = parseInt(minhSlider.value, 10) || 0;
+        if (v > 0) sec.style.setProperty('--fe-footer-min-h', v + 'vh');
+        else sec.style.removeProperty('--fe-footer-min-h');
+      }
+    };
+    minhSlider.addEventListener('input', apply);
+    apply();
+  }
+  // ── Font-scale readout + live preview sync. The variable cascades
+  //    to descendants whose font-size is declared in `em`. ──
+  const fsSlider = document.querySelector('[data-footer-fontscale-slider]');
+  const fsOut    = document.querySelector('[data-footer-fontscale-out]');
+  if (fsSlider && fsOut) {
+    const apply = () => {
+      fsOut.textContent = fsSlider.value;
+      const sec = document.querySelector('[data-footer-preview-section]');
+      if (sec) sec.style.setProperty('--fe-footer-scale', (parseInt(fsSlider.value, 10) || 100) / 100);
+    };
+    fsSlider.addEventListener('input', apply);
+    apply();
+  }
+  // ── Style picker (segmented seg-opts) swaps panes. The seg-opt's
+  //    own CSS handles the active highlight via `:has(input:checked)`. ──
+  document.querySelectorAll('[data-bg-style-radio]').forEach(r => {
+    r.addEventListener('change', () => {
+      const editor = r.closest('[data-footer-bg-editor]');
+      if (!editor) return;
+      const v = r.value;
+      editor.querySelectorAll('[data-bg-panel]').forEach(p => {
+        p.hidden = (p.getAttribute('data-bg-panel') !== v);
+      });
+    });
+  });
+  // ── Particle toggle reveals fields. ──
+  const partToggle = document.querySelector('[data-bg-particle-toggle]');
+  const partFields = document.querySelector('[data-bg-particle-fields]');
+  if (partToggle && partFields) {
+    partToggle.addEventListener('change', () => { partFields.hidden = !partToggle.checked; });
+  }
+  // ── Generic slider readout: any [data-slider-input] paired with a
+  //    [data-slider-out] inside the same containing label updates the
+  //    output element's text on input. Mirrors the hero admin's pattern. ──
+  document.querySelectorAll('[data-slider-input]').forEach(inp => {
+    const lbl = inp.closest('label, .nav-megalink-field');
+    const out = lbl && lbl.querySelector('[data-slider-out]');
+    if (!out) return;
+    const apply = () => { out.textContent = inp.value; };
+    inp.addEventListener('input', apply);
+    apply();
+  });
+})();
+
+// ── Live preview wiring for the inline footer-bg editor. Updates the
+//    preview footer's class / inline-style / CSS vars on every form
+//    field change. Sinewave + particles are reinit'd via the same login
+//    FX helpers the public footer uses. ──
+(function () {
+  const editor = document.querySelector('[data-footer-bg-editor]');
+  const sec = document.getElementById('footer-preview-section');
+  if (!editor || !sec) return;
+  const blobs = document.getElementById('footer-preview-blobs');
+  const canvas = document.getElementById('footer-preview-particles');
+
+  function getField(name) { return editor.querySelector('[name="' + name + '"]'); }
+  function val(name, dflt) { const f = getField(name); return f ? f.value : dflt; }
+  function checked(name) { const f = getField(name); return !!(f && f.checked); }
+  function styleVal() { return (editor.querySelector('[name="footer_bg_style"]:checked') || {}).value || 'frosty'; }
+
+  // Determine whether the preview should render in dark mode. Mirrors
+  // the public footer's logic: dark when bg-mode = "dark", otherwise
+  // follows the page (admin) theme. The sinewave palette adapts to this
+  // via loginFxUtils.adjustPaletteForTheme so colours never read as
+  // neon over a dark surface.
+  function isDarkPreview() {
+    const bgMode = (document.querySelector('input[name="frontend_footer_bg_mode"]:checked') || {}).value || 'dark';
+    if (bgMode === 'dark') return true;
+    return document.documentElement.getAttribute('data-theme') === 'dark';
+  }
+
+  // Re-paint sinewave on the preview footer using loginFxUtils. Reads
+  // the four discrete colour pickers (footer_bg_sinewave_c1..c4) and
+  // skips empty / invalid slots. Wave shape comes from the hidden
+  // input (JSON blob) — empty = canonical default.
+  function repaintSinewave() {
+    if (!window.loginFxUtils) return;
+    if (styleVal() !== 'sinewave') return;
+    const colors = Array.from(editor.querySelectorAll('input[data-sinewave-input]'))
+      .map(i => (i.value || '').trim())
+      .filter(c => /^#[0-9a-fA-F]{6}$/.test(c));
+    const palette = colors.length ? colors : ['#16c2ba', '#1883d5', '#5a1ce5'];
+    const adjusted = window.loginFxUtils.adjustPaletteForTheme(palette, isDarkPreview());
+    let wave = null;
+    const waveInp = editor.querySelector('[data-sinewave-wave-input]');
+    if (waveInp && waveInp.value.trim()) {
+      try { wave = JSON.parse(waveInp.value); } catch (_) { wave = null; }
+    }
+    window.loginFxUtils.applyBackground(sec, adjusted, { wave: wave || undefined });
+  }
+
+  // Re-spawn particle FX when style/effect/speed/size/enabled changes.
+  let fx = null;
+  function repaintParticles() {
+    if (!canvas) return;
+    const enabled = checked('footer_bg_particle_enabled');
+    canvas.hidden = !enabled;
+    if (fx && typeof fx.destroy === 'function') { try { fx.destroy(); } catch (_) {} fx = null; }
+    if (!enabled || !window.initLoginFX) return;
+    const effect = val('footer_bg_particle_effect', 'stars');
+    const speed = parseInt(val('footer_bg_particle_speed', '100'), 10) || 100;
+    const size = parseInt(val('footer_bg_particle_size', '100'), 10) || 100;
+    if (effect === 'off') return;
+    canvas.dataset.effect = effect;
+    canvas.dataset.speed = speed;
+    canvas.dataset.size = size;
+    fx = window.initLoginFX(canvas, { effect, speed, size });
+  }
+
+  function applyAll() {
+    const s = styleVal();
+    // Swap modifier class.
+    sec.className = sec.className
+      .split(/\s+/).filter(c => !c.startsWith('fe-footer-bg-')).join(' ')
+      .trim();
+    sec.classList.add('fe-footer-bg-' + s);
+    // Solid / gradient inline background. Clear every long-hand bg
+    // prop so the sinewave-applied background-image doesn't linger.
+    const c1 = val('footer_bg_color', '#0b1026');
+    const c2 = val('footer_bg_color_2', '#1f2a44');
+    const ang = val('footer_bg_gradient_angle', '180');
+    sec.style.background = '';
+    sec.style.backgroundImage = '';
+    sec.style.backgroundColor = '';
+    sec.style.backgroundSize = '';
+    sec.style.backgroundRepeat = '';
+    if (s === 'solid') sec.style.background = c1;
+    else if (s === 'gradient') sec.style.background = 'linear-gradient(' + ang + 'deg, ' + c1 + ', ' + c2 + ')';
+    // Frosty CSS vars on the blob layer.
+    if (blobs) {
+      blobs.hidden = (s !== 'frosty');
+      const hue = parseInt(val('footer_bg_hue', '225'), 10) || 0;
+      const hue2 = parseInt(val('footer_bg_hue_2', '170'), 10) || 0;
+      const blur = parseInt(val('footer_bg_blur', '80'), 10) || 0;
+      const op = parseInt(val('footer_bg_opacity', '45'), 10) || 0;
+      blobs.style.setProperty('--fe-blob-hue-a', hue);
+      blobs.style.setProperty('--fe-blob-hue-b', hue2);
+      blobs.style.setProperty('--fe-blob-blur', blur + 'px');
+      blobs.style.setProperty('--fe-blob-op', op / 100);
+    }
+    // Sinewave repaint.
+    if (s === 'sinewave') repaintSinewave();
+    repaintParticles();
+  }
+
+  // Fire applyAll() on every relevant field change.
+  editor.addEventListener('input', applyAll);
+  editor.addEventListener('change', applyAll);
+
+  // Bg-mode (dark/follow) toggles the .fe-footer-force-dark class on the
+  // preview wrapper so the dark-mode rules light up immediately.
+  document.querySelectorAll('input[name="frontend_footer_bg_mode"]').forEach(r => {
+    r.addEventListener('change', () => {
+      const wrap = document.querySelector('[data-footer-preview]');
+      if (!wrap) return;
+      wrap.classList.toggle('fe-footer-force-dark', r.value === 'dark' && r.checked);
+      // Sinewave palette flips between bright/muted depending on dark
+      // mode, so re-paint to pick the new variant up.
+      repaintSinewave();
+    });
+  });
+
+  // Helper: switch to sinewave style if the user clicked one of the
+  // sinewave action buttons while a different style was active.
+  function ensureSinewaveActive(){
+    const sw = editor.querySelector('[data-bg-style-radio][value="sinewave"]');
+    if (sw && !sw.checked) {
+      sw.checked = true;
+      editor.querySelectorAll('[data-bg-panel]').forEach(p => {
+        p.hidden = (p.dataset.bgPanel !== 'sinewave');
+      });
+    }
+  }
+
+  // Helper: programmatic value changes don't fire input/change events,
+  // so the yellow save bar (which listens on the form) doesn't notice.
+  // Dispatch a bubbling `input` event from the editor so the save bar's
+  // form-level listener picks it up as a dirty edit.
+  function notifyDirty(){
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  // Random palette button — fresh palette, keep wave + other settings.
+  const swRandomBtn = editor.querySelector('[data-sinewave-randomize]');
+  if (swRandomBtn) {
+    swRandomBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!window.loginFxUtils) return;
+      const palette = window.loginFxUtils.randomPalette(4);
+      editor.querySelectorAll('input[data-sinewave-input]').forEach((inp, i) => {
+        if (palette[i]) inp.value = palette[i];
+      });
+      ensureSinewaveActive();
+      applyAll();
+      notifyDirty();
+    });
+  }
+
+  // Random wave-pattern button — fresh wave shape stored in the hidden
+  // input as a JSON blob; palette unchanged.
+  const swWaveBtn = editor.querySelector('[data-sinewave-randomize-wave]');
+  const waveInp = editor.querySelector('[data-sinewave-wave-input]');
+  if (swWaveBtn && waveInp) {
+    swWaveBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!window.loginFxUtils) return;
+      const wave = window.loginFxUtils.randomWaveParams();
+      waveInp.value = JSON.stringify(wave);
+      ensureSinewaveActive();
+      applyAll();
+      notifyDirty();
+    });
+  }
+
+  // Reset button — restore default palette + canonical wave + clear
+  // both randomise-on-load toggles so the next save persists the
+  // canonical sinewave look.
+  const swResetBtn = editor.querySelector('[data-sinewave-reset]');
+  const swRandColorsToggle = editor.querySelector('[data-sinewave-randomize-colors-toggle]');
+  const swRandWaveToggle = editor.querySelector('[data-sinewave-randomize-wave-toggle]');
+  if (swResetBtn) {
+    swResetBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const defaults = ['#16c2ba', '#1883d5', '#5a1ce5', '#0a3eb5'];
+      editor.querySelectorAll('input[data-sinewave-input]').forEach((inp, i) => {
+        inp.value = defaults[i] || '#000000';
+      });
+      if (waveInp) waveInp.value = '';
+      if (swRandColorsToggle) swRandColorsToggle.checked = false;
+      if (swRandWaveToggle) swRandWaveToggle.checked = false;
+      ensureSinewaveActive();
+      applyAll();
+      notifyDirty();
+    });
+  }
+
+  // Re-paint sinewave when admin toggles their own light/dark theme
+  // (so a "Follow page" footer mode tracks live in the preview).
+  new MutationObserver(records => {
+    for (const r of records) if (r.attributeName === 'data-theme') {
+      repaintSinewave();
+      break;
+    }
+  }).observe(document.documentElement, { attributes: true });
+
+  // Initial paint — defer to DOMContentLoaded so login_fx.js (which
+  // ships from the settings-modal block, AFTER this script in source
+  // order) has had a chance to register window.initLoginFX /
+  // loginFxUtils. Without the defer, sinewave + particles would paint
+  // blank on first load and only light up after a field nudge.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyAll);
+  } else {
+    applyAll();
+  }
+})();
+
+// Brand modal — logo source toggle (header / custom), live preview swap,
+// live width readout. The toggle posts via the hidden
+// `footer_brand_logo_source` input so the existing parser path doesn't
+// need to know about the visual switch — only the resolved source value.
+(function () {
+  const toggle = document.querySelector('[data-brand-logo-source-toggle]');
+  const hidden = document.querySelector('[data-brand-logo-source-input]');
+  const preview = document.querySelector('[data-brand-logo-preview]');
+  if (toggle && hidden && preview) {
+    const sync = () => {
+      const isCustom = !!toggle.checked;
+      hidden.value = isCustom ? 'custom' : 'header';
+      preview.querySelectorAll('[data-brand-preview-source]').forEach(p => {
+        const want = (p.getAttribute('data-brand-preview-source') === (isCustom ? 'custom' : 'header'));
+        p.classList.toggle('is-hidden', !want);
+      });
+    };
+    toggle.addEventListener('change', sync);
+    sync();
+  }
+  // Live "X px" readout + width sync to the visible preview img.
+  const slider = document.querySelector('[data-brand-width-slider]');
+  const out    = document.querySelector('[data-brand-width-out]');
+  if (slider && out) {
+    const apply = () => {
+      out.textContent = slider.value;
+      preview && preview.querySelectorAll('img').forEach(img => {
+        img.style.width = slider.value + 'px';
+      });
+    };
+    slider.addEventListener('input', apply);
+    apply();
+  }
+})();
+
+// Columns + links editor
+(function () {
+  const editor = document.querySelector('[data-footer-cols-editor]');
+  if (!editor) return;
+  const list   = editor.querySelector('[data-footer-cols-list]');
+  const tmpl   = editor.querySelector('[data-footer-col-template]');
+  const linkTmpl = editor.querySelector('[data-footer-link-template]');
+  const addBtn = editor.querySelector('[data-footer-col-add]');
+  const count  = editor.querySelector('[data-footer-cols-count]');
+  const colsMax = parseInt(editor.getAttribute('data-cols-max') || '6', 10);
+  const linksMax = parseInt(editor.getAttribute('data-links-max') || '12', 10);
+
+  let nextCol = 0;
+  list.querySelectorAll('[data-footer-col]').forEach(c => {
+    const i = parseInt(c.getAttribute('data-col-index') || '0', 10);
+    if (i + 1 > nextCol) nextCol = i + 1;
+  });
+
+  function nextLinkIdx(colCard) {
+    let n = 0;
+    colCard.querySelectorAll('[data-footer-link]').forEach(l => {
+      const i = parseInt(l.getAttribute('data-link-index') || '0', 10);
+      if (i + 1 > n) n = i + 1;
+    });
+    return n;
+  }
+
+  function refresh() {
+    const cards = list.querySelectorAll('[data-footer-col]');
+    if (count) count.textContent = cards.length + ' / ' + colsMax + ' column' + (colsMax === 1 ? '' : 's');
+    addBtn.disabled = cards.length >= colsMax;
+    addBtn.classList.toggle('is-disabled', cards.length >= colsMax);
+  }
+
+  function addColumn() {
+    const cards = list.querySelectorAll('[data-footer-col]');
+    if (cards.length >= colsMax) return;
+    const idx = nextCol++;
+    const html = tmpl.innerHTML.split('__CIDX__').join(idx);
+    const holder = document.createElement('div');
+    holder.innerHTML = html.trim();
+    const node = holder.firstElementChild;
+    if (!node) return;
+    list.appendChild(node);
+    refresh();
+    const titleInput = node.querySelector('.fe-footer-col-title-input');
+    if (titleInput) titleInput.focus();
+  }
+
+  function addLink(colCard) {
+    const links = colCard.querySelectorAll('[data-footer-link]');
+    if (links.length >= linksMax) return;
+    const ci = parseInt(colCard.getAttribute('data-col-index') || '0', 10);
+    const li = nextLinkIdx(colCard);
+    const html = linkTmpl.innerHTML
+      .split('__CIDX__').join(ci)
+      .split('__LIDX__').join(li);
+    const holder = document.createElement('div');
+    holder.innerHTML = html.trim();
+    const node = holder.firstElementChild;
+    if (!node) return;
+    colCard.querySelector('[data-footer-link-list]').appendChild(node);
+    const labelInput = node.querySelector('input[type="text"]');
+    if (labelInput) labelInput.focus();
+  }
+
+  list.addEventListener('click', (e) => {
+    const rmCol = e.target.closest('[data-footer-col-remove]');
+    if (rmCol) { e.preventDefault(); rmCol.closest('[data-footer-col]').remove(); refresh(); return; }
+    const rmLink = e.target.closest('[data-footer-link-remove]');
+    if (rmLink) { e.preventDefault(); rmLink.closest('[data-footer-link]').remove(); return; }
+    const addLnk = e.target.closest('[data-footer-link-add]');
+    if (addLnk) { e.preventDefault(); addLink(addLnk.closest('[data-footer-col]')); return; }
+  });
+
+  addBtn.addEventListener('click', (e) => { e.preventDefault(); addColumn(); });
+
+  // Drag-reorder columns by their handle.
+  let draggingCol = null;
+  list.addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('.fe-footer-col-handle');
+    if (!handle) return;
+    const card = handle.closest('[data-footer-col]');
+    if (!card) return;
+    draggingCol = card; card.classList.add('is-dragging');
+    handle.setPointerCapture(e.pointerId);
+  });
+  list.addEventListener('pointermove', (e) => {
+    if (!draggingCol) return;
+    const sibs = Array.from(list.querySelectorAll('[data-footer-col]:not(.is-dragging)'));
+    for (const s of sibs) {
+      const r = s.getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) { list.insertBefore(draggingCol, s); return; }
+    }
+    list.appendChild(draggingCol);
+  });
+  function endColDrag() { if (!draggingCol) return; draggingCol.classList.remove('is-dragging'); draggingCol = null; }
+  list.addEventListener('pointerup', endColDrag);
+  list.addEventListener('pointercancel', endColDrag);
+
+  // Drag-reorder links within their column.
+  let draggingLink = null; let draggingLinkParent = null;
+  list.addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('.fe-footer-link-handle');
+    if (!handle) return;
+    const li = handle.closest('[data-footer-link]');
+    if (!li) return;
+    draggingLink = li; draggingLinkParent = li.parentElement;
+    li.classList.add('is-dragging');
+    handle.setPointerCapture(e.pointerId);
+  });
+  list.addEventListener('pointermove', (e) => {
+    if (!draggingLink || !draggingLinkParent) return;
+    const sibs = Array.from(draggingLinkParent.querySelectorAll('[data-footer-link]:not(.is-dragging)'));
+    for (const s of sibs) {
+      const r = s.getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) { draggingLinkParent.insertBefore(draggingLink, s); return; }
+    }
+    draggingLinkParent.appendChild(draggingLink);
+  });
+  function endLinkDrag() {
+    if (!draggingLink) return;
+    draggingLink.classList.remove('is-dragging');
+    draggingLink = null; draggingLinkParent = null;
+  }
+  list.addEventListener('pointerup', endLinkDrag);
+  list.addEventListener('pointercancel', endLinkDrag);
+
+  refresh();
+})();
+
+// Social icons editor
+(function () {
+  const editor = document.querySelector('[data-footer-social-editor]');
+  if (!editor) return;
+  const list = editor.querySelector('[data-footer-social-list]');
+  const tmpl = editor.querySelector('[data-footer-social-template]');
+  const addBtn = editor.querySelector('[data-footer-social-add]');
+  const max = parseInt(editor.getAttribute('data-social-max') || '10', 10);
+
+  let next = 0;
+  list.querySelectorAll('[data-footer-social-row]').forEach(c => {
+    const i = parseInt(c.getAttribute('data-social-index') || '0', 10);
+    if (i + 1 > next) next = i + 1;
+  });
+
+  function add() {
+    if (list.querySelectorAll('[data-footer-social-row]').length >= max) return;
+    const idx = next++;
+    const html = tmpl.innerHTML.split('__SIDX__').join(idx);
+    const holder = document.createElement('div'); holder.innerHTML = html.trim();
+    const node = holder.firstElementChild; if (!node) return;
+    list.appendChild(node);
+    const inp = node.querySelector('input.fe-footer-social-icon-input');
+    if (inp) inp.focus();
+  }
+  list.addEventListener('click', (e) => {
+    const rm = e.target.closest('[data-footer-social-remove]');
+    if (rm) { e.preventDefault(); rm.closest('[data-footer-social-row]').remove(); }
+  });
+  addBtn.addEventListener('click', (e) => { e.preventDefault(); add(); });
+})();
+
+// Meeting locations editor — same template-clone + add/remove pattern.
+(function () {
+  const editor = document.querySelector('[data-footer-loc-editor]');
+  if (!editor) return;
+  const list = editor.querySelector('[data-footer-loc-list]');
+  const tmpl = editor.querySelector('[data-footer-loc-template]');
+  const addBtn = editor.querySelector('[data-footer-loc-add]');
+  const max = parseInt(editor.getAttribute('data-loc-max') || '12', 10);
+  let next = 0;
+  list.querySelectorAll('[data-footer-loc-row]').forEach(c => {
+    const i = parseInt(c.getAttribute('data-loc-index') || '0', 10);
+    if (i + 1 > next) next = i + 1;
+  });
+  function add() {
+    if (list.querySelectorAll('[data-footer-loc-row]').length >= max) return;
+    const idx = next++;
+    const html = tmpl.innerHTML.split('__LOCIDX__').join(idx);
+    const holder = document.createElement('div'); holder.innerHTML = html.trim();
+    const node = holder.firstElementChild; if (!node) return;
+    list.appendChild(node);
+    // Wire up the markdown editor that ships inside the cloned card
+    // so its preview pane comes alive on the first keystroke.
+    if (window.tspInitMdEditors) window.tspInitMdEditors(node);
+    const inp = node.querySelector('input.fe-footer-loc-name');
+    if (inp) inp.focus();
+  }
+  list.addEventListener('click', e => {
+    const rm = e.target.closest('[data-footer-loc-remove]');
+    if (rm) { e.preventDefault(); rm.closest('[data-footer-loc-row]').remove(); }
+  });
+  addBtn.addEventListener('click', e => { e.preventDefault(); add(); });
+})();
+
+// Contact section editor — same pattern.
+(function () {
+  const editor = document.querySelector('[data-footer-contact-editor]');
+  if (!editor) return;
+  const list = editor.querySelector('[data-footer-contact-list]');
+  const tmpl = editor.querySelector('[data-footer-contact-template]');
+  const addBtn = editor.querySelector('[data-footer-contact-add]');
+  const max = parseInt(editor.getAttribute('data-contact-max') || '4', 10);
+  let next = 0;
+  list.querySelectorAll('[data-footer-contact-row]').forEach(c => {
+    const i = parseInt(c.getAttribute('data-contact-index') || '0', 10);
+    if (i + 1 > next) next = i + 1;
+  });
+  function add() {
+    if (list.querySelectorAll('[data-footer-contact-row]').length >= max) return;
+    const idx = next++;
+    const html = tmpl.innerHTML.split('__CTIDX__').join(idx);
+    const holder = document.createElement('div'); holder.innerHTML = html.trim();
+    const node = holder.firstElementChild; if (!node) return;
+    list.appendChild(node);
+    const inp = node.querySelector('input[type="text"]');
+    if (inp) inp.focus();
+  }
+  list.addEventListener('click', e => {
+    const rm = e.target.closest('[data-footer-contact-remove]');
+    if (rm) { e.preventDefault(); rm.closest('[data-footer-contact-row]').remove(); }
+  });
+  addBtn.addEventListener('click', e => { e.preventDefault(); add(); });
+})();
+
+// Secondary nav editor
+(function () {
+  const editor = document.querySelector('[data-footer-secnav-editor]');
+  if (!editor) return;
+  const list = editor.querySelector('[data-footer-secnav-list]');
+  const tmpl = editor.querySelector('[data-footer-secnav-template]');
+  const addBtn = editor.querySelector('[data-footer-secnav-add]');
+  const max = parseInt(editor.getAttribute('data-secnav-max') || '8', 10);
+
+  let next = 0;
+  list.querySelectorAll('[data-footer-secnav-row]').forEach(c => {
+    const i = parseInt(c.getAttribute('data-secnav-index') || '0', 10);
+    if (i + 1 > next) next = i + 1;
+  });
+
+  function add() {
+    if (list.querySelectorAll('[data-footer-secnav-row]').length >= max) return;
+    const idx = next++;
+    const html = tmpl.innerHTML.split('__NIDX__').join(idx);
+    const holder = document.createElement('div'); holder.innerHTML = html.trim();
+    const node = holder.firstElementChild; if (!node) return;
+    list.appendChild(node);
+    const inp = node.querySelector('input[type="text"]');
+    if (inp) inp.focus();
+  }
+  list.addEventListener('click', (e) => {
+    const rm = e.target.closest('[data-footer-secnav-remove]');
+    if (rm) { e.preventDefault(); rm.closest('[data-footer-secnav-row]').remove(); }
+  });
+  addBtn.addEventListener('click', (e) => { e.preventDefault(); add(); });
+})();
+</script>
 {% endblock %}

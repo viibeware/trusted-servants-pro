@@ -1,18 +1,39 @@
-{# Three-up feature columns. Content from site_blocks(site).features. #}
-{% set _features = (block_content.features if block_content else []) %}
+{# Feature columns. Content from site_blocks(site).features:
+   {heading, subheading, items: [{icon, icon_color, icon_size,
+   title, body, href, open_in_new_tab}]}. site_blocks normalizes
+   any legacy list-shape data into this dict shape on read. #}
+{% set _f = (block_content.features if block_content else {}) or {} %}
+{% set _items = _f.get('items') if _f.get('items') is not none else [] %}
+{% set _heading = _f.get('heading') %}
+{% set _sub = _f.get('subheading') %}
 <section class="fe-section fe-features" aria-label="Features">
   <div class="fe-container">
+    {% if _heading or _sub %}
     <div class="fe-section-head">
-      <h2>What we offer</h2>
-      <p>Everything a fellowship needs to stay connected and welcoming.</p>
+      {% if _heading %}<h2>{{ _heading | safe_html }}</h2>{% endif %}
+      {% if _sub %}<p>{{ _sub | safe_html }}</p>{% endif %}
     </div>
+    {% endif %}
     <div class="fe-features-grid">
-      {% for f in _features %}
-      <article class="fe-feature-card">
-        <div class="fe-feature-icon">{{ icon(f.icon or 'star') }}</div>
-        <h3>{{ f.title }}</h3>
-        <p>{{ f.body }}</p>
-      </article>
+      {% for f in _items %}
+        {% set _href = f.href or '' %}
+        {% set _newtab = f.open_in_new_tab %}
+        {% set _tag = 'a' if _href else 'article' %}
+        <{{ _tag }} class="fe-feature-card{% if _href %} fe-feature-card--linked{% endif %}"
+          {% if _href %}href="{{ _href }}"{% if _newtab %} target="_blank" rel="noopener"{% endif %}{% endif %}>
+          {% if f.icon %}
+          {# Icon color is intentionally NOT overridden inline — the theme's
+             .fe-feature-icon rule (var(--fe-accent)) always wins so the
+             card icons stay on-brand across light/dark mode. Size is still
+             admin-tunable via the picker. #}
+          <div class="fe-feature-icon"
+               {% if f.icon_size %}style="--icon-size: {{ f.icon_size }}px;"{% endif %}>
+            {{ icon(f.icon) }}
+          </div>
+          {% endif %}
+          {% if f.title %}<h3>{{ f.title | safe_html }}</h3>{% endif %}
+          {% if f.body %}<div class="fe-feature-body">{{ f.body | markdown_block }}</div>{% endif %}
+        </{{ _tag }}>
       {% endfor %}
     </div>
   </div>

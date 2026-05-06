@@ -1,0 +1,60 @@
+{# "Pro Tips" accordion at the bottom of the public /meetings page.
+   Reuses the same `data-faq-toggle` markup the homepage FAQ block
+   uses so the global click-delegation handler in frontend/base.html
+   picks it up — no per-page JS needed. The wrapper carries an extra
+   `.fe-protips` class so this section can opt into:
+     * a custom background colour (separate from the page surface)
+     * a section-header icon with admin-tunable colour
+
+   Skipped entirely when `enabled` is false or `items` is empty.
+#}
+{%- set _pt = list_protips -%}
+{%- if _pt and _pt.enabled and _pt['items'] -%}
+{%- set _pt_icon_style -%}
+  {%- if _pt.icon_color %}color: {{ _pt.icon_color }};{% endif -%}
+{%- endset -%}
+<section class="fe-section fe-faq fe-protips"
+         aria-label="Pro tips for online meetings">
+  {# Container width mirrors the meetings-list layouts above so the
+     Pro Tips section stays aligned with the meeting cards on desktop:
+     boxed mode → max-width capped at `list_max_width`; full mode →
+     `list_padding_pct`vw side padding. #}
+  <div class="{% if list_width_mode == 'boxed' %}fe-container{% else %}fe-mlist-fullwrap{% endif %}"
+       {% if list_width_mode == 'boxed' %}style="max-width: {{ list_max_width }}px;"
+       {%- elif list_padding_pct %}style="padding-left: {{ list_padding_pct }}vw; padding-right: {{ list_padding_pct }}vw;"{% endif %}>
+    <div class="fe-section-head fe-protips-head">
+      {% if _pt.icon %}
+      <span class="fe-protips-icon" aria-hidden="true"
+            {%- if _pt_icon_style %} style="{{ _pt_icon_style }}"{% endif %}>
+        {{ icon(_pt.icon) }}
+      </span>
+      {% endif %}
+      <h2>{{ _pt.heading or 'Pro Tips' }}</h2>
+      {% if _pt.subheading %}
+      <p>{{ _pt.subheading }}</p>
+      {% endif %}
+    </div>
+    <div class="fe-faq-list" data-faq-list>
+      {% for q in _pt['items'] %}
+      <div class="fe-faq-item" data-faq-item>
+        <button type="button" class="fe-faq-summary"
+                data-faq-toggle aria-expanded="false">
+          {% if q.icon %}
+          <span class="fe-faq-summary-icon"
+                {% if q.icon_size %}style="--icon-size: {{ q.icon_size }}px;"{% endif %}
+                aria-hidden="true">
+            {{ icon(q.icon) }}
+          </span>
+          {% endif %}
+          <span class="fe-faq-summary-q">{{ q.question | safe_html }}</span>
+          <span class="fe-faq-summary-chevron" aria-hidden="true">{{ icon('chevron-down') }}</span>
+        </button>
+        <div class="fe-faq-body">
+          <div class="fe-faq-body-inner">{{ q.answer | markdown_block }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{%- endif -%}

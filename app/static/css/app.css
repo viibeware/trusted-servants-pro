@@ -298,7 +298,24 @@ p { margin: .25rem 0; }
    DRAG-AND-DROP LAYOUT BUILDER
    ============================================================ */
 .fe-layout-builder-modal .modal-panel,
-.fe-layout-builder-panel { width: min(1100px, 96vw); max-height: 92vh; }
+.fe-layout-builder-panel {
+  /* Both `width` AND `max-width` are set: the generic `.modal-panel`
+     rule at the bottom of this file pins `max-width: 680px`, and CSS
+     resolves the rendered width as min(width, max-width). Without an
+     explicit `max-width` override here, the builder panel would clamp
+     back to 680px even though `width` says 1100px. */
+  width: min(1100px, 96vw);
+  max-width: min(1100px, 96vw);
+  max-height: 92vh;
+}
+/* Footer builder needs more horizontal real estate so 4 column drop
+   zones fit comfortably on desktop. The modifier class is added by
+   feFooterLayoutBuilder() — only applied to footer-kind modals. */
+.fe-layout-builder-modal--wide .modal-panel,
+.fe-layout-builder-modal--wide .fe-layout-builder-panel {
+  width: min(1500px, 98vw);
+  max-width: min(1500px, 98vw);
+}
 .fe-layout-builder-body { overflow-y: auto; }
 .fe-layout-builder-grid {
   display: grid; grid-template-columns: 280px minmax(0, 1fr);
@@ -366,6 +383,107 @@ p { margin: .25rem 0; }
   font-size: 1rem; line-height: 1;
 }
 .fe-builder-canvas-remove:hover { background: var(--danger); color: #fff; }
+
+/* ---- Footer-builder canvas (rows + columns) ---- */
+.fe-footer-builder-canvas {
+  background: var(--panel-2);
+  padding: 12px;
+  gap: 12px !important;
+}
+.fe-footer-builder-add-row {
+  align-self: flex-start;
+  margin-top: 12px;
+}
+.fe-footer-builder-row {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px 12px;
+  display: flex; flex-direction: column; gap: 10px;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.fe-footer-builder-row.is-dragging {
+  opacity: 0.65; box-shadow: 0 12px 28px rgba(0,0,0,0.18);
+}
+.fe-footer-builder-row-head {
+  display: flex; align-items: center; gap: 12px;
+  flex-wrap: wrap;
+}
+.fe-footer-builder-row-handle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  color: var(--muted); cursor: grab; touch-action: none;
+  font-size: 0.9rem; line-height: 1;
+}
+.fe-footer-builder-row-handle:active { cursor: grabbing; }
+.fe-footer-builder-row-label {
+  font-weight: 700; font-size: 0.78rem; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted);
+}
+.fe-footer-builder-row-cols {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.85rem; color: var(--muted);
+}
+.fe-footer-builder-row-cols select {
+  padding: 4px 8px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--panel-2);
+  color: var(--text); font: inherit;
+}
+.fe-footer-builder-row-remove {
+  margin-left: auto;
+  width: 28px; height: 28px; padding: 0; line-height: 1;
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 6px;
+  cursor: pointer; font-size: 1rem;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.fe-footer-builder-row-remove:hover {
+  color: var(--danger, #b91c1c); border-color: var(--danger, #b91c1c);
+  background: rgba(185, 28, 28, 0.06);
+}
+.fe-footer-builder-row-cols-wrap {
+  display: grid; gap: 10px;
+}
+.fe-footer-builder-cols-1 { grid-template-columns: 1fr; }
+.fe-footer-builder-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.fe-footer-builder-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.fe-footer-builder-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 980px) {
+  .fe-footer-builder-cols-3,
+  .fe-footer-builder-cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .fe-footer-builder-row-cols-wrap { grid-template-columns: 1fr !important; }
+}
+.fe-footer-builder-col {
+  display: flex; flex-direction: column; gap: 4px;
+  min-width: 0;
+}
+.fe-footer-builder-col-head {
+  font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; font-size: 0.7rem;
+}
+.fe-footer-builder-col-drop {
+  flex: 1 1 auto;
+  display: flex; flex-direction: column; gap: 6px;
+  min-height: 80px; padding: 8px;
+  border: 1.5px dashed var(--border); border-radius: 8px;
+  background: var(--panel-2);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.fe-footer-builder-col-drop.is-dragover {
+  border-color: var(--brand, var(--access));
+  background: var(--brand-soft, var(--panel));
+}
+.fe-footer-builder-col-drop .fe-builder-empty {
+  padding: 18px 0; pointer-events: none;
+}
+.fe-footer-builder-col-drop .fe-builder-canvas-block {
+  cursor: grab;
+}
+.fe-footer-builder-col-drop .fe-builder-canvas-block.is-dragging { opacity: 0.4; }
 
 /* Two-panel split inside the builder canvas. */
 .fe-builder-split { flex-direction: column; padding: 0; gap: 0; cursor: default; }
@@ -966,13 +1084,23 @@ html[data-theme="dark"] .post-chip-draft        { background: rgba(100, 116, 139
   border-radius: 8px; margin-bottom: 6px;
 }
 
-/* Header admin: every settings sub-panel sits inside a single card on a
-   3-column grid (Width & padding | Logo | Top alert | Under-header alert).
-   Each panel keeps its own form so the global save bar can submit all
-   dirty ones in one go. */
+/* Header admin: every settings sub-panel sits inside a single card on an
+   auto-fit grid (Width & padding | Logo | Under-header alert | Utility
+   bar). Each panel keeps its own form so the global save bar can submit
+   all dirty ones in one go.
+
+   Column count tracks the *available* space, not the viewport: the Web
+   Frontend admin sidebar (248 px) + page padding (28 px × 2) + the
+   secondary admin subnav (248 px + 32 px gap) + .card padding (32 px ×
+   2) eat ~620 px before the grid even starts, so a viewport-keyed
+   3-col rule kicks in long before there's room for three 320-px
+   columns. `auto-fit` + `minmax(min(100%, 320px), 1fr)` lets the grid
+   render 1, 2, or 3 columns based on the room actually available
+   inside the card — and `min(100%, 320px)` keeps the floor from
+   exceeding the container width on very narrow shells. */
 .fe-header-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   gap: 1.5rem;
   margin-top: 6px;
 }
@@ -982,6 +1110,14 @@ html[data-theme="dark"] .post-chip-draft        { background: rgba(100, 116, 139
   padding: 14px 16px;
   border: 1px solid var(--border); border-radius: 10px;
   background: var(--panel-2);
+  /* Container-type lets sub-rows inside each panel (alert colour row,
+     icon row) collapse based on the *card's* width instead of the
+     viewport — a viewport-keyed media query on .alert-bar-color-row
+     would only kick in below 560 px even though the card itself can
+     be ~280 px on a typical desktop with the admin sidebar + subnav
+     trimming the page. */
+  container-type: inline-size;
+  container-name: fe-header-grid-item;
 }
 .fe-header-grid-title {
   margin: 0 0 4px; font-size: 0.95rem; font-weight: 700;
@@ -989,12 +1125,12 @@ html[data-theme="dark"] .post-chip-draft        { background: rgba(100, 116, 139
 }
 .fe-header-grid-blurb { margin: 0 0 12px; }
 .fe-header-grid-foot { margin: 1rem 0 0; }
-@media (max-width: 1180px) {
-  .fe-header-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 720px) {
-  .fe-header-grid { grid-template-columns: 1fr; }
-}
+/* Tighter fieldset padding inside header-grid panels — the global
+   `.fieldset` rule pads 2rem all-round, which on a 320-px column
+   leaves <250 px for the legend + form controls. Halving the inline
+   padding gives controls room to breathe without changing the look
+   of fieldsets used elsewhere. */
+.fe-header-grid-item .fieldset { padding: 1rem 1.25rem; }
 .template-card { display: flex; flex-direction: column; gap: 10px;
   padding: 14px; border: 2px solid var(--border); border-radius: 12px;
   background: var(--panel); cursor: pointer; position: relative;
@@ -1089,6 +1225,262 @@ html[data-theme="dark"] .post-chip-draft        { background: rgba(100, 116, 139
 .alert-bar-color-row, .alert-bar-icon-row { display: grid;
   grid-template-columns: 1fr 1fr; gap: 16px; }
 
+/* Utility-bar admin editor — repeating-row form with kind-conditional
+   fields. Each row collapses on narrow card widths so the layout stays
+   adaptive regardless of viewport, sidebar, or surrounding chrome.
+   Why container queries instead of @media: on the frontend admin page
+   this card lives inside the main app sidebar (248px) + .content
+   padding + a secondary fe-admin subnav (248px + gap) + card padding,
+   so its actual width is ~viewport−600px. Viewport-keyed breakpoints
+   guess wrong and the 5-col row grid overflows by ~1100px viewport. */
+.fe-header-grid-item-wide {
+  grid-column: 1 / -1;
+  container-type: inline-size;
+  container-name: utility-bar-card;
+}
+.utility-bar-side { margin-top: 14px; min-width: 0; }
+.utility-bar-side legend { font-weight: 600; padding: 0 6px; }
+.utility-bar-items { display: flex; flex-direction: column; gap: 10px;
+  min-width: 0; }
+/* The shared .fieldset rule pads 2rem all-round, which on narrow cards
+   leaves less than 200px for the rows themselves and forces the row
+   grids to overflow. Halve the inline padding so row contents have
+   room. The mobile-default sub-fieldset gets the same treatment. */
+@container utility-bar-card (max-width: 480px) {
+  .utility-bar-side, .utility-bar-mobile-default {
+    padding: 1rem;
+  }
+}
+
+/* Each row — leaf or container — has the same outer grid: drag handle |
+   row contents | remove button. The handle is the only legitimate drag
+   start; clicking elsewhere lets the admin type/select normally. */
+.utility-bar-row { display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px; padding: 10px;
+  border: 1px solid var(--border, #e5e7eb); border-radius: 10px;
+  background: var(--card-soft, rgba(0,0,0,0.02));
+  align-items: start;
+  min-width: 0;
+}
+.utility-bar-handle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  background: transparent; border: 0; border-radius: 6px;
+  color: var(--muted, #6b7280); cursor: grab;
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+.utility-bar-handle:hover { background: rgba(0,0,0,0.05); color: var(--text, inherit); }
+.utility-bar-handle .icon { width: 16px; height: 16px; }
+.utility-bar-row.is-dragging { opacity: 0.55; }
+/* Drop indicators set during dragover. The before / after lines are
+   thin brand-tinted bars at the matching edge so the admin sees
+   exactly where the row will land on drop; the target ring shows when
+   the cursor is over the empty tail of a side or container. */
+.utility-bar-row.is-drop-before { box-shadow: 0 -3px 0 0 var(--brand, #0b5cff); }
+.utility-bar-row.is-drop-after  { box-shadow: 0 3px 0 0 var(--brand, #0b5cff); }
+[data-utility-side].is-drop-target,
+[data-utility-container-items].is-drop-target {
+  outline: 2px dashed var(--brand, #0b5cff);
+  outline-offset: -2px;
+}
+
+.utility-bar-row-fields { display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) minmax(0, 1fr) 160px auto;
+  gap: 10px; align-items: end;
+  min-width: 0; }
+.utility-bar-row-fields label { display: flex; flex-direction: column;
+  gap: 4px; font-size: 0.8125rem;
+  min-width: 0; }
+.utility-bar-row-fields label.check { flex-direction: row;
+  align-items: center; gap: 6px; padding-bottom: 6px; }
+/* Inputs/selects inherit `min-width: auto` from the grid, which means
+   they refuse to shrink below their intrinsic content width — long
+   placeholder text or a wide URL value pushes the whole row past the
+   card edge. Force them to fill the column instead. */
+.utility-bar-row-fields input,
+.utility-bar-row-fields select { width: 100%; min-width: 0;
+  box-sizing: border-box; }
+/* The kind-visibility JS sets [hidden] on labels that the current kind
+   doesn't apply to (e.g. URL + "Open in new tab" hide for text items).
+   The .utility-bar-row-fields label rules above land at the same
+   specificity as the UA [hidden]{display:none} rule, so without this
+   override the labels stay visible. The attribute-scoped rule beats
+   them on specificity. */
+.utility-bar-row-fields label[hidden] { display: none; }
+.utility-bar-add-row { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+.utility-bar-remove { align-self: start; }
+
+/* Container — labelled group of inner items. Visually distinct from
+   leaves: subtle accent border + brand-tinted header strip with the
+   group glyph + admin label input + remove button. The inner items
+   list is a drop zone (data-utility-container-items) styled the same
+   way as the side wrapper so dragging an item over it gives the same
+   ring affordance. */
+.utility-bar-container {
+  /* Reset the grid so the container can stack head / inner / add.
+     One brand-tinted background runs across the entire container —
+     head, items list, and add-row — so the grouping reads as a
+     single panel. The inner rows keep their own card chrome and
+     stand out clearly against this backdrop. */
+  grid-template-columns: 1fr;
+  border-color: var(--brand, #0b5cff);
+  background: rgba(11, 92, 255, 0.08);
+  padding: 0;
+  overflow: hidden;
+}
+.utility-bar-container-head {
+  display: grid;
+  /* handle | glyph | label-input | collapsed-icon picker | remove.
+     The label input takes the flexible column; the collapsed-icon
+     picker sits to its right with intrinsic width so the visible
+     "Collapsed icon" caption + select stay readable without
+     squashing the label. */
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  gap: 8px; align-items: center;
+  padding: 10px 12px;
+  min-width: 0;
+}
+.utility-bar-container-glyph {
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--brand, #0b5cff);
+}
+.utility-bar-container-glyph .icon { width: 16px; height: 16px; }
+.utility-bar-container-label-input {
+  font-weight: 600;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  background: var(--panel, #fff);
+  color: inherit; font-family: inherit; font-size: 0.875rem;
+  min-width: 0; width: 100%; box-sizing: border-box;
+}
+.utility-bar-container-items {
+  /* Roomier vertical gap so each row reads as its own card against
+     the brand-tinted container backdrop — the gap is what visually
+     separates one item from the next, since head and body now share
+     a single background. */
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 14px 12px 4px;
+  min-height: 60px;
+}
+.utility-bar-container-items:empty::before {
+  content: 'Drop items here, or use the button below';
+  color: var(--muted, #6b7280);
+  font-size: 0.8125rem; font-style: italic;
+  text-align: center;
+  padding: 8px 10px;
+  display: block;
+}
+.utility-bar-container-add {
+  padding: 10px 12px 12px;
+}
+/* Collapsed-icon picker — inlined into the container head as a
+   compact "Collapsed icon: <select>" pair. Visible caption is
+   tight; the long explainer lives on the label's title tooltip so
+   the strip stays one line. */
+.utility-bar-container-collapsed-label {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.8125rem; font-weight: 600;
+  min-width: 0;
+  white-space: nowrap;
+}
+.utility-bar-container-collapsed-label select {
+  min-width: 0; max-width: 180px;
+  padding: 4px 8px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  background: var(--panel, #fff);
+  color: inherit; font-family: inherit; font-size: 0.875rem;
+  font-weight: 400;
+  box-sizing: border-box;
+}
+/* Inner rows inside a container sit on top of the brand-tinted
+   panel — give them a solid white-ish card so the boundary between
+   one row and the next is unambiguous. */
+.utility-bar-container-items > .utility-bar-row {
+  background: var(--panel, #fff);
+  border-color: rgba(11, 92, 255, 0.20);
+  box-shadow: 0 1px 2px rgba(11, 92, 255, 0.06);
+}
+/* Containers nested inside a container's items list don't make sense —
+   the JS gates against it, but if anything slips through, hide the
+   drag handle so it can't be picked up again. */
+.utility-bar-container-items .utility-bar-container .utility-bar-handle { display: none; }
+
+/* Theme-toggle row — singleton, can be dragged but has no editable
+   fields and no remove button. Visually marked with a sun/moon glyph
+   + a short "can't be removed" hint so the admin understands why this
+   row looks different from the others. */
+.utility-bar-row--theme-toggle {
+  background: rgba(15, 118, 110, 0.06);
+  border-color: rgba(15, 118, 110, 0.40);
+}
+.utility-bar-theme-toggle-fields {
+  display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap;
+  padding: 4px 0;
+}
+.utility-bar-theme-toggle-glyph {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.18);
+  color: rgb(15, 118, 110);
+  flex: 0 0 auto;
+}
+.utility-bar-theme-toggle-glyph .icon { width: 18px; height: 18px; }
+.utility-bar-theme-toggle-label {
+  font-weight: 600; color: var(--text, inherit);
+}
+.utility-bar-theme-toggle-help {
+  flex: 1 1 200px; min-width: 0;
+}
+/* GSR singleton glyph carries the literal "GSR" text instead of an
+   icon — same teal pill chrome as the theme/search singletons so the
+   row reads as the same family. Slightly tighter type so three caps
+   fit inside the 32 × 32 chip. */
+.utility-bar-gsr-glyph {
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+}
+
+/* Threshold tuned to the row-fields hard column widths (140 + 160 +
+   ~150 newtab label + 4 × 10 gap = 490 minimum) plus the row outer
+   chrome (handle, remove, gaps, padding, fieldset padding, card
+   padding) — totals ~700 of card width before the 5-col grid stops
+   fitting. Below that, drop to a flexible 2-col layout. */
+@container utility-bar-card (max-width: 700px) {
+  .utility-bar-row { grid-template-columns: auto minmax(0, 1fr); }
+  .utility-bar-container { grid-template-columns: 1fr; }
+  .utility-bar-row-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .utility-bar-row-fields > label.utility-bar-newtab { grid-column: 1 / -1; }
+  .utility-bar-remove { grid-column: 2; justify-self: end; }
+  .utility-bar-container .utility-bar-remove { justify-self: end; }
+}
+/* On phones the two-up field grid still overflows (Type select + a long
+   URL placeholder don't fit side by side). Stack to a single column so
+   each input gets the full row width. The drag handle stays in its own
+   column and the remove button parks at the end of the fields block. */
+@container utility-bar-card (max-width: 380px) {
+  .utility-bar-row-fields { grid-template-columns: minmax(0, 1fr); }
+  .utility-bar-row-fields > label.utility-bar-newtab { grid-column: 1; }
+  .utility-bar-remove { grid-column: 1; }
+  /* Narrow head wraps the collapsed-icon picker and remove button
+     onto their own rows so the label input keeps full width. */
+  .utility-bar-container-head {
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+  .utility-bar-container-head .utility-bar-container-collapsed-label {
+    grid-column: 1 / -1; justify-self: start;
+  }
+  .utility-bar-container-head .utility-bar-remove {
+    grid-column: 1 / -1; justify-self: end;
+  }
+}
+
 /* ===== Mega menu editor (admin) =====
    Columns stack vertically at full container width so each column gets room
    to breathe. Inside a column, link blocks sit in a single stream. #Icon and
@@ -1174,6 +1566,22 @@ html[data-theme="dark"] .post-chip-draft        { background: rgba(100, 116, 139
   border-radius: 6px; background: transparent; cursor: pointer;
 }
 .nav-megalink-color-input:disabled { opacity: 0.35; cursor: not-allowed; }
+/* Per-link size-override row: matches the override-color row's
+   layout — toggle on the left, slider + percentage readout on the
+   right. Slider dims when the toggle is off so the inactive state
+   reads as "off" without needing to hide the control. */
+.nav-megalink-size-field .nav-megalink-size-row {
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.nav-megalink-size-slider {
+  width: 140px; accent-color: var(--brand);
+}
+.nav-megalink-size-slider:disabled { opacity: 0.35; cursor: not-allowed; }
+.nav-megalink-size-out {
+  font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums;
+  min-width: 38px; text-align: right;
+}
+.nav-megalink-size-field:not(.is-on) .nav-megalink-size-out { opacity: 0.5; }
 .nav-megalink-row-footer { grid-template-columns: 1fr auto; align-items: center; }
 .nav-megalink-newtab { display: inline-flex; align-items: center; gap: 6px;
   font-size: 0.75rem; color: var(--muted); font-weight: 500; cursor: pointer; }
@@ -1194,11 +1602,21 @@ html[data-theme="dark"] .post-chip-draft        { background: rgba(100, 116, 139
 .alert-bar-color-row input[type="color"] { width: 100%; height: 40px; padding: 2px;
   border: 1px solid var(--border); border-radius: 6px; background: transparent;
   cursor: pointer; }
+/* Stack the colour + icon rows when the host card is too narrow for
+   two side-by-side controls. Container query (vs. viewport) so the
+   collapse triggers off the actual card width — important on the
+   header admin where the card lives inside the admin sidebar + subnav
+   stack and the viewport stays wide. The legacy 560-px viewport rule
+   stays as a fallback for browsers that don't support container
+   queries. */
+@container fe-header-grid-item (max-width: 320px) {
+  .alert-bar-color-row, .alert-bar-icon-row { grid-template-columns: 1fr; }
+}
 @media (max-width: 560px) {
   .alert-bar-color-row, .alert-bar-icon-row { grid-template-columns: 1fr; }
 }
 
-.fe-logo-preview-mock { width: 248px; min-height: 96px; box-sizing: border-box;
+.fe-logo-preview-mock { width: 100%; max-width: 248px; min-height: 96px; box-sizing: border-box;
   padding: 18px 14px; background: var(--panel-2); border: 1px solid var(--border);
   border-radius: 8px; display: flex; align-items: center; justify-content: center;
   text-align: center; overflow: hidden; }
@@ -1267,6 +1685,28 @@ html[data-theme="dark"] .post-chip-draft        { background: rgba(100, 116, 139
   to   { opacity: 0; transform: translateY(28px); }
 }
 .fe-save-bar[hidden] { display: none !important; }
+/* In-modal variant — reuses the yellow chrome but unfixes the global
+   bar's `position: fixed; left: …; bottom: …` so it sits inline
+   inside the modal footer. Sized to its content (chip-style); placed
+   on the LEFT of the footer with Cancel pushed to the right via the
+   bar's `margin-right: auto`. Slides in from below on first appearance
+   via the same `fe-save-appear` keyframe. */
+.fe-modal-save-bar.fe-save-bar {
+  position: relative;
+  left: auto; right: auto; bottom: auto;
+  width: auto;
+  flex: 0 0 auto;
+  min-width: 0;
+  /* `order: -1` puts the bar before any other flex sibling regardless
+     of DOM position; `margin-right: auto` pushes the rest of the
+     footer (Cancel) to the right edge. */
+  order: -1;
+  margin-left: 0;
+  margin-right: auto;
+}
+.fe-modal-save-bar.fe-save-bar .fe-save-bar-msg {
+  flex: 0 0 auto;
+}
 .fe-save-bar-msg {
   font-weight: 700; font-size: 0.875rem;
   /* Single line, ellipsised if it'd wrap — prevents a 1→2 line flash
@@ -1636,6 +2076,39 @@ label.content-mode-switch {
   padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
 .md-editor-preview pre { background: var(--panel-2); padding: 10px 12px; border-radius: 6px;
   overflow-x: auto; }
+
+/* Side-by-side live mode (used by the inclusion editor + features card
+   bodies). The tabs are hidden (no need — both panes are visible at once);
+   the two panes sit in a 1fr|1fr grid with a subtle divider. Stacks on
+   narrow viewports so each pane keeps a useful width.
+   Heights stay locked: each pane is a flex column, the textarea / inner
+   preview both `flex: 1` to fill the grid cell, and the grid's default
+   align-items: stretch means whichever column is taller (textarea's
+   min-height + any user-resize, or content-driven preview) sets the row
+   height — and the other column matches. The panel-2 background lives
+   on the pane so the preview's coloured area always reaches the
+   textarea's bottom edge, even when the rendered preview is short. */
+.md-editor-live { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.md-editor-live .md-editor-tabs { display: none; }
+.md-editor-live .md-editor-pane {
+  display: flex; flex-direction: column;
+  min-width: 0; min-height: 0;
+}
+.md-editor-live .md-editor-pane-write { border-right: 1px solid var(--border); }
+.md-editor-live .md-editor-pane-preview { background: var(--panel-2); overflow: hidden; }
+.md-editor-live .md-editor-pane-write textarea {
+  flex: 1 1 auto; min-height: 180px; box-sizing: border-box;
+}
+.md-editor-live .md-editor-preview {
+  flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto;
+  background: transparent;
+}
+@media (max-width: 720px) {
+  .md-editor-live { grid-template-columns: 1fr; }
+  .md-editor-live .md-editor-pane-write {
+    border-right: 0; border-bottom: 1px solid var(--border);
+  }
+}
 
 /* ===== Reading lightbox (paper-style PDF viewer) ===== */
 .reading-lightbox .reading-lightbox-panel {
@@ -3004,7 +3477,7 @@ form.hide-zoom .zoom-only, form.hide-zoom .zoom-only-field { display: none; }
 .data-snapshot-row .smaller { flex: 0 0 auto; }
 .data-snapshot-row .btn { flex: 0 0 auto; }
 .branding-row { display: flex; gap: 16px; align-items: stretch; margin-top: 8px; }
-.branding-preview-wrap { flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; width: 248px; }
+.branding-preview-wrap { flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; width: 248px; max-width: 100%; }
 .width-slider-label { margin-top: 4px; font-size: 0.875rem; display: flex; flex-direction: column; gap: 4px; }
 .branding-save-row { margin-top: auto; margin-bottom: 1rem; display: flex; justify-content: flex-start; }
 .sidebar-footer-mock {
@@ -3103,7 +3576,32 @@ body.embed .card:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom
 .mtype-hybrid { background: rgba(172, 72, 255, 0.18); color: #8b36d9; }
 .mtype-in_person { background: rgba(56, 198, 76, 0.2); color: #1f9d3b; }
 
-.meeting-info { display: flex; flex-direction: column; gap: 20px; }
+.meeting-info {
+  display: flex; flex-direction: column; gap: 20px;
+  /* Anchor for the full-height column divider rendered via ::before. */
+  position: relative;
+}
+/* Vertical hairline between the left/right columns of the details
+   grid. Painted on the section card itself so it spans top-padding
+   to bottom-padding (the whole height of the container) instead of
+   stopping at the grid row's height. Hidden when the grid collapses
+   to a single column on narrow viewports — the divider would only
+   visually slice through stacked content there. */
+.meeting-info::before {
+  content: "";
+  position: absolute;
+  /* Stop 2rem short of the card's top + bottom padding edges so the
+     line reads as a column separator rather than a full-bleed
+     hairline through the card chrome. */
+  top: 2rem; bottom: 2rem;
+  left: calc(50% - 0.5px);
+  width: 1px;
+  background: var(--border);
+  pointer-events: none;
+}
+@media (max-width: 600px) {
+  .meeting-info::before { display: none; }
+}
 .meeting-info .detail-label { font-size: 1rem; font-weight: 700; color: var(--text);
   text-transform: none; letter-spacing: 0; margin-bottom: 1rem; }
 .meeting-header { display: flex; gap: 16px; align-items: flex-start; }
@@ -3111,9 +3609,33 @@ body.embed .card:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom
 .meeting-header-text .chip { align-self: flex-start; }
 .meeting-description { color: var(--text); }
 .meeting-description .clamp-body { white-space: pre-wrap; }
-.meeting-details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  column-gap: 2rem; row-gap: 16px; }
-.detail-block { display: flex; flex-direction: column; }
+.meeting-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  column-gap: 2rem; row-gap: 16px;
+  /* Cells align to the top of the grid row (rather than stretching
+     and centering content), so the right column's first label sits
+     at the same Y as the left column's first label regardless of
+     how tall the description block grows. */
+  align-items: start;
+}
+.detail-block { display: flex; flex-direction: column; align-self: start; }
+/* Right column gets 1rem of inner padding on the left so its content
+   sits clear of the vertical divider. Only applied on viewports wide
+   enough for the grid to actually have two columns — once it stacks
+   below 600px the second block sits flush like the first. */
+@media (min-width: 601px) {
+  .meeting-details-grid > .detail-block:nth-child(2) { padding-left: 1rem; }
+}
+/* Divider line between sub-sections inside a detail-block (e.g. the
+   right column's Location → Zoom transition). Adds a hairline +
+   breathing room in one rule so the inline `margin-top` style on
+   the old markup can go away. */
+.detail-section-divider {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
 .detail-label { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
   color: var(--muted); margin-bottom: 1rem; }
 .schedule-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -3178,28 +3700,45 @@ body.embed .card:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom
 .library-picker .library-row { display: flex; flex-direction: column; gap: 8px;
   border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
   background: var(--panel-2); }
+/* Head row carries the include checkbox + name on the left and the
+   whole-library Public toggle on the right. The wrapper is a flex
+   container so the toggle sits flush right while the label retains
+   its existing pointer-cursor + font-weight treatment. */
+.library-picker .library-head-wrap {
+  display: flex; flex-direction: row; align-items: center;
+  gap: 10px; width: 100%;
+}
 .library-picker .library-head { display: flex; flex-direction: row; align-items: center;
   gap: 10px; cursor: pointer; padding: 0; margin: 0; font-weight: 600; text-align: left;
-  width: 100%; }
+  flex: 1 1 auto; min-width: 0; }
 .library-picker .library-head input { accent-color: var(--brand); margin: 0; }
 .library-picker .library-name { font-weight: 600; flex: 0 1 auto; }
+.library-picker .library-public-toggle {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+/* Granular mode hides the whole-library Public toggle — per-item
+   toggles below take over. The library-readings block (which holds
+   them) is naturally hidden in 'all' mode by the existing JS. */
+.library-row.is-granular .library-public-toggle { display: none; }
 .library-picker .library-detail { display: flex; flex-direction: column; gap: 8px;
   padding: 0 0 0 26px; }
 .library-picker .library-readings { display: flex; flex-direction: column; gap: 4px;
   padding: 4px 0 0 0; max-height: 240px; overflow-y: auto; }
 .library-picker .reading-check { display: flex; flex-direction: row; align-items: center;
   gap: 8px; cursor: pointer; padding: 2px 0; margin: 0; font-weight: 400; text-align: left;
-  width: 100%; }
+  flex: 1 1 auto; min-width: 0; }
 .library-picker .reading-check input { accent-color: var(--brand); margin: 0; }
-/* Per-reading "Show on public meeting page" panel — appears below the
-   granular file-selection list, independent of selection mode. */
-.library-picker .library-public-readings {
-  margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--border);
-  border-radius: 8px; background: var(--panel-2);
-  display: flex; flex-direction: column; gap: 4px;
+/* Each granular reading row holds the include checkbox on the left
+   and a Public toggle on the right (only when the frontend module is
+   on). Mirrors the file-row layout: include + Public side-by-side. */
+.library-picker .reading-row {
+  display: flex; flex-direction: row; align-items: center;
+  gap: 10px; padding: 2px 0;
 }
-.library-picker .library-public-readings-head {
-  font-weight: 600; margin-bottom: 4px;
+.library-picker .reading-public-toggle {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 /* "Show on public meeting page" toggle inside each file's edit form. */
@@ -3895,6 +4434,20 @@ h5.block-heading { font-size: 0.875rem; font-weight: 600; margin: 12px 0 4px; }
   .locations-tbl td.locations-actions { padding-top: 10px; }
   .locations-tbl td.locations-actions .row-actions { justify-content: flex-start; }
   .locations-tbl td.locations-actions .row-actions .btn { flex: 1 1 auto; }
+  .loc-csz-row { grid-template-columns: 1fr 1fr 1fr; }
+}
+
+/* City / state / ZIP grid inside the Location create / edit modals.
+   Three side-by-side fields on desktop; collapses to a single column
+   below 480px in the mobile rule above. */
+.loc-csz-row {
+  display: grid; gap: 8px 12px;
+  grid-template-columns: 2fr 1fr 1fr;
+  margin-top: 8px;
+}
+.loc-csz-row label { display: flex; flex-direction: column; }
+@media (max-width: 480px) {
+  .loc-csz-row { grid-template-columns: 1fr; }
 
   .users-tbl { overflow-x: visible; }
   .users-tbl thead { display: none; }
@@ -4164,13 +4717,9 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
   border: 1px solid var(--border); border-radius: 8px;
   background: var(--panel-2); color: var(--text); font: inherit;
 }
-.icon-picker-color-label,
 .icon-picker-size-label {
   display: inline-flex; align-items: center; gap: 8px;
   flex: 0 0 auto;
-}
-.icon-picker-color-label input[type="color"] {
-  width: 40px; height: 32px; padding: 0; border: 1px solid var(--border); border-radius: 8px;
 }
 .icon-picker-size-label input[type="range"] {
   width: 140px; accent-color: var(--access, #4f46e5);
@@ -4565,3 +5114,1503 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
   display: flex; flex-direction: column; gap: 10px;
 }
 .fe-tplgrid-bg-toggle { display: flex; align-items: center; gap: 8px; }
+
+
+/* Features editor — heading/subheading row + draggable card list. The
+   row layout fans out to single-column on narrow screens; cards keep
+   their icon-trigger / fields / remove button as a flex strip. */
+.fe-feat-head-grid {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: 12px 16px; margin: 6px 0 14px;
+}
+@media (max-width: 720px) { .fe-feat-head-grid { grid-template-columns: 1fr; } }
+.fe-feat-head-grid label { display: flex; flex-direction: column; gap: 6px; }
+
+.fe-feat-cards {
+  display: flex; flex-direction: column; gap: 12px;
+  margin-top: 4px;
+}
+.fe-feat-cards:empty {
+  border: 1px dashed var(--border); border-radius: 10px;
+  padding: 24px; text-align: center; color: var(--muted);
+  background: var(--panel-2);
+}
+.fe-feat-cards:empty::before {
+  content: "No cards yet — click \201CAdd card\201D below to start.";
+  font-style: italic;
+}
+
+.fe-feat-card {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: stretch; gap: 12px;
+  padding: 12px 12px 12px 6px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: box-shadow 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+.fe-feat-card:hover { border-color: var(--brand-soft, var(--border)); }
+.fe-feat-card.is-dragging {
+  opacity: 0.65; box-shadow: 0 12px 28px rgba(0,0,0,0.18);
+  transform: scale(1.005);
+}
+
+.fe-feat-card-handle {
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; color: var(--muted); cursor: grab;
+  touch-action: none;
+}
+.fe-feat-card-handle:active { cursor: grabbing; }
+.fe-feat-card-handle .icon { width: 18px; height: 18px; }
+
+.fe-feat-card-icon {
+  display: flex; align-items: flex-start; padding-top: 2px;
+}
+.fe-feat-icon-trigger {
+  display: inline-flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px;
+  width: 64px; height: 64px;
+  padding: 8px; border-radius: 12px;
+  background: var(--panel-2); color: var(--text);
+  border: 1px dashed var(--border); cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.fe-feat-icon-trigger:hover { background: var(--panel); border-color: var(--brand, var(--border)); }
+.fe-feat-icon-trigger .icon-picker-preview { display: inline-flex; }
+.fe-feat-icon-trigger .icon-picker-preview .icon { width: 26px; height: 26px; }
+.fe-feat-icon-trigger .icon-picker-preview:empty { display: none; }
+.fe-feat-icon-trigger .icon-picker-trigger-empty {
+  display: inline-flex; flex-direction: column; align-items: center; gap: 2px;
+  color: var(--muted); font-size: 0.7rem;
+}
+.fe-feat-icon-trigger .icon-picker-trigger-empty .icon { width: 22px; height: 22px; }
+.fe-feat-card-icon.has-icon .fe-feat-icon-trigger { border-style: solid; }
+.fe-feat-card-icon.has-icon .icon-picker-trigger-empty { display: none; }
+
+.fe-feat-card-fields {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0;
+}
+.fe-feat-card-title {
+  font-weight: 600; font-size: 0.98rem;
+}
+.fe-feat-card-body { resize: vertical; min-height: 56px; }
+/* Compact in-card markdown editor — features cards run side-by-side
+   Write/Preview (matches the Inclusion block design) but with a tighter
+   min-height than the standalone Inclusion editor since the card row
+   itself is already dense. The shared `.md-editor-live` flex layout
+   keeps the two panes the same height; we only need to override the
+   textarea's min-height (the preview tracks via flex: 1) and the inner
+   paddings. Stacks earlier (≤900px) since the field column is narrow
+   inside a card. */
+.fe-feat-card-md { background: var(--panel); }
+.fe-feat-card-md textarea { padding: 8px 10px; font-size: 0.85rem; }
+.fe-feat-card-md.md-editor-live .md-editor-pane-write textarea { min-height: 80px; }
+.fe-feat-card-md.md-editor-live .md-editor-preview {
+  padding: 8px 10px; font-size: 0.85rem;
+}
+@media (max-width: 900px) {
+  .fe-feat-card-md.md-editor-live { grid-template-columns: 1fr; }
+  .fe-feat-card-md.md-editor-live .md-editor-pane-write {
+    border-right: 0; border-bottom: 1px solid var(--border);
+  }
+}
+
+.fe-feat-card-link-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 8px; background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: 8px;
+}
+.fe-feat-card-link-icon {
+  display: inline-flex; color: var(--muted);
+}
+.fe-feat-card-link-icon .icon { width: 16px; height: 16px; }
+.fe-feat-card-href {
+  flex: 1 1 220px; min-width: 0;
+  padding: 6px 8px; background: transparent; border: none;
+  font: inherit; color: var(--text);
+}
+.fe-feat-card-href:focus { outline: none; }
+.fe-feat-card-newtab {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.82rem; color: var(--muted); white-space: nowrap;
+}
+.fe-feat-card-newtab input { margin: 0; }
+
+.fe-feat-card-remove {
+  align-self: start;
+  width: 32px; height: 32px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 8px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.fe-feat-card-remove:hover {
+  color: var(--danger, #b91c1c); border-color: var(--danger, #b91c1c);
+  background: rgba(185, 28, 28, 0.06);
+}
+.fe-feat-card-remove .icon { width: 16px; height: 16px; }
+
+.fe-feat-actions {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 12px;
+}
+.fe-feat-actions .btn[disabled],
+.fe-feat-actions .btn.is-disabled {
+  opacity: 0.5; cursor: not-allowed;
+}
+.fe-feat-actions .btn .icon { width: 14px; height: 14px; margin-right: 2px; }
+
+/* FAQ editor — same draggable / add-remove / Markdown-card pattern as
+   features. One row per FAQ item: drag handle | icon trigger | fields
+   (question + side-by-side Markdown answer) | trash button. */
+.fe-faq-cards {
+  display: flex; flex-direction: column; gap: 12px;
+  margin-top: 4px;
+}
+.fe-faq-cards:empty {
+  border: 1px dashed var(--border); border-radius: 10px;
+  padding: 24px; text-align: center; color: var(--muted);
+  background: var(--panel-2);
+}
+.fe-faq-cards:empty::before {
+  content: "No items yet — click \201CAdd item\201D below to start.";
+  font-style: italic;
+}
+.fe-faq-card {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: stretch; gap: 12px;
+  padding: 12px 12px 12px 6px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: box-shadow 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+.fe-faq-card:hover { border-color: var(--brand-soft, var(--border)); }
+.fe-faq-card.is-dragging {
+  opacity: 0.65; box-shadow: 0 12px 28px rgba(0,0,0,0.18);
+  transform: scale(1.005);
+}
+.fe-faq-card-handle {
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; color: var(--muted); cursor: grab;
+  touch-action: none;
+}
+.fe-faq-card-handle:active { cursor: grabbing; }
+.fe-faq-card-handle .icon { width: 18px; height: 18px; }
+.fe-faq-card-icon {
+  display: flex; align-items: flex-start; padding-top: 2px;
+}
+.fe-faq-icon-trigger {
+  display: inline-flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px;
+  width: 64px; height: 64px;
+  padding: 8px; border-radius: 12px;
+  background: var(--panel-2); color: var(--text);
+  border: 1px dashed var(--border); cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.fe-faq-icon-trigger:hover { background: var(--panel); border-color: var(--brand, var(--border)); }
+.fe-faq-icon-trigger .icon-picker-preview { display: inline-flex; }
+.fe-faq-icon-trigger .icon-picker-preview .icon { width: 26px; height: 26px; }
+.fe-faq-icon-trigger .icon-picker-preview:empty { display: none; }
+.fe-faq-icon-trigger .icon-picker-trigger-empty {
+  display: inline-flex; flex-direction: column; align-items: center; gap: 2px;
+  color: var(--muted); font-size: 0.7rem;
+}
+.fe-faq-icon-trigger .icon-picker-trigger-empty .icon { width: 22px; height: 22px; }
+.fe-faq-card-icon.has-icon .fe-faq-icon-trigger { border-style: solid; }
+.fe-faq-card-icon.has-icon .icon-picker-trigger-empty { display: none; }
+.fe-faq-card-fields {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0;
+}
+.fe-faq-card-question {
+  font-weight: 600; font-size: 0.98rem;
+}
+/* Compact in-card markdown editor — same pattern as the features card.
+   Live side-by-side Write/Preview, but tighter min-height since the FAQ
+   row is dense. Stacks earlier (≤ 900 px) like features. */
+.fe-faq-card-md { background: var(--panel); }
+.fe-faq-card-md textarea { padding: 8px 10px; font-size: 0.85rem; }
+.fe-faq-card-md.md-editor-live .md-editor-pane-write textarea { min-height: 90px; }
+.fe-faq-card-md.md-editor-live .md-editor-preview {
+  padding: 8px 10px; font-size: 0.85rem;
+}
+@media (max-width: 900px) {
+  .fe-faq-card-md.md-editor-live { grid-template-columns: 1fr; }
+  .fe-faq-card-md.md-editor-live .md-editor-pane-write {
+    border-right: 0; border-bottom: 1px solid var(--border);
+  }
+}
+.fe-faq-card-remove {
+  align-self: start;
+  width: 32px; height: 32px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 8px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.fe-faq-card-remove:hover {
+  color: var(--danger, #b91c1c); border-color: var(--danger, #b91c1c);
+  background: rgba(185, 28, 28, 0.06);
+}
+.fe-faq-card-remove .icon { width: 16px; height: 16px; }
+.fe-faq-actions {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 12px;
+}
+.fe-faq-actions .btn[disabled],
+.fe-faq-actions .btn.is-disabled {
+  opacity: 0.5; cursor: not-allowed;
+}
+.fe-faq-actions .btn .icon { width: 14px; height: 14px; margin-right: 2px; }
+
+/* Default-appearance picker — three large radio cards (Light / Dark /
+   Follow system). The native radio is hidden; the surrounding label is
+   the click target. Active card gets a brand-tinted border + soft
+   background so the current setting reads at a glance. */
+.fe-default-theme-grid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin: 6px 0 14px;
+}
+.fe-default-theme-opt {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 14px; row-gap: 4px;
+  padding: 14px 16px; border-radius: 12px;
+  background: var(--panel); border: 1.5px solid var(--border);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.fe-default-theme-opt:hover { border-color: var(--brand-soft, var(--border)); }
+.fe-default-theme-opt.is-active {
+  border-color: var(--brand, var(--access));
+  background: var(--brand-soft, var(--panel-2));
+}
+.fe-default-theme-opt input[type="radio"] {
+  position: absolute; left: -9999px; opacity: 0;
+}
+.fe-default-theme-icon {
+  grid-row: 1 / span 2;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 10px;
+  background: var(--panel-2); color: var(--text);
+}
+.fe-default-theme-opt.is-active .fe-default-theme-icon {
+  background: var(--brand, var(--access)); color: #fff;
+}
+.fe-default-theme-icon .icon { width: 22px; height: 22px; }
+.fe-default-theme-name { font-weight: 600; align-self: end; }
+.fe-default-theme-desc { line-height: 1.35; }
+
+/* ========== Footer admin editor ========== */
+
+/* Container width — reused radio-card pattern from default-theme picker. */
+.fe-footer-width-grid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin: 6px 0 14px;
+}
+.fe-footer-width-opt {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 14px; row-gap: 4px;
+  padding: 14px 16px; border-radius: 12px;
+  background: var(--panel); border: 1.5px solid var(--border);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.fe-footer-width-opt:hover { border-color: var(--brand-soft, var(--border)); }
+.fe-footer-width-opt.is-active {
+  border-color: var(--brand, var(--access));
+  background: var(--brand-soft, var(--panel-2));
+}
+.fe-footer-width-opt input[type="radio"] {
+  position: absolute; left: -9999px; opacity: 0;
+}
+.fe-footer-width-icon {
+  grid-row: 1 / span 2;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 10px;
+  background: var(--panel-2); color: var(--text);
+}
+.fe-footer-width-opt.is-active .fe-footer-width-icon {
+  background: var(--brand, var(--access)); color: #fff;
+}
+.fe-footer-width-icon .icon { width: 22px; height: 22px; }
+.fe-footer-width-name { font-weight: 600; align-self: end; }
+.fe-footer-width-desc { line-height: 1.35; }
+.fe-footer-width-numbers {
+  display: grid; gap: 12px 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.fe-footer-width-numbers label { display: flex; flex-direction: column; gap: 6px; }
+
+/* Background-mode radio cards — same shape as the width selector. */
+.fe-footer-bg-grid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 14px;
+}
+.fe-footer-bg-opt {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 14px; row-gap: 4px;
+  padding: 14px 16px; border-radius: 12px;
+  background: var(--panel); border: 1.5px solid var(--border);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.fe-footer-bg-opt:hover { border-color: var(--brand-soft, var(--border)); }
+.fe-footer-bg-opt.is-active {
+  border-color: var(--brand, var(--access));
+  background: var(--brand-soft, var(--panel-2));
+}
+.fe-footer-bg-opt input[type="radio"] {
+  position: absolute; left: -9999px; opacity: 0;
+}
+.fe-footer-bg-icon {
+  grid-row: 1 / span 2;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 10px;
+  background: var(--panel-2); color: var(--text);
+}
+.fe-footer-bg-opt.is-active .fe-footer-bg-icon {
+  background: var(--brand, var(--access)); color: #fff;
+}
+.fe-footer-bg-icon .icon { width: 22px; height: 22px; }
+.fe-footer-bg-name { font-weight: 600; align-self: end; }
+.fe-footer-bg-desc { line-height: 1.35; }
+
+/* Min-height slider row inside Container width card. */
+.fe-footer-minh-row {
+  display: flex; align-items: center; gap: 10px;
+}
+.fe-footer-minh-row input[type="range"] {
+  flex: 1 1 auto; min-width: 120px; accent-color: var(--access, #4f46e5);
+}
+.fe-footer-minh-row output {
+  font-variant-numeric: tabular-nums; font-weight: 600;
+  min-width: 3ch; text-align: right;
+}
+/* Inline footer-bg admin section — live preview clip + segmented style
+   picker + per-style panels + particle overlay row. Mirrors the hero
+   admin's pattern; reuses .hero-bg-panel / .hero-bg-grid for the panel
+   internals so per-style controls look identical. */
+.fe-footer-bg-section .fe-footer-preview-clip {
+  position: relative;
+  height: 220px;
+  margin: 6px 0 18px;
+  border: 1px dashed var(--border); border-radius: 12px;
+  background: var(--panel-2);
+  overflow: hidden;
+}
+.fe-footer-preview-label {
+  position: absolute; top: 8px; left: 12px; z-index: 2;
+  margin: 0; padding: 2px 8px; border-radius: 4px;
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+  font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+}
+/* Preview wrapper fills the clip 1:1; the inner footer renders edge to
+   edge so the bg (solid / gradient / blobs / sinewave) spans the full
+   preview width. */
+.fe-footer-preview {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  user-select: none;
+  background: transparent;
+}
+.fe-footer-preview .fe-footer {
+  width: 100%; height: 100%;
+  padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0;
+}
+.fe-footer-preview-content {
+  position: relative; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  text-align: center;
+}
+.fe-footer-preview-brand {
+  font-weight: 700; font-size: 1.1rem;
+  color: color-mix(in srgb, currentColor 92%, transparent);
+}
+.fe-footer-preview-copy { font-size: 0.78rem; }
+/* Dark-mode preview wrapper — mirrors the public footer's
+   `body.fe-footer-force-dark` rule so the preview matches what users
+   will actually see when "Dark (always)" is selected. */
+.fe-footer-preview.fe-footer-force-dark .fe-footer {
+  background: #0b1026; color: #cbd5e1;
+}
+
+.fe-footer-bg-style-row { margin: 6px 0 4px; }
+
+.fe-footer-bg-panels { margin-top: 4px; }
+
+/* Sinewave action button row — Random palette / Random wave / Reset. */
+.fe-footer-sw-actions {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin-top: 12px;
+}
+.fe-footer-sw-actions .icon { width: 14px; height: 14px; }
+
+.fe-footer-bg-particles {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.fe-footer-bg-particles-fields {
+  display: grid; gap: 10px 14px;
+  grid-template-columns: 1fr auto auto;
+}
+.fe-footer-bg-particles-fields label { display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 540px) {
+  .fe-footer-bg-particles-fields { grid-template-columns: 1fr; }
+}
+
+/* Brand block toggles. */
+.fe-footer-brand-row {
+  display: flex; flex-wrap: wrap; gap: 18px;
+  margin: 4px 0 10px;
+}
+
+/* Brand modal — logo source toggle + preview + upload + width slider. */
+.fe-footer-brand-source-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-radius: 10px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  margin: 6px 0 14px;
+}
+.fe-footer-brand-source-label {
+  font-size: 0.875rem; font-weight: 600; color: var(--muted);
+  white-space: nowrap;
+}
+.fe-footer-brand-source-toggle { margin: 0; }
+.fe-footer-brand-logo-preview {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 80px; padding: 16px;
+  border: 1px dashed var(--border); border-radius: 10px;
+  background: var(--panel);
+  margin-bottom: 14px;
+}
+.fe-footer-brand-logo-preview img { max-width: 100%; height: auto; }
+.fe-footer-brand-preview-pane.is-hidden { display: none; }
+.fe-footer-brand-upload-row {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 0; border-top: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.fe-footer-brand-width-label {
+  display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px;
+}
+.fe-footer-brand-width-row {
+  display: flex; align-items: center; gap: 10px;
+}
+.fe-footer-brand-width-row input[type="range"] {
+  flex: 1 1 auto; min-width: 140px; accent-color: var(--access, #4f46e5);
+}
+.fe-footer-brand-width-row output {
+  font-variant-numeric: tabular-nums; font-weight: 600;
+  min-width: 3ch; text-align: right;
+}
+
+/* Link columns editor — list of column cards; each card holds a list
+   of link rows. Drag handles on the column header + each link. */
+.fe-footer-cols-list {
+  display: flex; flex-direction: column; gap: 12px;
+  margin-top: 4px;
+}
+.fe-footer-cols-list:empty {
+  border: 1px dashed var(--border); border-radius: 10px;
+  padding: 24px; text-align: center; color: var(--muted);
+  background: var(--panel-2);
+}
+.fe-footer-cols-list:empty::before {
+  content: "No columns yet — click \201CAdd column\201D below.";
+  font-style: italic;
+}
+.fe-footer-col-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+  transition: box-shadow 140ms ease, border-color 140ms ease;
+}
+.fe-footer-col-card.is-dragging { opacity: 0.65; box-shadow: 0 12px 28px rgba(0,0,0,0.18); }
+.fe-footer-col-card-head {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 8px;
+  align-items: center;
+}
+.fe-footer-col-handle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0;
+  background: transparent; border: 0; color: var(--muted);
+  cursor: grab; touch-action: none;
+}
+.fe-footer-col-handle:active { cursor: grabbing; }
+.fe-footer-col-title-input {
+  font-weight: 600; font-size: 0.95rem;
+}
+.fe-footer-col-remove,
+.fe-footer-link-remove,
+.fe-footer-social-remove,
+.fe-footer-secnav-remove {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0;
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.fe-footer-col-remove:hover,
+.fe-footer-link-remove:hover,
+.fe-footer-social-remove:hover,
+.fe-footer-secnav-remove:hover {
+  color: var(--danger, #b91c1c); border-color: var(--danger, #b91c1c);
+  background: rgba(185, 28, 28, 0.06);
+}
+.fe-footer-col-remove .icon,
+.fe-footer-link-remove .icon,
+.fe-footer-social-remove .icon,
+.fe-footer-secnav-remove .icon { width: 14px; height: 14px; }
+
+.fe-footer-link-rows {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.fe-footer-link-row {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) minmax(140px, 1.2fr) auto auto;
+  gap: 8px; align-items: center;
+}
+.fe-footer-link-row.is-dragging { opacity: 0.6; }
+.fe-footer-link-handle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; padding: 0;
+  background: transparent; border: 0; color: var(--muted);
+  cursor: grab; touch-action: none;
+}
+.fe-footer-link-handle:active { cursor: grabbing; }
+.fe-footer-link-newtab {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.78rem; color: var(--muted); white-space: nowrap;
+}
+.fe-footer-link-newtab input { margin: 0; }
+.fe-footer-link-add { align-self: flex-start; }
+.fe-footer-cols-actions {
+  display: flex; align-items: center; gap: 12px; margin-top: 12px;
+}
+.fe-footer-cols-actions .btn[disabled],
+.fe-footer-cols-actions .btn.is-disabled { opacity: 0.5; cursor: not-allowed; }
+
+@media (max-width: 720px) {
+  .fe-footer-link-row {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: "handle label  remove"
+                          "url    url    url"
+                          "newtab newtab newtab";
+  }
+  .fe-footer-link-row > .fe-footer-link-handle { grid-area: handle; }
+  .fe-footer-link-row > input[type="text"]:nth-of-type(1) { grid-area: label; }
+  .fe-footer-link-row > input[type="text"]:nth-of-type(2) { grid-area: url; }
+  .fe-footer-link-row > .fe-footer-link-newtab { grid-area: newtab; }
+  .fe-footer-link-row > .fe-footer-link-remove { grid-area: remove; }
+}
+
+/* Social icons editor */
+.fe-footer-social-list {
+  display: flex; flex-direction: column; gap: 8px; margin-top: 4px;
+}
+.fe-footer-social-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) minmax(180px, 1.5fr) auto;
+  gap: 8px; align-items: center;
+}
+@media (max-width: 720px) {
+  .fe-footer-social-row { grid-template-columns: 1fr 1fr auto; }
+  .fe-footer-social-row > input:nth-of-type(3) { grid-column: 1 / -2; }
+}
+
+/* Secondary nav editor */
+.fe-footer-secnav-list {
+  display: flex; flex-direction: column; gap: 8px; margin-top: 4px;
+}
+.fe-footer-secnav-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.5fr) auto;
+  gap: 8px; align-items: center;
+}
+
+/* ---- Predefined Locations checklist (top of meeting_locations
+   modal). Shows a card-list of every in-person Location from
+   Settings; the admin ticks the ones to include. Each row links out
+   to Settings → Meeting Locations for editing the source data. */
+.fe-footer-loc-predefined {
+  margin: 14px 0; padding: 12px 14px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+}
+.fe-footer-loc-predefined-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 6px;
+}
+.fe-footer-loc-predefined-head .u-name { font-weight: 600; }
+.fe-footer-loc-predefined-head .icon { width: 14px; height: 14px; }
+.fe-footer-loc-predefined-list {
+  list-style: none; padding: 0; margin: 8px 0 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.fe-footer-loc-predefined-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px; border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+.fe-footer-loc-predefined-check {
+  display: flex; align-items: center; gap: 8px;
+  flex: 1; min-width: 0; cursor: pointer; margin: 0;
+}
+.fe-footer-loc-predefined-check input[type="checkbox"] {
+  margin: 0; flex: 0 0 auto;
+}
+.fe-footer-loc-predefined-name { font-weight: 600; }
+.fe-footer-loc-predefined-addr { margin-left: 4px; }
+.fe-footer-loc-predefined-edit { flex: 0 0 auto; }
+.fe-footer-loc-predefined-edit .icon { width: 14px; height: 14px; }
+.fe-footer-loc-section-head {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
+  margin: 18px 0 6px; padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.fe-footer-loc-section-head .u-name { font-weight: 600; }
+
+/* ---- Meeting locations editor ----
+   Card layout: each location is its own panel with an icon picker +
+   name on top, address textarea, dual URL fields (card link + maps),
+   and a Markdown editor with side-by-side preview for the note. */
+.fe-footer-loc-list {
+  display: flex; flex-direction: column; gap: 12px;
+  margin: 6px 0 10px;
+}
+.fe-footer-loc-card {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 16px; border-radius: 10px;
+  background: var(--panel-2); border: 1px solid var(--border);
+}
+.fe-footer-loc-card-head {
+  display: flex; align-items: flex-end; gap: 10px;
+}
+.fe-footer-loc-icon-cell { flex: 0 0 auto; }
+.fe-footer-loc-icon-trigger {
+  width: 44px; height: 44px;
+}
+/* The Name input is wrapped in a `<label>` so it gets the standard
+   text-above-input form treatment; the wrapper grows to fill the row
+   while the icon picker + remove button hold their fixed sizes. */
+.fe-footer-loc-field-grow { flex: 1; min-width: 0; }
+.fe-footer-loc-card .fe-footer-loc-name { font-weight: 600; }
+.fe-footer-loc-card textarea { resize: vertical; min-height: 56px; }
+.fe-footer-loc-urls {
+  display: grid; gap: 8px 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.fe-footer-loc-url-cell {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.fe-footer-loc-note-label { display: block; }
+.fe-footer-loc-note-md { margin-top: 0; }
+.fe-footer-loc-remove {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0; flex: 0 0 auto;
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.fe-footer-loc-remove:hover {
+  color: var(--danger, #b91c1c); border-color: var(--danger, #b91c1c);
+  background: rgba(185, 28, 28, 0.06);
+}
+.fe-footer-loc-remove .icon { width: 14px; height: 14px; }
+
+/* ---- Contact section editor ---- */
+.fe-footer-contact-list {
+  display: flex; flex-direction: column; gap: 8px;
+  margin: 6px 0 10px;
+}
+.fe-footer-contact-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(280px, 2.5fr) auto;
+  gap: 8px; align-items: start;
+}
+.fe-footer-contact-row textarea { resize: vertical; min-height: 72px; }
+.fe-footer-contact-remove {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0;
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+  align-self: start; margin-top: 2px;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.fe-footer-contact-remove:hover {
+  color: var(--danger, #b91c1c); border-color: var(--danger, #b91c1c);
+  background: rgba(185, 28, 28, 0.06);
+}
+.fe-footer-contact-remove .icon { width: 14px; height: 14px; }
+@media (max-width: 720px) {
+  .fe-footer-contact-row { grid-template-columns: 1fr auto; }
+  .fe-footer-contact-row > textarea { grid-column: 1 / -2; }
+}
+
+/* ---- Active layout structure visualisation ----
+   Shared between every frontend admin page that opts into the
+   structure-card pattern (footer, homepage, future pages). The footer
+   uses the rows × columns shape; the homepage uses a vertical
+   sequence with optional 2-panel splits. Both share the same row /
+   column / pill styling. Two-column desktop layout per row: a fixed-
+   width label gutter on the left (Row #, column count) + the actual
+   columns grid on the right. Stacks to label-on-top on narrow
+   viewports. */
+.fe-page-structure .fe-page-structure-rows {
+  display: flex; flex-direction: column; gap: 14px; margin-top: 6px;
+}
+.fe-page-structure .fe-page-structure-row {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+@media (min-width: 720px) {
+  .fe-page-structure .fe-page-structure-row {
+    grid-template-columns: 130px 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+}
+.fe-page-structure .fe-page-structure-row-label {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.fe-page-structure .fe-page-structure-row-num {
+  font-weight: 700; font-size: 0.78rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted);
+}
+/* Single-block rows (homepage non-split entries) drop the label gutter
+   and let the pill span the whole width, since "Row 1 / 1 column" is
+   noise when every row is one block. */
+@media (min-width: 720px) {
+  .fe-page-structure .fe-page-structure-row--single {
+    grid-template-columns: 1fr;
+    padding: 10px 14px;
+  }
+  .fe-page-structure .fe-page-structure-row--single .fe-page-structure-col {
+    background: transparent;
+    border: 0;
+    padding: 0;
+  }
+  .fe-page-structure .fe-page-structure-row--single .fe-page-structure-col-label {
+    display: none;
+  }
+}
+/* Per-row action buttons (e.g. "Settings" on the homepage's split rows)
+   pin to the bottom of the label gutter on desktop; on mobile they
+   wrap below the label text. */
+.fe-page-structure .fe-page-structure-row-action {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 4px; align-self: flex-start;
+}
+.fe-page-structure .fe-page-structure-row-action .icon { width: 14px; height: 14px; }
+
+/* The columns grid honors the row's column count on desktop so the
+   admin sees the same shape the public site renders. Below 600 px the
+   columns stack to one. */
+.fe-page-structure .fe-page-structure-cols {
+  display: grid; gap: 10px;
+  align-items: stretch;
+}
+.fe-page-structure .fe-page-structure-cols--1 { grid-template-columns: 1fr; }
+.fe-page-structure .fe-page-structure-cols--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.fe-page-structure .fe-page-structure-cols--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.fe-page-structure .fe-page-structure-cols--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 980px) {
+  .fe-page-structure .fe-page-structure-cols--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .fe-page-structure .fe-page-structure-cols { grid-template-columns: 1fr !important; }
+}
+
+.fe-page-structure .fe-page-structure-col {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+  min-width: 0;
+}
+.fe-page-structure .fe-page-structure-col-label {
+  font-weight: 700; font-size: 0.68rem;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted);
+}
+.fe-page-structure .fe-page-structure-block-list {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.fe-page-structure .fe-page-structure-block {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 8px;
+  background: var(--brand-soft, var(--panel-2));
+  color: var(--text); font-size: 0.875rem; font-weight: 500;
+  border: 1px solid var(--border);
+  text-align: left; font-family: inherit;
+}
+/* Clickable variant — buttons that open the matching content-edit modal.
+   Cursor + brand-tint hover affordance + a small "Edit" hint that fades
+   in on hover so first-time admins know the pill is a button. */
+.fe-page-structure .fe-page-structure-block.is-clickable {
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+.fe-page-structure .fe-page-structure-block.is-clickable:hover {
+  background: var(--brand, var(--access));
+  border-color: var(--brand, var(--access));
+  color: #fff;
+}
+.fe-page-structure .fe-page-structure-block.is-clickable:hover .fe-page-structure-block-icon { color: #fff; }
+.fe-page-structure .fe-page-structure-block.is-clickable:focus-visible {
+  outline: 2px solid var(--brand, var(--access));
+  outline-offset: 2px;
+}
+.fe-page-structure-block-edit-hint {
+  margin-left: auto;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 0.65rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.18); color: inherit;
+  opacity: 0; transition: opacity 140ms ease;
+}
+.fe-page-structure .fe-page-structure-block.is-clickable:hover .fe-page-structure-block-edit-hint { opacity: 1; }
+/* Flat row of pills for prebuilt layouts (no rows × cols structure). */
+.fe-page-structure-flat {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding-top: 4px;
+}
+
+/* "Edit layout" shortcut button on the structure card head — opens the
+   builder modal pre-loaded with the active custom layout's blocks. Only
+   rendered for editable layouts (active_layout exists). */
+.fe-page-structure-edit-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-left: auto;
+}
+.fe-page-structure-edit-btn .icon { width: 14px; height: 14px; }
+.fe-page-structure .fe-page-structure-block-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--brand, var(--access));
+  flex: 0 0 auto;
+}
+.fe-page-structure .fe-page-structure-block-icon .icon { width: 14px; height: 14px; }
+.fe-page-structure .fe-page-structure-empty {
+  padding: 12px 0; font-style: italic; text-align: center; color: var(--muted);
+}
+
+/* ---- Per-block content-edit modals ----
+   Shared between footer and homepage block editors. Each block's
+   content-editor lives in its own modal; the modal-panel already
+   provides flex-column scroll-aware layout. Default size is the
+   global modal-panel max-width (680px); the --wide modifier bumps it
+   to 960px for editors with dense rows (link columns, locations,
+   features, etc.). Modals stay inside the page's save form so their
+   fields submit normally with the yellow save bar's POST. */
+.fe-page-edit-modal .modal-panel {
+  width: min(680px, calc(100vw - 32px));
+  max-width: min(680px, calc(100vw - 32px));
+}
+.fe-page-edit-modal--wide .modal-panel {
+  width: min(960px, calc(100vw - 32px));
+  max-width: min(960px, calc(100vw - 32px));
+}
+
+/* Wrapper variant for the homepage admin: editor cards live inside a
+   modal panel as-is (the existing <section class="card"> becomes the
+   panel content). The panel itself scrolls when content overflows; the
+   nested card is flushed (no margin/border) so the card+panel reads as
+   one surface, not two. The X close button floats top-right inside the
+   panel. */
+.fe-page-edit-modal-panel {
+  padding: 0;
+  overflow-y: auto;
+  position: relative;
+}
+.fe-page-edit-modal-panel > .card {
+  margin: 0;
+  border: 0;
+  border-radius: 14px;
+  box-shadow: none;
+  /* Reserve room for the floating close button so the card-head's
+     right-side controls (visibility toggle) don't sit underneath it. */
+  padding-right: 56px;
+}
+.fe-page-edit-modal-close {
+  position: absolute;
+  top: 12px; right: 12px;
+  z-index: 5;
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* Inclusion block admin editor — heading row pairs the icon trigger with
+   the heading input, then body / tags / CTA / alignment stack below. */
+.fe-inc-editor .fe-inc-head-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px 16px; align-items: end;
+  margin: 6px 0 12px;
+}
+.fe-inc-editor .fe-inc-icon-cell {
+  display: flex; flex-direction: column; gap: 4px; min-width: 0;
+}
+.fe-inc-editor .fe-inc-icon-trigger {
+  width: 64px; height: 64px;
+  display: inline-flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px;
+  padding: 8px; border-radius: 12px;
+  background: var(--panel-2); color: var(--text);
+  border: 1px dashed var(--border); cursor: pointer;
+}
+.fe-inc-editor .fe-inc-icon-trigger:hover {
+  background: var(--panel); border-color: var(--brand, var(--border));
+}
+.fe-inc-editor .fe-inc-icon-trigger .icon-picker-preview { display: inline-flex; --icon-size: 26px; }
+.fe-inc-editor .fe-inc-icon-trigger .icon-picker-preview:empty { display: none; }
+.fe-inc-editor [data-icon-field].has-icon .icon-picker-trigger-empty { display: none; }
+.fe-inc-editor [data-icon-field].has-icon .fe-inc-icon-trigger { border-style: solid; }
+.fe-inc-editor .fe-inc-heading-cell { display: flex; flex-direction: column; gap: 6px; }
+.fe-inc-editor .fe-inc-cta-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 12px 16px; margin-top: 6px;
+}
+@media (max-width: 720px) {
+  .fe-inc-editor .fe-inc-head-row,
+  .fe-inc-editor .fe-inc-cta-row { grid-template-columns: 1fr; }
+}
+.fe-inc-editor .fe-inc-align-row {
+  display: flex; align-items: center; gap: 14px; margin-top: 8px;
+}
+.fe-inc-editor .fe-inc-align-opt {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+}
+.fe-inc-editor .fe-inc-align-opt input { margin: 0; }
+
+/* Inclusion icon controls — color toggle + swatch + size slider + reset.
+   Sits in a single flex row under the icon trigger / heading row, so the
+   admin can tweak appearance without re-opening the icon picker modal. */
+.fe-inc-editor .fe-inc-icon-controls {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 14px 18px; margin: 0 0 14px;
+  padding: 10px 12px; background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: 10px;
+}
+.fe-inc-editor .fe-inc-icon-color-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.9rem; cursor: pointer;
+}
+.fe-inc-editor .fe-inc-icon-color-toggle input { margin: 0; }
+.fe-inc-editor .fe-inc-icon-color-swatch {
+  width: 40px; height: 28px; padding: 0;
+  border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+  background: transparent;
+}
+.fe-inc-editor .fe-inc-icon-color-swatch[disabled] { opacity: 0.45; cursor: not-allowed; }
+.fe-inc-editor .fe-inc-icon-size-label {
+  display: inline-flex; align-items: center; gap: 8px;
+  flex: 1 1 220px; min-width: 200px;
+}
+.fe-inc-editor .fe-inc-icon-size-label input[type="range"] {
+  flex: 1 1 auto; min-width: 120px; accent-color: var(--access, #4f46e5);
+}
+.fe-inc-editor .fe-inc-icon-size-label output { font-variant-numeric: tabular-nums; }
+.fe-inc-editor .fe-inc-icon-size-reset { white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .fe-feat-card {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "handle icon fields"
+      "remove remove remove";
+  }
+  .fe-feat-card-handle  { grid-area: handle; }
+  .fe-feat-card-icon    { grid-area: icon; }
+  .fe-feat-card-fields  { grid-area: fields; }
+  .fe-feat-card-remove  { grid-area: remove; justify-self: end; }
+}
+
+/* Meetings-list template thumbnails — three suggestive miniatures for
+   the picker on /tspro/frontend/templates. Same 140px-tall canvas as
+   the meeting/event thumbs, but each shape hints at the layout's
+   chrome (sidebar rail, sticky toolbar, week columns). */
+.fe-tplgrid-thumb-meetings-list .t-side {
+  position: absolute; left: 8px; top: 12px; width: 26%; bottom: 12px;
+  background: rgba(99, 102, 241, 0.18);
+  border-radius: 6px;
+  display: flex; flex-direction: column; gap: 5px; padding: 6px 5px;
+}
+.fe-tplgrid-thumb-meetings-list .t-side > span {
+  display: block; height: 8px; border-radius: 3px;
+  background: rgba(255, 255, 255, 0.85);
+}
+.fe-tplgrid-thumb-meetings-list .t-side > span:first-child {
+  background: #6366f1;
+}
+.fe-tplgrid-thumb-meetings-list .t-main {
+  position: absolute; right: 8px; top: 12px; left: 38%; bottom: 12px;
+}
+.fe-tplgrid-thumb-meetings-list .t-main .t-grid {
+  position: absolute; inset: 0;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+}
+.fe-tplgrid-thumb-meetings-list .t-main .t-grid > span {
+  display: block; background: #fff; border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+.fe-tplgrid-thumb-meetings-list .t-toolbar {
+  position: absolute; left: 8px; right: 8px; top: 10px; height: 24px;
+  background: #fff; border: 1px solid #cbd5e1; border-radius: 6px;
+}
+.fe-tplgrid-thumb-meetings-list .t-toolbar::after {
+  content: ""; position: absolute; right: 6px; top: 6px; bottom: 6px;
+  width: 70px;
+  background: linear-gradient(90deg,
+    #818cf8 0 18px, transparent 18px 22px,
+    #cbd5e1 22px 38px, transparent 38px 42px,
+    #cbd5e1 42px 58px, transparent 58px 62px,
+    #cbd5e1 62px 70px);
+  border-radius: 4px;
+}
+.fe-tplgrid-thumb-meetings-list .t-row {
+  position: absolute; left: 8px; right: 8px; height: 18px;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 4px;
+}
+.fe-tplgrid-thumb-meetings-list .t-row:nth-of-type(1) { top: 44px; }
+.fe-tplgrid-thumb-meetings-list .t-row:nth-of-type(2) { top: 66px; }
+.fe-tplgrid-thumb-meetings-list .t-row:nth-of-type(3) { top: 88px; }
+.fe-tplgrid-thumb-meetings-list .t-row:nth-of-type(4) { top: 110px; }
+.fe-tplgrid-thumb-meetings-list .t-week {
+  position: absolute; inset: 12px;
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+}
+.fe-tplgrid-thumb-meetings-list .t-week > span {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 3px;
+  position: relative;
+}
+.fe-tplgrid-thumb-meetings-list .t-week > span::before {
+  content: ""; position: absolute; left: 3px; right: 3px; top: 4px; height: 4px;
+  background: #6366f1; border-radius: 2px; opacity: 0.7;
+}
+.fe-tplgrid-thumb-meetings-list .t-week > span::after {
+  content: ""; position: absolute; left: 3px; right: 3px; top: 12px; height: 3px;
+  background: #cbd5e1; border-radius: 2px;
+}
+
+/* Events-list template thumbnails — four sketches mirroring each
+   layout's defining shape (stacked rows, calendar grid, timeline
+   spine, magazine hero + tiles). Same canvas as the meetings-list
+   thumbs so the picker reads as a uniform grid. */
+.fe-tplgrid-thumb-events-list .t-row {
+  position: absolute; left: 8px; right: 8px; height: 22px;
+  background: #fff; border: 1px solid #cbd5e1; border-radius: 6px;
+}
+.fe-tplgrid-thumb-events-list .t-row:nth-of-type(1) { top: 14px; }
+.fe-tplgrid-thumb-events-list .t-row:nth-of-type(2) { top: 42px; }
+.fe-tplgrid-thumb-events-list .t-row:nth-of-type(3) { top: 70px; }
+.fe-tplgrid-thumb-events-list .t-row:nth-of-type(4) { top: 98px; }
+.fe-tplgrid-thumb-events-list .t-row::before {
+  content: ""; position: absolute; left: 4px; top: 4px; bottom: 4px; width: 14px;
+  background: #818cf8; border-radius: 3px;
+}
+
+.fe-tplgrid-thumb-events-list .t-cal-toolbar {
+  position: absolute; left: 8px; right: 8px; top: 10px; height: 14px;
+  background: #fff; border: 1px solid #cbd5e1; border-radius: 4px;
+}
+.fe-tplgrid-thumb-events-list .t-cal-toolbar::after {
+  content: ""; position: absolute; left: 50%; transform: translateX(-50%);
+  top: 3px; width: 40px; height: 8px;
+  background: #cbd5e1; border-radius: 2px;
+}
+.fe-tplgrid-thumb-events-list .t-cal-grid {
+  position: absolute; inset: 30px 8px 8px;
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px;
+  background: #cbd5e1;
+}
+.fe-tplgrid-thumb-events-list .t-cal-grid > span {
+  background: #fff; position: relative;
+}
+.fe-tplgrid-thumb-events-list .t-cal-grid > span.dot::after {
+  content: ""; position: absolute; right: 2px; bottom: 2px;
+  width: 4px; height: 4px;
+  background: #818cf8; border-radius: 50%;
+}
+
+.fe-tplgrid-thumb-events-list .t-tl-spine {
+  position: absolute; left: 50%; top: 8px; bottom: 8px; width: 2px;
+  background: #818cf8; transform: translateX(-50%);
+}
+.fe-tplgrid-thumb-events-list .t-tl-row {
+  position: absolute; height: 18px;
+  background: #fff; border: 1px solid #cbd5e1; border-radius: 4px;
+}
+.fe-tplgrid-thumb-events-list .t-tl-row-left { left: 14px; right: 56%; }
+.fe-tplgrid-thumb-events-list .t-tl-row-right { left: 56%; right: 14px; }
+.fe-tplgrid-thumb-events-list .t-tl-row:nth-of-type(2) { top: 18px; }
+.fe-tplgrid-thumb-events-list .t-tl-row:nth-of-type(3) { top: 60px; }
+.fe-tplgrid-thumb-events-list .t-tl-row:nth-of-type(4) { top: 102px; }
+
+.fe-tplgrid-thumb-events-list .t-mag-hero {
+  position: absolute; left: 8px; right: 8px; top: 12px; height: 56px;
+  background: linear-gradient(135deg, #818cf8 0%, #c4b5fd 100%);
+  border-radius: 6px;
+}
+.fe-tplgrid-thumb-events-list .t-mag-tile {
+  position: absolute; top: 80px; height: 44px;
+  background: #fff; border: 1px solid #cbd5e1; border-radius: 4px;
+}
+.fe-tplgrid-thumb-events-list .t-mag-tile:nth-of-type(2) { left: 8px;  width: 30%; }
+.fe-tplgrid-thumb-events-list .t-mag-tile:nth-of-type(3) { left: 36%;  width: 28%; }
+.fe-tplgrid-thumb-events-list .t-mag-tile:nth-of-type(4) { right: 8px; width: 30%; }
+
+/* Omni thumb — segmented tab strip on top + a single panel below
+   suggesting "all four views, switchable". */
+.fe-tplgrid-thumb-events-list .t-omni-tabs {
+  position: absolute; left: 50%; top: 14px;
+  transform: translateX(-50%);
+  display: flex; gap: 2px;
+  padding: 3px;
+  background: #e2e8f0;
+  border-radius: 10px;
+}
+.fe-tplgrid-thumb-events-list .t-omni-tab {
+  display: block; width: 16px; height: 8px;
+  background: #cbd5e1; border-radius: 4px;
+}
+.fe-tplgrid-thumb-events-list .t-omni-tab.is-active {
+  background: #6366f1;
+}
+.fe-tplgrid-thumb-events-list .t-omni-panel {
+  position: absolute; left: 8px; right: 8px; top: 42px; bottom: 8px;
+  background: #fff; border: 1px solid #cbd5e1;
+  border-radius: 6px;
+}
+.fe-tplgrid-thumb-events-list .t-omni-panel::before {
+  content: ""; position: absolute; left: 8px; right: 8px; top: 8px; height: 6px;
+  background: linear-gradient(90deg, #818cf8 0 22%, transparent 22% 26%,
+                                       #cbd5e1 26% 78%, transparent 78% 82%,
+                                       #cbd5e1 82% 100%);
+  border-radius: 2px;
+}
+.fe-tplgrid-thumb-events-list .t-omni-panel::after {
+  content: ""; position: absolute; left: 8px; right: 8px; top: 22px; bottom: 8px;
+  background:
+    linear-gradient(transparent 0, #f1f5f9 0 8px, transparent 8px 12px,
+                                    #f1f5f9 12px 20px, transparent 20px 24px,
+                                    #f1f5f9 24px 32px);
+  border-radius: 2px;
+}
+
+.fe-mlist-width-fieldset {
+  margin: 18px 0 4px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.fe-mlist-width-fieldset legend {
+  font-weight: 600; padding: 0 6px;
+}
+.fe-mlist-width-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+}
+.fe-mlist-width-row .check {
+  align-items: flex-start; gap: 10px;
+  padding: 12px; border: 1px solid var(--border);
+  border-radius: 8px; cursor: pointer;
+}
+.fe-mlist-width-row .check:hover { background: var(--surface-2, #f8fafc); }
+.fe-mlist-width-row .check input { margin-top: 3px; }
+.fe-mlist-width-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+}
+.fe-mlist-width-pad {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 0.92rem;
+}
+.fe-mlist-width-pad input {
+  width: 110px; padding: 6px 10px;
+  border: 1px solid var(--border); border-radius: 6px;
+  font-family: inherit; font-size: 0.95rem;
+}
+
+/* Markdown editor with live side-by-side preview. The textarea is the
+   real form input; the right-hand pane is rendered HTML from marked.js
+   refreshed on every keystroke. Below 720px the panes stack so the
+   editor stays usable in narrow modal panels. */
+.md-editor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 4px;
+}
+.md-editor-input,
+.md-editor-preview {
+  min-height: 180px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  font: inherit;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+.md-editor-input {
+  resize: vertical;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+}
+.md-editor-preview {
+  overflow: auto;
+  background: var(--surface-2, #f8fafc);
+}
+.md-editor-preview > *:first-child { margin-top: 0; }
+.md-editor-preview > *:last-child { margin-bottom: 0; }
+.md-editor-preview p { margin: 0.4em 0; }
+.md-editor-preview ul,
+.md-editor-preview ol { margin: 0.4em 0; padding-left: 1.4em; }
+.md-editor-preview h1,
+.md-editor-preview h2,
+.md-editor-preview h3 { margin: 0.6em 0 0.3em; line-height: 1.25; }
+.md-editor-preview code {
+  padding: 1px 5px; border-radius: 3px;
+  background: rgba(15, 23, 42, 0.06);
+  font-size: 0.92em;
+}
+.md-editor-preview pre {
+  padding: 10px 12px; border-radius: 6px;
+  background: rgba(15, 23, 42, 0.06);
+  overflow: auto;
+}
+.md-editor-preview-empty { display: block; padding: 4px 0; }
+@media (max-width: 720px) {
+  .md-editor { grid-template-columns: 1fr; }
+}
+
+/* Backend meeting-detail location block — multi-line address rendering
+   when the meeting points at a saved Location row. The name is
+   bolder; street + city/state/zip read as quieter follow-up lines. */
+.loc-block { line-height: 1.4; }
+/* Location name reads as a plain first line — the rest of the address
+   carries the same weight, only the value-text colour is muted to
+   suggest hierarchy without bolding. */
+.loc-name { font-weight: 400; }
+.loc-line { color: var(--ink-muted, #475569); }
+.loc-notes {
+  margin-top: 6px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border, #e2e8f0);
+  /* Preserve newlines from the textarea so each line of notes renders
+     on its own line without any HTML in the source. */
+  white-space: pre-line;
+}
+
+/* "Pro Tips" admin fieldset on the Templates page — laid out as a
+   responsive 2-up grid so heading + subheading sit side-by-side and
+   the icon/colour controls share a row beneath. The JSON textarea
+   for items lives in a collapsed <details> below since it's an
+   advanced override. */
+.fe-mlist-protips-fieldset {
+  margin-top: 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.fe-mlist-protips-fieldset legend { font-weight: 600; padding: 0 6px; }
+.fe-mlist-protips-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+.fe-mlist-protips-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 0.92rem; }
+.fe-mlist-protips-grid input[type="text"] {
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+  font: inherit;
+}
+.fe-mlist-protips-grid input[type="color"] {
+  width: 80px; height: 36px; padding: 2px;
+  border: 1px solid var(--border); border-radius: 6px;
+}
+/* Extended-content section in the meeting edit modal — toggle gates
+   the per-block editor below it; each block is a card with optional
+   title input + Markdown body textarea + trash button. Stacked
+   vertically; "Add block" appends a fresh row via the cloned
+   <template>. */
+.fe-meeting-extended-fieldset {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.fe-meeting-extended-toggle {
+  align-self: flex-start;
+  display: flex; align-items: center; gap: 10px;
+  cursor: pointer;
+}
+.fe-meeting-extended-editor {
+  display: flex; flex-direction: column; gap: 10px;
+  padding-top: 4px;
+}
+.fe-meeting-extended-list {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.fe-meeting-extended-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  gap: 12px;
+  padding: 12px;
+  background: var(--surface-2, #f8fafc);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  align-items: start;
+}
+.fe-meeting-extended-card-fields { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.fe-meeting-extended-card-fields input[type="text"] {
+  padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 6px;
+  font: inherit; font-weight: 500;
+}
+.fe-meeting-extended-card-fields textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 6px;
+  font: inherit; font-size: 0.92rem; line-height: 1.45;
+  resize: vertical;
+  min-height: 100px;
+}
+.fe-meeting-extended-card-remove {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid transparent;
+  border-radius: 6px; color: var(--ink-muted, #64748b);
+  cursor: pointer;
+}
+.fe-meeting-extended-card-remove:hover {
+  background: rgba(220, 38, 38, 0.08);
+  color: #dc2626;
+  border-color: rgba(220, 38, 38, 0.24);
+}
+.fe-meeting-extended-card-remove .icon { width: 16px; height: 16px; }
+@media (max-width: 600px) {
+  .fe-meeting-extended-card {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "fields"
+      "remove";
+  }
+  .fe-meeting-extended-card-fields { grid-area: fields; }
+  .fe-meeting-extended-card-remove { grid-area: remove; justify-self: end; }
+}
+
+/* Pro Tips item editor — vertical stack of per-item cards with an
+   icon-picker trigger on the left, fields in the middle, and a
+   trash button on the right. Mirrors the homepage FAQ editor's
+   geometry but skips the drag handle since reorder isn't wired up
+   yet. */
+.fe-protips-items-editor { margin-top: 4px; display: flex; flex-direction: column; gap: 10px; }
+.fe-protips-items-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px;
+}
+.fe-protips-items-label { font-weight: 600; }
+.fe-protips-items-list { display: flex; flex-direction: column; gap: 10px; }
+.fe-protips-item-card {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 32px;
+  gap: 12px;
+  padding: 12px;
+  background: var(--surface-2, #f8fafc);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  align-items: start;
+}
+.fe-protips-item-icon { display: flex; align-items: center; justify-content: center; }
+.fe-protips-icon-trigger {
+  width: 56px; height: 56px;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff; border: 1px dashed var(--border); border-radius: 8px;
+  cursor: pointer; color: var(--ink-muted, #64748b);
+  font: inherit;
+}
+.fe-protips-item-icon.has-icon .fe-protips-icon-trigger {
+  border-style: solid; color: var(--brand, #6366f1);
+}
+.fe-protips-item-icon.has-icon .icon-picker-trigger-empty { display: none; }
+/* The base .icon-picker-preview rule is `display: none`; flip it to
+   inline-flex once the wrapper carries .has-icon so the chosen icon
+   actually renders inside the trigger button. Without this the
+   trigger reads as an empty white box even after the admin picks an
+   icon. Mirrors the same pattern the homepage FAQ + nav-megalink
+   editors use. */
+.fe-protips-item-icon.has-icon .icon-picker-preview { display: inline-flex; }
+.fe-protips-icon-trigger .icon-picker-preview .icon { width: 28px; height: 28px; }
+
+/* Section-level icon field on the Pro Tips fieldset shares the same
+   trigger chrome but sits inside a label column so its dimensions
+   and `has-icon` selector live on the field wrapper, not the per-
+   tip wrapper. */
+.fe-protips-section-icon-field {
+  display: inline-flex;
+  margin-top: 4px;
+}
+.fe-protips-section-icon-trigger { width: 56px; height: 56px; }
+.fe-protips-section-icon-field.has-icon .fe-protips-section-icon-trigger {
+  border-style: solid; color: var(--brand, #6366f1);
+}
+.fe-protips-section-icon-field.has-icon .icon-picker-trigger-empty { display: none; }
+.fe-protips-section-icon-field.has-icon .icon-picker-preview { display: inline-flex; }
+.fe-protips-section-icon-field:not(.has-icon) .icon-picker-preview { display: none; }
+.fe-protips-icon-trigger .icon-picker-trigger-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  font-size: 0.7rem;
+}
+.fe-protips-item-fields { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.fe-protips-item-question {
+  padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 6px;
+  font: inherit; font-weight: 500;
+}
+.fe-protips-item-answer {
+  padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 6px;
+  font: inherit; font-size: 0.92rem; line-height: 1.4;
+  resize: vertical;
+}
+.fe-protips-item-remove {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid transparent;
+  border-radius: 6px; color: var(--ink-muted, #64748b);
+  cursor: pointer;
+}
+.fe-protips-item-remove:hover { background: rgba(220, 38, 38, 0.08); color: #dc2626; border-color: rgba(220, 38, 38, 0.24); }
+.fe-protips-item-remove .icon { width: 16px; height: 16px; }
+@media (max-width: 600px) {
+  .fe-protips-item-card {
+    grid-template-columns: 56px minmax(0, 1fr);
+    grid-template-areas:
+      "icon fields"
+      "remove remove";
+  }
+  .fe-protips-item-icon { grid-area: icon; }
+  .fe-protips-item-fields { grid-area: fields; }
+  .fe-protips-item-remove { grid-area: remove; justify-self: end; }
+}

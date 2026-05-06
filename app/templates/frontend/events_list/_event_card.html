@@ -1,0 +1,66 @@
+{# Shared partial: a full event card with date block + optional cover
+   thumbnail + title + summary + meta. Used by the cards + magazine
+   layouts. The host layout decides the wrapper geometry; this partial
+   keeps the inner shape consistent.
+
+   Args:
+     ev                  — Post model
+     compact (bool)      — when true, drops the summary + meta details
+                           and keeps just date / cover / title
+     summary_chars (int) — max chars to truncate the summary to. Default
+                           220. The Magazine "More events" grid passes
+                           a smaller value so the secondary tiles read
+                           tighter than the standalone Cards layout.
+#}
+{%- set _compact = compact if compact is defined else false -%}
+{%- set _summary_chars = summary_chars if summary_chars is defined else 220 -%}
+{%- set _start = ev.event_starts_at -%}
+{%- set _end   = ev.event_ends_at -%}
+{%- set _has_image = ev.featured_image_filename -%}
+{%- set _detail_url = post_url(ev) -%}
+<article class="fe-events-card{% if _compact %} is-compact{% endif %}{% if _has_image %} has-cover{% endif %}">
+  {% if _start %}
+  <div class="fe-events-card-date" aria-label="Event date">
+    <span class="fe-events-card-date-month">{{ _start.strftime('%b') }}</span>
+    <span class="fe-events-card-date-day">{{ _start.strftime('%-d') }}</span>
+    <span class="fe-events-card-date-year">{{ _start.strftime('%Y') }}</span>
+  </div>
+  {% endif %}
+
+  {% if _has_image %}
+  <a class="fe-events-card-cover" href="{{ _detail_url }}" tabindex="-1" aria-hidden="true">
+    <img src="{{ url_for('public.post_featured_image', pid=ev.id) }}"
+         alt="" loading="lazy">
+  </a>
+  {% endif %}
+
+  <div class="fe-events-card-body">
+    <h3 class="fe-events-card-title">
+      <a href="{{ _detail_url }}">{{ ev.title }}</a>
+    </h3>
+    {% if not _compact %}
+    <div class="fe-events-card-meta">
+      {% if _start %}
+      <span class="fe-events-card-meta-row">
+        <span class="fe-events-card-meta-icon" aria-hidden="true">{{ icon('clock') }}</span>
+        <span>{{ _start.strftime('%A, %b %-d') }} · {{ _start.strftime('%-I:%M %p') }}{% if _end %} – {{ _end.strftime('%-I:%M %p') }}{% endif %}</span>
+      </span>
+      {% endif %}
+      {% if ev.is_online %}
+      <span class="fe-events-card-meta-row">
+        <span class="fe-events-card-meta-icon" aria-hidden="true">{{ icon('video') }}</span>
+        <span>Online event</span>
+      </span>
+      {% elif ev.location_name %}
+      <span class="fe-events-card-meta-row">
+        <span class="fe-events-card-meta-icon" aria-hidden="true">{{ icon('map-pin') }}</span>
+        <span>{{ ev.location_name }}</span>
+      </span>
+      {% endif %}
+    </div>
+    {% if ev.summary %}
+    <p class="fe-events-card-summary muted">{{ ev.summary|truncate(_summary_chars, True, '…') }}</p>
+    {% endif %}
+    {% endif %}
+  </div>
+</article>

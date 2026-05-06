@@ -1,0 +1,13 @@
+{# Timeline layout — vertical spine with alternating cards.
+   Body extracted to `_timeline_body.html`. #}
+<section class="fe-section fe-events fe-events-list-timeline fe-events-list--w-{{ list_width_mode }}" id="events">
+  <div class="{% if list_width_mode == 'boxed' %}fe-container{% else %}fe-mlist-fullwrap{% endif %}"
+       {% if list_width_mode == 'boxed' %}style="max-width: {{ list_max_width }}px;"
+       {%- elif list_padding_pct %}style="padding-left: {{ list_padding_pct }}vw; padding-right: {{ list_padding_pct }}vw;"{% endif %}>
+    <header class="fe-mlist-head">
+      <h1>{{ list_heading or 'Events timeline' }}</h1>
+      <p class="muted">{{ list_subheading or 'Every upcoming event placed along a vertical timeline. Read top-to-bottom.' }}</p>
+    </header>
+    {% include "frontend/events_list/_timeline_body.html" %}
+  </div>
+</section>

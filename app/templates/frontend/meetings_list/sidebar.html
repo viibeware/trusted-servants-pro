@@ -1,0 +1,338 @@
+{# Sidebar layout: sticky day-filter rail on the left + full meeting
+   cards on the right. Day pills carry a live count (number of meetings
+   that run on that day). Filtering is fully client-side via the
+   data-meeting-days attribute on each card. On mobile the rail
+   collapses to a horizontal scrollable pill row that sticks under the
+   page header. #}
+{# Day pill counts mirror each day section's actual item count, so a
+   meeting that runs twice on Monday (e.g. two separate time slots)
+   contributes 2 to Monday's count — same number the heading shows. #}
+{%- set _total_instances = namespace(n=0) -%}
+{%- for _b in (meetings_by_day or []) -%}
+  {%- set _total_instances.n = _total_instances.n + (_b['items']|length) -%}
+{%- endfor -%}
+
+<section class="fe-section fe-mlist fe-mlist-sidebar fe-mlist--w-{{ list_width_mode }}" id="meetings">
+  <div class="{% if list_width_mode == 'boxed' %}fe-container{% else %}fe-mlist-fullwrap{% endif %} fe-mlist-shell"
+       {% if list_width_mode == 'boxed' %}style="max-width: {{ list_max_width }}px;"
+       {%- elif list_padding_pct %}style="padding-left: {{ list_padding_pct }}vw; padding-right: {{ list_padding_pct }}vw;"{% endif %}>
+    <div class="fe-mlist-grid">
+      <aside class="fe-mlist-rail" data-mlist-rail>
+        {# Heading + subheading live in the rail column so they share the
+           rail's horizontal track. The header itself isn't sticky — it
+           scrolls away naturally while the rail-inner below it pins. #}
+        <header class="fe-mlist-head">
+          <h1>{{ list_heading or 'All meetings' }}</h1>
+          <p class="muted">{{ list_subheading or 'Browse every active meeting. Filter by day on the left, or scan the full list to find what fits your week.' }}</p>
+        </header>
+        <div class="fe-mlist-rail-inner">
+          {# Live search — types stack on top of the day pills. Filter
+             matches against each card's `data-meeting-search` blob
+             (built server-side: name + location + type aliases + day
+             names + times + period buckets). Keyboard shortcut `/`
+             or Cmd/Ctrl+K from anywhere on the page focuses it. #}
+          <label class="fe-mlist-search fe-mlist-rail-search">
+            <span class="fe-mlist-search-icon" aria-hidden="true">{{ icon('search') }}</span>
+            <input type="search" data-mlist-rail-search
+                   placeholder="Search meetings…" autocomplete="off"
+                   aria-label="Search meetings">
+            <kbd class="fe-mlist-search-kbd" aria-hidden="true">/</kbd>
+          </label>
+          <ul class="fe-mlist-day-list" role="tablist">
+            <li>
+              <button type="button" class="fe-mlist-day-pill is-active"
+                      data-mlist-filter="all" role="tab" aria-selected="true">
+                <span>All meetings</span>
+                <span class="fe-mlist-day-count">{{ _total_instances.n }}</span>
+              </button>
+            </li>
+            {# Section label sits below the divider so "All meetings"
+               anchors the top of the rail. The label styles itself
+               like an eyebrow header, not a button. #}
+            <li class="fe-mlist-rail-section" role="presentation">
+              <span>Filter by day</span>
+            </li>
+            {% for bucket in meetings_by_day %}
+            <li>
+              <button type="button" class="fe-mlist-day-pill"
+                      data-mlist-filter="{{ bucket.day }}" role="tab" aria-selected="false">
+                <span>{{ bucket.label }}</span>
+                <span class="fe-mlist-day-count">{{ bucket['items']|length }}</span>
+              </button>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </aside>
+
+      <div class="fe-mlist-main" data-mlist-results>
+        {% if not all_meetings %}
+        <p class="fe-mlist-empty muted">No active meetings on the calendar.</p>
+        {% else %}
+        {# One section per day. Each section holds the meetings that run
+           on that day, already sorted by start time (server-side). The
+           rail filters by toggling section visibility — picking "All"
+           shows every section in Mon→Sun order. #}
+        {% for bucket in meetings_by_day %}
+        <section class="fe-mlist-day-section" data-mlist-day-section="{{ bucket.day }}">
+          <h2 class="fe-mlist-day-section-heading">
+            <span>{{ bucket.label }}</span>
+            <span class="fe-mlist-day-section-count">{{ bucket['items']|length }}</span>
+          </h2>
+          {% if not bucket['items'] %}
+          <p class="fe-mlist-day-section-empty muted small">No meetings on {{ bucket.label }}.</p>
+          {% else %}
+          <div class="fe-mlist-card-stack">
+            {% for it in bucket['items'] %}
+              {% with m=it.meeting, primary_schedule=it.schedule, search_blob=it.search_blob %}
+                {% include "frontend/meetings_list/_meeting_card.html" %}
+              {% endwith %}
+            {% endfor %}
+          </div>
+          {% endif %}
+        </section>
+        {% endfor %}
+        {# Empty-state message used by the live search when the query
+           returns zero matches across every day. Hidden until the
+           search JS toggles it. #}
+        <p class="fe-mlist-empty muted" data-mlist-no-match hidden>No meetings match your search.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Pro Tips — rendered inline as a second 2-col grid that mirrors
+       the filter/cards layout above so column widths match. Header
+       (icon + heading + subheading) lives in the rail column;
+       accordion items fill the main column edge-to-edge to align
+       with the meeting cards above them. Skipped entirely when the
+       admin disables the section or empties the items list. #}
+    {%- set _pt = list_protips -%}
+    {%- if _pt and _pt.enabled and _pt['items'] -%}
+    {%- set _pt_icon_style -%}
+      {%- if _pt.icon_color %}color: {{ _pt.icon_color }};{% endif -%}
+    {%- endset -%}
+    <section class="fe-mlist-protips-inline fe-faq"
+             aria-label="Pro tips for online meetings">
+      <div class="fe-mlist-grid fe-mlist-grid-protips">
+        <aside class="fe-mlist-rail">
+          <div class="fe-mlist-protips-head">
+            {% if _pt.icon %}
+            <span class="fe-protips-icon" aria-hidden="true"
+                  {%- if _pt_icon_style %} style="{{ _pt_icon_style }}"{% endif %}>
+              {{ icon(_pt.icon) }}
+            </span>
+            {% endif %}
+            <h2>{{ _pt.heading or 'Pro Tips' }}</h2>
+            {% if _pt.subheading %}
+            <p class="muted">{{ _pt.subheading }}</p>
+            {% endif %}
+          </div>
+        </aside>
+        <div class="fe-mlist-main">
+          <div class="fe-faq-list" data-faq-list>
+            {% for q in _pt['items'] %}
+            <div class="fe-faq-item" data-faq-item>
+              <button type="button" class="fe-faq-summary"
+                      data-faq-toggle aria-expanded="false">
+                {% if q.icon %}
+                <span class="fe-faq-summary-icon"
+                      {% if q.icon_size %}style="--icon-size: {{ q.icon_size }}px;"{% endif %}
+                      aria-hidden="true">
+                  {{ icon(q.icon) }}
+                </span>
+                {% endif %}
+                <span class="fe-faq-summary-q">{{ q.question | safe_html }}</span>
+                <span class="fe-faq-summary-chevron" aria-hidden="true">{{ icon('chevron-down') }}</span>
+              </button>
+              <div class="fe-faq-body">
+                <div class="fe-faq-body-inner">{{ q.answer | markdown_block }}</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </section>
+    {%- endif -%}
+  </div>
+</section>
+
+<script>
+(function () {
+  var rail = document.querySelector('[data-mlist-rail]');
+  var results = document.querySelector('[data-mlist-results]');
+  if (!rail || !results) return;
+  var pills = rail.querySelectorAll('[data-mlist-filter]');
+  var sections = results.querySelectorAll('[data-mlist-day-section]');
+
+  // Replay the entrance animation on every visible card after a filter
+  // change. Cards are staggered so the eye reads top-to-bottom; the
+  // stagger caps so days with many meetings don't tail off into
+  // multi-second delays. The class is stripped on animationend so
+  // re-applying it on the next click triggers a fresh run.
+  function animateIn() {
+    var visible = [];
+    sections.forEach(function (sec) {
+      if (sec.hidden) return;
+      sec.querySelectorAll('.fe-mlist-card').forEach(function (c) { visible.push(c); });
+    });
+    visible.forEach(function (c) { c.classList.remove('is-entering'); });
+    // One reflow on the container so the browser commits the class
+    // removal before we re-add it (otherwise the animation doesn't
+    // restart). Touching offsetWidth is the cheapest way.
+    if (visible[0]) void results.offsetWidth;
+    visible.forEach(function (c, i) {
+      // Bigger per-card stagger so cards genuinely arrive one-by-one
+      // rather than as a unified wave. Cap keeps "All meetings" from
+      // dragging on for several seconds when the list is long.
+      c.style.setProperty('--fe-card-stagger', Math.min(i * 120, 2400) + 'ms');
+      c.classList.add('is-entering');
+    });
+  }
+
+  // Cleanup: drop the class once the animation finishes so the card
+  // stops carrying inline state we don't need anymore.
+  results.addEventListener('animationend', function (e) {
+    if (e.target.classList && e.target.classList.contains('is-entering')) {
+      e.target.classList.remove('is-entering');
+      e.target.style.removeProperty('--fe-card-stagger');
+    }
+  });
+
+  // Live search state: when there's a non-empty query the day filter
+  // is bypassed — every section is shown, then per-card filtered by
+  // the query against `data-meeting-search`. Sections with zero
+  // matches collapse so the user only sees days that have hits.
+  var searchInput = rail.querySelector('[data-mlist-rail-search]');
+  var noMatch = results.querySelector('[data-mlist-no-match]');
+  var allCards = Array.prototype.slice.call(results.querySelectorAll('.fe-mlist-card'));
+  var activeDayValue = 'all';
+
+  // Strip the same text-punctuation set the server used when building
+  // the search blob (apostrophes, ?, !, ., ,, ;, quote variants,
+  // parens/brackets/braces). Times (colons) + "in-person" (hyphen) stay
+  // intact because both sides preserve them.
+  var PUNCT_RE = /[‘’'?!.,;"“”()\[\]{}]/g;
+  function tokens() {
+    return ((searchInput && searchInput.value) || '')
+      .toLowerCase()
+      .replace(PUNCT_RE, '')
+      .split(/\s+/)
+      .filter(Boolean);
+  }
+
+  function applyFilter(value, fromInput) {
+    activeDayValue = value;
+    var query = tokens();
+    var hasQuery = query.length > 0;
+
+    sections.forEach(function (sec) {
+      var d = sec.getAttribute('data-mlist-day-section');
+      // Day filter ignored while search is active — the search
+      // already narrows results across every day.
+      var dayMatches = hasQuery || value === 'all' || d === value;
+      if (!dayMatches) { sec.hidden = true; return; }
+
+      // Per-card search filter. AND-match every token against the
+      // card's search blob. When no query, all cards show.
+      var anyVisible = false;
+      sec.querySelectorAll('.fe-mlist-card').forEach(function (card) {
+        if (!hasQuery) { card.hidden = false; anyVisible = true; return; }
+        var blob = card.getAttribute('data-meeting-search') || '';
+        var ok = true;
+        for (var i = 0; i < query.length; i++) {
+          if (blob.indexOf(query[i]) === -1) { ok = false; break; }
+        }
+        card.hidden = !ok;
+        if (ok) anyVisible = true;
+      });
+      // Hide the whole section if it has zero matching cards while a
+      // query is active.
+      sec.hidden = hasQuery && !anyVisible;
+    });
+
+    // Single-day mode hides the day heading via CSS; only meaningful
+    // when the day filter is the source of truth (no search query).
+    results.classList.toggle('is-single-day', !hasQuery && value !== 'all');
+
+    // Empty-results message
+    if (noMatch) {
+      var anyHit = false;
+      sections.forEach(function (sec) { if (!sec.hidden) anyHit = true; });
+      noMatch.hidden = anyHit;
+      noMatch.textContent = hasQuery ? 'No meetings match your search.' : 'No meetings on this day.';
+    }
+
+    // Re-run the entrance animation only on user interaction (pill
+    // click, search keystroke). On the initial load it would replay
+    // for every keystroke — skip when called silently.
+    if (fromInput !== false) animateIn();
+  }
+
+  pills.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      pills.forEach(function (b) {
+        b.classList.toggle('is-active', b === btn);
+        b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+      });
+      // Picking a day clears any active search so the day filter
+      // becomes meaningful again.
+      if (searchInput && searchInput.value) searchInput.value = '';
+      applyFilter(btn.getAttribute('data-mlist-filter'));
+    });
+  });
+
+  if (searchInput) {
+    searchInput.addEventListener('input', function () {
+      // Typing into search auto-switches the visual pill to "All" so
+      // the user understands the day filter has been bypassed.
+      var allPill = rail.querySelector('[data-mlist-filter="all"]');
+      if (allPill && searchInput.value) {
+        pills.forEach(function (b) {
+          b.classList.toggle('is-active', b === allPill);
+          b.setAttribute('aria-selected', b === allPill ? 'true' : 'false');
+        });
+        activeDayValue = 'all';
+      }
+      applyFilter(activeDayValue);
+    });
+    // ESC clears the search and restores the previous day filter.
+    searchInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && searchInput.value) {
+        e.preventDefault();
+        searchInput.value = '';
+        applyFilter(activeDayValue);
+      }
+    });
+  }
+
+  // Page-wide keyboard shortcut: `/` (when not already typing) or
+  // Cmd/Ctrl+K focuses the search input from anywhere on the page.
+  // Mirrors the GitHub / YouTube / Notion patterns visitors expect.
+  document.addEventListener('keydown', function (e) {
+    if (!searchInput) return;
+    var inField = e.target && /^(input|textarea|select)$/i.test(e.target.tagName) ||
+                   (e.target && e.target.isContentEditable);
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+      return;
+    }
+    if (e.key === '/' && !inField && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+    }
+  });
+
+  // Auto-pick today's day on first load so visitors land on whatever
+  // the site's configured timezone considers "today" instead of the
+  // less-relevant All-meetings view. The day enum here is the same
+  // 0=Mon..6=Sun the rail pills use, computed server-side from the
+  // SiteSetting timezone — so visitors in other zones still see the
+  // fellowship's current day, not their own browser's.
+  var todayPill = rail.querySelector('[data-mlist-filter="{{ list_current_day }}"]');
+  if (todayPill) todayPill.click();
+})();
+</script>

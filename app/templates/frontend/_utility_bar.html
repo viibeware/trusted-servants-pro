@@ -1,0 +1,221 @@
+{# Utility bar — top-of-page slim row above the header. Reads its
+   shape from the `utility_bar` context dict (built in
+   ``app/utility_bar.py::utility_bar_context``) and the optional
+   `live_meeting` dict (set when an online/hybrid meeting is currently
+   live and the admin has enabled the badge).
+
+   When a live meeting is active, the bar is forced yellow and its
+   adaptive class (`is-live`) flips text colour from white to black
+   for legibility, regardless of the admin's chosen idle palette. #}
+{% macro render_leaf(it) -%}
+  {%- set _tgt = ' target="_blank" rel="noopener"' if it.open_in_new_tab else '' -%}
+  {%- if it.kind == 'link' -%}
+    <a class="fe-utility-link" href="{{ it.url }}"{{ _tgt|safe }}>
+      {% if it.icon %}<span class="fe-utility-icon" aria-hidden="true">{{ icon(it.icon) }}</span>{% endif %}
+      <span>{{ it.label }}</span>
+    </a>
+  {%- elif it.kind == 'button' -%}
+    <a class="fe-utility-btn" href="{{ it.url }}"{{ _tgt|safe }}>
+      {% if it.icon %}<span class="fe-utility-icon" aria-hidden="true">{{ icon(it.icon) }}</span>{% endif %}
+      <span>{{ it.label }}</span>
+    </a>
+  {%- elif it.kind == 'text' -%}
+    <span class="fe-utility-text">
+      {% if it.icon %}<span class="fe-utility-icon" aria-hidden="true">{{ icon(it.icon) }}</span>{% endif %}
+      <span>{{ it.label }}</span>
+    </span>
+  {%- elif it.kind == 'icon' -%}
+    {% if it.url -%}
+      <a class="fe-utility-icon-only" href="{{ it.url }}"{{ _tgt|safe }}
+         aria-label="{{ it.label or it.icon }}">{{ icon(it.icon) }}</a>
+    {%- else -%}
+      <span class="fe-utility-icon-only" aria-label="{{ it.label or it.icon }}">{{ icon(it.icon) }}</span>
+    {%- endif %}
+  {%- elif it.kind == 'theme_toggle' -%}
+    {# Singleton dark/light mode button — chrome is fixed, only its
+       position in the items stream is admin-controllable. #}
+    <button type="button" class="fe-theme-toggle" data-fe-theme-toggle
+            aria-label="Toggle dark mode" title="Toggle dark mode">
+      <span class="fe-theme-toggle-icon fe-theme-toggle-sun">{{ icon('sun') }}</span>
+      <span class="fe-theme-toggle-icon fe-theme-toggle-moon">{{ icon('moon') }}</span>
+    </button>
+  {%- elif it.kind == 'search_trigger' -%}
+    {# Singleton site-search button — opens the global search modal.
+       Same draggable singleton pattern as the theme toggle. #}
+    <button type="button" class="fe-utility-search-btn"
+            data-fe-search-trigger
+            aria-label="Search the site"
+            title="Search (Ctrl/Cmd+K)">{{ icon('search') }}</button>
+  {%- elif it.kind == 'gsr_summary' -%}
+    {# Singleton "GSR" pill — links to /announcements#gsr. The
+       announcements omni layout's view-tab JS reads location.hash on
+       load (and on hashchange) so the GSR Summary tab opens directly
+       from this click without further interaction. #}
+    <a class="fe-utility-btn fe-utility-gsr-btn"
+       href="{{ url_for('frontend.announcements_list') }}#gsr"
+       aria-label="GSR Summary"
+       title="Open the GSR Summary view"><span>GSR</span></a>
+  {%- endif %}
+{%- endmacro %}
+
+{# Top-level item renderer — leaves go through render_leaf; containers
+   render their inner items inline as a single grouped unit so they
+   read as one element on the public bar AND become a single mobile
+   swipe target. The container's own label is admin-only metadata
+   (used in the radio list) and is intentionally NOT shown on the
+   public site.
+
+   When the live meetings bar is active AND the container has a
+   `collapsed_icon` set, the container collapses down to a single
+   round icon button (matching the search/theme-toggle chrome) so
+   the centre live message has room to breathe. The first child link
+   inside the container, if any, supplies the click target so the
+   collapsed pill stays useful (e.g. tap-to-call helpline). #}
+{% macro render_item(it, is_live=False) -%}
+  {%- if it.kind == 'container' -%}
+    {%- set _collapsed = is_live and (it.collapsed_icon or '') -%}
+    {%- if _collapsed -%}
+      {%- set _target = namespace(url='', new_tab=False, label='') -%}
+      {% for inner in (it['items'] or []) %}
+        {% if not _target.url and inner.kind in ('link', 'button', 'icon') and inner.url %}
+          {% set _target.url = inner.url %}
+          {% set _target.new_tab = inner.open_in_new_tab %}
+          {% set _target.label = inner.label or it.label or it.collapsed_icon %}
+        {% endif %}
+      {% endfor %}
+      {%- set _aria = _target.label or it.label or it.collapsed_icon -%}
+      {%- set _tgt = ' target="_blank" rel="noopener"' if _target.new_tab else '' -%}
+      {% if _target.url %}
+        <a class="fe-utility-container fe-utility-container--collapsed"
+           href="{{ _target.url }}"{{ _tgt|safe }}
+           aria-label="{{ _aria }}" title="{{ _aria }}">{{ icon(it.collapsed_icon) }}</a>
+      {% else %}
+        <span class="fe-utility-container fe-utility-container--collapsed"
+              aria-label="{{ _aria }}" title="{{ _aria }}">{{ icon(it.collapsed_icon) }}</span>
+      {% endif %}
+    {%- else -%}
+      <span class="fe-utility-container">
+        {# `it.items` would resolve to dict.items() in Jinja's attribute-
+           then-key precedence — use the subscript form. #}
+        {% for inner in (it['items'] or []) %}{{ render_leaf(inner) }}{% endfor %}
+      </span>
+    {%- endif -%}
+  {%- else -%}
+    {{ render_leaf(it) }}
+  {%- endif %}
+{%- endmacro %}
+
+{% set _is_live = (live_meeting is defined and live_meeting is not none and live_meeting.meeting) %}
+{% set _has_content = utility_bar and (utility_bar.left or utility_bar.right
+                                       or _is_live or utility_bar.show_theme_toggle) %}
+{% if utility_bar and utility_bar.enabled and _has_content %}
+  {# Live state colours come from CSS so dark mode can dim the yellow;
+     idle palette keeps the inline admin-chosen values. #}
+  {% set _bg = utility_bar.bg_color or '#0b1220' %}
+  {% set _fg = utility_bar.text_color or '#ffffff' %}
+  {# Width/padding mirrors the header — boxed clamps to a max-width and
+     centres; full-width pads by a viewport percentage. Both come from
+     the same SiteSetting fields the header consumes. #}
+  {% set _ub_full = site and site.frontend_header_width_mode == 'full' %}
+  {% set _ub_max  = (site.frontend_header_max_width if site else 1160) or 1160 %}
+  {% set _ub_pct  = (site.frontend_header_padding_pct if site else 5) or 0 %}
+  {% set _mobile_default = utility_bar.mobile_default or '' %}
+  {# Decide the snap-point composition for the mobile swipe strip:
+       - 'group' mode (admin chose "left" or "right" whole side) builds
+         two snap points: the entire left items as one block, and the
+         entire right items as one block. Default scrolls to whichever
+         side won.
+       - 'item' mode (admin chose a single item, the default) builds
+         one snap point per individual item across both sides. Default
+         scrolls to that exact item.
+     The live-meeting badge, when active, pins above the strip in its
+     own row regardless of mode and is always visible. #}
+  {% set _mobile_mode = 'group' if _mobile_default in ('left', 'right') else 'item' %}
+  <div class="fe-utility-bar{% if _is_live %} is-live{% endif %} fe-utility-bar--mobile-{{ _mobile_mode }}"
+       role="region" aria-label="Site utility bar"
+       data-fe-utility-bar
+       data-mobile-default="{{ _mobile_default }}"
+       {% if not _is_live %}style="background: {{ _bg }}; color: {{ _fg }};"{% endif %}>
+    {# Single inner row that adapts: 3-col grid on desktop (left |
+       live | right), horizontal swipe strip on mobile. The live
+       message sits in the centre column either way. On mobile in
+       live mode the JS overrides the admin's mobile-default to land
+       on the centre snap-point so the visitor sees the live status
+       first; left + right items are still swipeable around it. #}
+    <div class="fe-utility-bar-inner{% if not _ub_full %} fe-container{% endif %}"
+         {% if _ub_full %}style="padding-left: {{ _ub_pct }}%; padding-right: {{ _ub_pct }}%;"{% else %}style="max-width: {{ _ub_max }}px;"{% endif %}>
+      <div class="fe-utility-bar-side fe-utility-bar-left">
+        {% for it in utility_bar.left %}
+          <div class="fe-utility-mobile-item" data-mobile-key="left:{{ loop.index0 }}">
+            {{ render_item(it, _is_live) }}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="fe-utility-bar-center" data-mobile-key="live">
+        {% if _is_live %}
+          <div class="fe-utility-live">
+            <span class="fe-utility-live-pulse" aria-hidden="true"></span>
+            <span class="fe-utility-live-label">LIVE:</span>
+            <span class="fe-utility-live-name">{{ live_meeting.meeting.name }}</span>
+            {% if live_meeting.join_url %}
+              <a class="fe-utility-live-cta" href="{{ live_meeting.join_url }}"
+                 target="_blank" rel="noopener">Join Zoom Meeting</a>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+      <div class="fe-utility-bar-side fe-utility-bar-right">
+        {% for it in utility_bar.right %}
+          <div class="fe-utility-mobile-item" data-mobile-key="right:{{ loop.index0 }}">
+            {{ render_item(it, _is_live) }}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    // On mobile (≤ 720 px) the bar collapses to a horizontal swipe
+    // strip whose snap points are either individual items or whole
+    // side-groups depending on the admin's mobile-default choice.
+    // Scroll the chosen default into view on first paint so visitors
+    // see the right thing without needing to swipe first.
+    var bar = document.querySelector('[data-fe-utility-bar]');
+    if (!bar) return;
+    var strip = bar.querySelector('.fe-utility-bar-inner');
+    if (!strip) return;
+    function scrollToDefault(){
+      if (window.matchMedia('(min-width: 721px)').matches) return;
+      // Live mode wins on mobile: visitors should always land on the
+      // LIVE: <meeting> snap point first, with the rest of the items
+      // available by swiping. Falls back to the admin's saved default
+      // when no meeting is live.
+      var isLive = bar.classList.contains('is-live');
+      var target = null;
+      if (isLive) {
+        target = strip.querySelector('.fe-utility-bar-center[data-mobile-key="live"]');
+      }
+      if (!target) {
+        var key = bar.getAttribute('data-mobile-default') || '';
+        if (key === 'left') {
+          target = strip.querySelector('.fe-utility-bar-left');
+        } else if (key === 'right') {
+          target = strip.querySelector('.fe-utility-bar-right');
+        } else if (key) {
+          target = strip.querySelector('[data-mobile-key="' + key + '"]');
+        }
+      }
+      if (!target) return;
+      var off = target.offsetLeft - (strip.clientWidth - target.clientWidth) / 2;
+      strip.scrollTo({left: Math.max(0, off), behavior: 'instant'});
+    }
+    // Run after layout settles. requestAnimationFrame waits one paint;
+    // a fallback timeout covers fonts/images that resize the strip
+    // after the first frame.
+    requestAnimationFrame(scrollToDefault);
+    setTimeout(scrollToDefault, 80);
+    window.addEventListener('resize', scrollToDefault);
+  })();
+  </script>
+{% endif %}

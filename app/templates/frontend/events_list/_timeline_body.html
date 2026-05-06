@@ -1,0 +1,54 @@
+{# Body-only partial for the Timeline layout. Standalone timeline.html
+   wraps this in a section + header; omni.html includes it directly.
+   Expects `all_events` in scope. #}
+{% if not all_events %}
+<p class="fe-events-empty muted">No upcoming events — check back soon.</p>
+{% else %}
+<ol class="fe-events-tl">
+  {% for ev in all_events %}
+  {%- set _start = ev.event_starts_at -%}
+  {%- set _detail_url = post_url(ev) -%}
+  <li class="fe-events-tl-row{% if loop.index is divisibleby(2) %} fe-events-tl-row--right{% else %} fe-events-tl-row--left{% endif %}"
+      style="--fe-tl-i: {{ loop.index0 }};">
+    {% if _start %}
+    <div class="fe-events-tl-date" aria-label="Event date">
+      <span class="fe-events-tl-month">{{ _start.strftime('%b') }}</span>
+      <span class="fe-events-tl-day">{{ _start.strftime('%-d') }}</span>
+      <span class="fe-events-tl-year">{{ _start.strftime('%Y') }}</span>
+    </div>
+    {% endif %}
+    <article class="fe-events-tl-card">
+      <a class="fe-events-tl-card-link" href="{{ _detail_url }}" aria-label="{{ ev.title }}"></a>
+      {% if ev.featured_image_filename %}
+      <div class="fe-events-tl-cover" aria-hidden="true">
+        <img src="{{ url_for('public.post_featured_image', pid=ev.id) }}" alt="" loading="lazy">
+      </div>
+      {% endif %}
+      <h3 class="fe-events-tl-title">{{ ev.title }}</h3>
+      <div class="fe-events-tl-meta">
+        {% if _start %}
+        <span class="fe-events-tl-meta-row">
+          <span class="fe-events-tl-meta-icon" aria-hidden="true">{{ icon('clock') }}</span>
+          <span>{{ _start.strftime('%A') }} · {{ _start.strftime('%-I:%M %p') }}{% if ev.event_ends_at %} – {{ ev.event_ends_at.strftime('%-I:%M %p') }}{% endif %}</span>
+        </span>
+        {% endif %}
+        {% if ev.is_online %}
+        <span class="fe-events-tl-meta-row">
+          <span class="fe-events-tl-meta-icon" aria-hidden="true">{{ icon('video') }}</span>
+          <span>Online event</span>
+        </span>
+        {% elif ev.location_name %}
+        <span class="fe-events-tl-meta-row">
+          <span class="fe-events-tl-meta-icon" aria-hidden="true">{{ icon('map-pin') }}</span>
+          <span>{{ ev.location_name }}</span>
+        </span>
+        {% endif %}
+      </div>
+      {% if ev.summary %}
+      <p class="fe-events-tl-summary muted">{{ ev.summary|truncate(180, True, '…') }}</p>
+      {% endif %}
+    </article>
+  </li>
+  {% endfor %}
+</ol>
+{% endif %}

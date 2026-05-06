@@ -1,0 +1,158 @@
+{# Shared structure-card partial for any frontend admin page that wants
+   the "Active layout structure" treatment: a card at the top of the
+   form that visualises the active layout's block list and offers each
+   block as a clickable pill that opens its content-edit modal.
+
+   Three layout shapes are supported:
+     • structure_rows   — rows × columns (footer custom layouts)
+     • structure_flat   — one flat row of pills (footer prebuilts)
+     • structure_sequence — vertical block sequence with optional
+       two-panel splits (homepage layouts)
+
+   Modal IDs follow the convention `{modal_prefix}-{type}-modal` so the
+   editor card in the form just needs `id="{modal_prefix}-{type}-modal"`
+   to be linked from the pill. Block types listed in `editable_types`
+   render as buttons; everything else renders as a static label-only
+   pill (e.g. divider/spacer have no content to edit). #}
+
+{% macro block_pill(t, modal_prefix, labels, editable_types) -%}
+  {%- set _meta = labels.get(t, (t, 'square')) -%}
+  {%- if t in editable_types -%}
+  <button type="button" class="fe-page-structure-block fe-page-structure-block--{{ t }} is-clickable"
+          data-open-modal="{{ modal_prefix }}-{{ t }}-modal" title="Edit {{ _meta[0] }}">
+    <span class="fe-page-structure-block-icon">{{ icon(_meta[1]) }}</span>
+    <span>{{ _meta[0] }}</span>
+    <span class="fe-page-structure-block-edit-hint" aria-hidden="true">Edit</span>
+  </button>
+  {%- else -%}
+  <span class="fe-page-structure-block fe-page-structure-block--{{ t }}">
+    <span class="fe-page-structure-block-icon">{{ icon(_meta[1]) }}</span>
+    <span>{{ _meta[0] }}</span>
+  </span>
+  {%- endif -%}
+{%- endmacro %}
+
+
+{# Rows × columns visualisation. Used by the footer for custom layouts. #}
+{% macro structure_rows(rows, modal_prefix, labels, editable_types) %}
+<div class="fe-page-structure-rows">
+  {% for row in rows %}
+  <div class="fe-page-structure-row">
+    <div class="fe-page-structure-row-label">
+      <span class="fe-page-structure-row-num">Row {{ loop.index }}</span>
+      <span class="muted smaller">{{ row.cols }} column{% if row.cols != 1 %}s{% endif %}</span>
+    </div>
+    <div class="fe-page-structure-cols fe-page-structure-cols--{{ row.cols }}">
+      {% for col in row.columns %}
+      <div class="fe-page-structure-col">
+        <div class="fe-page-structure-col-label muted smaller">Col {{ loop.index }}</div>
+        {% if col %}
+        <div class="fe-page-structure-block-list">
+          {% for b in col %}{{ block_pill(b.type, modal_prefix, labels, editable_types) }}{% endfor %}
+        </div>
+        {% else %}
+        <div class="fe-page-structure-empty muted smaller">empty</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+
+{# Flat pill row — used for prebuilt layouts whose shape is fixed in
+   their Jinja file (no rows / cols structure to visualise). #}
+{% macro structure_flat(types, modal_prefix, labels, editable_types) %}
+<div class="fe-page-structure-block-list fe-page-structure-flat">
+  {% for t in types %}{{ block_pill(t, modal_prefix, labels, editable_types) }}{% endfor %}
+</div>
+{% endmacro %}
+
+
+{# Sequence visualisation — used by the homepage. Each entry is either
+   a regular block (rendered as a single-cell row whose pill opens the
+   block's modal) or a "split" (rendered as a two-cell row whose left +
+   right cells contain pills for the blocks nested in each panel, plus
+   an optional Settings button that opens the split's settings modal).
+
+   `seq` items must be `{type, [left, right, _split_idx]}` dicts. The
+   route is expected to attach `_split_idx` to each split entry; the
+   structure_settings_modal_prefix is then used as
+   `{prefix}-{_split_idx}` for the per-split settings modal. #}
+{% macro structure_sequence(seq, modal_prefix, labels, editable_types,
+                             split_settings_modal_prefix=None) %}
+<div class="fe-page-structure-rows">
+  {% for b in seq %}
+    {%- set _t = (b.type if b.type is defined else b.get('type', '')) -%}
+    {% if _t == 'split' %}
+    <div class="fe-page-structure-row fe-page-structure-row--split">
+      <div class="fe-page-structure-row-label">
+        <span class="fe-page-structure-row-num">Two-panel</span>
+        <span class="muted smaller">2 columns</span>
+        {% if split_settings_modal_prefix and b._split_idx is defined %}
+        <button type="button" class="btn btn-sm fe-page-structure-row-action"
+                data-open-modal="{{ split_settings_modal_prefix }}-{{ b._split_idx }}">
+          {{ icon('sliders') }} <span>Settings</span>
+        </button>
+        {% endif %}
+      </div>
+      <div class="fe-page-structure-cols fe-page-structure-cols--2">
+        {% for _side in ['left', 'right'] %}
+        {%- set _items = (b[_side] if b[_side] is defined else b.get(_side)) or [] -%}
+        <div class="fe-page-structure-col">
+          <div class="fe-page-structure-col-label muted smaller">{{ _side|capitalize }} panel</div>
+          {% if _items %}
+          <div class="fe-page-structure-block-list">
+            {% for inner in _items %}
+              {%- set _it = (inner.type if inner.type is defined else inner.get('type', '')) -%}
+              {{ block_pill(_it, modal_prefix, labels, editable_types) }}
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="fe-page-structure-empty muted smaller">empty</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <div class="fe-page-structure-row fe-page-structure-row--single">
+      <div class="fe-page-structure-cols fe-page-structure-cols--1">
+        <div class="fe-page-structure-col">
+          <div class="fe-page-structure-block-list">
+            {{ block_pill(_t, modal_prefix, labels, editable_types) }}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  {% endfor %}
+</div>
+{% endmacro %}
+
+
+{# Outer card wrapper — title row with optional "Edit layout" button
+   + a {% call %} body slot the page fills with one of the structure_*
+   macros above. #}
+{% macro structure_card(title, active_layout=None, builder_modal_id=None,
+                         help_text=None) %}
+<section class="card fe-page-structure">
+  <div class="card-head">
+    <h2>{{ title }}{% if active_layout %} — <span class="muted">{{ active_layout.name }}</span>{% endif %}</h2>
+    <span class="muted smaller">{{ help_text or 'Click any block to edit its content.' }}{% if not active_layout %} Reorder + restructure isn't available — this layout's shape is fixed. Switch to a custom layout via the Layout picker to drag blocks around.{% endif %}</span>
+    {% if active_layout and builder_modal_id %}
+    <button type="button" class="btn btn-sm fe-page-structure-edit-btn"
+            data-edit-layout="{{ active_layout.key }}"
+            data-builder-modal="{{ builder_modal_id }}"
+            data-layout-key="{{ active_layout.key }}"
+            data-layout-name="{{ active_layout.name }}"
+            data-layout-blocks="{{ active_layout.blocks_json or '[]' }}">
+      {{ icon('edit') }} <span>Edit layout</span>
+    </button>
+    {% endif %}
+  </div>
+  {{ caller() }}
+</section>
+{% endmacro %}
