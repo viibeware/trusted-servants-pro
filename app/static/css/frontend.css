@@ -7129,9 +7129,17 @@ body.fe-frontend-force-dark .fe-archive-types-legend {
   display: flex;
   justify-content: flex-end;
 }
+/* Brand-tokenised primary button — same fallback chain the hero
+   "Find a Meeting" CTA uses, so changing the primary-button colour
+   on the Design tokens admin page recolours this button too. Order:
+   --fe-btn-bg (the most specific, settable per-button surface) →
+   --fe-color-btn-primary-bg (site-wide primary button colour) →
+   the baked default. Hover darkens via color-mix against black, the
+   same recipe the hero button uses, instead of a brightness filter
+   so the colour stays consistent across themes. */
 .fe-submission-submit {
-  background: var(--fe-accent);
-  color: #fff;
+  background: var(--fe-btn-bg, var(--fe-color-btn-primary-bg, var(--fe-accent)));
+  color: var(--fe-color-btn-primary-text, #ffffff);
   border: 0;
   border-radius: 999px;
   padding: 12px 28px;
@@ -7139,8 +7147,26 @@ body.fe-frontend-force-dark .fe-archive-types-legend {
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
+  transition: background 160ms ease, transform 160ms ease;
 }
-.fe-submission-submit:hover { filter: brightness(1.08); }
+.fe-submission-submit:hover {
+  background: color-mix(in srgb,
+                        var(--fe-btn-bg, var(--fe-color-btn-primary-bg, var(--fe-accent))) 88%,
+                        black);
+}
+html[data-theme="dark"] .fe-submission-submit,
+body.fe-frontend-force-dark .fe-submission-submit {
+  background: var(--fe-dm-btn-primary-bg,
+                  var(--fe-btn-bg, var(--fe-color-btn-primary-bg, var(--fe-accent))));
+  color: var(--fe-dm-btn-primary-text, var(--fe-color-btn-primary-text, #ffffff));
+}
+html[data-theme="dark"] .fe-submission-submit:hover,
+body.fe-frontend-force-dark .fe-submission-submit:hover {
+  background: color-mix(in srgb,
+                        var(--fe-dm-btn-primary-bg,
+                            var(--fe-btn-bg, var(--fe-color-btn-primary-bg, var(--fe-accent)))) 80%,
+                        white);
+}
 .fe-submission-fineprint {
   text-align: center;
   margin: 0;
