@@ -1,0 +1,158 @@
+{# Submission form body — shared between the standalone /submissionform
+   page and the global frontend modal. Both contexts post to the same
+   endpoint. The form layout mirrors the login-page Request Access
+   form: vertical stack of labelled inputs in a single column,
+   required-field markers, fieldsets for grouping (event-only fields
+   collapse into their own block, revealed when the "Event" checkbox
+   is checked).
+
+   Caller passes ``form_id`` so multiple instances on the same page
+   (unlikely but defensive) don't collide on element IDs. #}
+{%- set _site_title = (site.frontend_title if site else None) or 'Trusted Servants' -%}
+{%- set _form_id = form_id or 'submission-form' -%}
+<form method="post" action="{{ url_for('frontend.submission_submit') }}"
+      class="form fe-submission-form"
+      data-submission-form
+      enctype="multipart/form-data"
+      id="{{ _form_id }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <fieldset class="fe-submission-types">
+    <legend>What are you submitting? <span class="req">*</span></legend>
+    <label class="check">
+      <input type="checkbox" name="is_announcement" value="1" data-submission-kind>
+      <span>Announcement <span class="muted smaller">— news, service updates, fellowship info</span></span>
+    </label>
+    <label class="check">
+      <input type="checkbox" name="is_event" value="1" data-submission-kind>
+      <span>Event <span class="muted smaller">— a dated happening with a start time</span></span>
+    </label>
+  </fieldset>
+
+  <label>
+    <span>Title <span class="req">*</span></span>
+    <input name="title" type="text" maxlength="255" required>
+  </label>
+
+  <label>
+    <span>Summary <span class="muted smaller">(short blurb shown in lists)</span></span>
+    <textarea name="summary" rows="2" maxlength="500"></textarea>
+  </label>
+
+  <label>
+    <span>Full content <span class="muted smaller">(Markdown supported)</span></span>
+    <textarea name="body" rows="6"></textarea>
+  </label>
+
+  <label>
+    <span>Featured image <span class="muted smaller">(optional — JPG, PNG, or GIF, max 8 MB)</span></span>
+    <input name="featured_image" type="file" accept="image/jpeg,image/png,image/gif,image/webp">
+  </label>
+
+  <fieldset class="fe-submission-event-fields" data-submission-event-fields hidden>
+    <legend>Event details</legend>
+    <div class="fe-submission-grid-2">
+      <label>
+        <span>Starts</span>
+        <input name="event_starts_at" type="datetime-local">
+      </label>
+      <label>
+        <span>Ends</span>
+        <input name="event_ends_at" type="datetime-local">
+      </label>
+    </div>
+    <label class="check">
+      <input type="checkbox" name="is_online" value="1">
+      <span>Online event (Zoom, video, etc.)</span>
+    </label>
+    <label>
+      <span>Location name <span class="muted smaller">(building, group, or "Online")</span></span>
+      <input name="location_name" type="text" maxlength="255">
+    </label>
+    <label>
+      <span>Address</span>
+      <textarea name="location_address" rows="2"></textarea>
+    </label>
+    <label>
+      <span>Google Maps URL <span class="muted smaller">(optional)</span></span>
+      <input name="google_maps_url" type="url" maxlength="500">
+    </label>
+    <div class="fe-submission-grid-2">
+      <label>
+        <span>Website URL</span>
+        <input name="website_url" type="url" maxlength="500">
+      </label>
+      <label>
+        <span>Website label</span>
+        <input name="website_label" type="text" maxlength="120" placeholder="Visit website">
+      </label>
+    </div>
+    <div class="fe-submission-grid-2">
+      <label>
+        <span>Zoom meeting ID</span>
+        <input name="zoom_meeting_id" type="text" maxlength="64">
+      </label>
+      <label>
+        <span>Zoom passcode</span>
+        <input name="zoom_passcode" type="text" maxlength="128">
+      </label>
+    </div>
+    <label>
+      <span>Zoom URL</span>
+      <input name="zoom_url" type="url" maxlength="500">
+    </label>
+    <fieldset class="fe-submission-event-contact">
+      <legend>Public contact for this event <span class="muted smaller">(optional)</span></legend>
+      <div class="fe-submission-grid-2">
+        <label>
+          <span>Name</span>
+          <input name="contact_name" type="text" maxlength="120">
+        </label>
+        <label>
+          <span>Phone</span>
+          <input name="contact_phone" type="tel" maxlength="64">
+        </label>
+      </div>
+      <label>
+        <span>Email</span>
+        <input name="contact_email" type="email" maxlength="255">
+      </label>
+    </fieldset>
+  </fieldset>
+
+  <fieldset class="fe-submission-submitter">
+    <legend>Your contact info <span class="req">*</span></legend>
+    <p class="muted smaller fe-submission-submitter-help">An admin will reach out before publishing — make sure your email works.</p>
+    <div class="fe-submission-grid-2">
+      <label>
+        <span>Your name <span class="req">*</span></span>
+        <input name="submitter_name" type="text" maxlength="120" required>
+      </label>
+      <label>
+        <span>Your email <span class="req">*</span></span>
+        <input name="submitter_email" type="email" maxlength="255" required>
+      </label>
+    </div>
+    <label>
+      <span>Your phone <span class="muted smaller">(optional)</span></span>
+      <input name="submitter_phone" type="tel" maxlength="64">
+    </label>
+    <label>
+      <span>Anything else? <span class="muted smaller">(notes for the admin reviewing this submission)</span></span>
+      <textarea name="submitter_notes" rows="2" maxlength="2000"></textarea>
+    </label>
+  </fieldset>
+
+  {% if site and site.turnstile_enabled and site.turnstile_site_key %}
+  <div class="cf-turnstile fe-submission-turnstile"
+       data-sitekey="{{ site.turnstile_site_key }}"
+       data-theme="auto"
+       data-size="flexible"></div>
+  {% endif %}
+
+  <div class="fe-submission-actions">
+    <button class="btn btn-primary fe-submission-submit" type="submit">Submit for review</button>
+  </div>
+
+  <p class="muted smaller fe-submission-fineprint">Submissions are held for review by an admin before being published. We don't publicly display your contact info — those fields are only used to follow up about your submission.</p>
+</form>

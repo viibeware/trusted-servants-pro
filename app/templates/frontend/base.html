@@ -455,6 +455,67 @@
    handles the keyboard shortcut + live filter. #}
 {% include "frontend/_search_modal.html" %}
 
+{# Frontend-wide submission modal — opens via any element carrying
+   the ``data-fe-submission-trigger`` attribute (a nav link, a
+   utility-bar button, an inline CTA, anywhere). The form posts to
+   /submissionform/submit; visitors can also reach the same form at
+   the standalone /submissionform URL. JS handler is in the inline
+   block lower down. #}
+{% include "frontend/_submission_modal.html" %}
+
+{% if site and site.turnstile_enabled and site.turnstile_site_key %}
+{# Loaded once for the page so the modal's Turnstile widget can
+   render. The standalone /submissionform page loads its own copy
+   via the page template — this load is idempotent (Turnstile's
+   api.js no-ops on a second include). #}
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+{% endif %}
+
+<script>
+// ── FRONTEND-WIDE SUBMISSION MODAL ─────────────────────────────────
+// Any element with data-fe-submission-trigger opens the modal. The
+// event-fields fieldset reveals when the visitor checks "Event" —
+// matches the standalone page's behaviour so the two contexts feel
+// identical. Esc + backdrop click + close button all dismiss.
+(function feFrontendSubmission(){
+  var modal = document.querySelector('[data-fe-submission-modal]');
+  if (!modal) return;
+  var triggers = document.querySelectorAll('[data-fe-submission-trigger]');
+  var closers = modal.querySelectorAll('[data-fe-submission-close]');
+
+  function open() {
+    modal.hidden = false;
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('fe-submission-open');
+    var first = modal.querySelector('input[name="title"]');
+    if (first) requestAnimationFrame(function () { first.focus(); });
+  }
+  function close() {
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('fe-submission-open');
+  }
+
+  triggers.forEach(function (el) {
+    el.addEventListener('click', function (e) { e.preventDefault(); open(); });
+  });
+  closers.forEach(function (el) { el.addEventListener('click', close); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !modal.hidden) { e.preventDefault(); close(); }
+  });
+
+  // Event-fields reveal — same logic as the standalone page.
+  modal.querySelectorAll('[data-submission-form]').forEach(function (form) {
+    var eventBox = form.querySelector('input[name="is_event"]');
+    var fields = form.querySelector('[data-submission-event-fields]');
+    if (!eventBox || !fields) return;
+    function sync() { fields.hidden = !eventBox.checked; }
+    eventBox.addEventListener('change', sync);
+    sync();
+  });
+})();
+</script>
+
 <script>
 // ── FRONTEND-WIDE LIVE SEARCH ─────────────────────────────────────────
 // Cmd/Ctrl+K from anywhere on the public site (or the search trigger

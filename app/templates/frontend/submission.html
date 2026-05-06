@@ -1,0 +1,49 @@
+{% extends "frontend/base.html" %}
+{% block title %}Submit an Event or Announcement · {{ frontend_title }}{% endblock %}
+{% block content %}
+{# Standalone /submissionform page. Same form body as the global modal,
+   wrapped in a centered single-column page layout that visually
+   matches the login-page Request Access form: card-shaped panel,
+   centered title, vertical stack of inputs. #}
+<section class="fe-section fe-submission-section">
+  <div class="fe-container">
+    <div class="fe-submission-page">
+      <header class="fe-submission-page-head">
+        <h1 class="fe-submission-page-title">Submit an event or announcement</h1>
+        <p class="fe-submission-page-blurb">
+          Fill out the form below and a {{ frontend_title }} admin will review your submission before publishing it. Required fields are marked <span class="req">*</span>.
+        </p>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+          <div class="fe-submission-flashes">
+            {% for cat, msg in messages %}<div class="flash flash-{{ cat }}">{{ msg }}</div>{% endfor %}
+          </div>
+          {% endif %}
+        {% endwith %}
+      </header>
+      <div class="fe-submission-card">
+        {% include "frontend/_submission_form_body.html" %}
+      </div>
+    </div>
+  </div>
+</section>
+
+{% if site and site.turnstile_enabled and site.turnstile_site_key %}
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+{% endif %}
+<script>
+// Reveal the event-only fieldset when the visitor checks "Event" — kept
+// hidden by default so a quick announcement submission isn't buried
+// under fields the submitter doesn't need to touch.
+(function () {
+  document.querySelectorAll('[data-submission-form]').forEach(function (form) {
+    var eventBox = form.querySelector('input[name="is_event"]');
+    var fields = form.querySelector('[data-submission-event-fields]');
+    if (!eventBox || !fields) return;
+    function sync() { fields.hidden = !eventBox.checked; }
+    eventBox.addEventListener('change', sync);
+    sync();
+  });
+})();
+</script>
+{% endblock %}

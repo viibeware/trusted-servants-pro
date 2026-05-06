@@ -7169,19 +7169,36 @@ def posts():
     kind = (request.args.get("kind") or "all").strip()
     q = Post.query
     if show == "archived":
-        q = q.filter(Post.is_archived.is_(True))
+        q = q.filter(Post.is_archived.is_(True),
+                     Post.is_pending_review.is_(False))
     elif show == "drafts":
-        q = q.filter(Post.is_draft.is_(True), Post.is_archived.is_(False))
+        q = q.filter(Post.is_draft.is_(True),
+                     Post.is_archived.is_(False),
+                     Post.is_pending_review.is_(False))
+    elif show == "pending":
+        # Holding tank for visitor submissions awaiting admin review.
+        q = q.filter(Post.is_pending_review.is_(True),
+                     Post.is_archived.is_(False))
     else:  # active
-        q = q.filter(Post.is_archived.is_(False), Post.is_draft.is_(False))
+        q = q.filter(Post.is_archived.is_(False),
+                     Post.is_draft.is_(False),
+                     Post.is_pending_review.is_(False))
     if kind == "events":
         q = q.filter(Post.is_event.is_(True))
     elif kind == "announcements":
         q = q.filter(Post.is_announcement.is_(True))
     # Newest first; events sort by event-start when set so upcoming reads top.
-    items = q.order_by(Post.event_starts_at.desc().nulls_last(),
-                       Post.updated_at.desc()).all()
-    return render_template("posts.html", posts=items, show=show, kind=kind)
+    # Pending tab sorts by submission time so freshest submissions land top.
+    if show == "pending":
+        items = q.order_by(Post.submitted_at.desc().nulls_last(),
+                           Post.updated_at.desc()).all()
+    else:
+        items = q.order_by(Post.event_starts_at.desc().nulls_last(),
+                           Post.updated_at.desc()).all()
+    pending_count = (Post.query.filter(Post.is_pending_review.is_(True),
+                                        Post.is_archived.is_(False)).count())
+    return render_template("posts.html", posts=items, show=show, kind=kind,
+                           pending_count=pending_count)
 
 
 @bp.route("/announcementsevents/new")
@@ -7312,6 +7329,27 @@ def post_save():
         return redirect(url_for("main.posts", show=("drafts" if post.is_draft else "active")))
     flash("Post saved", "success")
     return redirect(url_for("main.post_edit", pid=post.id))
+
+
+@bp.route("/announcementsevents/<int:pid>/approve-pending", methods=["POST"])
+@login_required
+def post_approve_pending(pid):
+    """Move a visitor-submitted post out of the holding tank. ``target``
+    determines the destination: ``draft`` parks it for further editing
+    before publishing; ``publish`` makes it live immediately. Either
+    way, the pending-review flag clears."""
+    _require_posts_enabled()
+    post = db.session.get(Post, pid) or abort(404)
+    post.is_pending_review = False
+    target = (request.form.get("target") or "draft").strip().lower()
+    if target == "publish":
+        post.is_draft = False
+        flash("Submission approved and published", "success")
+    else:
+        post.is_draft = True
+        flash("Submission moved to drafts for further editing", "success")
+    db.session.commit()
+    return redirect(request.referrer or url_for("main.post_edit", pid=post.id))
 
 
 @bp.route("/announcementsevents/<int:pid>/publish", methods=["POST"])

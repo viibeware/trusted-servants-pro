@@ -1128,6 +1128,182 @@ def hyperlist():
                                           or "Trusted Servants")
 
 
+@bp.route("/submissionform")
+def submission_form():
+    """Standalone submission form. Visitors fill out the form to submit
+    an event or announcement for admin review. Same form body the
+    global modal uses — both POST to ``/submissionform/submit`` so
+    the two contexts always stay in sync.
+    """
+    site = _site()
+    gate = _frontend_gate(site)
+    if gate is not None:
+        return gate
+    ctx = _frontend_context(site)
+    return render_template("frontend/submission.html", **ctx)
+
+
+@bp.route("/submissionform/submit", methods=["POST"])
+def submission_submit():
+    """Process a public submission. Validates required fields,
+    verifies Turnstile when enabled, persists a Post row in the
+    pending-review state, and emails the configured admin recipients.
+
+    The Post is created with the same field shapes as a normal
+    /tspro/announcementsevents/save call but with ``is_pending_review=
+    True`` so the public site's existing draft/archive filters never
+    show it. The admin's holding-tank tab on /tspro/announcementsevents
+    surfaces it for review.
+    """
+    from flask import flash, current_app
+    from .auth import _verify_turnstile
+    from .mail import send_mail
+    from .models import Post
+    from .colors import slugify
+    site = _site()
+    gate = _frontend_gate(site)
+    if gate is not None:
+        return gate
+    if not site or not getattr(site, "posts_enabled", True):
+        abort(404)
+
+    f = request.form
+    title = (f.get("title") or "").strip()[:255]
+    is_announcement = f.get("is_announcement") == "1"
+    is_event = f.get("is_event") == "1"
+    submitter_name = (f.get("submitter_name") or "").strip()[:120]
+    submitter_email = (f.get("submitter_email") or "").strip()[:255]
+
+    # Required fields. Title, at least one type, submitter contact.
+    if not title:
+        flash("A title is required.", "danger")
+        return redirect(url_for("frontend.submission_form"))
+    if not (is_announcement or is_event):
+        flash("Pick at least one type — Announcement or Event.", "danger")
+        return redirect(url_for("frontend.submission_form"))
+    if not submitter_name or not submitter_email:
+        flash("Please include your name and email so we can follow up.", "danger")
+        return redirect(url_for("frontend.submission_form"))
+
+    # Turnstile gate, when enabled.
+    if site.turnstile_enabled:
+        token = f.get("cf-turnstile-response", "")
+        ok, err = _verify_turnstile(site, token, request.remote_addr)
+        if not ok:
+            flash(err or "Security check failed — please try again.", "danger")
+            return redirect(url_for("frontend.submission_form"))
+
+    # Build the Post row. Most fields mirror the admin save endpoint.
+    from datetime import datetime as _dt
+    def _parse_dt(raw):
+        if not raw:
+            return None
+        try:
+            return _dt.fromisoformat(raw.strip())
+        except (TypeError, ValueError):
+            return None
+
+    p = Post()
+    p.title = title
+    # Slug is left NULL on submission — the admin chooses one when
+    # publishing. Public render still won't see it (pending state).
+    p.slug = None
+    p.summary = (f.get("summary") or "").strip()[:2000] or None
+    p.body = (f.get("body") or "").strip() or None
+    p.is_announcement = is_announcement
+    p.is_event = is_event
+    p.event_starts_at = _parse_dt(f.get("event_starts_at"))
+    p.event_ends_at = _parse_dt(f.get("event_ends_at"))
+    p.is_online = f.get("is_online") == "1"
+    p.location_name = (f.get("location_name") or "").strip()[:255] or None
+    p.location_address = (f.get("location_address") or "").strip() or None
+    p.google_maps_url = (f.get("google_maps_url") or "").strip()[:500] or None
+    p.website_url = (f.get("website_url") or "").strip()[:500] or None
+    p.website_label = (f.get("website_label") or "").strip()[:120] or None
+    p.zoom_meeting_id = (f.get("zoom_meeting_id") or "").strip()[:64] or None
+    p.zoom_passcode = (f.get("zoom_passcode") or "").strip()[:128] or None
+    p.zoom_url = (f.get("zoom_url") or "").strip()[:500] or None
+    p.contact_name = (f.get("contact_name") or "").strip()[:120] or None
+    p.contact_phone = (f.get("contact_phone") or "").strip()[:64] or None
+    p.contact_email = (f.get("contact_email") or "").strip()[:255] or None
+    p.is_pending_review = True
+    p.is_draft = False
+    p.is_archived = False
+    p.submitter_name = submitter_name
+    p.submitter_email = submitter_email
+    p.submitter_phone = (f.get("submitter_phone") or "").strip()[:64] or None
+    p.submitter_notes = (f.get("submitter_notes") or "").strip()[:2000] or None
+    p.submitted_at = _dt.utcnow()
+
+    # Featured image upload (optional). Reuses the same pattern as the
+    # admin post_save endpoint but inlined here so we don't have to
+    # import the helper across blueprints. Anything that isn't an
+    # accepted image type is silently ignored — public submitters
+    # don't need surfaced upload errors.
+    upload = request.files.get("featured_image")
+    if upload and upload.filename:
+        from werkzeug.utils import secure_filename
+        import os, uuid as _uuid
+        ext = os.path.splitext(upload.filename or "")[1].lower()
+        if ext in (".jpg", ".jpeg", ".png", ".gif", ".webp"):
+            stored = f"{_uuid.uuid4().hex}{ext}"
+            target = os.path.join(current_app.config["UPLOAD_FOLDER"], stored)
+            try:
+                upload.save(target)
+                p.featured_image_filename = stored
+            except (OSError, IOError):
+                # File-system write failed — drop the image silently;
+                # submission still proceeds without it.
+                p.featured_image_filename = None
+
+    from .models import db as _db
+    _db.session.add(p)
+    _db.session.commit()
+
+    # Email notification to the configured recipients. Falls back to
+    # access_request_to when submission_to is blank so installs that
+    # already configured admin notifications get submissions routed
+    # without separate setup.
+    recipients = (site.submission_to or site.access_request_to or "").strip()
+    if site.smtp_host and recipients:
+        kind_label = " + ".join([k for k, v in
+                                 (("Announcement", is_announcement),
+                                  ("Event", is_event)) if v])
+        lines = [
+            f"A new {kind_label.lower()} submission has come in via "
+            f"the public {site.frontend_title or 'Trusted Servants'} site.",
+            "",
+            f"Title:     {title}",
+            f"Submitter: {submitter_name} <{submitter_email}>",
+        ]
+        if p.submitter_phone:
+            lines.append(f"Phone:     {p.submitter_phone}")
+        if is_event and p.event_starts_at:
+            lines.append(f"Starts:    {p.event_starts_at.isoformat()}")
+        if is_event and p.event_ends_at:
+            lines.append(f"Ends:      {p.event_ends_at.isoformat()}")
+        if p.location_name:
+            lines.append(f"Location:  {p.location_name}")
+        if p.summary:
+            lines += ["", "Summary:", p.summary]
+        if p.submitter_notes:
+            lines += ["", "Submitter notes:", p.submitter_notes]
+        review_url = url_for("main.post_edit", pid=p.id, _external=True)
+        lines += [
+            "",
+            f"Review and publish: {review_url}",
+        ]
+        send_mail(site, recipients,
+                  f"New {kind_label.lower()} submission: {title}",
+                  "\n".join(lines))
+        # Mail failures are not surfaced to the visitor — the submission
+        # is already persisted; the admin can find it in the holding
+        # tank regardless of whether the notification email landed.
+
+    flash("Thank you — your submission has been received and will be reviewed before publishing.", "success")
+    return redirect(url_for("frontend.submission_form"))
+
+
 @bp.route("/printlist")
 @bp.route("/printlist.pdf", endpoint="printlist_pdf")
 def printlist():
@@ -1379,7 +1555,8 @@ def archive():
     # Past events: ended OR is_archived. Skip the ones with no date.
     event_rows = (Post.query
                   .filter(Post.is_event.is_(True),
-                          Post.is_draft.is_(False))
+                          Post.is_draft.is_(False),
+                          Post.is_pending_review.is_(False))
                   .order_by(Post.event_starts_at.desc().nulls_last())
                   .all())
     past_events = []
@@ -1396,7 +1573,8 @@ def archive():
                 .filter(Post.is_announcement.is_(True),
                         Post.is_event.is_(False),
                         Post.is_archived.is_(True),
-                        Post.is_draft.is_(False))
+                        Post.is_draft.is_(False),
+                          Post.is_pending_review.is_(False))
                 .order_by(Post.created_at.desc())
                 .all())
 
@@ -1519,7 +1697,8 @@ def archive_detail(slug):
     if not site or not getattr(site, "posts_enabled", True):
         abort(404)
     candidates = (Post.query
-                  .filter(Post.is_draft.is_(False))
+                  .filter(Post.is_draft.is_(False),
+                          Post.is_pending_review.is_(False))
                   .order_by(Post.id)
                   .all())
     candidates = [p for p in candidates if p.is_event or p.is_announcement]
@@ -1562,7 +1741,8 @@ def announcements_list():
     rows = (Post.query
             .filter(Post.is_announcement.is_(True),
                     Post.is_archived.is_(False),
-                    Post.is_draft.is_(False))
+                    Post.is_draft.is_(False),
+                          Post.is_pending_review.is_(False))
             .order_by(Post.created_at.desc())
             .all())
 
@@ -1635,7 +1815,8 @@ def event_detail(slug):
         abort(404)
     candidates = (Post.query
                   .filter(Post.is_event.is_(True),
-                          Post.is_draft.is_(False))
+                          Post.is_draft.is_(False),
+                          Post.is_pending_review.is_(False))
                   .order_by(Post.id)
                   .all())
     ev = next((p for p in candidates if p.public_slug == slug), None)
@@ -1677,7 +1858,8 @@ def announcement_detail(slug):
         abort(404)
     candidates = (Post.query
                   .filter(Post.is_announcement.is_(True),
-                          Post.is_draft.is_(False))
+                          Post.is_draft.is_(False),
+                          Post.is_pending_review.is_(False))
                   .order_by(Post.id)
                   .all())
     ann = next((p for p in candidates if p.public_slug == slug), None)

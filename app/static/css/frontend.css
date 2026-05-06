@@ -6973,3 +6973,238 @@ body.fe-frontend-force-dark .fe-archive-types-legend {
   color: var(--fe-dm-text-muted);
 }
 
+
+/* ===== Submission form (public /submissionform + global modal) =====
+   Visual language mirrors the login-page Request Access modal:
+   centered card, vertical stack of labelled inputs, clean
+   typography. Lives both inline on /submissionform and as a
+   site-wide modal that any nav link / button can open. */
+.fe-submission-section { padding: 4rem 0; }
+.fe-submission-page { max-width: 720px; margin: 0 auto; }
+.fe-submission-page-head {
+  text-align: center;
+  margin: 0 0 2rem;
+}
+.fe-submission-page-title {
+  margin: 0 0 0.5rem;
+  font-size: clamp(1.6rem, 1.4rem + 1vw, 2.2rem);
+  font-weight: 700;
+  color: var(--fe-color-text, #0a0a0a);
+  line-height: 1.2;
+}
+.fe-submission-page-blurb {
+  margin: 0;
+  color: var(--fe-color-text-muted, #475569);
+  font-size: 1rem;
+  max-width: 50ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+.fe-submission-card {
+  background: var(--fe-color-surface, #ffffff);
+  border: 1px solid var(--fe-color-border, rgba(0, 0, 0, 0.08));
+  border-radius: 18px;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
+  padding: 2rem 2rem 2.25rem;
+}
+.fe-submission-flashes { margin: 0 0 1.25rem; }
+.fe-submission-flashes .flash {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+.fe-submission-flashes .flash-success {
+  background: color-mix(in srgb, #10b981 12%, transparent);
+  color: #047857;
+  border: 1px solid color-mix(in srgb, #10b981 35%, transparent);
+}
+.fe-submission-flashes .flash-danger {
+  background: color-mix(in srgb, #ef4444 12%, transparent);
+  color: #b91c1c;
+  border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
+}
+
+/* Form layout — matches the request-access form's vertical stack. */
+.fe-submission-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.125rem;
+}
+.fe-submission-form .req { color: #e11d48; }
+.fe-submission-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--fe-color-text, #0a0a0a);
+}
+.fe-submission-form label > span:first-child { line-height: 1.4; }
+.fe-submission-form input[type="text"],
+.fe-submission-form input[type="email"],
+.fe-submission-form input[type="tel"],
+.fe-submission-form input[type="url"],
+.fe-submission-form input[type="datetime-local"],
+.fe-submission-form input[type="file"],
+.fe-submission-form textarea {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--fe-color-border, rgba(0, 0, 0, 0.16));
+  background: var(--fe-color-surface, #fff);
+  color: var(--fe-color-text, #0a0a0a);
+  font-size: 0.9375rem;
+  font-family: inherit;
+  width: 100%;
+}
+.fe-submission-form input:focus,
+.fe-submission-form textarea:focus {
+  outline: none;
+  border-color: var(--fe-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fe-accent) 22%, transparent);
+}
+.fe-submission-form textarea { resize: vertical; min-height: 4rem; }
+.fe-submission-form fieldset {
+  border: 1px solid var(--fe-color-border, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  padding: 1rem 1.125rem;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+.fe-submission-form fieldset legend {
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0 0.5rem;
+  color: var(--fe-color-text, #0a0a0a);
+}
+.fe-submission-form .check {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 400;
+  font-size: 0.9375rem;
+}
+.fe-submission-form .check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--fe-accent);
+  flex-shrink: 0;
+}
+.fe-submission-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.875rem;
+}
+@media (max-width: 540px) {
+  .fe-submission-grid-2 { grid-template-columns: 1fr; }
+  .fe-submission-card { padding: 1.5rem 1.25rem 1.75rem; }
+  .fe-submission-section { padding: 2rem 0; }
+}
+.fe-submission-event-fields[hidden] { display: none; }
+.fe-submission-submitter-help { margin: -4px 0 0; }
+.fe-submission-turnstile { margin: 4px 0 0; min-height: 65px; }
+.fe-submission-actions {
+  margin-top: 0.5rem;
+  display: flex;
+  justify-content: flex-end;
+}
+.fe-submission-submit {
+  background: var(--fe-accent);
+  color: #fff;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 28px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.fe-submission-submit:hover { filter: brightness(1.08); }
+.fe-submission-fineprint {
+  text-align: center;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Modal variant ─────────────────────────────────────────────────
+   Same form body; wraps in a centered overlay panel. JS toggles
+   `.fe-submission-modal[hidden]` and a body-class so background
+   scroll locks while open. */
+.fe-submission-modal[hidden] { display: none !important; }
+.fe-submission-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 4vh 1rem;
+  overflow-y: auto;
+}
+.fe-submission-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+}
+.fe-submission-modal-panel {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  background: var(--fe-color-surface, #fff);
+  border-radius: 18px;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.35);
+  padding: 1.75rem 1.75rem 1.75rem;
+  z-index: 1;
+}
+.fe-submission-modal-close {
+  position: absolute;
+  top: 14px; right: 14px;
+  width: 36px; height: 36px;
+  background: transparent; border: 0;
+  border-radius: 8px;
+  display: grid; place-items: center;
+  cursor: pointer;
+  color: var(--fe-color-text-muted, #64748b);
+}
+.fe-submission-modal-close:hover { background: rgba(0,0,0,0.06); color: var(--fe-accent); }
+.fe-submission-modal-head { margin: 0 36px 1.25rem 0; }
+.fe-submission-modal-head h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--fe-color-text, #0a0a0a);
+}
+.fe-submission-modal-head p { margin: 0; }
+body.fe-submission-open { overflow: hidden; }
+
+html[data-theme="dark"] .fe-submission-card,
+body.fe-frontend-force-dark .fe-submission-card,
+html[data-theme="dark"] .fe-submission-modal-panel,
+body.fe-frontend-force-dark .fe-submission-modal-panel {
+  background: var(--fe-dm-surface);
+  border-color: var(--fe-dm-border);
+  color: var(--fe-dm-text);
+}
+html[data-theme="dark"] .fe-submission-form input,
+html[data-theme="dark"] .fe-submission-form textarea,
+body.fe-frontend-force-dark .fe-submission-form input,
+body.fe-frontend-force-dark .fe-submission-form textarea {
+  background: var(--fe-dm-surface);
+  color: var(--fe-dm-text);
+  border-color: var(--fe-dm-border);
+}
+html[data-theme="dark"] .fe-submission-form fieldset,
+body.fe-frontend-force-dark .fe-submission-form fieldset {
+  border-color: var(--fe-dm-border);
+}
+html[data-theme="dark"] .fe-submission-modal-head h2,
+html[data-theme="dark"] .fe-submission-page-title,
+body.fe-frontend-force-dark .fe-submission-modal-head h2,
+body.fe-frontend-force-dark .fe-submission-page-title {
+  color: var(--fe-dm-text-strong);
+}

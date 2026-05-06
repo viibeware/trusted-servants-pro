@@ -578,6 +578,11 @@ class SiteSetting(db.Model):
     smtp_from_name = db.Column(db.String(200))
     smtp_security = db.Column(db.String(16), nullable=False, default="starttls")  # none|starttls|ssl
     access_request_to = db.Column(db.String(500))  # comma-separated recipients
+    # Where to email new submissions made via the public /submissionform.
+    # Comma-separated list, mirrors access_request_to. Falls back to
+    # access_request_to when blank so installs that already configured
+    # admin notifications get submissions for free.
+    submission_to = db.Column(db.String(500))
     login_particle_effect = db.Column(db.String(32), nullable=False, default="stars")
     login_bg_color = db.Column(db.String(32))  # legacy single color
     login_bg_colors = db.Column(db.Text)  # JSON array of hex codes, 1..4, overrides login_bg_color
@@ -1239,12 +1244,28 @@ class Post(db.Model):
     contact_phone = db.Column(db.String(64))
     contact_email = db.Column(db.String(255))
 
-    # Lifecycle. Posts are in one of three states:
+    # Lifecycle. Posts are in one of four states:
+    #   pending  → is_pending_review=True (submitted via /submissionform,
+    #              awaiting admin/editor review; NEVER public)
     #   draft    → is_draft=True  (edited in private; not on the public site)
-    #   active   → both False     (live)
+    #   active   → all flags False (live)
     #   archived → is_archived=True (hidden, kept for reference)
     is_draft = db.Column(db.Boolean, nullable=False, default=False)
     is_archived = db.Column(db.Boolean, nullable=False, default=False)
+    # Submission holding tank. When True, the post was created via the
+    # public /submissionform endpoint and hasn't been reviewed yet.
+    # The public site filters these out alongside drafts; the admin
+    # Posts page surfaces them under a dedicated "Pending review" tab.
+    is_pending_review = db.Column(db.Boolean, nullable=False, default=False)
+    # Submitter contact (separate from the post's own contact_* fields,
+    # which the admin may want to keep distinct from whoever submitted
+    # the request — e.g. a fellowship member submitting an event hosted
+    # by someone else). The admin replies to submitter_email.
+    submitter_name = db.Column(db.String(120))
+    submitter_email = db.Column(db.String(255))
+    submitter_phone = db.Column(db.String(64))
+    submitter_notes = db.Column(db.Text)
+    submitted_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"))

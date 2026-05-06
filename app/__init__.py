@@ -764,6 +764,7 @@ def _migrate_sqlite(app):
                          ("smtp_from_name", "VARCHAR(200)"),
                          ("smtp_security", "VARCHAR(16) NOT NULL DEFAULT 'starttls'"),
                          ("access_request_to", "VARCHAR(500)"),
+                         ("submission_to", "VARCHAR(500)"),
                          ("login_particle_effect", "VARCHAR(32) NOT NULL DEFAULT 'stars'"),
                          ("login_bg_color", "VARCHAR(32)"),
                          ("login_bg_colors", "TEXT"),
@@ -934,7 +935,13 @@ def _migrate_sqlite(app):
         for col, ddl in (("asset_files_json", "TEXT"),):
             add("custom_font", col, ddl)
         for col, ddl in (("is_draft", "BOOLEAN NOT NULL DEFAULT 0"),
-                         ("slug", "VARCHAR(255)")):
+                         ("slug", "VARCHAR(255)"),
+                         ("is_pending_review", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("submitter_name", "VARCHAR(120)"),
+                         ("submitter_email", "VARCHAR(255)"),
+                         ("submitter_phone", "VARCHAR(64)"),
+                         ("submitter_notes", "TEXT"),
+                         ("submitted_at", "DATETIME")):
             add("post", col, ddl)
         for col, ddl in (("is_archived", "BOOLEAN NOT NULL DEFAULT 0"),
                          ("archived_at", "DATETIME")):

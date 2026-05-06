@@ -834,10 +834,26 @@ html[data-theme="dark"] .perm-badge-viewer { background: rgba(100, 116, 139, 0.2
 .post-chip-event        { background: rgba(11, 92, 255, 0.12);  color: #1d4ed8; border-color: rgba(11, 92, 255, 0.32); }
 .post-chip-online       { background: rgba(20, 184, 166, 0.12); color: #0f766e; border-color: rgba(20, 184, 166, 0.32); }
 .post-chip-draft        { background: rgba(100, 116, 139, 0.14); color: #475569; border-color: rgba(100, 116, 139, 0.34); }
+.post-chip-warning      { background: rgba(245, 158, 11, 0.18);  color: #b45309; border-color: rgba(245, 158, 11, 0.5); }
 html[data-theme="dark"] .post-chip-announcement { background: rgba(245, 158, 11, 0.18); color: #fbbf24; border-color: rgba(245, 158, 11, 0.5); }
 html[data-theme="dark"] .post-chip-event        { background: rgba(11, 92, 255, 0.22);  color: #93c5fd; border-color: rgba(11, 92, 255, 0.45); }
 html[data-theme="dark"] .post-chip-online       { background: rgba(20, 184, 166, 0.20); color: #5eead4; border-color: rgba(20, 184, 166, 0.45); }
 html[data-theme="dark"] .post-chip-draft        { background: rgba(100, 116, 139, 0.22); color: #cbd5e1; border-color: rgba(100, 116, 139, 0.45); }
+html[data-theme="dark"] .post-chip-warning      { background: rgba(245, 158, 11, 0.25); color: #fbbf24; border-color: rgba(245, 158, 11, 0.55); }
+/* Pending-submission banner on the post edit screen — sits above the
+   normal edit form so admins see who submitted before they touch
+   any field. */
+.pending-submission-card {
+  border-left: 4px solid #f59e0b;
+}
+.pending-submission-meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0 0 16px;
+}
+.pending-submission-meta dt { font-weight: 600; color: var(--muted); }
+.pending-submission-meta dd { margin: 0; }
 /* Header-row variant of the chip — used in the edit page's top-actions
    bar where the parent is a flex row. Switch to inline-flex with
    centered alignment so the "Draft" text sits visually centered inside

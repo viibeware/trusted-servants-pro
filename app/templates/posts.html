@@ -12,10 +12,14 @@
          href="{{ url_for('main.posts', show=show, kind='events') }}">Events</a>
     </div>
     <div class="view-toggle">
-      <a class="btn btn-sm {% if show == 'active' or show not in ('archived', 'drafts') %}active{% endif %}"
+      <a class="btn btn-sm {% if show == 'active' or show not in ('archived', 'drafts', 'pending') %}active{% endif %}"
          href="{{ url_for('main.posts', show='active', kind=kind) }}">Active</a>
       <a class="btn btn-sm {% if show == 'drafts' %}active{% endif %}"
          href="{{ url_for('main.posts', show='drafts', kind=kind) }}">Drafts</a>
+      <a class="btn btn-sm {% if show == 'pending' %}active{% endif %}"
+         href="{{ url_for('main.posts', show='pending', kind=kind) }}">
+        Pending review{% if pending_count %} <span class="badge badge-warning">{{ pending_count }}</span>{% endif %}
+      </a>
       <a class="btn btn-sm {% if show == 'archived' %}active{% endif %}"
          href="{{ url_for('main.posts', show='archived', kind=kind) }}">Archived</a>
     </div>

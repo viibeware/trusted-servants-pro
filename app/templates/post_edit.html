@@ -5,6 +5,9 @@
 {% block heading_help %}{% if _is_new %}Compose an announcement, an event, or both. Tag at least one type so it's published.{% else %}Update the content, type, schedule, location, contact, or media.{% endif %}{% endblock %}
 {% block top_actions %}
   <a class="btn" href="{{ url_for('main.posts') }}">← All</a>
+  {% if _p and _p.is_pending_review %}
+  <span class="post-chip post-chip-warning post-chip-header">Pending review</span>
+  {% endif %}
   {% if _p and _p.is_draft %}
   <span class="post-chip post-chip-draft post-chip-header">Draft</span>
   {% endif %}
@@ -55,6 +58,39 @@
   {% endif %}
 {% endblock %}
 {% block content %}
+{% if _p and _p.is_pending_review %}
+<section class="card pending-submission-card">
+  <div class="card-head">
+    <h2>Submitted for review</h2>
+    <span class="muted smaller">Reach out to the submitter before publishing if anything needs clarifying.</span>
+  </div>
+  <dl class="pending-submission-meta">
+    <dt>From</dt>
+    <dd>{{ _p.submitter_name or '—' }}{% if _p.submitter_email %} &lt;<a href="mailto:{{ _p.submitter_email }}">{{ _p.submitter_email }}</a>&gt;{% endif %}</dd>
+    {% if _p.submitter_phone %}
+    <dt>Phone</dt><dd>{{ _p.submitter_phone }}</dd>
+    {% endif %}
+    {% if _p.submitted_at %}
+    <dt>Submitted</dt><dd>{{ _p.submitted_at.strftime('%b %d, %Y · %-I:%M %p') }} UTC</dd>
+    {% endif %}
+    {% if _p.submitter_notes %}
+    <dt>Notes</dt><dd style="white-space: pre-line">{{ _p.submitter_notes }}</dd>
+    {% endif %}
+  </dl>
+  <div class="form-actions">
+    <form method="post" action="{{ url_for('main.post_approve_pending', pid=_p.id) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" name="target" value="draft" class="btn">Approve to Drafts</button>
+      <button type="submit" name="target" value="publish" class="btn btn-primary">Approve &amp; Publish</button>
+    </form>
+    <form method="post" action="{{ url_for('main.post_delete', pid=_p.id) }}" style="display:inline"
+          onsubmit="return confirm('Reject and delete this submission? The submitter will not be notified.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-danger">Reject</button>
+    </form>
+  </div>
+</section>
+{% endif %}
 <form id="post-edit-form" class="form post-form" method="post" action="{{ url_for('main.post_save') }}" enctype="multipart/form-data">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% if _p %}<input type="hidden" name="post_id" value="{{ _p.id }}">{% endif %}
