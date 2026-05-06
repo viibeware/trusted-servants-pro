@@ -39,6 +39,28 @@ def create_app():
     # Secure cookies when not running in debug mode (HTTPS expected in prod).
     cookie_secure = not is_debug
 
+    # Per-instance cookie names. Browsers scope cookies by hostname only
+    # (NOT by port), so two instances on the same host — e.g. localhost:8090
+    # prod + localhost:8091 test — collide on the default ``session`` cookie:
+    # whichever side last set the cookie wins, and the other side can't
+    # validate the CSRF token in any form rendered before the swap (the
+    # token was signed with one TSP_SECRET_KEY; the cookie now says the
+    # session belongs to the other). The visible symptom is a 400 "CSRF
+    # token is missing/invalid" the moment you switch tabs and submit a
+    # form. Suffixing the cookie name with a stable hash of TSP_SECRET_KEY
+    # keeps each instance on its own cookie (different secret → different
+    # name → no overlap) without needing any per-env config. An explicit
+    # ``TSP_SESSION_COOKIE_NAME`` / ``TSP_REMEMBER_COOKIE_NAME`` env var
+    # still wins when set.
+    import hashlib as _hashlib
+    _cookie_suffix = _hashlib.blake2b(
+        secret_key.encode("utf-8"), digest_size=4
+    ).hexdigest()
+    session_cookie_name = os.environ.get(
+        "TSP_SESSION_COOKIE_NAME", f"tspro_session_{_cookie_suffix}")
+    remember_cookie_name = os.environ.get(
+        "TSP_REMEMBER_COOKIE_NAME", f"tspro_remember_{_cookie_suffix}")
+
     db_path = os.path.join(data_dir, "tsp.db")
     app.config.update(
         SECRET_KEY=secret_key,
@@ -50,9 +72,11 @@ def create_app():
         MAX_CONTENT_LENGTH=256 * 1024 * 1024,
         PERMANENT_SESSION_LIFETIME=timedelta(days=180),
         REMEMBER_COOKIE_DURATION=timedelta(days=180),
+        REMEMBER_COOKIE_NAME=remember_cookie_name,
         REMEMBER_COOKIE_SAMESITE="Lax",
         REMEMBER_COOKIE_HTTPONLY=True,
         REMEMBER_COOKIE_SECURE=cookie_secure,
+        SESSION_COOKIE_NAME=session_cookie_name,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SECURE=cookie_secure,
