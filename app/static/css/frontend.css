@@ -6979,7 +6979,14 @@ body.fe-frontend-force-dark .fe-archive-types-legend {
    centered card, vertical stack of labelled inputs, clean
    typography. Lives both inline on /submissionform and as a
    site-wide modal that any nav link / button can open. */
-.fe-submission-section { padding: 4rem 0; }
+/* Page area sits on the soft surface-alt tone — same recipe the
+   /meetings list uses, so the submission page reads as part of the
+   same visual family. Dark mode swaps to the page-bg token via the
+   dark-mode block below. */
+.fe-submission-section {
+  padding: 4rem 0;
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft, #f1f5f9));
+}
 .fe-submission-page { max-width: 720px; margin: 0 auto; }
 .fe-submission-page-head {
   text-align: center;
@@ -7000,12 +7007,22 @@ body.fe-frontend-force-dark .fe-archive-types-legend {
   margin-left: auto;
   margin-right: auto;
 }
+/* Form card mirrors the .fe-mlist-card recipe on /meetings:
+   solid 1px accent border, soft 1px shadow at rest, 1px translateY
+   lift + deeper shadow on hover. Border colour stays put on hover
+   so the card feels stable rather than visibly recolouring under
+   the cursor. */
 .fe-submission-card {
-  background: var(--fe-color-surface, #ffffff);
-  border: 1px solid var(--fe-color-border, rgba(0, 0, 0, 0.08));
-  border-radius: 18px;
-  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
+  background: #ffffff;
+  border: 1px solid var(--fe-accent);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   padding: 2rem 2rem 2.25rem;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.fe-submission-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
 }
 .fe-submission-flashes { margin: 0 0 1.25rem; }
 .fe-submission-flashes .flash {
@@ -7241,13 +7258,35 @@ body.fe-frontend-force-dark .fe-archive-types-legend {
 }
 body.fe-submission-open { overflow: hidden; }
 
+/* Dark-mode page surface — same recipe the /meetings list uses:
+   the page sits on the dark page-bg, the card flips to a near-black
+   surface with a soft white border, and the hover state brightens
+   the edge to the same indigo tint .fe-mlist-card adopts on hover. */
+html[data-theme="dark"] .fe-submission-section,
+body.fe-frontend-force-dark .fe-submission-section {
+  background: var(--fe-dm-page-bg);
+  color: var(--fe-dm-text);
+}
 html[data-theme="dark"] .fe-submission-card,
-body.fe-frontend-force-dark .fe-submission-card,
+body.fe-frontend-force-dark .fe-submission-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: var(--fe-dm-text);
+}
+html[data-theme="dark"] .fe-submission-card:hover,
+body.fe-frontend-force-dark .fe-submission-card:hover {
+  border-color: rgba(122, 163, 255, 0.4);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+}
 html[data-theme="dark"] .fe-submission-modal-panel,
 body.fe-frontend-force-dark .fe-submission-modal-panel {
   background: var(--fe-dm-surface);
   border-color: var(--fe-dm-border);
   color: var(--fe-dm-text);
+}
+html[data-theme="dark"] .fe-submission-page-blurb,
+body.fe-frontend-force-dark .fe-submission-page-blurb {
+  color: var(--fe-dm-text-muted);
 }
 html[data-theme="dark"] .fe-submission-form input,
 html[data-theme="dark"] .fe-submission-form textarea,
