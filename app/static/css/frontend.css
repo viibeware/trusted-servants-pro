@@ -7129,43 +7129,52 @@ body.fe-frontend-force-dark .fe-archive-types-legend {
   display: flex;
   justify-content: flex-end;
 }
-/* Brand-tokenised primary button — same fallback chain the hero
-   "Find a Meeting" CTA uses, so changing the primary-button colour
-   on the Design tokens admin page recolours this button too. Order:
-   --fe-btn-bg (the most specific, settable per-button surface) →
-   --fe-color-btn-primary-bg (site-wide primary button colour) →
-   the baked default. Hover darkens via color-mix against black, the
-   same recipe the hero button uses, instead of a brightness filter
-   so the colour stays consistent across themes. */
+/* Submit button inherits the same brand-tokenised recipe used by
+   .fe-btn-primary on every other public surface. The four admin-
+   toggleable design tokens — --fe-color-btn-primary-bg /
+   --fe-color-btn-primary-text / --fe-btn-shadow / --fe-btn-hover-
+   transform / --fe-btn-hover-glow — flow through transparently, so
+   changing the primary-button colour or toggling the rest shadow /
+   hover lift / hover glow on the Design tokens admin page recolours
+   and animates this button automatically. The `transition` is also
+   the same shape as .fe-btn so the timing and properties match. */
 .fe-submission-submit {
-  background: var(--fe-btn-bg, var(--fe-color-btn-primary-bg, var(--fe-accent)));
-  color: var(--fe-color-btn-primary-text, #ffffff);
-  border: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--fe-color-btn-primary-bg, var(--fe-accent));
+  color: var(--fe-color-btn-primary-text, #fff);
+  border: 1px solid transparent;
   border-radius: 999px;
-  padding: 12px 28px;
+  padding: 14px 28px;
   font-size: 1rem;
   font-weight: 600;
-  cursor: pointer;
   font-family: inherit;
-  transition: background 160ms ease, transform 160ms ease;
+  cursor: pointer;
+  text-decoration: none;
+  box-shadow: var(--fe-btn-shadow, 0 8px 20px rgba(15, 23, 42, 0.18));
+  transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
 }
 .fe-submission-submit:hover {
+  transform: var(--fe-btn-hover-transform, translateY(-1px));
   background: color-mix(in srgb,
-                        var(--fe-btn-bg, var(--fe-color-btn-primary-bg, var(--fe-accent))) 88%,
+                        var(--fe-color-btn-primary-bg, var(--fe-accent)) 88%,
                         black);
+  color: var(--fe-color-btn-primary-text, #fff);
+  box-shadow: var(--fe-btn-hover-glow, 0 10px 28px rgba(81, 100, 255, 0.32));
 }
+/* Dark mode mirrors the .fe-btn-primary dark-theme rules — bright
+   surface on a dark page, slightly brighter on hover. The token
+   chain still applies for installs that customised dark-mode
+   button colours; the hardcoded #e2e8f0 / #fff matches the dark
+   .fe-btn-primary baked defaults so the two buttons stay in sync. */
 html[data-theme="dark"] .fe-submission-submit,
 body.fe-frontend-force-dark .fe-submission-submit {
-  background: var(--fe-dm-btn-primary-bg,
-                  var(--fe-btn-bg, var(--fe-color-btn-primary-bg, var(--fe-accent))));
-  color: var(--fe-dm-btn-primary-text, var(--fe-color-btn-primary-text, #ffffff));
+  background: var(--fe-dm-btn-primary-bg, #e2e8f0);
+  color: var(--fe-dm-btn-primary-text, #0b1026);
 }
 html[data-theme="dark"] .fe-submission-submit:hover,
 body.fe-frontend-force-dark .fe-submission-submit:hover {
-  background: color-mix(in srgb,
-                        var(--fe-dm-btn-primary-bg,
-                            var(--fe-btn-bg, var(--fe-color-btn-primary-bg, var(--fe-accent)))) 80%,
-                        white);
+  background: var(--fe-dm-btn-primary-bg-hover, #ffffff);
+  color: var(--fe-dm-btn-primary-text, #0b1026);
 }
 .fe-submission-fineprint {
   text-align: center;
