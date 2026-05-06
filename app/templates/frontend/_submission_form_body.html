@@ -181,9 +181,15 @@
        data-size="flexible"></div>
   {% endif %}
 
+  {# Caller (modal vs standalone page) decides whether to render the
+     submit button + fineprint inline. The modal renders its own
+     submit button in a sticky footer (using the HTML5 ``form``
+     attribute so a button outside the <form> still submits it),
+     so passing ``submit_inside=false`` skips this block. #}
+  {% if submit_inside is not defined or submit_inside %}
   <div class="fe-submission-actions">
     <button class="btn btn-primary fe-submission-submit" type="submit">{{ _submit_label }}</button>
   </div>
-
   <p class="muted smaller fe-submission-fineprint">Submissions are held for review by an admin before being published. We don't publicly display your contact info — those fields are only used to follow up about your submission.</p>
+  {% endif %}
 </form>

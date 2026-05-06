@@ -4060,11 +4060,39 @@ def frontend_fonts_icons():
 def frontend_forms():
     """Forms index — lists every registered public form. The list is
     populated from ``app/forms_registry.py``; future forms join the
-    list automatically by adding an entry there."""
+    list automatically by adding an entry there. Each registry entry
+    declares an ``enabled_setting`` column; the index reads its
+    current value off SiteSetting and exposes an inline toggle."""
     from .forms_registry import all_forms
-    return render_template("frontend_forms.html",
-                           site=_get_site_setting(),
-                           forms=all_forms())
+    s = _get_site_setting()
+    forms = []
+    for f in all_forms():
+        enabled = True
+        col = f.get("enabled_setting")
+        if col:
+            enabled = bool(getattr(s, col, True))
+        forms.append({**f, "enabled": enabled})
+    return render_template("frontend_forms.html", site=s, forms=forms)
+
+
+@bp.route("/frontend/forms/<key>/toggle", methods=["POST"])
+@admin_required
+def frontend_form_toggle(key):
+    """Inline enable/disable toggle for a registered form. Posts JSON
+    in / returns JSON out so the Forms admin's per-row switch can
+    fire-and-forget. The form's registry entry must declare an
+    ``enabled_setting`` column for this to be meaningful — without
+    one we 404 since there's nothing to flip."""
+    from .forms_registry import form_by_key
+    entry = form_by_key(key)
+    if entry is None or not entry.get("enabled_setting"):
+        abort(404)
+    payload = request.get_json(silent=True) or {}
+    s = _get_site_setting()
+    enabled = bool(payload.get("enabled"))
+    setattr(s, entry["enabled_setting"], enabled)
+    db.session.commit()
+    return jsonify(key=key, enabled=enabled)
 
 
 @bp.route("/frontend/forms/submission", methods=["GET", "POST"])

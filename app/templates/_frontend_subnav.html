@@ -52,6 +52,17 @@
          class="fe-subnav-link {% if request.endpoint == 'main.frontend_templates' %}active{% endif %}">
         {{ icon('copy') }}<span>Templates</span>
       </a>
+      {# Forms — list of every registered public form (see
+         app/forms_registry.py). Lives under Structure alongside
+         Navigation since forms are typically wired up through nav
+         links / triggers rather than as standalone content. The
+         active class lights up on the index page AND on each
+         form's individual settings page so the Forms entry stays
+         visually selected while editing one. #}
+      <a href="{{ url_for('main.frontend_forms') }}"
+         class="fe-subnav-link {% if request.endpoint in ('main.frontend_forms', 'main.frontend_form_submission') %}active{% endif %}">
+        {{ icon('send') }}<span>Forms</span>
+      </a>
       <a href="{{ url_for('main.frontend_404') }}"
          class="fe-subnav-link {% if request.endpoint == 'main.frontend_404' %}active{% endif %}">
         {{ icon('alert-circle') }}<span>404 page</span>
@@ -67,14 +78,6 @@
       <a href="{{ url_for('main.frontend_pages') }}"
          class="fe-subnav-link {% if request.endpoint == 'main.frontend_pages' %}active{% endif %}">
         {{ icon('file-text') }}<span>Pages</span>
-      </a>
-      {# Forms — list of every registered public form (see
-         app/forms_registry.py). The active class also lights up on
-         each form's individual settings page so the Forms group
-         stays visually selected while editing one. #}
-      <a href="{{ url_for('main.frontend_forms') }}"
-         class="fe-subnav-link {% if request.endpoint in ('main.frontend_forms', 'main.frontend_form_submission') %}active{% endif %}">
-        {{ icon('send') }}<span>Forms</span>
       </a>
     </div>
   </nav>

@@ -49,6 +49,11 @@ def all_forms():
             "icon": "send",
             "settings_endpoint": "main.frontend_form_submission",
             "public_url_endpoint": "frontend.submission_form",
+            # Name of the boolean SiteSetting column that gates this
+            # form site-wide. The Forms admin index reads + writes
+            # this column directly through its inline toggle, so a
+            # future form just needs to declare its own column here.
+            "enabled_setting": "submission_form_enabled",
         },
     ]
 
