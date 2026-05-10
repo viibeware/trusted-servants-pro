@@ -1,0 +1,534 @@
+{% extends "frontend/base.html" %}
+{% from "_blocks.html" import render_sections, render_toc, render_block %}
+{% block title %}{{ page.title }} · {{ frontend_title }}{% endblock %}
+
+{# Shadow lookup mirrors `_BLOCK_CONT_SHADOW` in _blocks.html. Kept here
+   so pp_container_styles can resolve the same five presets without
+   pulling the macro from the other module. #}
+{%- set _PP_CONT_SHADOW = {
+  'none': 'none',
+  'sm':   '0 2px 6px rgba(15,23,42,0.08)',
+  'md':   '0 8px 24px rgba(15,23,42,0.10)',
+  'lg':   '0 14px 40px rgba(15,23,42,0.14)',
+  'xl':   '0 24px 60px rgba(15,23,42,0.18)',
+} -%}
+
+{%- macro pp_container_styles(d) -%}
+  {%- set _styles = [] -%}
+  {%- set _disp = d.display or 'flex' -%}
+  {%- set _ = _styles.append('display: ' ~ _disp) -%}
+  {%- if _disp == 'grid' -%}
+    {%- set _ = _styles.append('grid-template-columns: ' ~ (d.grid_columns or 'repeat(2, 1fr)')) -%}
+  {%- else -%}
+    {%- set _ = _styles.append('flex-direction: ' ~ (d.direction or 'column')) -%}
+    {%- if d.wrap %}{%- set _ = _styles.append('flex-wrap: wrap') -%}{%- endif -%}
+  {%- endif -%}
+  {%- set _ = _styles.append('justify-content: ' ~ (d.justify or 'flex-start')) -%}
+  {%- set _ = _styles.append('align-items: ' ~ (d.align or 'stretch')) -%}
+  {%- set _ = _styles.append('gap: ' ~ (d.gap or '1rem')) -%}
+  {%- set _ = _styles.append('padding: ' ~ (d.padding or '1rem')) -%}
+  {%- if d.bg_color %}{%- set _ = _styles.append('background-color: ' ~ (d.bg_color|css_color)) -%}{%- endif -%}
+  {%- if d.get('bg_color_dark') %}{%- set _ = _styles.append('--tsp-bg-dm: ' ~ (d.get('bg_color_dark')|css_color)) -%}{%- endif -%}
+  {%- set _bw = (d.border_width if d.border_width is not none else 0) | int -%}
+  {%- if _bw and (d.border_style or 'solid') != 'none' -%}
+    {%- set _ = _styles.append('border: ' ~ _bw ~ 'px ' ~ (d.border_style or 'solid') ~ ' ' ~ ((d.border_color|css_color) or 'currentColor')) -%}
+  {%- endif -%}
+  {%- if d.get('border_color_dark') %}{%- set _ = _styles.append('--tsp-border-dm: ' ~ (d.get('border_color_dark')|css_color)) -%}{%- endif -%}
+  {%- set _br = (d.border_radius if d.border_radius is not none else 0) | int -%}
+  {%- if _br %}{%- set _ = _styles.append('border-radius: ' ~ _br ~ 'px') -%}{%- endif -%}
+  {%- if (d.width_mode or 'boxed') == 'boxed' -%}
+    {%- set _mw = (d.max_width or 0) | int -%}
+    {%- if _mw > 0 -%}
+      {%- set _ = _styles.append('max-width: ' ~ _mw ~ 'px') -%}
+      {%- set _ = _styles.append('margin-left: auto; margin-right: auto') -%}
+    {%- endif -%}
+  {%- endif -%}
+  {%- set _shadow = _PP_CONT_SHADOW.get(d.shadow or 'none', 'none') -%}
+  {%- set _ = _styles.append('--block-cont-shadow: ' ~ _shadow ~ '; box-shadow: var(--block-cont-shadow)') -%}
+  {%- if d.hover_bg_color %}{%- set _ = _styles.append('--block-cont-hover-bg: ' ~ d.hover_bg_color) -%}{%- endif -%}
+  {%- if d.hover_border_color %}{%- set _ = _styles.append('--block-cont-hover-border: ' ~ d.hover_border_color) -%}{%- endif -%}
+  {%- if d.hover_shadow -%}
+    {%- set _hs = _PP_CONT_SHADOW.get(d.hover_shadow, '') -%}
+    {%- if _hs %}{%- set _ = _styles.append('--block-cont-hover-shadow: ' ~ _hs) -%}{%- endif -%}
+  {%- endif -%}
+  {%- if d.hover_lift %}{%- set _ = _styles.append('--block-cont-hover-transform: translateY(-2px)') -%}{%- endif -%}
+  {{ _styles | join('; ') }}
+{%- endmacro -%}
+
+{# Per-block typography → inline style. Same shape as the macro in
+   _blocks.html — duplicated here so both renderers stay symmetric.
+   `--tsp-color-dm` rides along when the admin set a dark-mode colour;
+   a global rule swaps it in under `html[data-theme="dark"]`. #}
+{%- macro pp_typo_style(d) -%}
+  {%- set _s = [] -%}
+  {%- if d.font_family %}{%- set _ = _s.append('font-family: ' ~ d.font_family) -%}{%- endif -%}
+  {%- if d.font_size %}{%- set _ = _s.append('font-size: ' ~ d.font_size) -%}{%- endif -%}
+  {%- if d.font_weight %}{%- set _ = _s.append('font-weight: ' ~ d.font_weight) -%}{%- endif -%}
+  {%- if d.color %}{%- set _ = _s.append('color: ' ~ (d.color|css_color)) -%}{%- endif -%}
+  {%- if d.get('color_dark') %}{%- set _ = _s.append('--tsp-color-dm: ' ~ (d.get('color_dark')|css_color)) -%}{%- endif -%}
+  {%- if d.align %}{%- set _ = _s.append('text-align: ' ~ d.align) -%}{%- endif -%}
+  {%- if d.line_height %}{%- set _ = _s.append('line-height: ' ~ d.line_height) -%}{%- endif -%}
+  {{ _s | join('; ') }}
+{%- endmacro -%}
+
+{%- macro pp_block(b) -%}
+  {%- set t = b.type -%}{%- set d = b.data or {} -%}
+  {%- if t == 'paragraph' -%}
+    {%- set _st = pp_typo_style(d) -%}
+    <div class="fe-pp-prose"{% if _st %} style="{{ _st }}"{% endif %}>{{ (d.md or '') | string | markdown_block }}</div>
+  {%- elif t == 'toc_sidebar' -%}
+    {# Wiki sidebar — sticky list of jump-links built from every
+       heading block on the page (collected by `_collect_page_headings`
+       in frontend.py so it walks containers too). Filtered to
+       headings <= max_level. #}
+    {%- set _max_lvl = (d.max_level if d.max_level else 3) | int -%}
+    {%- set _items = (toc_items or []) | selectattr('level', 'le', _max_lvl) | list -%}
+    {%- set _sticky_off = (d.sticky_offset if d.sticky_offset is not none else 96) | int -%}
+    {%- set _sticky_classes = ' is-sticky' if d.sticky else '' -%}
+    {%- set _sticky_style = ('top: ' ~ _sticky_off ~ 'px;') if d.sticky else '' -%}
+    <aside class="fe-pp-toc{{ _sticky_classes }}"{% if _sticky_style %} style="{{ _sticky_style }}"{% endif %}>
+      {%- if d.title %}<div class="fe-pp-toc-title">{{ d.title }}</div>{%- endif %}
+      {%- if _items %}
+      <ul class="fe-pp-toc-list">
+        {%- for it in _items %}
+        <li class="fe-pp-toc-item fe-pp-toc-l{{ it.level }}">
+          <a href="#{{ it.anchor }}">{{ it.text }}</a>
+        </li>
+        {%- endfor %}
+      </ul>
+      {%- else %}
+      <p class="fe-pp-toc-empty muted small">Add Heading blocks to populate this sidebar.</p>
+      {%- endif %}
+    </aside>
+  {%- elif t == 'image' -%}
+    {# Image renders unstyled by default — no alignment override, no
+       max-width constraint beyond the parent (max_width_pct=100).
+       Inline styles ONLY emit when the admin explicitly chose them
+       via the block settings; otherwise the figure inherits whatever
+       the surrounding container layout provides. Legacy blocks may
+       lack the newer typography/sizing fields, so dict.get() with
+       fallbacks keeps them rendering through StrictUndefined. #}
+    {%- set _w = d.get('max_width_pct', 100) or 100 -%}
+    {%- set _align = d.get('align', '') -%}
+    {%- set _cap_color = d.get('caption_color', '') -%}
+    {%- set _cap_size = d.get('caption_size', '') -%}
+    {%- set _radius = d.get('border_radius', 0) or 0 -%}
+    {%- set _shadow_key = d.get('shadow', '') or '' -%}
+    {# Shadow recipes — kept in sync with block_editor.js's
+       SHADOW_RECIPES + the same map in `_blocks.html` so every page
+       surface that renders an image block paints the same shadow. #}
+    {%- set _img_shadow_recipes = {
+        'sm': '0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.10)',
+        'md': '0 4px 6px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.06)',
+        'lg': '0 10px 15px rgba(0, 0, 0, 0.10), 0 4px 6px rgba(0, 0, 0, 0.08)',
+        'xl': '0 20px 25px rgba(0, 0, 0, 0.15), 0 10px 10px rgba(0, 0, 0, 0.06)',
+    } -%}
+    {%- set _fig_styles = [] -%}
+    {%- if _align == 'left' -%}
+      {%- set _ = _fig_styles.extend(['text-align: left', 'margin-left: 0', 'margin-right: auto']) -%}
+    {%- elif _align == 'right' -%}
+      {%- set _ = _fig_styles.extend(['text-align: right', 'margin-left: auto', 'margin-right: 0']) -%}
+    {%- elif _align == 'center' -%}
+      {%- set _ = _fig_styles.extend(['text-align: center', 'margin-left: auto', 'margin-right: auto']) -%}
+    {%- endif -%}
+    {%- if (_w | int) != 100 -%}
+      {%- set _ = _fig_styles.append('max-width: ' ~ _w ~ '%') -%}
+    {%- endif -%}
+    {%- set _img_styles = ['max-width: 100%'] -%}
+    {# Emit border-radius as a custom property `--img-radius` (not as
+       a direct `border-radius` declaration) so a CSS media query can
+       halve it on narrow viewports. Stylesheet reads the var via
+       `border-radius: var(--img-radius, 0)`. #}
+    {%- if (_radius | int) > 0 -%}{%- set _ = _img_styles.append('--img-radius: ' ~ _radius ~ 'px') -%}{%- endif -%}
+    {%- if _img_shadow_recipes.get(_shadow_key) -%}{%- set _ = _img_styles.append('box-shadow: ' ~ _img_shadow_recipes[_shadow_key]) -%}{%- endif -%}
+    {%- set _cap_styles = [] -%}
+    {%- if _cap_color %}{%- set _ = _cap_styles.append('color: ' ~ (_cap_color|css_color)) -%}{%- endif -%}
+    {%- if _cap_size %}{%- set _ = _cap_styles.append('font-size: ' ~ _cap_size) -%}{%- endif -%}
+    <figure class="fe-pp-figure"{% if _fig_styles %} style="{{ _fig_styles | join('; ') }}"{% endif %}>
+      <img src="{{ d.src }}" alt="{{ d.alt or '' }}" loading="lazy" style="{{ _img_styles | join('; ') }}">
+      {%- if d.caption %}<figcaption{% if _cap_styles %} style="{{ _cap_styles | join('; ') }}"{% endif %}>{{ d.caption }}</figcaption>{%- endif %}
+    </figure>
+  {%- elif t == 'heading' -%}
+    {%- set lvl = d.level or 3 -%}
+    {%- set _st = pp_typo_style(d) -%}
+    <h{{ lvl }} class="block block-heading"{% if d._anchor %} id="{{ d._anchor }}"{% endif %}{% if _st %} style="{{ _st }}"{% endif %}>{{ d.text }}</h{{ lvl }}>
+  {%- elif t == 'list' -%}
+    {%- set _st = pp_typo_style(d) -%}
+    {%- set _ds = d.get('display_style', '') -%}
+    {%- if _ds == 'cards' -%}
+      {# Card-style overrides — `.fe-pp-steps` carries the gap; each
+         `.fe-pp-step` carries bg / border / radius / padding / shadow
+         + CSS custom properties for hover behaviour and the dark-mode
+         color twins. CSS rules read these vars with `var(... , default)`
+         fallbacks so unedited cards keep the meeting-card recipe. #}
+      {%- set _wrap_styles = [] -%}
+      {%- if d.get('card_gap') %}{%- set _ = _wrap_styles.append('gap: ' ~ d.get('card_gap')) -%}{%- endif -%}
+      {%- set _card_styles = [] -%}
+      {%- if d.get('card_bg') %}{%- set _ = _card_styles.append('background-color: ' ~ (d.get('card_bg')|css_color)) -%}{%- endif -%}
+      {%- if d.get('card_bg_dark') %}{%- set _ = _card_styles.append('--tsp-bg-dm: ' ~ (d.get('card_bg_dark')|css_color)) -%}{%- endif -%}
+      {%- if d.get('card_border_color') %}{%- set _ = _card_styles.append('border-color: ' ~ (d.get('card_border_color')|css_color)) -%}{%- endif -%}
+      {%- if d.get('card_border_color_dark') %}{%- set _ = _card_styles.append('--tsp-border-dm: ' ~ (d.get('card_border_color_dark')|css_color)) -%}{%- endif -%}
+      {%- if d.get('card_border_radius') %}{%- set _ = _card_styles.append('border-radius: ' ~ d.get('card_border_radius')) -%}{%- endif -%}
+      {%- if d.get('card_padding') %}{%- set _ = _card_styles.append('padding: ' ~ d.get('card_padding')) -%}{%- endif -%}
+      {%- set _shadow_v = _PP_CONT_SHADOW.get(d.get('card_shadow') or '', '') -%}
+      {%- if _shadow_v %}{%- set _ = _card_styles.append('box-shadow: ' ~ _shadow_v) -%}{%- endif -%}
+      {%- set _hover_lift = d.get('card_hover_lift') -%}
+      {%- if _hover_lift is sameas false -%}
+        {%- set _ = _card_styles.append('--fe-pp-step-hover-lift: 0') -%}
+        {%- set _ = _card_styles.append('--fe-pp-step-hover-shadow: none') -%}
+      {%- endif -%}
+      {%- set _num_styles = [] -%}
+      {%- if d.get('card_num_bg') %}{%- set _ = _num_styles.append('background-color: ' ~ (d.get('card_num_bg')|css_color)) -%}{%- endif -%}
+      {%- if d.get('card_num_bg_dark') %}{%- set _ = _num_styles.append('--tsp-bg-dm: ' ~ (d.get('card_num_bg_dark')|css_color)) -%}{%- endif -%}
+      {%- if d.get('card_num_color') %}{%- set _ = _num_styles.append('color: ' ~ (d.get('card_num_color')|css_color)) -%}{%- endif -%}
+      {%- if d.get('card_num_color_dark') %}{%- set _ = _num_styles.append('--tsp-color-dm: ' ~ (d.get('card_num_color_dark')|css_color)) -%}{%- endif -%}
+      {%- set _wrap_attr = (_st ~ '; ' if _st else '') ~ (_wrap_styles | join('; ')) -%}
+      {%- set _card_attr = _card_styles | join('; ') -%}
+      {%- set _num_attr = _num_styles | join('; ') -%}
+      <ol class="fe-pp-steps fe-pp-list-cards"{% if _wrap_attr %} style="{{ _wrap_attr }}"{% endif %}>
+        {%- for item in d.get('items', []) -%}
+        <li class="fe-pp-step"{% if _card_attr %} style="{{ _card_attr }}"{% endif %}>
+          <span class="fe-pp-step-num" aria-hidden="true"{% if _num_attr %} style="{{ _num_attr }}"{% endif %}>{{ loop.index }}</span>
+          <span class="fe-pp-step-body">{{ item|markdown_inline }}</span>
+        </li>
+        {%- endfor -%}
+      </ol>
+    {%- elif _ds == 'checklist' -%}
+      <ul class="block block-list fe-pp-list-checklist"{% if _st %} style="{{ _st }}"{% endif %}>
+        {%- for item in d.get('items', []) -%}
+        <li><span class="fe-pp-list-mark" aria-hidden="true">✓</span><span class="fe-pp-list-text">{{ item|markdown_inline }}</span></li>
+        {%- endfor -%}
+      </ul>
+    {%- elif _ds == 'arrows' -%}
+      <ul class="block block-list fe-pp-list-arrows"{% if _st %} style="{{ _st }}"{% endif %}>
+        {%- for item in d.get('items', []) -%}
+        <li><span class="fe-pp-list-mark" aria-hidden="true">→</span><span class="fe-pp-list-text">{{ item|markdown_inline }}</span></li>
+        {%- endfor -%}
+      </ul>
+    {%- elif _ds == 'pills' -%}
+      <ul class="block block-list fe-pp-list-pills"{% if _st %} style="{{ _st }}"{% endif %}>
+        {%- for item in d.get('items', []) -%}
+        <li>{{ item|markdown_inline }}</li>
+        {%- endfor -%}
+      </ul>
+    {%- else -%}
+      {%- if d.bullet_style -%}{%- set _st = (_st ~ '; ' if _st else '') ~ 'list-style-type: ' ~ d.bullet_style -%}{%- endif -%}
+      {%- if d.ordered -%}<ol class="block block-list"{% if _st %} style="{{ _st }}"{% endif %}>{%- else -%}<ul class="block block-list"{% if _st %} style="{{ _st }}"{% endif %}>{%- endif -%}
+        {%- for item in d.get('items', []) -%}<li>{{ item|markdown_inline }}</li>{%- endfor -%}
+      {%- if d.ordered -%}</ol>{%- else -%}</ul>{%- endif -%}
+    {%- endif -%}
+  {%- elif t == 'icon' -%}
+    {# Icon block — wrapper carries `font-size` (which the `.icon` em-sized
+       SVG inherits) plus the colour + dark-mode colour CSS custom property.
+       Alignment uses a per-class flex block; centre-by-default since a
+       lone icon usually wants to anchor to the centre of its column. #}
+    {%- set _icon_styles = [] -%}
+    {%- if d.get('size') %}{%- set _ = _icon_styles.append('font-size: ' ~ d.get('size') ~ 'px') -%}{%- endif -%}
+    {%- if d.get('color') %}{%- set _ = _icon_styles.append('color: ' ~ (d.get('color')|css_color)) -%}{%- endif -%}
+    {%- if d.get('color_dark') %}{%- set _ = _icon_styles.append('--tsp-color-dm: ' ~ (d.get('color_dark')|css_color)) -%}{%- endif -%}
+    {%- set _icon_align = d.get('align') or 'center' -%}
+    <div class="block block-icon block-icon--{{ _icon_align }}"{% if _icon_styles %} style="{{ _icon_styles | join('; ') }}"{% endif %}>
+      {%- if d.get('url') %}<a href="{{ d.get('url') }}"{% if d.get('new_tab') %} target="_blank" rel="noopener"{% endif %}>{%- endif %}
+      {%- if d.get('name') %}{{ icon(d.get('name')) }}{%- endif %}
+      {%- if d.get('url') %}</a>{%- endif %}
+    </div>
+  {%- elif t == 'container' -%}
+    {# Nested container — recursive render. Children flow through
+       pp_block again so the styling stays consistent with the rest
+       of the page. Hover gating uses per-property classes (matches
+       _blocks.html) so untouched hover values don't revert to
+       `initial`. #}
+    {%- set _hover_classes = [] -%}
+    {%- if d.hover_bg_color %}{%- set _ = _hover_classes.append('block-container--hover-bg') -%}{%- endif -%}
+    {%- if d.hover_border_color %}{%- set _ = _hover_classes.append('block-container--hover-border') -%}{%- endif -%}
+    {%- if d.hover_shadow and _PP_CONT_SHADOW.get(d.hover_shadow, '') %}{%- set _ = _hover_classes.append('block-container--hover-shadow') -%}{%- endif -%}
+    {%- if d.hover_lift %}{%- set _ = _hover_classes.append('block-container--hover-lift') -%}{%- endif -%}
+    {%- set _ppc_active = d.get('bg_dynamic_key') or d.get('bg_dynbg_overlay') -%}
+    {%- set _ppc_pseudo_cfg = {'overlay': d.get('bg_dynbg_overlay'),
+                                'colors': d.get('bg_dynbg_colors') or [],
+                                'overlay_scope': d.get('bg_dynbg_overlay_scope'),
+                                'overlay_size': d.get('bg_dynbg_overlay_size'),
+                                'overlay_intensity': d.get('bg_dynbg_overlay_intensity'),
+                                'randomize_colors': d.get('bg_dynbg_randomize_colors') or d.get('bg_dynbg_randomize'),
+                                'randomize_positions': d.get('bg_dynbg_randomize_positions') or d.get('bg_dynbg_randomize')} -%}
+    {%- set _ppc_colors = dynbg_resolve_colors(_ppc_pseudo_cfg) -%}
+    {%- set _ppc_color_vars = '' -%}
+    {%- for _c in _ppc_colors -%}
+      {%- set _ppc_color_vars = _ppc_color_vars ~ '--fe-dynbg-c' ~ loop.index ~ ': ' ~ _c ~ '; ' -%}
+    {%- endfor -%}
+    {%- set _ppc_pos_vars = dynbg_resolve_positions(_ppc_pseudo_cfg, d.get('bg_dynamic_key')) -%}
+    {%- set _ppc_style = pp_container_styles(d) | trim -%}
+    {%- if _ppc_active and _ppc_color_vars -%}
+      {%- set _ppc_style = _ppc_style ~ '; ' ~ _ppc_color_vars -%}
+    {%- endif -%}
+    {%- if _ppc_active and _ppc_pos_vars -%}
+      {%- set _ppc_style = _ppc_style ~ '; ' ~ _ppc_pos_vars -%}
+    {%- endif -%}
+    <div class="block block-container block-container--{{ d.display or 'flex' }} fe-pp-container{% if _ppc_active %} fe-dynbg-host{% endif %}{% if _hover_classes %} {{ _hover_classes | join(' ') }}{% endif %}"
+         style="{{ _ppc_style }}">
+      {%- if _ppc_active -%}
+      {% with dynbg_key=d.get('bg_dynamic_key'),
+               dynbg_config=_ppc_pseudo_cfg %}
+        {% include "frontend/_dynbg_apply.html" %}
+      {% endwith %}
+      {%- endif -%}
+      {%- for child in (d.get('blocks', []) or []) -%}{{ pp_block(child) }}{%- endfor -%}
+    </div>
+  {%- else -%}
+    {{ render_block(b) }}
+  {%- endif -%}
+{%- endmacro -%}
+
+{# Section renderer — renders ONLY what the admin placed in the layout.
+   No auto-injected page title, no auto-split-into-hero magic, no
+   auto-promoted lead paragraph. Every visible element traces back to a
+   block in the section's `blocks` list, in order. The optional section
+   title (`sec.title`) is the only soft-injected element, and it only
+   appears when the admin actually set one — empty titles render as a
+   bare blocks-only section. #}
+{%- macro pp_section(sec) -%}
+  {# Orphan sections (`_orphans: true`) are admin-only — they hold
+     blocks displaced by a layout switch until the admin drags them
+     back in. They never render publicly. #}
+  {%- if sec._orphans -%}{%- else -%}
+  <section class="fe-pp-section">
+    {%- if sec.title %}<h2 class="fe-pp-section-title">{{ sec.title }}</h2>{%- endif %}
+    {%- for b in sec.blocks or [] -%}{{ pp_block(b) }}{%- endfor -%}
+  </section>
+  {%- endif -%}
+{%- endmacro -%}
+
+{# Inline style on the article gathers everything the page can override:
+   background image (cover or tile @ scale) plus the per-page hero
+   typography custom properties. Each typography variable falls back
+   to a theme-level default on the consumer side via `var(--…, …)`,
+   so blank values mean "inherit". #}
+{%- set _style_parts = [] -%}
+{# Solid background colour — light value goes on `background-color`,
+   dark value rides `--tsp-bg-dm` which the global rule under
+   `html[data-theme="dark"] [style*="--tsp-bg-dm"]` swaps in (same
+   pattern containers use for their dark-mode bgs).
+
+   Each value can be a hex literal (`#fef3c7`) OR a design-token ref
+   (`token:color_brand`). Tokens emit as `var(--fe-color-<key>)` so
+   updating the token under Settings → Design re-tints every page
+   that uses it, no re-save required.
+
+   Auto-derivation falls through token references to the resolved
+   hex from `resolve_design(site)` so the dark variant still tracks
+   the token's current colour at render time. #}
+{%- macro _bg_color_css(value) -%}
+  {%- set value = (value or '') | trim -%}
+  {%- if value.startswith('token:') -%}
+    {%- set _key = value[6:] -%}
+    {{- 'var(--fe-' ~ _key|replace('_', '-') ~ ')' -}}
+  {%- else -%}
+    {{- value -}}
+  {%- endif -%}
+{%- endmacro -%}
+{%- macro _bg_color_resolved_hex(value, design) -%}
+  {%- set value = (value or '') | trim -%}
+  {%- if value.startswith('token:') -%}
+    {{- design.get(value[6:], '') -}}
+  {%- else -%}
+    {{- value -}}
+  {%- endif -%}
+{%- endmacro -%}
+{%- if page.bg_color -%}
+  {%- set _design_resolved = resolve_design(site) -%}
+  {%- set _light_css = _bg_color_css(page.bg_color) | trim -%}
+  {%- if _light_css -%}
+    {%- set _ = _style_parts.append("background-color: " ~ _light_css) -%}
+  {%- endif -%}
+  {%- set _bg_dm_mode = page.bg_color_dark_mode or 'same' -%}
+  {%- if _bg_dm_mode == 'auto' -%}
+    {%- set _light_hex = _bg_color_resolved_hex(page.bg_color, _design_resolved) | trim -%}
+    {%- set _auto_dark = derive_dark_color(_light_hex) -%}
+    {%- if _auto_dark -%}
+      {%- set _ = _style_parts.append("--tsp-bg-dm: " ~ _auto_dark) -%}
+    {%- endif -%}
+  {%- elif _bg_dm_mode == 'manual' -%}
+    {%- if page.bg_color_dark -%}
+      {%- set _dark_css = _bg_color_css(page.bg_color_dark) | trim -%}
+      {%- if _dark_css -%}
+        {%- set _ = _style_parts.append("--tsp-bg-dm: " ~ _dark_css) -%}
+      {%- endif -%}
+    {%- else -%}
+      {%- set _light_hex = _bg_color_resolved_hex(page.bg_color, _design_resolved) | trim -%}
+      {%- set _auto_dark = derive_dark_color(_light_hex) -%}
+      {%- if _auto_dark -%}
+        {%- set _ = _style_parts.append("--tsp-bg-dm: " ~ _auto_dark) -%}
+      {%- endif -%}
+    {%- endif -%}
+  {%- endif -%}
+{%- endif -%}
+{%- if page.bg_image_filename -%}
+  {%- set _bg_url = url_for('public.public_page_bg', page_id=page.id, v=(page.updated_at.timestamp()|int) if page.updated_at else 0) -%}
+  {%- if page.bg_mode == 'tile' -%}
+    {%- set _tile_px = ((page.bg_tile_scale or 100) * 1.2)|int -%}
+    {%- set _ = _style_parts.append("background-image: url('" ~ _bg_url ~ "')") -%}
+    {%- set _ = _style_parts.append("background-size: " ~ _tile_px ~ "px " ~ _tile_px ~ "px") -%}
+    {%- set _ = _style_parts.append("background-repeat: repeat") -%}
+    {%- set _ = _style_parts.append("background-position: top left") -%}
+  {%- else -%}
+    {%- set _ = _style_parts.append("background-image: url('" ~ _bg_url ~ "')") -%}
+    {%- set _ = _style_parts.append("background-size: cover") -%}
+    {%- set _ = _style_parts.append("background-repeat: no-repeat") -%}
+    {%- set _ = _style_parts.append("background-position: center") -%}
+    {%- set _ = _style_parts.append("background-attachment: scroll") -%}
+  {%- endif -%}
+{%- endif -%}
+{%- if page.heading_color -%}
+  {%- set _ = _style_parts.append("--fe-pp-heading-color: " ~ (page.heading_color|css_color)) -%}
+{%- endif -%}
+{%- if page.subheading_color -%}
+  {%- set _ = _style_parts.append("--fe-pp-subheading-color: " ~ (page.subheading_color|css_color)) -%}
+{%- endif -%}
+{%- if page.heading_font -%}
+  {%- set _ = _style_parts.append("--fe-pp-heading-font: " ~ font_stack(page.heading_font)) -%}
+{%- endif -%}
+{%- if page.subheading_font -%}
+  {%- set _ = _style_parts.append("--fe-pp-subheading-font: " ~ font_stack(page.subheading_font)) -%}
+{%- endif -%}
+{%- set _bg_style = (_style_parts | join('; ')) -%}
+{%- set _heading_align = (page.heading_align or 'auto') -%}
+
+{% block content %}
+{# Page-wide width formatting. Boxed = centered with max_width.
+   Full = viewport-wide with `full_padding_pct` % left/right gutter.
+   Both branches share the same render path (no auto-injected
+   chrome) — the wrapper just changes the geometry. #}
+{%- set _width_mode = (page.width_mode or 'boxed') -%}
+{%- if _width_mode == 'full' -%}
+  {%- set _pad_pct = (page.full_padding_pct if page.full_padding_pct is not none else 4) | int -%}
+  {%- set _shell_style = 'max-width: none; padding-left: ' ~ _pad_pct ~ 'vw; padding-right: ' ~ _pad_pct ~ 'vw' -%}
+{%- else -%}
+  {%- set _mw = (page.max_width or 1160) | int -%}
+  {%- set _shell_style = 'max-width: ' ~ _mw ~ 'px' -%}
+{%- endif -%}
+{%- set _pp_cfg = dynbg_decode(page.bg_dynbg_config_json) -%}
+{%- set _pp_dynbg_active = page.bg_dynamic_key or _pp_cfg.overlay -%}
+{%- set _pp_color_vars = dynbg_colors_css(dynbg_resolve_colors(_pp_cfg)) -%}
+{%- set _pp_pos_vars = dynbg_resolve_positions(_pp_cfg, page.bg_dynamic_key) -%}
+{%- set _pp_dynbg_inline = (_pp_color_vars ~ " " ~ _pp_pos_vars) | trim -%}
+<article class="fe-section fe-pp fe-pp-w-{{ _width_mode }}{% if page.bg_image_filename %} fe-pp-has-bg fe-pp-bg-{{ page.bg_mode }}{% endif %}{% if _pp_dynbg_active %} fe-dynbg-host{% endif %} fe-pp-halign-{{ _heading_align }}"
+         {% if _bg_style or _pp_dynbg_inline %}style="{{ _bg_style }}{% if _pp_dynbg_inline %} {{ _pp_dynbg_inline }}{% endif %}"{% endif %}>
+  {%- if _pp_dynbg_active -%}
+    {% with dynbg_key=page.bg_dynamic_key, dynbg_config=page.bg_dynbg_config_json %}
+      {% include "frontend/_dynbg_apply.html" %}
+    {% endwith %}
+  {%- endif -%}
+  <div class="fe-pp-shell" style="{{ _shell_style }}">
+    {% for sec in sections %}{{ pp_section(sec) }}{% endfor %}
+  </div>
+</article>
+{% if has_lottie %}
+{# Vendored lottie-web (Bodymovin) player + a minimal init script. Only
+   loaded on pages that actually contain a `lottie` block — detected
+   server-side in `_sections_have_block_type`. The init walks every
+   `[data-lottie-src]` wrapper once on DOMContentLoaded and calls
+   `lottie.loadAnimation` with the per-block settings (loop, autoplay,
+   speed, renderer). #}
+<script src="{{ url_for('static', filename='vendor/lottie/lottie.min.js', v=app_build_id) }}"></script>
+<script>
+(function () {
+  if (typeof lottie === 'undefined') return;
+
+  // Pull the loaded animation's intrinsic dimensions out of its
+  // animationData and stamp them onto the wrapper as the
+  // `--lottie-ratio` CSS custom property. The stage's CSS reads this
+  // var via `aspect-ratio: var(--lottie-ratio, 1 / 1)` so non-square
+  // animations get the right shape instead of being letterboxed
+  // inside a forced square. The fallback 1/1 covers the brief window
+  // before DOMLoaded fires.
+  function applyAspectRatio(el, anim) {
+    var d = anim && anim.animationData;
+    if (!d || !d.w || !d.h) return;
+    el.style.setProperty('--lottie-ratio', d.w + ' / ' + d.h);
+  }
+
+  // Hover playback wiring — frame 0 at rest, forward on enter,
+  // reverse on leave. The frame watcher pauses the animation when it
+  // crosses back through frame 0 going backwards so it doesn't loop
+  // in reverse forever (lottie-web's `loop` config doesn't gate the
+  // direction).
+  function attachHoverPlayback(el, anim) {
+    var watcher = null;
+    function clearWatcher() {
+      if (watcher) {
+        anim.removeEventListener('enterFrame', watcher);
+        watcher = null;
+      }
+    }
+    function onEnter() {
+      clearWatcher();
+      anim.setDirection(1);
+      anim.play();
+    }
+    function onLeave() {
+      clearWatcher();
+      anim.setDirection(-1);
+      watcher = function () {
+        if (anim.currentFrame <= 0.5) {
+          clearWatcher();
+          anim.goToAndStop(0, true);
+        }
+      };
+      anim.addEventListener('enterFrame', watcher);
+      anim.play();
+    }
+    el.addEventListener('mouseenter', onEnter);
+    el.addEventListener('mouseleave', onLeave);
+    // Touch UX — a single tap kicks off the forward play and the next
+    // tap reverses it. Uses click rather than touchstart so accidental
+    // scrolls don't trigger.
+    var played = false;
+    el.addEventListener('click', function () {
+      if (played) onLeave(); else onEnter();
+      played = !played;
+    });
+  }
+
+  function init() {
+    document.querySelectorAll('[data-lottie-src]').forEach(function (el) {
+      if (el.dataset.lottieMounted) return;
+      var src = el.dataset.lottieSrc || '';
+      if (!src) return;
+      el.dataset.lottieMounted = '1';
+      var hover = el.dataset.lottiePlayback === 'hover';
+      var anim = lottie.loadAnimation({
+        container: el,
+        renderer: el.dataset.lottieRenderer || 'svg',
+        // In hover mode loop is irrelevant: forward play is gated by
+        // mouseenter and reverse play stops at frame 0 via the watcher.
+        // We pass loop=true anyway so a tap-and-hold-style "keep
+        // playing" use case works if the admin enables it.
+        loop: el.dataset.lottieLoop !== '0',
+        // Hover mode forces autoplay off — the animation parks at
+        // frame 0 until the user enters the wrapper.
+        autoplay: !hover && el.dataset.lottieAutoplay !== '0',
+        path: src,
+      });
+      var sp = parseFloat(el.dataset.lottieSpeed);
+      if (!isNaN(sp) && sp > 0) anim.setSpeed(sp);
+      anim.addEventListener('DOMLoaded', function () {
+        applyAspectRatio(el, anim);
+        if (hover) {
+          // Make sure we're parked at the first frame regardless of
+          // what lottie-web did during loading (defensive — autoplay
+          // is already false above).
+          anim.goToAndStop(0, true);
+        }
+      });
+      if (hover) attachHoverPlayback(el, anim);
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

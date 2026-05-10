@@ -37,7 +37,13 @@
 </script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=app_build_id) }}">
 </head>
-{% set embed = request.args.get('embed') == '1' %}
+{# Embed mode (chromeless render for iframe-hosted modals) — accept
+   either ?embed=1 on the URL or a form-body embed=1 from a POST. The
+   wizard's commit step renders wp_import_done.html directly after a
+   POST (no redirect), so the form-body branch keeps the done page
+   chromeless instead of leaking the sidebar + header back in. #}
+{% set embed = request.args.get('embed') == '1'
+               or (request.method == 'POST' and request.form.get('embed') == '1') %}
 <body class="{% if embed %}embed{% endif %}">
 {% if current_user.is_authenticated %}
 {% if not embed %}
@@ -150,7 +156,7 @@
       <button type="button" class="settings-tab" data-tab="your-access">Your Access</button>
       {% if current_user.is_admin() %}
       <button type="button" class="settings-tab" data-tab="users">Users</button>
-      <button type="button" class="settings-tab" data-tab="locations">Meeting Locations</button>
+      <button type="button" class="settings-tab" data-tab="locations">Global</button>
       <button type="button" class="settings-tab" data-tab="sidebar">Sidebar</button>
       <button type="button" class="settings-tab" data-tab="modules">Modules</button>
       <button type="button" class="settings-tab" data-tab="email">Email</button>
@@ -784,6 +790,23 @@
           </li>
           <li class="special-page-row">
             <div class="special-page-info">
+              <div class="u-name">Stories</div>
+              <p class="muted small">Recovery stories — long-form first-person posts at <code>/stories</code> and <code>/stories/&lt;slug&gt;</code>. Each story has an author byline, an optional sobriety / story date, a featured image, and a Markdown body. When off, the sidebar entry disappears and the public + admin routes return 404; existing stories are kept and reappear when re-enabled.</p>
+            </div>
+            {{ module_role_picker('stories', site.stories_required_role if site else 'admin') }}
+            <form method="post" action="{{ url_for('main.stories_toggle') }}" class="special-page-toggle-form" data-refresh-sidebar="1">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <label class="mode-toggle" title="Enable Stories">
+                <input type="checkbox" name="stories_enabled" value="1"
+                       onchange="this.form.submit()"
+                       {% if site and site.stories_enabled %}checked{% endif %}>
+                <span class="mode-track"><span class="mode-thumb"></span></span>
+              </label>
+              <noscript><button class="btn btn-sm btn-primary">Save</button></noscript>
+            </form>
+          </li>
+          <li class="special-page-row">
+            <div class="special-page-info">
               <div class="u-name">Web Frontend module</div>
               <p class="muted small">Turn the entire Web Frontend module on or off. When off, the <b>Web Frontend</b> entry disappears from the sidebar, the editor routes are blocked, and the public homepage won't serve. The role gate here only hides/shows the sidebar entry — the underlying editor routes always require <b>admin</b> authority.</p>
             </div>
@@ -956,123 +979,126 @@
         </div>
       </div>
       <div class="settings-pane" data-pane="data">
-        <div class="data-grid">
-          <div class="data-col">
-            <div class="u-name">Import</div>
-            <p class="muted small">
-              Replace this portal's database and uploads with the contents of an export archive.
-              The current database and uploads are moved to a timestamped <code>backup-YYYYMMDD-HHMMSS/</code>
-              folder inside the data directory before the import is applied. You will be signed out
-              when the import completes.
-            </p>
-            <p class="muted small">
-              This overwrites all existing data. Type <code>REPLACE</code> in the
-              confirmation field to proceed.
-            </p>
-            <form class="form" method="post" action="{{ url_for('main.data_import') }}" enctype="multipart/form-data" data-no-ajax="1">
-<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <label>Export archive (.zip)<input type="file" name="archive" accept=".zip,application/zip" required></label>
-              <label>Type <code>REPLACE</code> to confirm<input type="text" name="confirm" placeholder="REPLACE" autocomplete="off" required></label>
-              <div class="form-actions"><button class="btn btn-danger">Import &amp; Replace All Data</button></div>
-            </form>
+
+        {# ── All data — full archive (database + uploads + zoom.key) #}
+        <section class="card data-card">
+          <div class="data-card-head">
+            {{ icon('database') }}
+            <span>All data</span>
           </div>
-          <div class="data-col">
-            <div class="u-name">Export</div>
-            <p class="muted small">
-              Download a complete archive of this portal: the SQLite database, every uploaded file,
-              and the Fernet key (<code>zoom.key</code>) used to decrypt stored Zoom credentials.
-              Use the Import section on a fresh instance to restore.
-            </p>
-            <div class="form-actions">
-              <a class="btn btn-primary" href="{{ url_for('main.data_export') }}">Export full archive (.zip)</a>
+          <p class="muted small data-card-lead">
+            The complete portal — SQLite database, every uploaded file, and the
+            Fernet key (<code>zoom.key</code>) used to decrypt stored Zoom
+            credentials. Use this to migrate the whole install or roll back to
+            a known-good archive.
+          </p>
+          <div class="data-card-grid">
+            <div class="data-card-col">
+              <div class="u-name">Import</div>
+              <p class="muted small">
+                Replaces this portal's database and uploads with the contents of an
+                export archive. The current database and uploads are moved to a
+                timestamped <code>backup-YYYYMMDD-HHMMSS/</code> folder inside the
+                data directory before the import is applied. You will be signed out
+                when the import completes. Type <code>REPLACE</code> to confirm.
+              </p>
+              <form class="form" method="post" action="{{ url_for('main.data_import') }}" enctype="multipart/form-data" data-no-ajax="1">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label>Export archive (.zip)<input type="file" name="archive" accept=".zip,application/zip" required></label>
+                <label>Type <code>REPLACE</code> to confirm<input type="text" name="confirm" placeholder="REPLACE" autocomplete="off" required></label>
+                <div class="form-actions"><button class="btn btn-danger">Import &amp; Replace All Data</button></div>
+              </form>
+            </div>
+            <div class="data-card-col">
+              <div class="u-name">Export</div>
+              <p class="muted small">
+                Download a complete archive of this portal — database, uploads, and
+                the Fernet key. Use the Import side on a fresh instance to restore.
+              </p>
+              <div class="form-actions">
+                <a class="btn btn-primary" href="{{ url_for('main.data_export') }}">Export full archive (.zip)</a>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <hr class="settings-rule">
-
-        <div class="u-name">Frontend bundle</div>
-        <p class="muted small">
-          Export just the public frontend — content, navigation (nav items, mega menu columns and
-          blocks), template choices, colors, alerts, and referenced logos/assets — as a portable
-          bundle. Import it on a fresh install to drop your frontend into place without touching
-          users, meetings, libraries, or uploads tied to meetings.
-        </p>
-        <div class="data-grid">
-          <div class="data-col">
-            <div class="u-name">Import frontend</div>
-            <p class="muted small">
-              Overwrites all frontend settings, nav items, and referenced assets with the bundle's
-              contents. Other data (users, meetings, libraries) is left alone. Type
-              <code>REPLACE</code> to confirm.
-            </p>
-            <form class="form" method="post" action="{{ url_for('main.data_frontend_import') }}" enctype="multipart/form-data" data-no-ajax="1">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <label>Frontend bundle (.zip)<input type="file" name="archive" accept=".zip,application/zip" required></label>
-              <label>Type <code>REPLACE</code> to confirm<input type="text" name="confirm" placeholder="REPLACE" autocomplete="off" required></label>
-              <div class="form-actions"><button class="btn btn-danger">Import frontend bundle</button></div>
-            </form>
+        {# ── Frontend bundle — scoped to public-site content + assets ── #}
+        <section class="card data-card">
+          <div class="data-card-head">
+            {{ icon('layout-grid') }}
+            <span>Frontend bundle</span>
           </div>
-          <div class="data-col">
-            <div class="u-name">Export frontend</div>
-            <p class="muted small">
-              Download a scoped <code>.zip</code> containing <code>frontend.json</code> (settings +
-              nav tree) and an <code>assets/</code> folder with every file the frontend references.
-            </p>
-            <div class="form-actions">
-              <a class="btn btn-primary" href="{{ url_for('main.data_frontend_export') }}">Export frontend bundle (.zip)</a>
+          <p class="muted small data-card-lead">
+            Just the public frontend — content, navigation (nav items, mega-menu
+            columns and blocks), template choices, colors, alerts, and referenced
+            logos / assets. Use this to drop your frontend into a fresh install
+            without touching users, meetings, libraries, or meeting uploads.
+          </p>
+          <div class="data-card-grid">
+            <div class="data-card-col">
+              <div class="u-name">Import frontend</div>
+              <p class="muted small">
+                Overwrites all frontend settings, nav items, and referenced assets
+                with the bundle's contents. Other data (users, meetings, libraries)
+                is left alone. Type <code>REPLACE</code> to confirm.
+              </p>
+              <form class="form" method="post" action="{{ url_for('main.data_frontend_import') }}" enctype="multipart/form-data" data-no-ajax="1">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label>Frontend bundle (.zip)<input type="file" name="archive" accept=".zip,application/zip" required></label>
+                <label>Type <code>REPLACE</code> to confirm<input type="text" name="confirm" placeholder="REPLACE" autocomplete="off" required></label>
+                <div class="form-actions"><button class="btn btn-danger">Import frontend bundle</button></div>
+              </form>
+            </div>
+            <div class="data-card-col">
+              <div class="u-name">Export frontend</div>
+              <p class="muted small">
+                Download a scoped <code>.zip</code> containing
+                <code>frontend.json</code> (settings + nav tree) and an
+                <code>assets/</code> folder with every file the frontend references.
+              </p>
+              <div class="form-actions">
+                <a class="btn btn-primary" href="{{ url_for('main.data_frontend_export') }}">Export frontend bundle (.zip)</a>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <hr class="settings-rule">
-
-        {# ── WordPress posts importer ───────────────────────────── #}
-        <div class="u-name">WordPress posts → Library</div>
-        <p class="muted small">
-          Import a WP All Export <i>Posts</i> CSV. Rows whose <code>Categories</code>
-          column contains the filter string are pulled into the named library
-          as Readings — one Reading per post, with the post's <code>Attachment URL</code>
-          downloaded and stored locally. Duplicate titles already in the library
-          are skipped. The library is created if it doesn't already exist.
-        </p>
-        <p class="muted small">
-          Typical use: importing <i>Intergroup Minutes</i> from DCCMA's WordPress
-          into the matching library on a fresh install.
-        </p>
-        <form class="form" method="post"
-              action="{{ url_for('main.data_wp_import_posts') }}"
-              enctype="multipart/form-data" data-no-ajax="1">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <div class="data-grid">
-            <div class="data-col">
-              <label>CSV file
-                <input type="file" name="csv" accept=".csv,text/csv" required>
-              </label>
-            </div>
-            <div class="data-col">
-              <label>Destination library
-                <input type="text" name="library_name" value="Intergroup Minutes" required>
-              </label>
-              <label>Category filter
-                <span class="muted smaller">Match if the row's <code>Categories</code> column contains this text (case-insensitive).</span>
-                <input type="text" name="category_filter" value="Intergroup Minutes" required>
-              </label>
-            </div>
+        {# ── WordPress importer wizard ─────────────────────────── #}
+        <section class="card data-card">
+          <div class="data-card-head">
+            {{ icon('globe') }}
+            <span>WordPress importer</span>
           </div>
-          <div class="form-actions">
-            <button class="btn btn-primary">Import posts</button>
+          <p class="muted small data-card-lead">
+            Pull recovery stories, announcements, or events out of an existing
+            WordPress site. Connect over the WP REST API or upload a posts CSV.
+            The wizard previews exactly what will be created — including slug
+            clashes and image downloads — before anything is saved.
+          </p>
+          <p class="muted smaller data-card-sub">
+            Maps each post (or every post in a category) onto <b>Stories</b>,
+            <b>Announcements</b>, <b>Events</b>, or skip. Featured images are
+            deduplicated by content hash on import.
+          </p>
+          <div class="data-card-actions">
+            <button type="button" class="btn btn-primary"
+                    data-open-modal="wp-import-modal"
+                    data-close-modal="settings-modal">
+              Launch importer →
+            </button>
           </div>
-        </form>
+        </section>
 
         {# ── Daily SQLite snapshots ────────────────────────────── #}
-        <hr class="settings-sep">
-        <div class="data-col data-snapshots">
-          <div class="u-name">Database snapshots</div>
-          <p class="muted small">
-            One snapshot of <code>tsp.db</code> is taken automatically each day at app start.
-            The most recent 14 are kept; older ones are pruned. Use these to roll back from
-            an accidental delete or a broken migration.
+        <section class="card data-card">
+          <div class="data-card-head">
+            {{ icon('save') }}
+            <span>Database snapshots</span>
+          </div>
+          <p class="muted small data-card-lead">
+            One snapshot of <code>tsp.db</code> is taken automatically each day at
+            app start. The most recent 14 are kept; older ones are pruned. Use
+            these to roll back from an accidental delete or a broken migration.
           </p>
           {% set _snaps = db_snapshots() %}
           {% if _snaps %}
@@ -1088,13 +1114,14 @@
           {% else %}
           <p class="muted">No snapshots yet — one will be created on the next app start.</p>
           {% endif %}
-          <div class="form-actions">
+          <div class="data-card-actions">
             <form method="post" action="{{ url_for('main.data_snapshot_now') }}" style="display:inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn">Snapshot now</button>
             </form>
           </div>
-        </div>
+        </section>
+
       </div>
 {% endif %}
       <div class="settings-pane" data-pane="about">
@@ -1147,6 +1174,18 @@
 
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
+            <li>
+              <div class="u-name">Unreleased</div>
+              <div class="muted smaller">Working towards 1.8.7</div>
+              <ul>
+                <li><b>Public submission form — visitors submit events / announcements for admin review at <code>/submissionform</code> and via a site-wide modal</b> — new public surface that lets non-admins propose content without an account. Standalone page styled like the login Request Access form (centered card, vertical-stack labels, required markers, Turnstile). Global modal markup ships on every public page via <code>frontend/base.html</code> so any element with <code>data-fe-form-trigger="submission"</code> (or the legacy <code>data-fe-submission-trigger</code>) opens it. Same form body shared between modal and standalone via a partial — the two contexts can never drift out of sync. Required fields: title, at least one type (announcement / event), submitter name + email; everything else optional. Featured-image upload accepts JPG/PNG/GIF/WebP. Schema added <code>Post.is_pending_review</code> + <code>submitter_name</code> / <code>_email</code> / <code>_phone</code> / <code>_notes</code> / <code>submitted_at</code>, plus <code>SiteSetting.submission_to</code> for recipient list (falls back to <code>access_request_to</code>). All public Post queries grew a parallel <code>is_pending_review.is_(False)</code> filter so a pending submission can never leak. <b>Holding tank</b>: <i>tspro/announcementsevents</i> grew a <i>Pending review</i> tab with a yellow badge count; the post-edit page surfaces a "Submitted for review" banner with submitter contact + notes + Approve-to-Drafts / Approve-and-Publish / Reject actions sitting above the regular edit form so reviewers can edit anything before promoting.</li>
+                <li><b>Forms admin section + nav-link form-trigger picker</b> — new admin surface for managing public-facing forms. <i>Web Frontend → Structure → Forms</i> lists every form registered in the new <code>app/forms_registry.py</code> single-source-of-truth module (index page + per-form settings page); each registry entry is a dict with <code>key</code>, <code>name</code>, <code>description</code>, <code>icon</code>, <code>settings_endpoint</code>, <code>public_url_endpoint</code>, and <code>enabled_setting</code>. Adding a future form is three changes: add a dict to the registry, include its modal partial in <code>frontend/base.html</code>, register a settings route. The Navigation admin's top-level nav-item edit modal AND each mega-menu link's inline editor grew a <b>Triggers form</b> dropdown populated from the same registry — pick a form and the rendered <code>&lt;a&gt;</code> on the public site emits <code>data-fe-form-trigger="&lt;key&gt;"</code> alongside the URL fallback; the public dispatcher in <code>frontend/base.html</code> reads that attribute and opens the matching modal (matched by <code>data-fe-form-modal="&lt;key&gt;"</code> on the modal markup). Schema additions: <code>FrontendNavItem.form_trigger</code> + <code>FrontendNavLink.form_trigger</code> (both validated against the live registry on save), plus 8 <code>submission_form_*</code> SiteSetting columns (enabled, heading, subheading, modal_heading, intro, success_message, allowed_types, submit_label) — all migrated additively. The submission-form settings page exposes every column with sensible baked defaults so an unconfigured install still has working copy. Frontend export round-trips <code>form_trigger</code> on both nav models; submission-form settings ride along automatically thanks to the dynamic prefix-based key selector from 1.8.6.</li>
+                <li><b>Forms admin polish — modal restructured into header / scrollable body / footer; X-only close; per-form enable/disable toggle; cleaner Forms card</b> — the submission modal was a single overflow-y panel that grew taller as content filled it, with the submit button mixed into the body and the backdrop dismissing on click (admins were losing in-progress submissions to accidental backdrop clicks). Restructured into three regions: fixed header (title + X), scrollable body (the form), fixed footer (submit button via HTML5 <code>form="…"</code>). Panel caps at 92vh so the body's internal scroll triggers when the form gets long; mobile (≤540px) goes full-screen for one-thumb reach. Backdrop neutralised — no <code>data-fe-submission-close</code> attribute, plus <code>pointer-events: none</code> in CSS so click-off does nothing. The X button and Esc key are the only close affordances. Each form's row in the Forms admin grew an inline mode-toggle next to <i>Configure</i> that flips the form's <code>enabled_setting</code> column site-wide via a new <code>POST /tspro/frontend/forms/&lt;key&gt;/toggle</code> JSON endpoint (optimistic UI, snaps back on failure). Cleaned up the Forms card layout from a hand-rolled stack to a 3-column grid row per form (icon chip → text block → actions) with the icon chip picking up the admin's brand colour via <code>color-mix</code> on <code>--brand</code>; mobile breakpoint stacks actions onto a separate row with a hairline divider. Forms entry moved from Content to Structure in the Web Frontend sidebar (alongside Navigation, where forms typically live).</li>
+                <li><b>Submission page surface-alt background + meeting-card hover style + brand-tokenised submit button</b> — the standalone <code>/submissionform</code> page now sits on <code>var(--fe-color-surface-alt, var(--fe-panel-soft))</code> in light mode and <code>var(--fe-dm-page-bg)</code> in dark — same recipe the <code>/meetings</code> list uses, so the form page reads as part of the same visual family instead of floating against the body's pure white. The form card now mirrors <code>.fe-mlist-card</code> exactly: <code>1px solid var(--fe-accent)</code> border, 16px radius, soft <code>0 1px 2px</code> rest shadow, 1px <code>translateY</code> lift + deeper hover shadow, border-colour stays put on hover. Dark-mode card: <code>rgba(255,255,255,0.03)</code> surface with <code>rgba(255,255,255,0.08)</code> border at rest, brightening to the same <code>rgba(122,163,255,0.4)</code> indigo tint <code>.fe-mlist-card</code> adopts on hover. <b>Submit button</b> now reads through the same four design tokens <code>.fe-btn-primary</code> consumes — <code>--fe-color-btn-primary-bg</code> / <code>-text</code>, <code>--fe-btn-shadow</code>, <code>--fe-btn-hover-transform</code>, <code>--fe-btn-hover-glow</code> — so changing the primary-button colour or toggling rest shadow / hover lift / hover glow on the Design tokens admin page recolours and re-animates this button automatically, identical to the hero "Find a Meeting" CTA. Hover background uses the same <code>color-mix(... 88%, black)</code> darken recipe; transition timing matches <code>.fe-btn</code> (<code>150ms ease</code> across <code>transform</code>, <code>box-shadow</code>, <code>background</code>) so the two buttons animate in lockstep. Dark-mode submit button mirrors <code>.fe-btn-primary</code>'s dark theme override (bright <code>#e2e8f0</code> resting → <code>#fff</code> on hover, with <code>--fe-dm-btn-primary-bg</code> taking precedence when the install has customised them).</li>
+                <li><b>Submission form usability fixes — pending uploads hidden from non-admins, URL fields use text-with-inputmode (no native validation popup), public-contact warning banner, Zoom block gated on Online toggle</b> — four polish passes. (1) Pending-review submission uploads hide from non-admin users in the File Browser AND the global search media section: a <code>Post.is_pending_review.is_(True)</code> + <code>featured_image_filename.isnot(None)</code> query yields the set of in-flight upload filenames; for non-admins, those rows are filtered out so editors / viewers don't see raw visitor uploads polluting their curated review surface. Admins still see them. Once a post leaves pending state, its image surfaces normally. (2) URL fields (<code>google_maps_url</code>, <code>website_url</code>, <code>zoom_url</code>) switched from <code>type="url"</code> to <code>type="text" inputmode="url"</code>: preserves the mobile URL keyboard hint without triggering the browser's native validation popup, which on some setups (system dark mode + Linux distros, Firefox themes) renders white-on-white and is unstyleable cross-browser. Bad URLs become an admin-review concern instead of a client-side block. (3) The "Public contact for this event" fieldset grew a soft amber callout banner reading <i>Heads up: anything you put here will be displayed publicly on the event's page once it's published.</i> — submitters had been leaving phone numbers in the contact field thinking it'd only go to the admin. Banner picks up amber tints in both light and dark modes. (4) The Zoom credentials block (Meeting ID / Passcode / Zoom URL) now reveals only when the <i>Online event</i> checkbox is on — in-person events were getting empty Zoom-field clutter on every submission. Same JS toggle pattern the Event-fields fieldset uses; both standalone page and modal share the handler.</li>
+                <li><b>Submission email expanded — every populated field included, featured image rides along as an attachment</b> — the admin notification email previously surfaced a small subset of the submission (title, submitter, basic event date / location, summary, notes) and never carried the uploaded image. Now includes every field the form captures, organised into four sections — Submitter (name / email / phone / notes), Submission (title / type / summary / full body / featured-image filename), Event details (starts / ends / online / location name + address / Maps URL / Zoom ID + passcode + URL / website URL + label), and Public contact (the on-post contact info, only when the post is an event). Featured image attaches with a friendly filename derived from the submission title (<code>"Spring Roundup 2026.jpg"</code>) and a guessed MIME type so admins can preview directly in their mail client without touching the holding tank. <code>send_mail</code> in <code>app/mail.py</code> grew an <code>attachments=</code> parameter that accepts <code>{path, filename, mime_type}</code> dicts; missing files are silently skipped so a vanished upload doesn't take down the email. Empty sections collapse — an announcement-only submission email omits the Event-details and Public-contact blocks entirely instead of padding with empty headers. Footer of every email links straight to the post-edit page in the holding tank.</li>
+              </ul>
+            </li>
             <li>
               <div class="u-name">1.8.6</div>
               <div class="muted smaller">May 2026</div>
@@ -1836,6 +1875,22 @@
   })();
 </script>
 
+{# WordPress importer modal (shared). Iframe loads lazily — src is set
+   from data-src the first time the modal is opened (see app.js).
+   Closing the modal resets src so a fresh open starts at step 1. #}
+<div class="modal modal-lg" id="wp-import-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2>WordPress importer</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+    </div>
+    <iframe class="settings-frame" id="wp-import-frame"
+            data-src="{{ url_for('main.wp_import_start', embed=1) }}"
+            src="about:blank"></iframe>
+  </div>
+</div>
+
 {# Media picker modal (shared) #}
 <div class="modal modal-lg" id="media-picker-modal" aria-hidden="true">
   <div class="modal-backdrop" data-close></div>
@@ -2038,6 +2093,195 @@
 })();
 </script>
 {% endif %}
+
+{# Shared dynamic-background picker modal.
+   Lives at the body root so any admin form anywhere in the portal
+   can drop in a `dynbg_trigger(...)` button and open the same
+   picker. The modal stays out of the DOM until first opened (the
+   .open class toggles its display); it reads the active key from
+   the trigger's data-current attr, then writes the selected value
+   back to the trigger's hidden input on Save.
+
+   Catalog comes from app/dynbg.py via the dynbg_catalog() global,
+   so adding a preset there appears here automatically. #}
+<div class="modal modal-lg" id="dynbg-picker-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="dynbg-picker-modal-title">
+    <div class="modal-head">
+      <h2 id="dynbg-picker-modal-title">Choose a dynamic background</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+    </div>
+    <div class="modal-body">
+      {# ── Tabs: Background / Overlay / Colours. The base catalog
+         and the overlay catalog both render as picker grids; the
+         colours panel is a small fieldset of three colour inputs.
+         All three tabs commit together on Save. #}
+      <div class="dynbg-modal-tabs" role="tablist" data-dynbg-modal-tabs>
+        <button type="button" role="tab" class="dynbg-modal-tab is-active"
+                data-dynbg-modal-tab="background" aria-selected="true">Background</button>
+        <button type="button" role="tab" class="dynbg-modal-tab"
+                data-dynbg-modal-tab="overlay" aria-selected="false">Overlay</button>
+        <button type="button" role="tab" class="dynbg-modal-tab"
+                data-dynbg-modal-tab="colors" aria-selected="false">Colours</button>
+      </div>
+
+      <section class="dynbg-modal-panel is-active" data-dynbg-modal-panel="background">
+        <p class="muted small dynbg-modal-blurb">CSS-driven backdrops that animate or sit static behind the surface. Each preset is dark-mode aware and respects <code>prefers-reduced-motion</code>. The chosen background paints behind any solid colour or uploaded image you've also configured.</p>
+        {# "Disable animation" gate. Visible only when the active
+           preset is one of the keyframe-animated ones (hidden by JS
+           when the user picks a static preset like dotted-grid).
+           data-dynbg-animated-keys hands the JS the list once so it
+           doesn't have to round-trip to a Python check. #}
+        <fieldset class="dynbg-modal-fieldset" id="dynbg-picker-modal-anim-row"
+                  data-dynbg-animated-keys="{{ dynbg_animated_keys()|join(',') }}" hidden>
+          <legend>Animation</legend>
+          <label class="check dynbg-modal-randomize">
+            <input type="checkbox" id="dynbg-picker-modal-animate-off" value="1">
+            <span><b>Freeze movement</b> <span class="muted smaller">— stops the keyframe animation on this preset (blobs / bands / twinkle pinpoints stay where they're first painted). Useful for marketing screenshots, low-power devices, or visitors who find motion distracting.</span></span>
+          </label>
+        </fieldset>
+        <div class="fe-dynbg-picker fe-dynbg-picker-md" id="dynbg-picker-modal-grid" role="radiogroup">
+          <label class="fe-dynbg-picker-card" data-dynbg-modal-card data-dynbg-key="">
+            <input type="radio" name="__dynbg_modal_pick" value="">
+            <span class="fe-dynbg-picker-thumb fe-dynbg-picker-thumb-none" aria-hidden="true">
+              <span class="fe-dynbg-picker-none-icon">∅</span>
+            </span>
+            <span class="fe-dynbg-picker-info">
+              <span class="fe-dynbg-picker-name">None</span>
+              <span class="fe-dynbg-picker-desc muted small">Solid colour or uploaded image only — no dynamic backdrop.</span>
+            </span>
+          </label>
+          {% for entry in dynbg_catalog() %}
+          <label class="fe-dynbg-picker-card" data-dynbg-modal-card data-dynbg-key="{{ entry.key }}">
+            <input type="radio" name="__dynbg_modal_pick" value="{{ entry.key }}">
+            <span class="fe-dynbg-picker-thumb">
+              {% with dynbg_key=entry.key %}{% include "frontend/_dynbg.html" %}{% endwith %}
+            </span>
+            <span class="fe-dynbg-picker-info">
+              <span class="fe-dynbg-picker-name">{{ entry.name }}</span>
+              <span class="fe-dynbg-picker-desc muted small">{{ entry.description }}</span>
+            </span>
+          </label>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="dynbg-modal-panel" data-dynbg-modal-panel="overlay">
+        <p class="muted small dynbg-modal-blurb">A texture pass that paints over the base background AND content — same recipe family as the viibeware noise grain (subtle by default; click-through). Compose with any base background or use standalone over a solid colour.</p>
+        <div class="fe-dynbg-picker fe-dynbg-picker-md" id="dynbg-picker-modal-overlay-grid" role="radiogroup">
+          <label class="fe-dynbg-picker-card" data-dynbg-modal-overlay-card data-dynbg-overlay-key="">
+            <input type="radio" name="__dynbg_modal_overlay_pick" value="">
+            <span class="fe-dynbg-picker-thumb fe-dynbg-picker-thumb-none" aria-hidden="true">
+              <span class="fe-dynbg-picker-none-icon">∅</span>
+            </span>
+            <span class="fe-dynbg-picker-info">
+              <span class="fe-dynbg-picker-name">None</span>
+              <span class="fe-dynbg-picker-desc muted small">No texture overlay.</span>
+            </span>
+          </label>
+          {% for entry in dynbg_overlays() %}
+          <label class="fe-dynbg-picker-card" data-dynbg-modal-overlay-card data-dynbg-overlay-key="{{ entry.key }}">
+            <input type="radio" name="__dynbg_modal_overlay_pick" value="{{ entry.key }}">
+            <span class="fe-dynbg-picker-thumb fe-dynbg-overlay-thumb">
+              {# Overlays render against the surface they're on top
+                 of, not on their own — for the picker thumb we paint
+                 a soft brand-tinted plate behind so admins can see
+                 the overlay's recipe in isolation. #}
+              <span class="fe-dynbg-overlay-thumb-plate"></span>
+              {% with dynbg_overlay_key=entry.key %}{% include "frontend/_dynbg_overlay.html" %}{% endwith %}
+            </span>
+            <span class="fe-dynbg-picker-info">
+              <span class="fe-dynbg-picker-name">{{ entry.name }}</span>
+              <span class="fe-dynbg-picker-desc muted small">{{ entry.description }}</span>
+            </span>
+          </label>
+          {% endfor %}
+        </div>
+
+        {%- set _dyn = dynbg_defaults() -%}
+        <fieldset class="dynbg-modal-fieldset">
+          <legend>Scope</legend>
+          <p class="muted small" style="margin: 0 0 8px;">Where the texture lays down. <b>All</b> matches the viibeware feel — texture rides over backgrounds AND content for a consistent surface finish. <b>Background only</b> tucks it under the content (cards / typography stay clean).</p>
+          <div class="dynbg-modal-scope-row" role="radiogroup">
+            <label class="dynbg-modal-scope-opt">
+              <input type="radio" name="__dynbg_modal_scope_pick" value="all"
+                     id="dynbg-picker-modal-scope-all" checked>
+              <span><b>All page elements</b> <span class="muted smaller">— textures bg + content</span></span>
+            </label>
+            <label class="dynbg-modal-scope-opt">
+              <input type="radio" name="__dynbg_modal_scope_pick" value="bg"
+                     id="dynbg-picker-modal-scope-bg">
+              <span><b>Background only</b> <span class="muted smaller">— texture sits under content</span></span>
+            </label>
+          </div>
+        </fieldset>
+
+        {# Noise-grain only knobs. Visible only when the noise-grain
+           card is the active overlay; toggled by the modal handler.
+           Sliders write to the same hidden inputs the trigger reads
+           on save. #}
+        <fieldset class="dynbg-modal-fieldset" id="dynbg-picker-modal-noise-knobs" hidden>
+          <legend>Noise grain knobs</legend>
+          <p class="muted small" style="margin: 0 0 8px;">Fine-tune the grain. <b>Size</b> controls particle scale (lower = bigger flecks); <b>intensity</b> controls how visible the texture is.</p>
+          <label class="dynbg-modal-slider-row">
+            <span class="dynbg-modal-slider-label">Size <output id="dynbg-picker-modal-noise-size-out">{{ _dyn.noise_size }}</output></span>
+            <input type="range" id="dynbg-picker-modal-noise-size"
+                   min="{{ _dyn.noise_size_min }}" max="{{ _dyn.noise_size_max }}"
+                   step="0.05" value="{{ _dyn.noise_size }}">
+            <span class="muted smaller">{{ _dyn.noise_size_min }} = coarse · {{ _dyn.noise_size_max }} = fine</span>
+          </label>
+          <label class="dynbg-modal-slider-row">
+            <span class="dynbg-modal-slider-label">Intensity <output id="dynbg-picker-modal-noise-intensity-out">{{ '%.3f' % _dyn.noise_intensity }}</output></span>
+            <input type="range" id="dynbg-picker-modal-noise-intensity"
+                   min="{{ _dyn.noise_intensity_min }}" max="{{ _dyn.noise_intensity_max }}"
+                   step="0.005" value="{{ _dyn.noise_intensity }}">
+            <span class="muted smaller">{{ _dyn.noise_intensity_min }} = whisper · {{ _dyn.noise_intensity_max }} = heavy</span>
+          </label>
+          <button type="button" class="btn btn-sm" id="dynbg-picker-modal-noise-reset" style="align-self: flex-start; margin-top: 4px;">Reset to default</button>
+        </fieldset>
+      </section>
+
+      <section class="dynbg-modal-panel" data-dynbg-modal-panel="colors">
+        <p class="muted small dynbg-modal-blurb">Override the brand-token colours each preset uses with up to three custom hexes. Empty slots fall through to the brand accent. Colour 1 is the primary glow, Colour 2 the secondary accent, Colour 3 the tertiary highlight.</p>
+        <div class="dynbg-modal-colors">
+          {% for slot in [1, 2, 3] %}
+          <label class="dynbg-modal-color-row">
+            <span class="dynbg-modal-color-label">Colour {{ slot }}</span>
+            <span class="dynbg-modal-color-controls">
+              <input type="color" id="dynbg-picker-modal-c{{ slot }}-color"
+                     data-dynbg-modal-color="{{ slot }}" value="#0b5cff">
+              <input type="text" id="dynbg-picker-modal-c{{ slot }}-text"
+                     data-dynbg-modal-color-text="{{ slot }}"
+                     placeholder="(brand default)" maxlength="9"
+                     pattern="^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
+                     autocomplete="off">
+              <button type="button" class="btn btn-sm dynbg-modal-color-clear"
+                      data-dynbg-modal-color-clear="{{ slot }}">Clear</button>
+            </span>
+          </label>
+          {% endfor %}
+        </div>
+
+        <fieldset class="dynbg-modal-fieldset" style="margin-top: 16px;">
+          <legend>Randomize on every page load</legend>
+          <label class="check dynbg-modal-randomize">
+            <input type="checkbox" id="dynbg-picker-modal-randomize-colors" value="1">
+            <span><b>Colours</b> <span class="muted smaller">— ignores the slots above; picks a fresh brand-friendly palette each render so the surface re-tints every visit.</span></span>
+          </label>
+          <label class="check dynbg-modal-randomize">
+            <input type="checkbox" id="dynbg-picker-modal-randomize-positions" value="1">
+            <span><b>Positions</b> <span class="muted smaller">— blobs / gradients / bands / spotlights spawn at fresh coordinates each render. Other static patterns (dotted grid, lines, paper) ignore this since they have nothing to move.</span></span>
+          </label>
+        </fieldset>
+      </section>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" data-close>Cancel</button>
+      <button type="button" class="btn btn-danger" id="dynbg-picker-modal-clear">Clear all</button>
+      <button type="button" class="btn btn-primary" id="dynbg-picker-modal-save">Save</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>

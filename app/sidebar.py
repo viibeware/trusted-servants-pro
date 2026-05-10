@@ -34,12 +34,14 @@ _MAIN_CATALOG = [
     {"key": "intergroup",     "label": None,                   "endpoint": "main.intergroup",       "active_kind": "exact"},
     {"key": "zoom_tech",      "label": None,                   "endpoint": "main.zoom_tech",        "active_kind": "exact"},
     {"key": "posts",          "label": "Announcements & Events", "endpoint": "main.posts",          "active_kind": "prefix:main.post"},
+    {"key": "stories",        "label": "Stories",              "endpoint": "main.stories",        "active_kind": "prefix:main.story"},
     {"key": "web_frontend",   "label": "Web Frontend",         "endpoint": "main.frontend_dashboard", "active_kind": "prefix:main.frontend_"},
 ]
 
 _ADMIN_CATALOG = [
     # Items that are always admin-only by code, not configuration.
     {"key": "access_requests", "label": "Access Requests",        "endpoint": "main.access_requests",  "active_kind": "contains:access_request"},
+    {"key": "contact_form",    "label": "Contact Form",           "endpoint": "main.contact_form",     "active_kind": "contains:contact_form"},
     {"key": "user_log",        "label": "User Log",               "endpoint": "main.user_log",         "active_kind": "contains:user_log"},
     {"key": "delete_log",      "label": "Delete Log",             "endpoint": "main.delete_log",       "active_kind": "contains:delete_log"},
 ]
@@ -60,6 +62,7 @@ _DYNAMIC_SECTION_ITEMS = {
     "intergroup":    "intergroup_required_role",
     "zoom_tech":     "zoom_tech_required_role",
     "posts":         "posts_required_role",
+    "stories":       "stories_required_role",
     "web_frontend":  "frontend_module_required_role",
 }
 
@@ -104,7 +107,11 @@ def _is_visible(key, site, user):
     if key == "posts":
         return bool(site and site.posts_enabled
                     and user_meets_role(user, site.posts_required_role))
+    if key == "stories":
+        return bool(site and getattr(site, "stories_enabled", False)
+                    and user_meets_role(user, getattr(site, "stories_required_role", "admin")))
     if key == "access_requests": return bool(user.is_admin())
+    if key == "contact_form":    return bool(user.is_admin())
     if key == "user_log":        return bool(user.is_admin())
     if key == "delete_log":      return bool(user.is_admin())
     if key == "web_frontend":

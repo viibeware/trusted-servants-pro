@@ -10,6 +10,16 @@
      callout   {variant, title, md}
      list      {ordered, items: [md]}
      separator {}
+     button    {label, url, align, style, new_tab,
+                bg, hover_bg, text_color, hover_text,
+                border, hover_border, shadow}
+     container {display, direction, justify, align, wrap,
+                grid_columns, gap, padding, width_mode, max_width,
+                bg_color, border_width, border_style, border_color,
+                border_radius, shadow,
+                hover_bg_color, hover_border_color, hover_shadow,
+                hover_lift,
+                blocks: [...]}    ← children render recursively
 #}
 
 {% macro slug(text) -%}
@@ -38,17 +48,67 @@
   </nav>
 {% endmacro %}
 
+{# Per-block typography → inline style. Only emits properties that
+   the admin actually set; blank values fall through so the theme /
+   page CSS keeps its defaults. When `color_dark` is non-empty, an
+   extra `--tsp-color-dm: <hex>` custom property rides along — a
+   global rule under `html[data-theme="dark"]` swaps `color` to that
+   value in dark mode. Same pattern is used for container bg /
+   border colours via `--tsp-bg-dm` / `--tsp-border-dm`. #}
+{% macro typo_style(d) -%}
+  {%- set _s = [] -%}
+  {%- if d.font_family %}{%- set _ = _s.append('font-family: ' ~ d.font_family) -%}{%- endif -%}
+  {%- if d.font_size %}{%- set _ = _s.append('font-size: ' ~ d.font_size) -%}{%- endif -%}
+  {%- if d.font_weight %}{%- set _ = _s.append('font-weight: ' ~ d.font_weight) -%}{%- endif -%}
+  {%- if d.color %}{%- set _ = _s.append('color: ' ~ (d.color|css_color)) -%}{%- endif -%}
+  {%- if d.get('color_dark') %}{%- set _ = _s.append('--tsp-color-dm: ' ~ (d.get('color_dark')|css_color)) -%}{%- endif -%}
+  {%- if d.align %}{%- set _ = _s.append('text-align: ' ~ d.align) -%}{%- endif -%}
+  {%- if d.line_height %}{%- set _ = _s.append('line-height: ' ~ d.line_height) -%}{%- endif -%}
+  {{ _s | join('; ') }}
+{%- endmacro %}
+
 {% macro render_block(b) %}
   {% set t = b.type %}{% set d = b.data or {} %}
   {% if t == 'paragraph' %}
-    <div class="block block-paragraph">{{ d.md|markdown }}</div>
+    {% set _st = typo_style(d) %}
+    <div class="block block-paragraph"{% if _st %} style="{{ _st }}"{% endif %}>{{ d.md|markdown_block }}</div>
   {% elif t == 'heading' %}
     {% set lvl = d.level or 3 %}
-    <h{{ lvl }} class="block block-heading">{{ d.text }}</h{{ lvl }}>
+    {% set _st = typo_style(d) %}
+    <h{{ lvl }} class="block block-heading"{% if d._anchor %} id="{{ d._anchor }}"{% endif %}{% if _st %} style="{{ _st }}"{% endif %}>{{ d.text }}</h{{ lvl }}>
   {% elif t == 'image' %}
-    <figure class="block block-image">
-      <img src="{{ d.src }}" alt="{{ d.alt or '' }}">
-      {% if d.caption %}<figcaption>{{ d.caption }}</figcaption>{% endif %}
+    {% set _w = d.get('max_width_pct', 100) or 100 %}
+    {% set _align = d.get('align', '') %}
+    {% set _cap_color = d.get('caption_color', '') %}
+    {% set _cap_size = d.get('caption_size', '') %}
+    {% set _radius = d.get('border_radius', 0) or 0 %}
+    {% set _shadow_key = d.get('shadow', '') or '' %}
+    {# Shadow recipes — kept in sync with block_editor.js's
+       SHADOW_RECIPES so the modal preview matches the public render.
+       Empty key = no shadow rule. #}
+    {% set _shadow_recipes = {
+        'sm': '0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.10)',
+        'md': '0 4px 6px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.06)',
+        'lg': '0 10px 15px rgba(0, 0, 0, 0.10), 0 4px 6px rgba(0, 0, 0, 0.08)',
+        'xl': '0 20px 25px rgba(0, 0, 0, 0.15), 0 10px 10px rgba(0, 0, 0, 0.06)',
+    } %}
+    {% set _fig_styles = [] %}
+    {% if _align == 'left' %}{% set _ = _fig_styles.append('text-align: left') %}{% set _ = _fig_styles.append('margin-left: 0') %}{% set _ = _fig_styles.append('margin-right: auto') %}
+    {% elif _align == 'right' %}{% set _ = _fig_styles.append('text-align: right') %}{% set _ = _fig_styles.append('margin-left: auto') %}{% set _ = _fig_styles.append('margin-right: 0') %}
+    {% elif _align == 'center' %}{% set _ = _fig_styles.append('text-align: center') %}{% set _ = _fig_styles.append('margin-left: auto') %}{% set _ = _fig_styles.append('margin-right: auto') %}{% endif %}
+    {% if (_w | int) != 100 %}{% set _ = _fig_styles.append('max-width: ' ~ _w ~ '%') %}{% endif %}
+    {% set _img_styles = ['max-width: 100%'] %}
+    {# Border-radius rides through `--img-radius` so the public CSS
+       can halve it on mobile via a media query. The matching
+       stylesheet reads `border-radius: var(--img-radius, 0)`. #}
+    {% if (_radius | int) > 0 %}{% set _ = _img_styles.append('--img-radius: ' ~ _radius ~ 'px') %}{% endif %}
+    {% if _shadow_recipes.get(_shadow_key) %}{% set _ = _img_styles.append('box-shadow: ' ~ _shadow_recipes[_shadow_key]) %}{% endif %}
+    {% set _cap_styles = [] %}
+    {% if _cap_color %}{% set _ = _cap_styles.append('color: ' ~ (_cap_color|css_color)) %}{% endif %}
+    {% if _cap_size %}{% set _ = _cap_styles.append('font-size: ' ~ _cap_size) %}{% endif %}
+    <figure class="block block-image"{% if _fig_styles %} style="{{ _fig_styles | join('; ') }}"{% endif %}>
+      <img src="{{ d.src }}" alt="{{ d.alt or '' }}" style="{{ _img_styles | join('; ') }}">
+      {% if d.caption %}<figcaption{% if _cap_styles %} style="{{ _cap_styles | join('; ') }}"{% endif %}>{{ d.caption }}</figcaption>{% endif %}
     </figure>
   {% elif t == 'video' %}
     <div class="block block-video">
@@ -56,6 +116,32 @@
         <source src="{{ d.src }}">
       </video>
     </div>
+  {% elif t == 'lottie' %}
+    {# Lottie animation block. Rendered as an empty wrapper carrying
+       data-* attributes; the bundled init script (loaded once per page
+       that contains a lottie block) walks every `[data-lottie-src]` and
+       calls `lottie.loadAnimation` to play it. The figure mirrors the
+       image block's alignment + width semantics so admins can compose
+       a row of icons / images / lottie all the same way. #}
+    {% set _w = d.get('max_width_pct', 100) or 100 %}
+    {% set _align = d.get('align', '') or 'center' %}
+    {% set _fig_styles = [] %}
+    {% if _align == 'left' %}{% set _ = _fig_styles.extend(['margin-left: 0', 'margin-right: auto']) %}
+    {% elif _align == 'right' %}{% set _ = _fig_styles.extend(['margin-left: auto', 'margin-right: 0']) %}
+    {% else %}{% set _ = _fig_styles.extend(['margin-left: auto', 'margin-right: auto']) %}{% endif %}
+    {% if (_w | int) != 100 %}{% set _ = _fig_styles.append('max-width: ' ~ _w ~ '%') %}{% endif %}
+    {% if d.get('bg_color') %}{% set _ = _fig_styles.append('background-color: ' ~ (d.get('bg_color')|css_color)) %}{% endif %}
+    <figure class="block block-lottie"{% if _fig_styles %} style="{{ _fig_styles | join('; ') }}"{% endif %}>
+      <div class="block-lottie-stage"
+           data-lottie-src="{{ d.src or '' }}"
+           data-lottie-loop="{{ '1' if d.loop else '0' }}"
+           data-lottie-autoplay="{{ '1' if d.autoplay else '0' }}"
+           data-lottie-speed="{{ d.speed if d.speed is not none else 1 }}"
+           data-lottie-renderer="{{ d.renderer or 'svg' }}"
+           data-lottie-playback="{{ d.playback or 'auto' }}"
+           role="img"
+           aria-label="{{ d.alt or 'Lottie animation' }}"></div>
+    </figure>
   {% elif t == 'code' %}
     <pre class="block block-code"><code{% if d.lang %} class="language-{{ d.lang }}"{% endif %}>{{ d.code }}</code></pre>
   {% elif t == 'callout' %}
@@ -69,10 +155,434 @@
       </div>
     </div>
   {% elif t == 'list' %}
-    {% if d.ordered %}<ol class="block block-list">{% else %}<ul class="block block-list">{% endif %}
-      {% for item in d.get('items', []) %}<li>{{ item|markdown }}</li>{% endfor %}
-    {% if d.ordered %}</ol>{% else %}</ul>{% endif %}
+    {% set _st = typo_style(d) %}
+    {% set _ds = d.get('display_style', '') %}
+    {% if _ds == 'cards' %}
+      {% set _wrap_styles = [] %}
+      {% if d.get('card_gap') %}{% set _ = _wrap_styles.append('gap: ' ~ d.get('card_gap')) %}{% endif %}
+      {% set _card_styles = [] %}
+      {% if d.get('card_bg') %}{% set _ = _card_styles.append('background-color: ' ~ (d.get('card_bg')|css_color)) %}{% endif %}
+      {% if d.get('card_bg_dark') %}{% set _ = _card_styles.append('--tsp-bg-dm: ' ~ (d.get('card_bg_dark')|css_color)) %}{% endif %}
+      {% if d.get('card_border_color') %}{% set _ = _card_styles.append('border-color: ' ~ (d.get('card_border_color')|css_color)) %}{% endif %}
+      {% if d.get('card_border_color_dark') %}{% set _ = _card_styles.append('--tsp-border-dm: ' ~ (d.get('card_border_color_dark')|css_color)) %}{% endif %}
+      {% if d.get('card_border_radius') %}{% set _ = _card_styles.append('border-radius: ' ~ d.get('card_border_radius')) %}{% endif %}
+      {% if d.get('card_padding') %}{% set _ = _card_styles.append('padding: ' ~ d.get('card_padding')) %}{% endif %}
+      {% set _shadow_v = _BLOCK_CONT_SHADOW.get(d.get('card_shadow') or '', '') %}
+      {% if _shadow_v %}{% set _ = _card_styles.append('box-shadow: ' ~ _shadow_v) %}{% endif %}
+      {% set _hover_lift = d.get('card_hover_lift') %}
+      {% if _hover_lift is sameas false %}
+        {% set _ = _card_styles.append('--fe-pp-step-hover-lift: 0') %}
+        {% set _ = _card_styles.append('--fe-pp-step-hover-shadow: none') %}
+      {% endif %}
+      {% set _num_styles = [] %}
+      {% if d.get('card_num_bg') %}{% set _ = _num_styles.append('background-color: ' ~ (d.get('card_num_bg')|css_color)) %}{% endif %}
+      {% if d.get('card_num_bg_dark') %}{% set _ = _num_styles.append('--tsp-bg-dm: ' ~ (d.get('card_num_bg_dark')|css_color)) %}{% endif %}
+      {% if d.get('card_num_color') %}{% set _ = _num_styles.append('color: ' ~ (d.get('card_num_color')|css_color)) %}{% endif %}
+      {% if d.get('card_num_color_dark') %}{% set _ = _num_styles.append('--tsp-color-dm: ' ~ (d.get('card_num_color_dark')|css_color)) %}{% endif %}
+      {% set _wrap_attr = (_st ~ '; ' if _st else '') ~ (_wrap_styles | join('; ')) %}
+      {% set _card_attr = _card_styles | join('; ') %}
+      {% set _num_attr = _num_styles | join('; ') %}
+      <ol class="fe-pp-steps fe-pp-list-cards"{% if _wrap_attr %} style="{{ _wrap_attr }}"{% endif %}>
+        {% for item in d.get('items', []) %}
+        <li class="fe-pp-step"{% if _card_attr %} style="{{ _card_attr }}"{% endif %}>
+          <span class="fe-pp-step-num" aria-hidden="true"{% if _num_attr %} style="{{ _num_attr }}"{% endif %}>{{ loop.index }}</span>
+          <span class="fe-pp-step-body">{{ item|markdown_inline }}</span>
+        </li>
+        {% endfor %}
+      </ol>
+    {% elif _ds == 'checklist' %}
+      <ul class="block block-list fe-pp-list-checklist"{% if _st %} style="{{ _st }}"{% endif %}>
+        {% for item in d.get('items', []) %}
+        <li><span class="fe-pp-list-mark" aria-hidden="true">✓</span><span class="fe-pp-list-text">{{ item|markdown_inline }}</span></li>
+        {% endfor %}
+      </ul>
+    {% elif _ds == 'arrows' %}
+      <ul class="block block-list fe-pp-list-arrows"{% if _st %} style="{{ _st }}"{% endif %}>
+        {% for item in d.get('items', []) %}
+        <li><span class="fe-pp-list-mark" aria-hidden="true">→</span><span class="fe-pp-list-text">{{ item|markdown_inline }}</span></li>
+        {% endfor %}
+      </ul>
+    {% elif _ds == 'pills' %}
+      <ul class="block block-list fe-pp-list-pills"{% if _st %} style="{{ _st }}"{% endif %}>
+        {% for item in d.get('items', []) %}<li>{{ item|markdown_inline }}</li>{% endfor %}
+      </ul>
+    {% else %}
+      {% if d.bullet_style %}{% set _st = (_st ~ '; ' if _st else '') ~ 'list-style-type: ' ~ d.bullet_style %}{% endif %}
+      {% if d.ordered %}<ol class="block block-list"{% if _st %} style="{{ _st }}"{% endif %}>{% else %}<ul class="block block-list"{% if _st %} style="{{ _st }}"{% endif %}>{% endif %}
+        {% for item in d.get('items', []) %}<li>{{ item|markdown_inline }}</li>{% endfor %}
+      {% if d.ordered %}</ol>{% else %}</ul>{% endif %}
+    {% endif %}
+  {% elif t == 'intergroup_member' %}
+    {# Intergroup member — pulls the chosen officer row from the
+       IntergroupOfficer table at request time so edits to the global
+       roster propagate to every page that references it without
+       re-saving. The four `show_*` toggles gate which fields render;
+       missing values fall through silently so a partially-filled
+       officer (e.g. no phone yet) doesn't leave an empty <div>. #}
+    {% set _officer = intergroup_officer(d.get('officer_id') or 0) %}
+    {% if _officer %}
+    <div class="block block-officer">
+      <div class="block-officer-card">
+        {% if d.get('show_role') and _officer.role %}
+        <div class="block-officer-role">{{ _officer.role }}</div>
+        {% endif %}
+        {% if d.get('show_name') and _officer.name %}
+        <div class="block-officer-name">{{ _officer.name }}</div>
+        {% endif %}
+        {% if d.get('show_phone') and _officer.phone %}
+        <div class="block-officer-phone"><a href="tel:{{ _officer.phone|replace(' ', '')|replace('-', '')|replace('(', '')|replace(')', '') }}">{{ _officer.phone }}</a></div>
+        {% endif %}
+        {% if d.get('show_email') and _officer.email %}
+        <div class="block-officer-email"><a href="mailto:{{ _officer.email }}">{{ _officer.email }}</a></div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  {% elif t == 'intergroup_member_roster' %}
+    {# Officer roster — loops every IntergroupOfficer into a card grid.
+       The grid lives at request time (no JS) so it renders cleanly even
+       with JS disabled. Each card carries a shadow + rounded corners
+       to read as a discrete unit. The four `show_*` toggles apply
+       uniformly to every card so admins can pull "just names" or
+       "just emails" with one switch.
+       Empty cards (no enabled fields produced any content) are dropped
+       so blocks don't render visible holes for officers missing the
+       chosen fields (e.g. nobody-has-phone + show_phone=true and others
+       off → empty list, which we skip rather than render). #}
+    {% set _cols = (d.get('columns') or 3) | int %}
+    {% if _cols not in [2, 3] %}{% set _cols = 3 %}{% endif %}
+    {% set _gap = d.get('gap') or '1rem' %}
+    {% set _officers = intergroup_officers() %}
+    {% if _officers %}
+    <div class="block block-officer-roster"
+         style="display: grid; grid-template-columns: repeat({{ _cols }}, minmax(0, 1fr)); gap: {{ _gap }};">
+      {% for o in _officers %}
+      <div class="block-officer-roster-card">
+        {% if d.get('show_role') and o.role %}
+        <div class="block-officer-role">{{ o.role }}</div>
+        {% endif %}
+        {% if d.get('show_name') and o.name %}
+        <div class="block-officer-name">{{ o.name }}</div>
+        {% endif %}
+        {% if d.get('show_phone') and o.phone %}
+        <div class="block-officer-phone"><a href="tel:{{ o.phone|replace(' ', '')|replace('-', '')|replace('(', '')|replace(')', '') }}">{{ o.phone }}</a></div>
+        {% endif %}
+        {% if d.get('show_email') and o.email %}
+        <div class="block-officer-email"><a href="mailto:{{ o.email }}">{{ o.email }}</a></div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% elif t == 'library' %}
+    {# Library block — pulls a Library + its items at request time so
+       admin edits to items propagate to every page that references the
+       library. Three styles share the same data shape:
+         • bulleted  → <ul> with markers, title-only (linked when the
+           item carries a file or external URL)
+         • list      → <div> stack with title + optional description
+         • cards     → grid of cards with optional thumbnail + title +
+           description + category chips
+       Granular mode (`mode='granular'`) filters to only the selected
+       item ids. The renderer drops items whose links can't be resolved
+       (no file + no URL + no body) silently. #}
+    {%- set _lib_data = library_block_data(d.get('library_id') or 0,
+                                            d.get('mode') or 'all',
+                                            d.get('item_ids') or [],
+                                            d.get('sort') or 'manual') -%}
+    {%- set _lib = _lib_data[0] -%}
+    {%- set _items = _lib_data[1] -%}
+    {%- set _max_items = (d.get('max_items') or 0) | int -%}
+    {%- set _load_step = (d.get('load_step') or _max_items or 0) | int -%}
+    {%- if _load_step <= 0 %}{%- set _load_step = _max_items -%}{%- endif -%}
+    {%- set _has_more = _max_items > 0 and _items|length > _max_items -%}
+    {% if _lib and _items %}
+    {# `data-lib-block-max` is the *current* visible count managed by
+       app.js; we seed it with max_items so the Load More handler can
+       step through `data-lib-block-step` items at a time. The CSS rule
+       on `.block-library-hidden` defaults to display:none — reveal on
+       a row happens by clearing that class via JS. #}
+    <div class="block block-library block-library-style-{{ d.get('style') or 'cards' }}"
+         {% if _has_more %}data-lib-block-max="{{ _max_items }}" data-lib-block-step="{{ _load_step }}"{% endif %}>
+      {% if d.get('title') %}
+      <h3 class="block-library-title">{{ d.get('title') }}</h3>
+      {% endif %}
+      {% if (d.get('style') or 'cards') == 'bulleted' %}
+        <ul class="block-library-bulleted">
+          {% for it in _items %}
+          <li{% if _has_more and loop.index0 >= _max_items %} class="block-library-hidden" data-lib-block-item{% endif %}>
+            {% if it.stored_filename %}
+              <a href="{{ url_for('public.public_file', filename=it.original_filename) }}" target="_blank" rel="noopener">{{ it.title }}</a>
+            {% elif it.url %}
+              <a href="{{ it.url }}" target="_blank" rel="noopener">{{ it.title }}</a>
+            {% else %}
+              <span>{{ it.title }}</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      {% elif (d.get('style') or 'cards') == 'list' %}
+        <div class="block-library-list">
+          {% for it in _items %}
+          <div class="block-library-list-item{% if _has_more and loop.index0 >= _max_items %} block-library-hidden{% endif %}"
+               {% if _has_more and loop.index0 >= _max_items %}data-lib-block-item{% endif %}>
+            <div class="block-library-list-title">
+              {% if it.stored_filename %}
+                <a href="{{ url_for('public.public_file', filename=it.original_filename) }}" target="_blank" rel="noopener">{{ it.title }}</a>
+              {% elif it.url %}
+                <a href="{{ it.url }}" target="_blank" rel="noopener">{{ it.title }}</a>
+              {% else %}
+                <span>{{ it.title }}</span>
+              {% endif %}
+            </div>
+            {% if d.get('show_description') and it.body %}
+            <div class="block-library-list-desc">{{ it.body|truncate(220, True, '…') }}</div>
+            {% endif %}
+            {% if d.get('show_categories') and it.categories %}
+            <div class="block-library-cats">
+              {% for c in it.categories %}<span class="block-library-cat">{{ c.name }}</span>{% endfor %}
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        {%- set _cols = (d.get('columns') or 2) | int -%}
+        {%- if _cols not in [1, 2, 3] %}{%- set _cols = 2 -%}{%- endif -%}
+        {%- set _gap = d.get('gap') or '1rem' -%}
+        <div class="block-library-cards"
+             style="display: grid; grid-template-columns: repeat({{ _cols }}, minmax(0, 1fr)); gap: {{ _gap }};">
+          {% for it in _items %}
+          <div class="block-library-card{% if _has_more and loop.index0 >= _max_items %} block-library-hidden{% endif %}"
+               {% if _has_more and loop.index0 >= _max_items %}data-lib-block-item{% endif %}>
+            {% if d.get('show_thumbnails') and it.thumbnail_filename %}
+            <div class="block-library-card-thumb">
+              <img src="{{ url_for('main.reading_thumbnail', rid=it.id) }}" alt="" loading="lazy">
+            </div>
+            {% endif %}
+            <div class="block-library-card-body">
+              <div class="block-library-card-title">
+                {% if it.stored_filename %}
+                  <a href="{{ url_for('public.public_file', filename=it.original_filename) }}" target="_blank" rel="noopener">{{ it.title }}</a>
+                {% elif it.url %}
+                  <a href="{{ it.url }}" target="_blank" rel="noopener">{{ it.title }}</a>
+                {% else %}
+                  <span>{{ it.title }}</span>
+                {% endif %}
+              </div>
+              {% if d.get('show_description') and it.body %}
+              <div class="block-library-card-desc">{{ it.body|truncate(180, True, '…') }}</div>
+              {% endif %}
+              {% if d.get('show_categories') and it.categories %}
+              <div class="block-library-cats">
+                {% for c in it.categories %}<span class="block-library-cat">{{ c.name }}</span>{% endfor %}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if _has_more %}
+      <div class="block-library-more">
+        <button type="button" class="block-library-more-btn" data-lib-block-more
+                aria-label="Show more items from this library">
+          Load more
+          <span class="block-library-more-count" data-lib-block-more-count>({{ _items|length - _max_items }} more)</span>
+        </button>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% if _has_more %}
+    <script>
+    /* Library block "Load more" handler. Single delegated click listener
+       handles every library block on the page; clicking the button
+       reveals the next `data-lib-block-step` hidden rows and removes
+       itself once nothing's left. The window flag makes this safe to
+       emit once per library block — only the first instance binds. */
+    (function () {
+      if (window.__tspLibBlockMoreBound) return;
+      window.__tspLibBlockMoreBound = true;
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-lib-block-more]');
+        if (!btn) return;
+        var block = btn.closest('.block-library');
+        if (!block) return;
+        var step = parseInt(block.getAttribute('data-lib-block-step'), 10) || 0;
+        if (step <= 0) step = 12;
+        var hidden = block.querySelectorAll('.block-library-hidden');
+        var revealed = 0;
+        for (var i = 0; i < hidden.length && revealed < step; i++) {
+          hidden[i].classList.remove('block-library-hidden');
+          revealed++;
+        }
+        var stillHidden = block.querySelectorAll('.block-library-hidden').length;
+        if (stillHidden === 0) {
+          var more = btn.closest('.block-library-more');
+          if (more) more.parentNode.removeChild(more);
+        } else {
+          var countEl = btn.querySelector('[data-lib-block-more-count]');
+          if (countEl) countEl.textContent = '(' + stillHidden + ' more)';
+        }
+      });
+    })();
+    </script>
+    {% endif %}
   {% elif t == 'separator' %}
     <hr class="block block-separator">
+  {% elif t == 'icon' %}
+    {# Icon block — renders the icon helper's inline SVG (or <img> for
+       custom icons) inside an aligned wrapper. Size is applied as
+       `font-size` because `.icon` is sized in em units. Dark-mode
+       colour rides `--tsp-color-dm` per the project-wide convention. #}
+    {% set _icon_styles = [] %}
+    {% if d.get('size') %}{% set _ = _icon_styles.append('font-size: ' ~ d.get('size') ~ 'px') %}{% endif %}
+    {% if d.get('color') %}{% set _ = _icon_styles.append('color: ' ~ (d.get('color')|css_color)) %}{% endif %}
+    {% if d.get('color_dark') %}{% set _ = _icon_styles.append('--tsp-color-dm: ' ~ (d.get('color_dark')|css_color)) %}{% endif %}
+    {% set _icon_align = d.get('align') or 'center' %}
+    <div class="block block-icon block-icon--{{ _icon_align }}"{% if _icon_styles %} style="{{ _icon_styles | join('; ') }}"{% endif %}>
+      {% if d.get('url') %}<a href="{{ d.get('url') }}"{% if d.get('new_tab') %} target="_blank" rel="noopener"{% endif %}>{% endif %}
+      {% if d.get('name') %}{{ icon(d.get('name')) }}{% endif %}
+      {% if d.get('url') %}</a>{% endif %}
+    </div>
+  {% elif t == 'button' %}
+    {{ render_button_block(d) }}
+  {% elif t == 'container' %}
+    {{ render_container_block(d) }}
   {% endif %}
+{% endmacro %}
+
+{# Container block — recursive layout primitive. Resolves the stored
+   data into inline CSS (display + flex/grid axes + spacing + visual
+   chrome) and recurses through its `blocks` array. Hover styling is
+   driven by CSS custom properties consumed by `.block-container:hover`
+   so each container can carry its own hover recipe without bloating
+   the stylesheet with per-instance rules. #}
+{% set _BLOCK_CONT_SHADOW = {
+  'none': 'none',
+  'sm':   '0 2px 6px rgba(15,23,42,0.08)',
+  'md':   '0 8px 24px rgba(15,23,42,0.10)',
+  'lg':   '0 14px 40px rgba(15,23,42,0.14)',
+  'xl':   '0 24px 60px rgba(15,23,42,0.18)',
+} %}
+{% macro render_container_block(d) %}
+  {% set _styles = [] %}
+  {% set _disp = d.display or 'flex' %}
+  {% set _ = _styles.append('display: ' ~ _disp) %}
+  {% if _disp == 'grid' %}
+    {% set _ = _styles.append('grid-template-columns: ' ~ (d.grid_columns or 'repeat(2, 1fr)')) %}
+  {% else %}
+    {% set _ = _styles.append('flex-direction: ' ~ (d.direction or 'column')) %}
+    {% if d.wrap %}{% set _ = _styles.append('flex-wrap: wrap') %}{% endif %}
+  {% endif %}
+  {% set _ = _styles.append('justify-content: ' ~ (d.justify or 'flex-start')) %}
+  {% set _ = _styles.append('align-items: ' ~ (d.align or 'stretch')) %}
+  {% set _ = _styles.append('gap: ' ~ (d.gap or '1rem')) %}
+  {% set _ = _styles.append('padding: ' ~ (d.padding or '1rem')) %}
+
+  {% if d.bg_color %}{% set _ = _styles.append('background-color: ' ~ (d.bg_color|css_color)) %}{% endif %}
+  {% if d.get('bg_color_dark') %}{% set _ = _styles.append('--tsp-bg-dm: ' ~ (d.get('bg_color_dark')|css_color)) %}{% endif %}
+  {% set _bw = (d.border_width if d.border_width is not none else 0) | int %}
+  {% if _bw and (d.border_style or 'solid') != 'none' %}
+    {% set _ = _styles.append('border: ' ~ _bw ~ 'px ' ~ (d.border_style or 'solid') ~ ' ' ~ ((d.border_color|css_color) or 'currentColor')) %}
+  {% endif %}
+  {% if d.get('border_color_dark') %}{% set _ = _styles.append('--tsp-border-dm: ' ~ (d.get('border_color_dark')|css_color)) %}{% endif %}
+  {% set _br = (d.border_radius if d.border_radius is not none else 0) | int %}
+  {% if _br %}{% set _ = _styles.append('border-radius: ' ~ _br ~ 'px') %}{% endif %}
+
+  {% if (d.width_mode or 'boxed') == 'boxed' %}
+    {% set _mw = (d.max_width or 0) | int %}
+    {% if _mw > 0 %}
+      {% set _ = _styles.append('max-width: ' ~ _mw ~ 'px') %}
+      {% set _ = _styles.append('margin-left: auto') %}
+      {% set _ = _styles.append('margin-right: auto') %}
+    {% endif %}
+  {% endif %}
+
+  {% set _shadow = _BLOCK_CONT_SHADOW.get(d.shadow or 'none', 'none') %}
+  {% set _ = _styles.append('--block-cont-shadow: ' ~ _shadow) %}
+  {% set _ = _styles.append('box-shadow: var(--block-cont-shadow)') %}
+
+  {# Hover behaviour gates on per-property classes so an unset hover
+     value leaves the original property alone (rather than reverting
+     to `initial` via an empty `var()` fallback). Each class wires
+     its CSS rule to the matching custom property. #}
+  {% set _hover_classes = [] %}
+  {% if d.hover_bg_color %}
+    {% set _ = _styles.append('--block-cont-hover-bg: ' ~ (d.hover_bg_color|css_color)) %}
+    {% set _ = _hover_classes.append('block-container--hover-bg') %}
+  {% endif %}
+  {% if d.hover_border_color %}
+    {% set _ = _styles.append('--block-cont-hover-border: ' ~ (d.hover_border_color|css_color)) %}
+    {% set _ = _hover_classes.append('block-container--hover-border') %}
+  {% endif %}
+  {% if d.hover_shadow %}
+    {% set _hs = _BLOCK_CONT_SHADOW.get(d.hover_shadow, '') %}
+    {% if _hs %}
+      {% set _ = _styles.append('--block-cont-hover-shadow: ' ~ _hs) %}
+      {% set _ = _hover_classes.append('block-container--hover-shadow') %}
+    {% endif %}
+  {% endif %}
+  {% if d.hover_lift %}{% set _ = _hover_classes.append('block-container--hover-lift') %}{% endif %}
+
+  {%- set _bdyn_active = d.get('bg_dynamic_key') or d.get('bg_dynbg_overlay') -%}
+  {%- set _bdyn_pseudo_cfg = {'overlay': d.get('bg_dynbg_overlay'),
+                              'colors': d.get('bg_dynbg_colors') or [],
+                              'overlay_scope': d.get('bg_dynbg_overlay_scope'),
+                              'overlay_size': d.get('bg_dynbg_overlay_size'),
+                              'overlay_intensity': d.get('bg_dynbg_overlay_intensity'),
+                              'randomize_colors': d.get('bg_dynbg_randomize_colors') or d.get('bg_dynbg_randomize'),
+                              'randomize_positions': d.get('bg_dynbg_randomize_positions') or d.get('bg_dynbg_randomize')} -%}
+  {%- if _bdyn_active -%}
+    {%- set _bdyn_colors = dynbg_resolve_colors(_bdyn_pseudo_cfg) -%}
+    {%- for _c in _bdyn_colors -%}
+      {%- set _ = _styles.append('--fe-dynbg-c' ~ loop.index ~ ': ' ~ _c) -%}
+    {%- endfor -%}
+    {%- set _bdyn_pos = dynbg_resolve_positions(_bdyn_pseudo_cfg, d.get('bg_dynamic_key')) -%}
+    {%- if _bdyn_pos -%}{%- set _ = _styles.append(_bdyn_pos) -%}{%- endif -%}
+  {%- endif -%}
+  <div class="block block-container block-container--{{ _disp }}{% if _bdyn_active %} fe-dynbg-host{% endif %}{% if _hover_classes %} {{ _hover_classes | join(' ') }}{% endif %}"
+       style="{{ _styles | join('; ') }}">
+    {% if _bdyn_active %}
+      {% with dynbg_key=d.get('bg_dynamic_key'),
+               dynbg_config=_bdyn_pseudo_cfg %}
+        {% include "frontend/_dynbg_apply.html" %}
+      {% endwith %}
+    {% endif %}
+    {% for child in (d.get('blocks', []) or []) %}{{ render_block(child) }}{% endfor %}
+  </div>
+{% endmacro %}
+
+{# Resolves a button block's stored data into a final <a class … style …>.
+   Style names map to .fe-btn-primary / .fe-btn-ghost. 'custom' emits
+   only the values that were actually set, leaving the rest to fall
+   through .fe-btn-custom's `var(--btn-…, default)` consumers — so a
+   half-configured custom button still reads correctly. #}
+{% macro render_button_block(d) %}
+  {% set _align = (d.align or 'left') %}
+  {% set _style = (d.style or 'primary') %}
+  {% set _classes = ['fe-btn'] %}
+  {% if _style == 'primary' %}{% set _ = _classes.append('fe-btn-primary') %}
+  {% elif _style == 'secondary' %}{% set _ = _classes.append('fe-btn-ghost') %}
+  {% else %}{% set _ = _classes.append('fe-btn-custom') %}
+  {% endif %}
+  {% set _vars = [] %}
+  {% if _style == 'custom' %}
+    {% if d.bg %}{% set _ = _vars.append('--btn-bg: ' ~ (d.bg|css_color)) %}{% endif %}
+    {% if d.hover_bg %}{% set _ = _vars.append('--btn-hover-bg: ' ~ (d.hover_bg|css_color)) %}{% endif %}
+    {% if d.text_color %}{% set _ = _vars.append('--btn-text: ' ~ (d.text_color|css_color)) %}{% endif %}
+    {% if d.hover_text %}{% set _ = _vars.append('--btn-hover-text: ' ~ (d.hover_text|css_color)) %}{% endif %}
+    {% if d.border %}{% set _ = _vars.append('--btn-border: ' ~ (d.border|css_color)) %}{% endif %}
+    {% if d.hover_border %}{% set _ = _vars.append('--btn-hover-border: ' ~ (d.hover_border|css_color)) %}{% endif %}
+    {% if d.shadow %}{% set _ = _vars.append('--btn-shadow-color: ' ~ (d.shadow|css_color)) %}{% endif %}
+  {% endif %}
+  <p class="block block-button block-button-align-{{ _align }}">
+    <a class="{{ _classes | join(' ') }}"
+       href="{{ d.url or '#' }}"
+       {% if d.new_tab %}target="_blank" rel="noopener"{% endif %}
+       {% if _vars %}style="{{ _vars | join('; ') }}"{% endif %}>
+      {{ d.label or 'Click here' }}
+    </a>
+  </p>
 {% endmacro %}

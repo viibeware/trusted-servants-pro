@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block heading %}Contact Form{% endblock %}
+{% block heading_help %}Configures the public contact-us form at <code>/contact</code>. Visitor messages email the public information chair (with reply-to set to the visitor) and persist in the Contact Form admin section so nothing is lost when the email lands in spam.{% endblock %}
+{% block top_actions %}
+<a class="btn" href="{{ url_for('main.frontend_forms') }}">← All forms</a>
+<a class="btn" href="{{ url_for('frontend.contact') }}" target="_blank" rel="noopener">Preview /contact ↗</a>
+<a class="btn" href="{{ url_for('main.contact_form') }}">View messages</a>
+{% endblock %}
+{% block content %}
+<div class="fe-admin-layout">
+  {% include "_frontend_subnav.html" %}
+  <div class="fe-admin-main">
+
+    <form class="form" method="post" action="{{ url_for('main.frontend_form_contact') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Visibility</h2>
+          <span class="muted smaller">Off-switch for the contact page site-wide. When off, <code>/contact</code> returns 404 and any nav link pointed at the form falls back to its URL. Settings below are preserved when off.</span>
+        </div>
+        <li class="special-page-row" style="list-style:none; padding: 1rem;">
+          <div class="special-page-info">
+            <div class="u-name">Contact form enabled</div>
+            <p class="muted small">Hard off-switch. Settings below are preserved when off.</p>
+          </div>
+          <label class="mode-toggle">
+            <input type="checkbox" name="contact_form_enabled" value="1"
+                   {% if site.contact_form_enabled %}checked{% endif %}>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+          </label>
+        </li>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Recipient</h2>
+          <span class="muted smaller">Where messages are emailed. Comma-separated for multiple recipients. Replies in your inbox go straight to the visitor — the message is sent with <code>Reply-To</code> set to the email they typed in the form.</span>
+        </div>
+        <label>Public information chair email
+          <input type="text" name="contact_form_to" maxlength="500"
+                 value="{{ site.contact_form_to or '' }}"
+                 placeholder="{{ site.pic_email or 'pic@example.com' }}">
+        </label>
+        <p class="muted small">Configured fallbacks: <code>{{ site.pic_email or '(PIC email not set)' }}</code> → <code>{{ site.access_request_to or '(access-request recipients not set)' }}</code>. The recipient most-specifically configured wins.</p>
+      </section>
+
+      <p class="muted small" style="margin: 0 0 0.5rem;">
+        Looking for the page heading, subheading, intro, or PIC contact-panel toggles? Those live on the <a href="{{ url_for('main.frontend_templates') }}#fe-tplgrid-contact">Templates page</a> alongside the layout preview — this page is for form mechanics only.
+      </p>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Form behaviour</h2>
+          <span class="muted smaller">What the visitor sees and which fields are required.</span>
+        </div>
+        <fieldset class="fieldset">
+          <legend>Visible fields</legend>
+          <label class="check">
+            <input type="checkbox" name="contact_form_show_phone" value="1"
+                   {% if site.contact_form_show_phone %}checked{% endif %}>
+            <span><b>Show the phone field</b> <span class="muted smaller">— always optional for the visitor.</span></span>
+          </label>
+          <label class="check">
+            <input type="checkbox" name="contact_form_subject_required" value="1"
+                   {% if site.contact_form_subject_required %}checked{% endif %}>
+            <span><b>Require a subject line</b> <span class="muted smaller">— blocks submission until the visitor fills it in.</span></span>
+          </label>
+        </fieldset>
+        <label>Submit button label
+          <input type="text" name="contact_form_submit_label" maxlength="100"
+                 value="{{ site.contact_form_submit_label or '' }}"
+                 placeholder="Send message">
+        </label>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Confirmation</h2>
+          <span class="muted smaller">Shown to the visitor after a successful submission.</span>
+        </div>
+        <label>Success message
+          <textarea name="contact_form_success_message" rows="2" maxlength="500"
+                    placeholder="Thanks — your message has been sent. We'll be in touch shortly.">{{ site.contact_form_success_message or '' }}</textarea>
+        </label>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Bot protection</h2>
+          <span class="muted smaller">A hidden honeypot field traps simple form-fillers automatically. Cloudflare Turnstile rides on the existing site-wide setting — when it's on for the login page, it's on for this form too.</span>
+        </div>
+        <p class="muted small" style="margin: 0;">
+          Turnstile is currently
+          {% if site.turnstile_enabled and site.turnstile_site_key %}<b>enabled</b>{% else %}<b>disabled</b>{% endif %}.
+          Configure it on <a href="{{ url_for('main.index') }}">Settings → Login &amp; security</a>.
+        </p>
+      </section>
+
+      <div class="form-actions">
+        <button class="btn btn-primary">Save contact form</button>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endblock %}

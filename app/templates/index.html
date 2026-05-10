@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_dash_widget.html" import dash_widget with context %}
 {% block heading %}Dashboard{% endblock %}
 {% block heading_help %}Your home view — see upcoming meetings, recent activity, and quick links to the areas of the portal you use most.{% endblock %}
 {% block top_actions %}
@@ -108,13 +109,8 @@
   {% endif %}
 
   {% if widget_key == 'meetings' and current_user.dash_show_meetings %}
-  <div class="dash-widget" data-widget-key="meetings" {% if can_reorder %}draggable="true"{% endif %}>
-    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
-    <section class="card">
-      <div class="card-head">
-        <h2>Recent Meetings</h2>
-        <a href="{{ url_for('main.meetings') }}" class="link">View all {{ icon('arrow-right') }}</a>
-      </div>
+    {% call dash_widget(key='meetings', title='Recent Meetings',
+                         view_all_url=url_for('main.meetings')) %}
       {% if meetings %}
       <ul class="list">
         {% for m in meetings[:6] %}
@@ -122,18 +118,12 @@
         {% endfor %}
       </ul>
       {% else %}<p class="muted">No meetings yet.</p>{% endif %}
-    </section>
-  </div>
+    {% endcall %}
   {% endif %}
 
   {% if widget_key == 'libraries' and current_user.dash_show_libraries %}
-  <div class="dash-widget" data-widget-key="libraries" {% if can_reorder %}draggable="true"{% endif %}>
-    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
-    <section class="card">
-      <div class="card-head">
-        <h2>Libraries</h2>
-        <a href="{{ url_for('main.libraries') }}" class="link">View all {{ icon('arrow-right') }}</a>
-      </div>
+    {% call dash_widget(key='libraries', title='Libraries',
+                         view_all_url=url_for('main.libraries')) %}
       {% if libraries %}
       <ul class="list">
         {% for l in libraries[:6] %}
@@ -141,18 +131,12 @@
         {% endfor %}
       </ul>
       {% else %}<p class="muted">No libraries yet.</p>{% endif %}
-    </section>
-  </div>
+    {% endcall %}
   {% endif %}
 
   {% if widget_key == 'files' and current_user.dash_show_files %}
-  <div class="dash-widget" data-widget-key="files" {% if can_reorder %}draggable="true"{% endif %}>
-    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
-    <section class="card">
-      <div class="card-head">
-        <h2>Recent Files</h2>
-        <a href="{{ url_for('main.media_list') }}" class="link">View all {{ icon('arrow-right') }}</a>
-      </div>
+    {% call dash_widget(key='files', title='Recent Files',
+                         view_all_url=url_for('main.media_list')) %}
       {% if recent_files %}
       <ul class="list">
         {% for f in recent_files %}
@@ -160,8 +144,7 @@
         {% endfor %}
       </ul>
       {% else %}<p class="muted">No files uploaded yet.</p>{% endif %}
-    </section>
-  </div>
+    {% endcall %}
   {% endif %}
 
   {% if widget_key == 'currently-online' and current_user.is_admin() and current_user.dash_show_currently_online %}
@@ -172,13 +155,9 @@
   {% endif %}
 
   {% if widget_key == 'deletions' and current_user.is_admin() and current_user.dash_show_deletions %}
-  <div class="dash-widget" data-widget-key="deletions" {% if can_reorder %}draggable="true"{% endif %}>
-    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
-    <section class="card">
-      <div class="card-head">
-        <h2>Recent Deletions</h2>
-        <a href="{{ url_for('main.delete_log') }}" class="link">Open Delete Log {{ icon('arrow-right') }}</a>
-      </div>
+    {% call dash_widget(key='deletions', title='Recent Deletions',
+                         view_all_url=url_for('main.delete_log'),
+                         view_all_label='Open Delete Log') %}
       {% if recent_deletions %}
       <ul class="list dash-deletions-list">
         {% for d in recent_deletions %}
@@ -194,8 +173,23 @@
       </ul>
       <div class="dash-deletions-foot muted smaller">Files are restorable for 30 days.</div>
       {% else %}<p class="muted">Nothing in the recycle bin.</p>{% endif %}
-    </section>
-  </div>
+    {% endcall %}
+  {% endif %}
+
+  {% if widget_key == 'contact-form' and current_user.is_admin() and current_user.dash_show_contact_form %}
+    {% call dash_widget(key='contact-form', title='Contact Form',
+                         view_all_url=url_for('main.contact_form'),
+                         view_all_label='View inbox',
+                         badge_count=unread_contact_count,
+                         badge_title='Unread messages') %}
+      {% if unread_contacts %}
+      <ul class="list">
+        {% for c in unread_contacts %}
+        <li><a href="{{ url_for('main.contact_form') }}"><span>{{ c.name }}{% if c.subject %} — {{ c.subject }}{% endif %}</span><span class="muted">{{ c.created_at.strftime('%b %d') }}</span></a></li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted">No unread messages — inbox is clear.</p>{% endif %}
+    {% endcall %}
   {% endif %}
 
   {% if widget_key == 'access-requests' and current_user.is_admin() and current_user.dash_show_access_requests %}
@@ -284,6 +278,16 @@
             </div>
             <label class="mode-toggle" title="Show Access Requests &amp; Locked Accounts">
               <input type="checkbox" name="dash_show_access_requests" value="1" {% if current_user.dash_show_access_requests %}checked{% endif %}>
+              <span class="mode-track"><span class="mode-thumb"></span></span>
+            </label>
+          </li>
+          <li class="special-page-row">
+            <div class="special-page-info">
+              <div class="u-name">Contact Form</div>
+              <p class="muted small">Unread submissions from the public /contact form. Highlights when there's something to read; quiet when the inbox is clear.</p>
+            </div>
+            <label class="mode-toggle" title="Show Contact Form">
+              <input type="checkbox" name="dash_show_contact_form" value="1" {% if current_user.dash_show_contact_form %}checked{% endif %}>
               <span class="mode-track"><span class="mode-thumb"></span></span>
             </label>
           </li>

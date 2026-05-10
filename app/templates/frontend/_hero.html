@@ -50,9 +50,20 @@
   {% endif %}
 {% endif %}
 
-<section class="fe-hero fe-hero-bg-{{ _bg_style }}{{ _dyn_class }}"
-         {% if _hero_style %}style="{{ _hero_style }}"{% endif %}
+{%- set _hero_cfg = dynbg_decode(site.frontend_hero_bg_dynbg_config_json if site else None) -%}
+{%- set _hero_color_vars = dynbg_colors_css(dynbg_resolve_colors(_hero_cfg)) -%}
+{%- set _hero_pos_vars = dynbg_resolve_positions(_hero_cfg, site.frontend_hero_bg_dynamic_key if site else "") -%}
+{%- set _hero_dynbg_inline = (_hero_color_vars ~ " " ~ _hero_pos_vars) | trim -%}
+{%- set _hero_dynbg_active = _bg_style == 'dynamic' and ((site and site.frontend_hero_bg_dynamic_key) or _hero_cfg.overlay) -%}
+<section class="fe-hero fe-hero-bg-{{ _bg_style }}{{ _dyn_class }}{% if _hero_dynbg_active %} fe-dynbg-host{% endif %}"
+         {% if _hero_style or (_hero_dynbg_active and _hero_dynbg_inline) %}style="{{ _hero_style }}{% if _hero_dynbg_active and _hero_dynbg_inline %} {{ _hero_dynbg_inline }}{% endif %}"{% endif %}
          {% if _bg_style == 'sinewave' and site and site.frontend_hero_sinewave_colors %}data-sinewave-colors='{{ site.frontend_hero_sinewave_colors }}'{% endif %}>
+  {% if _hero_dynbg_active %}
+    {% with dynbg_key=(site.frontend_hero_bg_dynamic_key if site else ''),
+             dynbg_config=(site.frontend_hero_bg_dynbg_config_json if site else None) %}
+      {% include "frontend/_dynbg_apply.html" %}
+    {% endwith %}
+  {% endif %}
   {% if _bg_style == 'frosty' %}
     {% set _hue_a = site.frontend_hero_bg_hue if site else 225 %}
     {% set _hue_b = site.frontend_hero_bg_hue_2 if site else 170 %}

@@ -147,6 +147,13 @@
       <a class="fe-btn fe-btn-ghost"
          href="{{ _maps_url }}" target="_blank" rel="noopener">Get Directions</a>
       {% endif %}
+      {% if m.schedules %}
+      <a class="fe-btn fe-btn-ghost fe-mlist-card-ics"
+         href="{{ url_for('frontend.meeting_calendar_ics', slug=m.public_slug) }}"
+         download="{{ m.public_slug }}.ics">
+        {{ icon('calendar-check') }} Add to Calendar
+      </a>
+      {% endif %}
       <a class="fe-mlist-card-permalink" href="{{ _meeting_url }}">View Meeting →</a>
     </div>
   </div>
@@ -211,6 +218,13 @@
     {% endif %}
     {% if _has_loc %}
     <a class="fe-btn fe-btn-ghost" href="{{ _maps_url }}" target="_blank" rel="noopener">Get Directions</a>
+    {% endif %}
+    {% if m.schedules %}
+    <a class="fe-btn fe-btn-ghost fe-mlist-card-ics"
+       href="{{ url_for('frontend.meeting_calendar_ics', slug=m.public_slug) }}"
+       download="{{ m.public_slug }}.ics">
+      {{ icon('calendar-check') }} Add to Calendar
+    </a>
     {% endif %}
     <a class="fe-mlist-card-permalink" href="{{ _meeting_url }}">Open page →</a>
   </div>

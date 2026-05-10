@@ -1,0 +1,249 @@
+{# Magazine layout — featured story as a hero with cover image; the
+   remaining stories as a 3-up grid of illustrated cards. Serif
+   headlines, sans-serif bylines, modern editorial polish. #}
+{% set _featured = (all_stories | selectattr('is_featured') | list)[:1] %}
+{% set _hero = _featured[0] if _featured else (all_stories[0] if all_stories else None) %}
+{% set _rest = all_stories | rejectattr('id', 'equalto', _hero.id if _hero else 0) | list %}
+<section class="fe-stories fe-stories-mag fe-stories-list--w-{{ list_width_mode }}">
+  <div class="{% if list_width_mode == 'boxed' %}fe-container{% else %}fe-stories-fullwrap{% endif %}"
+       {% if list_width_mode == 'boxed' %}style="max-width: {{ list_max_width }}px;"
+       {%- elif list_padding_pct %}style="padding-left: {{ list_padding_pct }}vw; padding-right: {{ list_padding_pct }}vw;"{% endif %}>
+
+    <header class="fe-stories-mag-head">
+      <h1 class="fe-stories-mag-title">{{ list_heading or 'Stories' }}</h1>
+      {% if list_subheading %}<p class="fe-stories-mag-sub">{{ list_subheading }}</p>{% endif %}
+    </header>
+
+    {% if not all_stories %}
+    <p class="fe-stories-mag-empty">No stories yet — check back soon.</p>
+    {% else %}
+      {% if _hero %}
+      <a class="fe-stories-mag-hero" href="{{ url_for('frontend.story_detail', slug=_hero.public_slug) }}">
+        <span class="fe-stories-mag-hero-img" aria-hidden="true">
+          {% if _hero.featured_image_filename %}
+          <img src="{{ url_for('public.story_featured_image', sid=_hero.id, thumb=720) }}"
+               alt="" loading="lazy">
+          {% else %}
+          <span class="fe-stories-mag-hero-fallback"></span>
+          {% endif %}
+        </span>
+        <span class="fe-stories-mag-hero-body">
+          <span class="fe-stories-mag-hero-eyebrow">{% if _hero.is_featured %}Featured story{% else %}Latest{% endif %}</span>
+          <h2 class="fe-stories-mag-hero-title">{{ _hero.title }}</h2>
+          {% if _hero.summary %}<p class="fe-stories-mag-hero-deck">{{ _hero.summary }}</p>{% endif %}
+          <span class="fe-stories-mag-hero-meta">
+            {% if _hero.author_name %}<span>{{ _hero.author_name }}</span>{% endif %}
+            {% if _hero.author_name and _hero.display_date %}<span class="fe-stories-mag-meta-dot">·</span>{% endif %}
+            {% if _hero.display_date %}<span>{{ _hero.display_date.strftime('%B %-d, %Y') }}</span>{% endif %}
+          </span>
+        </span>
+      </a>
+      {% endif %}
+
+      {% if _rest %}
+      <div class="fe-stories-mag-grid">
+        {% for story in _rest %}
+        <a class="fe-stories-mag-card" href="{{ url_for('frontend.story_detail', slug=story.public_slug) }}">
+          <span class="fe-stories-mag-card-img" aria-hidden="true">
+            {% if story.featured_image_filename %}
+            <img src="{{ url_for('public.story_featured_image', sid=story.id, thumb=400) }}"
+                 alt="" loading="lazy">
+            {% else %}
+            <span class="fe-stories-mag-card-fallback"></span>
+            {% endif %}
+          </span>
+          <span class="fe-stories-mag-card-body">
+            {% if story.is_featured %}<span class="fe-stories-mag-card-pin">Featured</span>{% endif %}
+            <h3 class="fe-stories-mag-card-title">{{ story.title }}</h3>
+            {% if story.summary %}<p class="fe-stories-mag-card-deck">{{ story.summary }}</p>{% endif %}
+            <span class="fe-stories-mag-card-meta">
+              {% if story.author_name %}{{ story.author_name }}{% endif %}
+              {% if story.author_name and story.display_date %} · {% endif %}
+              {% if story.display_date %}{{ story.display_date.strftime('%b %Y') }}{% endif %}
+            </span>
+          </span>
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endif %}
+  </div>
+</section>
+
+<style>
+  .fe-stories-mag {
+    --mag-bg: var(--tpl-bg, var(--surface, #faf8f4));
+    --mag-card: var(--surface-alt, #ffffff);
+    --mag-ink: var(--ink, #1c1812);
+    --mag-ink-soft: rgba(28,24,18,.6);
+    --mag-rule: rgba(28,24,18,.10);
+    --mag-accent: #8a3713;
+    background: var(--mag-bg);
+    color: var(--mag-ink);
+    padding: clamp(3rem, 6vw, 5rem) 0 clamp(4rem, 8vw, 7rem);
+    font-family: var(--tpl-body-font, 'Inter', system-ui, sans-serif);
+  }
+  [data-theme="dark"] .fe-stories-mag {
+    --mag-bg: var(--tpl-bg, var(--surface, #14110d));
+    --mag-card: var(--surface-alt, #1d1812);
+    --mag-ink: var(--ink, #ece1c8);
+    --mag-ink-soft: rgba(236,225,200,.55);
+    --mag-rule: rgba(236,225,200,.12);
+    --mag-accent: #d8794d;
+  }
+  .fe-stories-mag-head { text-align: center; margin-bottom: clamp(2.5rem, 5vw, 4rem); }
+  .fe-stories-mag-eyebrow {
+    display: inline-block;
+    font-size: .72rem;
+    letter-spacing: .26em;
+    text-transform: uppercase;
+    color: var(--mag-accent);
+    margin-bottom: 1rem;
+  }
+  .fe-stories-mag-title {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-size: clamp(2.4rem, 5.4vw, 4rem);
+    line-height: 1.05;
+    margin: 0;
+    letter-spacing: -.01em;
+  }
+  .fe-stories-mag-sub {
+    margin: 1.25rem auto 0;
+    max-width: 36rem;
+    color: var(--mag-ink-soft);
+    line-height: 1.65;
+  }
+  .fe-stories-mag-empty { text-align: center; color: var(--mag-ink-soft); font-style: italic; padding: 2rem 0; }
+
+  .fe-stories-mag-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    background: var(--mag-card);
+    border-radius: 16px;
+    overflow: hidden;
+    color: inherit;
+    text-decoration: none;
+    margin-bottom: clamp(2rem, 4vw, 3rem);
+    box-shadow: 0 1px 0 rgba(0,0,0,.03), 0 12px 28px -10px rgba(40,30,15,.18);
+    transition: transform .25s ease, box-shadow .25s ease;
+  }
+  @media (max-width: 760px) { .fe-stories-mag-hero { grid-template-columns: 1fr; } }
+  .fe-stories-mag-hero:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 24px 48px -16px rgba(40,30,15,.28);
+  }
+  .fe-stories-mag-hero-img {
+    aspect-ratio: 16 / 11;
+    background: linear-gradient(135deg, #d9c9a3, #a98c5b);
+    overflow: hidden;
+  }
+  .fe-stories-mag-hero-img img { width: 100%; height: 100%; object-fit: cover; }
+  .fe-stories-mag-hero-fallback {
+    display: block; width: 100%; height: 100%;
+    background:
+      radial-gradient(circle at 20% 20%, rgba(255,255,255,.4), transparent 40%),
+      linear-gradient(135deg, #d9c9a3, #8a3713);
+  }
+  .fe-stories-mag-hero-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(1.75rem, 3.5vw, 3rem);
+  }
+  .fe-stories-mag-hero-eyebrow {
+    font-size: .68rem;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--mag-accent);
+    margin-bottom: .85rem;
+  }
+  .fe-stories-mag-hero-title {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-size: clamp(1.8rem, 3.6vw, 2.6rem);
+    line-height: 1.1;
+    letter-spacing: -.01em;
+    margin: 0 0 .85rem;
+  }
+  .fe-stories-mag-hero-deck {
+    margin: 0 0 1rem;
+    line-height: 1.6;
+    color: var(--mag-ink-soft);
+    font-size: 1.05rem;
+  }
+  .fe-stories-mag-hero-meta {
+    font-size: .85rem;
+    color: var(--mag-ink-soft);
+    letter-spacing: .04em;
+  }
+  .fe-stories-mag-meta-dot { margin: 0 .4rem; opacity: .55; }
+
+  .fe-stories-mag-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(1.25rem, 2.5vw, 2rem);
+  }
+  @media (max-width: 880px) { .fe-stories-mag-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 540px) { .fe-stories-mag-grid { grid-template-columns: 1fr; } }
+  .fe-stories-mag-card {
+    background: var(--mag-card);
+    border-radius: 14px;
+    overflow: hidden;
+    color: inherit;
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 1px 0 rgba(0,0,0,.02), 0 8px 18px -8px rgba(40,30,15,.14);
+    transition: transform .25s ease, box-shadow .25s ease;
+  }
+  .fe-stories-mag-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 18px 36px -12px rgba(40,30,15,.22);
+  }
+  .fe-stories-mag-card-img {
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    background: var(--mag-card);
+  }
+  .fe-stories-mag-card-img img { width: 100%; height: 100%; object-fit: cover; }
+  .fe-stories-mag-card-fallback {
+    display: block; width: 100%; height: 100%;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(255,255,255,.4), transparent 40%),
+      linear-gradient(135deg, #efe2c1, #c69460);
+  }
+  .fe-stories-mag-card-body { padding: 1.25rem 1.25rem 1.5rem; flex: 1; display: flex; flex-direction: column; }
+  .fe-stories-mag-card-pin {
+    align-self: flex-start;
+    background: var(--mag-accent);
+    color: #fff;
+    font-size: .62rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 999px;
+    margin-bottom: .65rem;
+  }
+  .fe-stories-mag-card-title {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-size: 1.3rem;
+    line-height: 1.2;
+    margin: 0 0 .5rem;
+    letter-spacing: -.005em;
+  }
+  .fe-stories-mag-card-deck {
+    margin: 0 0 .85rem;
+    color: var(--mag-ink-soft);
+    line-height: 1.6;
+    font-size: .96rem;
+    flex: 1;
+  }
+  .fe-stories-mag-card-meta {
+    font-size: .78rem;
+    letter-spacing: .04em;
+    color: var(--mag-ink-soft);
+    text-transform: none;
+  }
+</style>

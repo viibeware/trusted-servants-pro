@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Contact Form · Trusted Servants Pro{% endblock %}
+{% block heading %}Contact Form{% endblock %}
+{% block heading_help %}Messages from the public /contact form. Each submission also goes out by email to the configured recipient; this list is the persistent record so nothing is lost when the email lands in spam. Page settings (enable, recipient, copy) live in <a href="{{ url_for('main.frontend_form_contact') }}">Web Frontend → Forms</a>.{% endblock %}
+{% block top_actions %}
+<a class="btn" href="{{ url_for('main.frontend_form_contact') }}">Form settings</a>
+<a class="btn" href="{{ url_for('frontend.contact') }}" target="_blank" rel="noopener">View page ↗</a>
+{% endblock %}
+{% block content %}
+
+{# ── Submissions list ─────────────────────────────────────────────
+   Active vs Archived tabs match the Access Requests UX. Each row
+   shows the message inline so admins don't have to drill into a
+   detail page for short notes; the row also exposes the email
+   delivery status so failed sends are easy to spot.
+
+   Page configuration (visibility, recipient, copy, field options)
+   lives on the Forms admin under Web Frontend so this surface
+   stays focused on triage. #}
+<section class="card">
+  <div class="card-head ar-card-head">
+    <h2>Messages</h2>
+    <div class="ar-view-tabs" role="tablist">
+      <a href="{{ url_for('main.contact_form', view='active') }}"
+         class="ar-view-tab {% if view == 'active' %}is-active{% endif %}"
+         role="tab"
+         aria-selected="{{ 'true' if view == 'active' else 'false' }}">
+        Active
+        {% if active_count %}<span class="ar-view-count">{{ active_count }}</span>{% endif %}
+        {% if unread_count and view == 'active' %}<span class="ar-view-count" title="Unread">{{ unread_count }} new</span>{% endif %}
+      </a>
+      <a href="{{ url_for('main.contact_form', view='archived') }}"
+         class="ar-view-tab {% if view == 'archived' %}is-active{% endif %}"
+         role="tab"
+         aria-selected="{{ 'true' if view == 'archived' else 'false' }}">
+        Archived
+        {% if archived_count %}<span class="ar-view-count">{{ archived_count }}</span>{% endif %}
+      </a>
+    </div>
+  </div>
+  {% if not items %}
+  <p class="muted">
+    {% if view == 'archived' %}No archived messages yet. Click <i>Archive</i> on a handled message to move it here.{% else %}No messages yet. When a visitor submits the contact form, their message will appear here and be emailed to the recipient configured above.{% endif %}
+  </p>
+  {% else %}
+  <div class="contact-list">
+    {% for c in items %}
+    <article class="contact-card{% if not c.is_read %} is-unread{% endif %}">
+      <header class="contact-card-head">
+        <div class="contact-card-meta">
+          <h3 class="contact-card-name">
+            {{ c.name }}
+            {% if not c.is_read %}<span class="badge badge-warning contact-card-new">New</span>{% endif %}
+            {% if c.email_sent %}
+              <span class="badge badge-success" title="Notification email delivered">Emailed</span>
+            {% else %}
+              <span class="badge badge-muted" title="{% if c.email_error %}{{ c.email_error }}{% else %}Email not sent (no recipient or SMTP not configured){% endif %}">No email</span>
+            {% endif %}
+          </h3>
+          <div class="contact-card-contact muted small">
+            <a href="mailto:{{ c.email }}{% if c.subject %}?subject=Re: {{ c.subject|urlencode }}{% endif %}">{{ c.email }}</a>
+            {% if c.phone %}<span class="contact-card-sep">·</span><a href="tel:{{ c.phone }}">{{ c.phone }}</a>{% endif %}
+            <span class="contact-card-sep">·</span>
+            <span>{{ c.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            {% if c.ip_address %}<span class="contact-card-sep">·</span><span title="IP">{{ c.ip_address }}</span>{% endif %}
+          </div>
+        </div>
+        <div class="contact-card-actions">
+          {% if view == 'active' %}
+          <form method="post" action="{{ url_for('main.contact_submission_toggle_read', cid=c.id) }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="view" value="{{ view }}">
+            <button class="btn btn-sm">{% if c.is_read %}Mark unread{% else %}Mark read{% endif %}</button>
+          </form>
+          <form method="post" action="{{ url_for('main.contact_submission_archive', cid=c.id) }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="view" value="{{ view }}">
+            <button class="btn btn-sm">Archive</button>
+          </form>
+          {% else %}
+          <form method="post" action="{{ url_for('main.contact_submission_unarchive', cid=c.id) }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="view" value="{{ view }}">
+            <button class="btn btn-sm btn-primary">Restore</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('main.contact_submission_delete', cid=c.id) }}"
+                onsubmit="return confirm('Delete this message permanently?');" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="view" value="{{ view }}">
+            <button class="btn btn-sm btn-danger">Delete</button>
+          </form>
+        </div>
+      </header>
+      {% if c.subject %}<p class="contact-card-subject"><b>Subject:</b> {{ c.subject }}</p>{% endif %}
+      <div class="contact-card-message">{{ c.message }}</div>
+      {% if c.email_error %}
+      <p class="muted small contact-card-mailerr"><b>Mail delivery error:</b> {{ c.email_error }}</p>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+<style>
+.contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.contact-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  background: var(--card);
+}
+.contact-card.is-unread {
+  border-left: 3px solid var(--access);
+  background: color-mix(in srgb, var(--access) 4%, var(--card));
+}
+.contact-card-head {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin: 0 0 8px;
+}
+.contact-card-meta { min-width: 0; flex: 1 1 320px; }
+.contact-card-name {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.contact-card-new { background: color-mix(in srgb, var(--access) 18%, transparent); color: var(--access); }
+.contact-card-contact { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.contact-card-contact a { color: var(--access); text-decoration: none; }
+.contact-card-contact a:hover { text-decoration: underline; }
+.contact-card-sep { opacity: 0.5; }
+.contact-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.contact-card-subject {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+}
+.contact-card-message {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+.contact-card-mailerr {
+  margin: 8px 0 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, #ef4444 8%, transparent);
+}
+</style>
+{% endblock %}

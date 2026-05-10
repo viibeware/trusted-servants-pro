@@ -4,4 +4,17 @@
    lives in frontend/events_list/<key>.html and is selected on the
    admin's Templates page (SiteSetting.frontend_events_list_template).
    Every layout receives the same `all_events` list. #}
-{% block content %}{% include list_partial %}{% endblock %}
+{% block content %}
+{%- set _events_list_tpl = template_settings(site, 'events_list', site.frontend_events_list_template) if site else {} -%}
+{%- set _dynbg = _events_list_tpl.get('bg_dynamic_key') or (site.frontend_events_list_bg_dynamic_key if site else None) -%}
+{%- set _dynbg_cfg_raw = {'overlay': _events_list_tpl.get('bg_dynbg_overlay'), 'colors': _events_list_tpl.get('bg_dynbg_colors') or [], 'overlay_scope': _events_list_tpl.get('bg_dynbg_overlay_scope'), 'overlay_size': _events_list_tpl.get('bg_dynbg_overlay_size'), 'overlay_intensity': _events_list_tpl.get('bg_dynbg_overlay_intensity'), 'randomize_colors': _events_list_tpl.get('bg_dynbg_randomize_colors'), 'randomize_positions': _events_list_tpl.get('bg_dynbg_randomize_positions'), 'animate': _events_list_tpl.get('bg_dynbg_animate', True)} if _events_list_tpl.get('bg_dynamic_key') or _events_list_tpl.get('bg_dynbg_overlay') else (site.frontend_events_list_bg_dynbg_config_json if site else None) -%}
+{%- set _dynbg_cfg = dynbg_decode(_dynbg_cfg_raw) -%}
+{%- set _dynbg_color_vars = dynbg_colors_css(dynbg_resolve_colors(_dynbg_cfg)) -%}
+{%- set _dynbg_pos_vars = dynbg_resolve_positions(_dynbg_cfg, _dynbg) -%}
+{%- set _dynbg_inline = (_dynbg_color_vars ~ " " ~ _dynbg_pos_vars) | trim -%}
+{%- set _dynbg_active = _dynbg or _dynbg_cfg.overlay -%}
+<div class="fe-page-dynbg-host{% if _dynbg_active %} fe-dynbg-host{% endif %}"{% if _dynbg_active and _dynbg_inline %} style="{{ _dynbg_inline }}"{% endif %}>
+  {% if _dynbg_active %}{% with dynbg_key=_dynbg, dynbg_config=_dynbg_cfg_raw %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}
+  {% include list_partial %}
+</div>
+{% endblock %}

@@ -129,9 +129,156 @@
 </div>
 {% endmacro %}
 
+{# Reusable customize panel — Background / Fonts / Sizes 3-column
+   grid wrapped in a <details> dropdown, with its own form posting
+   to `frontend_template_settings_save`. Pulled into its own macro
+   so every section card on this page (not just meeting/event detail)
+   can drop in the same panel under its style cards. The
+   `scope_label` is the noun used in the summary copy ("page" /
+   "list page" / "section"). The `name` is the active template's
+   display name shown in the summary heading.
+
+   Background fieldset always shows the dynamic-background trigger
+   AND the override-bg-colour control so the UI is uniform across
+   every section — admins never have to hunt for one of the
+   sub-controls on a particular template card. #}
+{% macro tpl_customize_panel(kind, active_key, settings, name, scope_label='page') %}
+<details class="fe-tplgrid-customize" open>
+  <summary>
+    <span class="fe-tplgrid-customize-title">Customize{% if name %} {{ name }}{% endif %}</span>
+    <span class="muted small">Background, fonts, and sizes for this template — applies to every {{ scope_label }} that uses it.</span>
+  </summary>
+  <form class="form fe-tplgrid-customize-form" method="post"
+        action="{{ url_for('main.frontend_template_settings_save', kind=kind, key=active_key) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="fe-tplgrid-customize-grid">
+      <fieldset class="fieldset">
+        <legend>Background</legend>
+        <label class="check fe-tplgrid-bg-toggle">
+          <input type="checkbox" name="bg_enabled" value="1"
+                 {% if settings.bg %}checked{% endif %}
+                 data-tpl-bg-toggle>
+          <span>Override page background color</span>
+        </label>
+        <label>Color
+          <input type="color" name="bg" value="{{ settings.bg or '#ffffff' }}"
+                 data-tpl-bg-input
+                 {% if not settings.bg %}disabled{% endif %}>
+        </label>
+        <p class="muted small">When off, falls through to the global Design page surface color.</p>
+        <div style="margin-top: 12px;">
+          <span class="fe-tplgrid-bg-toggle" style="font-size: 0.875rem; font-weight: 600; display: block; margin-bottom: 6px;">Dynamic background</span>
+          {% from "_dynbg_picker.html" import dynbg_trigger with context %}
+          {# Per-template settings absorb overlay + colours into
+             the existing template-settings JSON via the picker's
+             `bg_dynbg_config_json__*` form names. The save handler
+             (frontend_template_settings_save) reads them through
+             dynbg.encode_config and stamps `bg_dynbg_overlay` /
+             `bg_dynbg_colors` keys onto the leaf settings dict. #}
+          {# Pseudo-config built from the per-template-settings leaf
+             keys. Carries every dimension the dynbg trigger / modal
+             round-trip — overlay, colour palette, scope, noise
+             knobs, randomize flags, animate state — so opening the
+             modal pre-selects exactly what was saved. Earlier this
+             only carried `overlay` + `colors`, so the randomize /
+             scope / noise / animate state appeared blank in the
+             modal even when persisted in JSON, and Save would
+             clobber them with the empty defaults. #}
+          {%- set _tpl_pseudo_cfg = {
+                'overlay': settings.get('bg_dynbg_overlay') if settings else None,
+                'colors':  settings.get('bg_dynbg_colors')  if settings else [],
+                'overlay_scope':     settings.get('bg_dynbg_overlay_scope')     if settings else None,
+                'overlay_size':      settings.get('bg_dynbg_overlay_size')      if settings else None,
+                'overlay_intensity': settings.get('bg_dynbg_overlay_intensity') if settings else None,
+                'randomize_colors':    settings.get('bg_dynbg_randomize_colors')    if settings else False,
+                'randomize_positions': settings.get('bg_dynbg_randomize_positions') if settings else False,
+                'animate': settings.get('bg_dynbg_animate', True) if settings else True,
+          } -%}
+          {{ dynbg_trigger(field_name='bg_dynamic_key',
+                           current=settings.get('bg_dynamic_key') if settings else None,
+                           config_field='bg_dynbg_config_json',
+                           config=(_tpl_pseudo_cfg | tojson),
+                           button_id=('tpl-dynbg-' ~ kind ~ '-' ~ active_key)) }}
+          <p class="muted small" style="margin: 6px 0 0;">Layered behind the colour above. Each preset is dark-mode aware.</p>
+        </div>
+      </fieldset>
+
+      <fieldset class="fieldset">
+        <legend>Fonts</legend>
+        <label>Heading font
+          <select name="heading_font">
+            <option value="">— Theme default —</option>
+            {% for f in font_options %}
+            <option value="{{ f.key }}" {% if settings.heading_font == f.key %}selected{% endif %}>{{ f.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Body font
+          <select name="body_font">
+            <option value="">— Theme default —</option>
+            {% for f in font_options %}
+            <option value="{{ f.key }}" {% if settings.body_font == f.key %}selected{% endif %}>{{ f.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <p class="muted small">Manage fonts on the <a href="{{ url_for('main.frontend_fonts_icons') }}">Fonts &amp; Icons</a> page.</p>
+      </fieldset>
+
+      <fieldset class="fieldset">
+        <legend>Sizes</legend>
+        {% set _h_default = 2.0 %}
+        {% set _b_default = 1.0 %}
+        <label class="check fe-tplgrid-bg-toggle">
+          <input type="checkbox" name="heading_size_enabled" value="1"
+                 {% if settings.heading_size %}checked{% endif %}
+                 data-tpl-size-toggle="heading">
+          <span>Override heading size</span>
+        </label>
+        <label>Heading size
+          <span class="muted smaller">(0.5–4.0 rem)</span>
+          <div class="login-fx-speed-row">
+            <input type="range" name="heading_size" min="0.5" max="4.0" step="0.1"
+                   value="{{ '%.1f' % (settings.heading_size or _h_default) }}"
+                   data-tpl-size-slider="heading"
+                   {% if not settings.heading_size %}disabled{% endif %}>
+            <output data-tpl-size-output="heading">{{ '%.1f' % (settings.heading_size or _h_default) }}rem</output>
+          </div>
+        </label>
+        <label class="check fe-tplgrid-bg-toggle">
+          <input type="checkbox" name="body_size_enabled" value="1"
+                 {% if settings.body_size %}checked{% endif %}
+                 data-tpl-size-toggle="body">
+          <span>Override body text size</span>
+        </label>
+        <label>Body text size
+          <span class="muted smaller">(0.5–4.0 rem)</span>
+          <div class="login-fx-speed-row">
+            <input type="range" name="body_size" min="0.5" max="4.0" step="0.1"
+                   value="{{ '%.1f' % (settings.body_size or _b_default) }}"
+                   data-tpl-size-slider="body"
+                   {% if not settings.body_size %}disabled{% endif %}>
+            <output data-tpl-size-output="body">{{ '%.1f' % (settings.body_size or _b_default) }}rem</output>
+          </div>
+        </label>
+        <p class="muted small">Off → template uses its own responsive default size. When on, the value is the desktop target — narrow viewports auto-scale it down so headings don't overflow on phones.</p>
+      </fieldset>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary">Save customizations</button>
+    </div>
+  </form>
+</details>
+{% endmacro %}
+
 {% macro tpl_section(title, blurb, kind, templates, active_key, action_url, settings) %}
-{% set _active_name = '' %}
-{% for t in templates if t.key == active_key %}{% set _active_name = t.name %}{% endfor %}
+{# Active template's display name for the customize-summary heading.
+   `selectattr|first` (vs a `{% set %}`-inside-`{% for %}` loop)
+   actually returns a value the surrounding template can read —
+   loop scope rules in Jinja means `{% set %}` inside a loop
+   doesn't leak outside, so the previous loop-set was always None
+   and the rendered text was just `Customize ""`. #}
+{%- set _active_entry = (templates | selectattr('key', 'equalto', active_key) | list | first) -%}
+{%- set _active_name = _active_entry.name if _active_entry else '' -%}
 <section class="card fe-tplgrid-section">
   <div class="card-head">
     <h2>{{ title }}</h2>
@@ -160,96 +307,7 @@
     </div>
   </form>
 
-  <details class="fe-tplgrid-customize" {% if settings.bg or settings.heading_font or settings.body_font or settings.heading_size or settings.body_size %}open{% endif %}>
-    <summary>
-      <span class="fe-tplgrid-customize-title">Customize "{{ _active_name }}"</span>
-      <span class="muted small">Background, fonts, and sizes for this template only — applies to every {{ kind }} page.</span>
-    </summary>
-    <form class="form fe-tplgrid-customize-form" method="post"
-          action="{{ url_for('main.frontend_template_settings_save', kind=kind, key=active_key) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="fe-tplgrid-customize-grid">
-        <fieldset class="fieldset">
-          <legend>Background</legend>
-          <label class="check fe-tplgrid-bg-toggle">
-            <input type="checkbox" name="bg_enabled" value="1"
-                   {% if settings.bg %}checked{% endif %}
-                   data-tpl-bg-toggle>
-            <span>Override page background color</span>
-          </label>
-          <label>Color
-            <input type="color" name="bg" value="{{ settings.bg or '#ffffff' }}"
-                   data-tpl-bg-input
-                   {% if not settings.bg %}disabled{% endif %}>
-          </label>
-          <p class="muted small">When off, falls through to the global Design page surface color.</p>
-        </fieldset>
-
-        <fieldset class="fieldset">
-          <legend>Fonts</legend>
-          <label>Heading font
-            <select name="heading_font">
-              <option value="">— Theme default —</option>
-              {% for f in font_options %}
-              <option value="{{ f.key }}" {% if settings.heading_font == f.key %}selected{% endif %}>{{ f.name }}</option>
-              {% endfor %}
-            </select>
-          </label>
-          <label>Body font
-            <select name="body_font">
-              <option value="">— Theme default —</option>
-              {% for f in font_options %}
-              <option value="{{ f.key }}" {% if settings.body_font == f.key %}selected{% endif %}>{{ f.name }}</option>
-              {% endfor %}
-            </select>
-          </label>
-          <p class="muted small">Manage fonts on the <a href="{{ url_for('main.frontend_fonts_icons') }}">Fonts &amp; Icons</a> page.</p>
-        </fieldset>
-
-        <fieldset class="fieldset">
-          <legend>Sizes</legend>
-          {% set _h_default = 2.0 %}
-          {% set _b_default = 1.0 %}
-          <label class="check fe-tplgrid-bg-toggle">
-            <input type="checkbox" name="heading_size_enabled" value="1"
-                   {% if settings.heading_size %}checked{% endif %}
-                   data-tpl-size-toggle="heading">
-            <span>Override heading size</span>
-          </label>
-          <label>Heading size
-            <span class="muted smaller">(0.5–4.0 rem)</span>
-            <div class="login-fx-speed-row">
-              <input type="range" name="heading_size" min="0.5" max="4.0" step="0.1"
-                     value="{{ '%.1f' % (settings.heading_size or _h_default) }}"
-                     data-tpl-size-slider="heading"
-                     {% if not settings.heading_size %}disabled{% endif %}>
-              <output data-tpl-size-output="heading">{{ '%.1f' % (settings.heading_size or _h_default) }}rem</output>
-            </div>
-          </label>
-          <label class="check fe-tplgrid-bg-toggle">
-            <input type="checkbox" name="body_size_enabled" value="1"
-                   {% if settings.body_size %}checked{% endif %}
-                   data-tpl-size-toggle="body">
-            <span>Override body text size</span>
-          </label>
-          <label>Body text size
-            <span class="muted smaller">(0.5–4.0 rem)</span>
-            <div class="login-fx-speed-row">
-              <input type="range" name="body_size" min="0.5" max="4.0" step="0.1"
-                     value="{{ '%.1f' % (settings.body_size or _b_default) }}"
-                     data-tpl-size-slider="body"
-                     {% if not settings.body_size %}disabled{% endif %}>
-              <output data-tpl-size-output="body">{{ '%.1f' % (settings.body_size or _b_default) }}rem</output>
-            </div>
-          </label>
-          <p class="muted small">Off → template uses its own responsive default size. When on, the value is the desktop target — narrow viewports auto-scale it down so headings don't overflow on phones.</p>
-        </fieldset>
-      </div>
-      <div class="form-actions">
-        <button class="btn btn-primary">Save customizations</button>
-      </div>
-    </form>
-  </details>
+  {{ tpl_customize_panel(kind, active_key, settings, _active_name, scope_label=kind ~ ' page') }}
 </section>
 {% endmacro %}
 
@@ -308,6 +366,16 @@
       </label>
       {% endfor %}
     </div>
+    <div class="form-actions">
+      <button class="btn btn-primary">Save layout</button>
+    </div>
+  </form>
+
+  {{ tpl_customize_panel('announcements_list', announcements_list_active_key, announcements_list_active_settings, ((announcements_list_templates | selectattr('key', 'equalto', announcements_list_active_key) | list | first).name if (announcements_list_templates | selectattr('key', 'equalto', announcements_list_active_key) | list | first) else ''), scope_label='announcements list') }}
+
+  <form class="form" method="post"
+        action="{{ url_for('main.frontend_announcements_list_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {%- set _awmode = (site.frontend_announcements_list_width_mode if site else None) or 'boxed' -%}
     {%- set _awpad  = (site.frontend_announcements_list_padding_pct if site else 5) -%}
     {%- set _awmax  = (site.frontend_announcements_list_max_width   if site else 1160) -%}
@@ -357,6 +425,131 @@
     <div class="form-actions">
       <a class="btn" href="{{ url_for('frontend.announcements_list') }}" target="_blank" rel="noopener">Preview /announcements ↗</a>
       <button class="btn btn-primary">Save Announcements list</button>
+    </div>
+  </form>
+</section>
+
+{# ── Contact us page ─────────────────────────────────────────────
+   Single-template surface today. The card here is purely a
+   wayfinding affordance — the meaningful configuration (recipient,
+   copy, enable toggle, field options) lives on the dedicated
+   Contact Form admin page so it sits next to the messages list. #}
+<section class="card fe-tplgrid-section" id="fe-tplgrid-contact">
+  <div class="card-head">
+    <h2>Contact us (/contact)</h2>
+    <span class="muted smaller">Public contact-us page with a Turnstile-protected form. Submissions email the public information chair (with reply-to set to the visitor) and land in the Contact Form admin section for safekeeping.</span>
+  </div>
+  <div class="fe-tplgrid">
+    <label class="fe-tplgrid-card active" style="cursor: default;">
+      <input type="radio" checked disabled>
+      <div class="fe-tplgrid-thumb fe-tplgrid-thumb-meetings-list" aria-hidden="true">
+        <span class="t-side">
+          <span></span><span></span><span></span><span></span>
+        </span>
+        <span class="t-main">
+          <span class="t-row"></span>
+          <span class="t-row"></span>
+          <span class="t-row"></span>
+        </span>
+      </div>
+      <div class="fe-tplgrid-info">
+        <div class="fe-tplgrid-name">
+          Split — intro + form
+          <span class="fe-tplgrid-badge">Active</span>
+        </div>
+        <div class="fe-tplgrid-desc muted small">Two-column hero on desktop with a brand-tinted aside (eyebrow, heading, optional Markdown intro, auto-populated PIC channels) beside a glassy form card. Honeypot + optional Turnstile bot protection. Single column on mobile.</div>
+      </div>
+    </label>
+  </div>
+  <p class="muted small" style="margin: 12px 0 0;">
+    {% if site and site.contact_form_enabled %}
+      <span class="badge badge-success">Enabled</span> — the public <code>/contact</code> page is live.
+    {% else %}
+      <span class="badge badge-muted">Disabled</span> — turn the page on from <a href="{{ url_for('main.frontend_form_contact') }}">Forms → Contact Form</a> to make it public.
+    {% endif %}
+  </p>
+
+  {{ tpl_customize_panel('contact', 'split', contact_active_settings, 'Split — intro + form', scope_label='/contact page') }}
+
+  {# Page-level config: heading / subheading / intro plus the PIC
+     contact-panel granular toggles. Form mechanics (recipient, field
+     options, success message, bot protection) live on the Forms
+     admin so this surface stays focused on look-and-feel.
+
+     Each PIC toggle is independent — turning off the phone leaves
+     the name + email channels visible, and vice versa. The toggles
+     gate visibility on /contact only; the dashboard PIC fields keep
+     populating wherever else they're shown in the portal. #}
+  <form class="form fe-tplgrid-form" method="post"
+        action="{{ url_for('main.frontend_contact_template_save') }}"
+        style="margin-top: 1rem;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <fieldset class="fieldset fe-mlist-copy-fieldset">
+      <legend>Page heading</legend>
+      <p class="muted small" style="margin: 0 0 8px;">Override the title and subheading shown above the form. Leave blank to use the baked defaults.</p>
+      <label>Title
+        <input type="text" name="contact_form_heading" maxlength="200"
+               value="{{ site.contact_form_heading or '' }}"
+               placeholder="Get in touch">
+      </label>
+      <label>Subheading
+        <textarea name="contact_form_subheading" rows="2" maxlength="500"
+                  placeholder="Send the public information committee a note. Replies come straight to your email.">{{ site.contact_form_subheading or '' }}</textarea>
+      </label>
+      <label>Optional intro <span class="muted smaller">(Markdown supported, shown below the subheading)</span>
+        <textarea name="contact_form_intro" rows="4"
+                  placeholder="**Tip:** mention which meeting or service committee your question is about so we can route the reply to the right trusted servant.">{{ site.contact_form_intro or '' }}</textarea>
+      </label>
+    </fieldset>
+
+    {%- set _has_pic_name  = (site.pic_name  if site else '') -%}
+    {%- set _has_pic_email = (site.pic_email if site else '') -%}
+    {%- set _has_pic_phone = (site.pic_phone if site else '') -%}
+    <fieldset class="fieldset fe-mlist-copy-fieldset">
+      <legend>Public information chair panel</legend>
+      <p class="muted small" style="margin: 0 0 8px;">
+        Pulls from the <a href="{{ url_for('main.index') }}">dashboard's PIC fields</a>. Each row only renders on the public page when its value is set <em>and</em> its toggle here is on — so an empty PIC field hides the row even with the toggle on.
+      </p>
+      <label class="check">
+        <input type="checkbox" name="contact_form_show_pic_name" value="1"
+               {% if site.contact_form_show_pic_name %}checked{% endif %}>
+        <span><b>Show PIC name</b>
+          {% if _has_pic_name %}
+            <span class="muted smaller">— currently <code>{{ _has_pic_name }}</code></span>
+          {% else %}
+            <span class="muted smaller">— PIC name is blank in the dashboard</span>
+          {% endif %}
+        </span>
+      </label>
+      <label class="check">
+        <input type="checkbox" name="contact_form_show_pic_email" value="1"
+               {% if site.contact_form_show_pic_email %}checked{% endif %}>
+        <span><b>Show PIC email</b>
+          {% if _has_pic_email %}
+            <span class="muted smaller">— currently <code>{{ _has_pic_email }}</code></span>
+          {% else %}
+            <span class="muted smaller">— PIC email is blank in the dashboard</span>
+          {% endif %}
+        </span>
+      </label>
+      <label class="check">
+        <input type="checkbox" name="contact_form_show_pic_phone" value="1"
+               {% if site.contact_form_show_pic_phone %}checked{% endif %}>
+        <span><b>Show PIC phone</b>
+          {% if _has_pic_phone %}
+            <span class="muted smaller">— currently <code>{{ _has_pic_phone }}</code></span>
+          {% else %}
+            <span class="muted smaller">— PIC phone is blank in the dashboard</span>
+          {% endif %}
+        </span>
+      </label>
+    </fieldset>
+
+    <div class="form-actions">
+      <a class="btn" href="{{ url_for('frontend.contact') }}" target="_blank" rel="noopener">Preview /contact ↗</a>
+      <a class="btn" href="{{ url_for('main.contact_form') }}">View messages</a>
+      <a class="btn" href="{{ url_for('main.frontend_form_contact') }}">Form mechanics</a>
+      <button class="btn btn-primary">Save Contact page</button>
     </div>
   </form>
 </section>
@@ -418,6 +611,16 @@
       </label>
       {% endfor %}
     </div>
+    <div class="form-actions">
+      <button class="btn btn-primary">Save layout</button>
+    </div>
+  </form>
+
+  {{ tpl_customize_panel('events_list', events_list_active_key, events_list_active_settings, ((events_list_templates | selectattr('key', 'equalto', events_list_active_key) | list | first).name if (events_list_templates | selectattr('key', 'equalto', events_list_active_key) | list | first) else ''), scope_label='events list') }}
+
+  <form class="form" method="post"
+        action="{{ url_for('main.frontend_events_list_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {%- set _ewmode = (site.frontend_events_list_width_mode if site else None) or 'boxed' -%}
     {%- set _ewpad  = (site.frontend_events_list_padding_pct if site else 5) -%}
     {%- set _ewmax  = (site.frontend_events_list_max_width   if site else 1160) -%}
@@ -506,6 +709,16 @@
       </label>
       {% endfor %}
     </div>
+    <div class="form-actions">
+      <button class="btn btn-primary">Save layout</button>
+    </div>
+  </form>
+
+  {{ tpl_customize_panel('literature_library', literature_library_active_key, literature_library_active_settings, ((literature_library_templates | selectattr('key', 'equalto', literature_library_active_key) | list | first).name if (literature_library_templates | selectattr('key', 'equalto', literature_library_active_key) | list | first) else ''), scope_label='/library page') }}
+
+  <form class="form" method="post"
+        action="{{ url_for('main.frontend_literature_library_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <p class="muted small" style="margin: 12px 0 0;">Manage which libraries appear by toggling <b>Show on public Literature Library</b> on each library's edit modal in <a href="{{ url_for('main.libraries') }}">Libraries</a>; once enabled, per-item visibility toggles appear next to each row in that library's file list.</p>
     <div class="form-actions">
       <a class="btn" href="{{ url_for('frontend.literature_library') }}" target="_blank" rel="noopener">Preview /library ↗</a>
@@ -568,6 +781,16 @@
       </label>
       {% endfor %}
     </div>
+    <div class="form-actions">
+      <button class="btn btn-primary">Save layout</button>
+    </div>
+  </form>
+
+  {{ tpl_customize_panel('meetings_list', meetings_list_active_key, meetings_list_active_settings, ((meetings_list_templates | selectattr('key', 'equalto', meetings_list_active_key) | list | first).name if (meetings_list_templates | selectattr('key', 'equalto', meetings_list_active_key) | list | first) else ''), scope_label='meetings list') }}
+
+  <form class="form" method="post"
+        action="{{ url_for('main.frontend_meetings_list_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {# Width mode + padding share the same form so a single Save commits
        both the layout choice and the container width. The padding input
        only matters when 'full' is selected, but we don't disable it so
@@ -701,6 +924,13 @@
     <h2>Printlist (/printlist)</h2>
     <span class="muted smaller">Branded, printable meeting schedule. Visitors can print directly or download a PDF; the PDF is rendered server-side via WeasyPrint and uses the same layout as the screen view.</span>
   </div>
+
+  {# Printlist has no template variants (single layout), so there's
+     no style-cards form to put above the customize panel. The
+     customize panel sits directly under the section heading; the
+     existing config form (header content + page size) follows. #}
+  {{ tpl_customize_panel('printlist', 'default', printlist_active_settings, 'Printlist', scope_label='/printlist page') }}
+
   <form class="form fe-tplgrid-form" method="post"
         action="{{ url_for('main.frontend_printlist_template_save') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -740,6 +970,325 @@
       <a class="btn" href="{{ url_for('frontend.printlist') }}" target="_blank" rel="noopener">Preview /printlist ↗</a>
       <a class="btn" href="{{ url_for('frontend.printlist_pdf') }}" target="_blank" rel="noopener">Download PDF ↗</a>
       <button class="btn btn-primary">Save Printlist</button>
+    </div>
+  </form>
+</section>
+
+{# Stories list picker — only surfaces when the Stories module is on
+   (toggle lives on Settings → Modules). Same chrome as the Events
+   list. Six paper / editorial layouts; serif fonts throughout. #}
+{% if site and site.stories_enabled %}
+<section class="card fe-tplgrid-section">
+  <div class="card-head">
+    <h2>Stories list (/stories)</h2>
+    <span class="muted smaller">Picks the layout for the public stories page. Includes paper-textured stacks, ruled ledgers, manuscript / broadsheet / minimal-serif treatments, and a clean magazine grid.</span>
+  </div>
+  <form class="form fe-tplgrid-form" method="post"
+        action="{{ url_for('main.frontend_stories_list_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="fe-tplgrid">
+      {% for t in stories_list_templates %}
+      <label class="fe-tplgrid-card{% if stories_list_active_key == t.key %} active{% endif %}">
+        <input type="radio" name="frontend_stories_list_template" value="{{ t.key }}"
+               {% if stories_list_active_key == t.key %}checked{% endif %}>
+        <div class="fe-tplgrid-thumb fe-tplgrid-thumb-stories-list fe-tplgrid-thumb-stories-list-{{ t.key }}" aria-hidden="true">
+          {% if t.key == 'paper-stack' %}
+            <span class="t-row"></span><span class="t-row"></span><span class="t-row"></span>
+          {% elif t.key == 'ledger' %}
+            <span class="t-h"></span>
+            <span class="t-line"></span><span class="t-line"></span>
+            <span class="t-line short"></span><span class="t-line"></span>
+          {% elif t.key == 'manuscript' %}
+            <span class="t-h centered"></span>
+            <span class="t-line"></span><span class="t-line short"></span>
+            <span class="t-line"></span>
+          {% elif t.key == 'broadsheet' %}
+            <span class="t-h-big"></span>
+            <span class="t-cols">
+              <span class="t-col-main"><span></span><span></span><span></span></span>
+              <span class="t-col-side"><span></span><span></span></span>
+            </span>
+          {% elif t.key == 'minimal-serif' %}
+            <span class="t-h-big centered"></span>
+            <span class="t-line centered"></span>
+            <span class="t-line centered short"></span>
+          {% elif t.key == 'magazine' %}
+            <span class="t-mag-hero"></span>
+            <span class="t-mag-tile"></span>
+            <span class="t-mag-tile"></span>
+            <span class="t-mag-tile"></span>
+          {% endif %}
+        </div>
+        <div class="fe-tplgrid-info">
+          <div class="fe-tplgrid-name">
+            {{ t.name }}
+            <span class="fe-tplgrid-badge">Active</span>
+          </div>
+          <div class="fe-tplgrid-desc muted small">{{ t.description }}</div>
+        </div>
+      </label>
+      {% endfor %}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary">Save layout</button>
+    </div>
+  </form>
+
+  {{ tpl_customize_panel('stories_list', stories_list_active_key, stories_list_active_settings, ((stories_list_templates | selectattr('key', 'equalto', stories_list_active_key) | list | first).name if (stories_list_templates | selectattr('key', 'equalto', stories_list_active_key) | list | first) else ''), scope_label='stories list') }}
+
+  <form class="form" method="post"
+        action="{{ url_for('main.frontend_stories_list_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {%- set _swmode = (site.frontend_stories_list_width_mode if site else None) or 'boxed' -%}
+    {%- set _swpad  = (site.frontend_stories_list_padding_pct if site else 5) -%}
+    {%- set _swmax  = (site.frontend_stories_list_max_width   if site else 1160) -%}
+    {%- set _swhead = (site.frontend_stories_list_heading     if site else '') or '' -%}
+    {%- set _swsub  = (site.frontend_stories_list_subheading  if site else '') or '' -%}
+    <fieldset class="fieldset fe-mlist-copy-fieldset">
+      <legend>Page heading</legend>
+      <p class="muted small" style="margin: 0 0 8px;">Override the title and subheading the public /stories page shows above the layout. Leave blank to use the chosen layout's built-in copy.</p>
+      <label>Title
+        <input type="text" name="frontend_stories_list_heading"
+               maxlength="200" value="{{ _swhead }}"
+               placeholder="Stories">
+      </label>
+      <label>Subheading
+        <textarea name="frontend_stories_list_subheading"
+                  rows="2" maxlength="500"
+                  placeholder="First-person accounts from members of the fellowship.">{{ _swsub }}</textarea>
+      </label>
+    </fieldset>
+    <fieldset class="fieldset fe-mlist-width-fieldset">
+      <legend>Container width</legend>
+      <div class="fe-mlist-width-row">
+        <label class="check">
+          <input type="radio" name="frontend_stories_list_width_mode" value="boxed"
+                 {% if _swmode == 'boxed' %}checked{% endif %}>
+          <span><b>Boxed</b> — caps at the max-width below and centers in the viewport.</span>
+        </label>
+        <label class="check">
+          <input type="radio" name="frontend_stories_list_width_mode" value="full"
+                 {% if _swmode == 'full' %}checked{% endif %}>
+          <span><b>Full width</b> — spans the entire viewport with the side padding below applied as <code>vw</code> gutters.</span>
+        </label>
+      </div>
+      <div class="fe-mlist-width-controls">
+        <label class="fe-mlist-width-pad">
+          <span>Max width (px, boxed only)</span>
+          <input type="number" name="frontend_stories_list_max_width"
+                 min="640" max="2400" step="10" value="{{ _swmax }}">
+        </label>
+        <label class="fe-mlist-width-pad">
+          <span>Side padding (% of viewport, full-width only)</span>
+          <input type="number" name="frontend_stories_list_padding_pct"
+                 min="0" max="20" step="1" value="{{ _swpad }}">
+        </label>
+      </div>
+    </fieldset>
+    <div class="form-actions">
+      <a class="btn" href="{{ url_for('frontend.stories_list') }}" target="_blank" rel="noopener">Preview /stories ↗</a>
+      <button class="btn btn-primary">Save Stories list</button>
+    </div>
+  </form>
+</section>
+
+{# Story detail picker — drives /stories/<slug>. Five layouts: paper,
+   letter, journal, anthology, magazine. #}
+<section class="card fe-tplgrid-section">
+  <div class="card-head">
+    <h2>Story detail (/stories/&lt;slug&gt;)</h2>
+    <span class="muted smaller">Picks the layout for an individual recovery story. Paper / letter / journal lean organic + serif; anthology is centered + minimal; magazine is modern editorial with a hero image.</span>
+  </div>
+  <form class="form fe-tplgrid-form" method="post"
+        action="{{ url_for('main.frontend_story_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="fe-tplgrid">
+      {% for t in story_templates %}
+      <label class="fe-tplgrid-card{% if story_active_key == t.key %} active{% endif %}">
+        <input type="radio" name="frontend_story_template" value="{{ t.key }}"
+               {% if story_active_key == t.key %}checked{% endif %}>
+        <div class="fe-tplgrid-thumb fe-tplgrid-thumb-story fe-tplgrid-thumb-story-{{ t.key }}" aria-hidden="true">
+          {% if t.key == 'paper' %}
+            <span class="t-cover"></span>
+            <span class="t-h centered"></span>
+            <span class="t-line"></span><span class="t-line"></span><span class="t-line short"></span>
+          {% elif t.key == 'letter' %}
+            <span class="t-line short"></span>
+            <span class="t-h centered"></span>
+            <span class="t-line"></span><span class="t-line"></span><span class="t-line short"></span>
+          {% elif t.key == 'journal' %}
+            <span class="t-h"></span>
+            <span class="t-line"></span><span class="t-line"></span>
+            <span class="t-line short"></span><span class="t-line"></span>
+          {% elif t.key == 'anthology' %}
+            <span class="t-eyebrow"></span>
+            <span class="t-h-big centered"></span>
+            <span class="t-line centered"></span>
+            <span class="t-line centered short"></span>
+            <span class="t-line centered"></span>
+          {% elif t.key == 'magazine' %}
+            <span class="t-poster-hero"></span>
+            <span class="t-poster-overlay">
+              <span class="t-poster-title"></span>
+            </span>
+            <span class="t-cols">
+              <span class="t-col-main"><span></span><span></span><span></span></span>
+              <span class="t-col-side"><span></span><span></span></span>
+            </span>
+          {% endif %}
+        </div>
+        <div class="fe-tplgrid-info">
+          <div class="fe-tplgrid-name">
+            {{ t.name }}
+            <span class="fe-tplgrid-badge">Active</span>
+          </div>
+          <div class="fe-tplgrid-desc muted small">{{ t.description }}</div>
+        </div>
+      </label>
+      {% endfor %}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary">Save layout</button>
+    </div>
+  </form>
+
+  {{ tpl_customize_panel('story', story_active_key, story_active_settings, ((story_templates | selectattr('key', 'equalto', story_active_key) | list | first).name if (story_templates | selectattr('key', 'equalto', story_active_key) | list | first) else ''), scope_label='story-detail page') }}
+
+  <form class="form" method="post"
+        action="{{ url_for('main.frontend_story_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-actions">
+      <a class="btn" href="{{ url_for('frontend.stories_list') }}" target="_blank" rel="noopener">Browse /stories ↗</a>
+      <button class="btn btn-primary">Save Story template</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+
+{# ── Site Index ──────────────────────────────────────────────────
+   Auto-populated /siteindex page that lists every public surface:
+   static pages, meetings, events, announcements, stories, library
+   items. Two layouts (Grouped + Alphabet) plus a per-section
+   visibility toggle row so admins can prune what shows up. Same
+   Customize / dynbg machinery as the rest of the templates. #}
+{%- set _siheading = (site.frontend_site_index_heading    if site else '') or '' -%}
+{%- set _sisub     = (site.frontend_site_index_subheading if site else '') or '' -%}
+{%- set _sisort    = (site.frontend_site_index_sort_mode  if site else None) or 'grouped' -%}
+{%- set _sienabled = (site.frontend_site_index_enabled    if site else False) -%}
+<section class="card fe-tplgrid-section">
+  <div class="card-head">
+    <h2>Site index (/siteindex)</h2>
+    <span class="muted smaller">An auto-generated table of contents that lists every public page on the site — static pages, meetings, events, announcements, stories, and library items. Pick a layout and toggle which sections to include.</span>
+  </div>
+  <form class="form fe-tplgrid-form" method="post"
+        action="{{ url_for('main.frontend_site_index_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="fe-tplgrid">
+      {% for t in site_index_templates %}
+      <label class="fe-tplgrid-card{% if site_index_active_key == t.key %} active{% endif %}">
+        <input type="radio" name="frontend_site_index_template" value="{{ t.key }}"
+               {% if site_index_active_key == t.key %}checked{% endif %}>
+        <div class="fe-tplgrid-thumb fe-tplgrid-thumb-site-index fe-tplgrid-thumb-site-index-{{ t.key }}" aria-hidden="true">
+          {% if t.key == 'grouped' %}
+            <span class="t-eyebrow"></span>
+            <span class="t-row"></span><span class="t-row"></span>
+            <span class="t-eyebrow t-eyebrow-2"></span>
+            <span class="t-row"></span><span class="t-row"></span>
+          {% elif t.key == 'alphabet' %}
+            <span class="t-h centered"></span>
+            <span class="t-row"></span><span class="t-row"></span>
+            <span class="t-row"></span><span class="t-row"></span>
+            <span class="t-row"></span>
+          {% endif %}
+        </div>
+        <div class="fe-tplgrid-info">
+          <div class="fe-tplgrid-name">
+            {{ t.name }}
+            <span class="fe-tplgrid-badge">Active</span>
+          </div>
+          <div class="fe-tplgrid-desc muted small">{{ t.description }}</div>
+        </div>
+      </label>
+      {% endfor %}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary">Save layout</button>
+    </div>
+  </form>
+
+  {{ tpl_customize_panel('site_index', site_index_active_key, site_index_active_settings, ((site_index_templates | selectattr('key', 'equalto', site_index_active_key) | list | first).name if (site_index_templates | selectattr('key', 'equalto', site_index_active_key) | list | first) else ''), scope_label='/siteindex page') }}
+
+  <form class="form" method="post"
+        action="{{ url_for('main.frontend_site_index_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <fieldset class="fieldset">
+      <legend>Page heading</legend>
+      <p class="muted small" style="margin: 0 0 8px;">Override the title and subheading shown above the index. Leave blank to use the default copy.</p>
+      <label>Title
+        <input type="text" name="frontend_site_index_heading"
+               maxlength="200" value="{{ _siheading }}"
+               placeholder="Site index">
+      </label>
+      <label>Subheading
+        <textarea name="frontend_site_index_subheading"
+                  rows="2" maxlength="500"
+                  placeholder="Every page on the site, in one place.">{{ _sisub }}</textarea>
+      </label>
+    </fieldset>
+
+    <fieldset class="fieldset">
+      <legend>Sort order</legend>
+      <p class="muted small" style="margin: 0 0 8px;">How the items are ordered on the public page. The Grouped layout always uses Grouped; the Alphabet layout always sorts A–Z regardless of this choice.</p>
+      <label class="check">
+        <input type="radio" name="frontend_site_index_sort_mode" value="grouped"
+               {% if _sisort == 'grouped' %}checked{% endif %}>
+        <span><b>Grouped</b> — pages, meetings, events, etc. in their own sections, alphabetical within each.</span>
+      </label>
+      <label class="check">
+        <input type="radio" name="frontend_site_index_sort_mode" value="alpha"
+               {% if _sisort == 'alpha' %}checked{% endif %}>
+        <span><b>A–Z</b> — single flat list across every kind, sorted by title.</span>
+      </label>
+    </fieldset>
+
+    <fieldset class="fieldset">
+      <legend>Sections to include</legend>
+      <p class="muted small" style="margin: 0 0 8px;">Uncheck a content type to hide it from the index. Useful when a section is empty or admins prefer to surface it elsewhere.</p>
+      <div class="fe-mlist-width-row">
+        {% for col, label in [
+            ('show_pages', 'Pages'),
+            ('show_meetings', 'Meetings'),
+            ('show_events', 'Events'),
+            ('show_announcements', 'Announcements'),
+            ('show_stories', 'Stories'),
+            ('show_library', 'Library')
+        ] %}
+        {%- set _on = (site|attr('frontend_site_index_' ~ col) if site else True) -%}
+        <label class="check">
+          <input type="hidden" name="frontend_site_index_{{ col }}_present" value="1">
+          <input type="checkbox" name="frontend_site_index_{{ col }}" value="1"
+                 {% if _on %}checked{% endif %}>
+          <span>{{ label }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <fieldset class="fieldset">
+      <legend>Publish</legend>
+      <label class="check">
+        <input type="hidden" name="frontend_site_index_enabled_present" value="1">
+        <input type="checkbox" name="frontend_site_index_enabled" value="1"
+               {% if _sienabled %}checked{% endif %}>
+        <span>Publish the Site Index page at <code>/siteindex</code>. When off, the URL returns 404 and is hidden from menus.</span>
+      </label>
+    </fieldset>
+
+    <div class="form-actions">
+      {% if _sienabled %}
+      <a class="btn" href="{{ url_for('frontend.site_index') }}" target="_blank" rel="noopener">Preview /siteindex ↗</a>
+      {% endif %}
+      <button class="btn btn-primary">Save Site Index</button>
     </div>
   </form>
 </section>
@@ -877,3 +1426,4 @@
   </div>
 </div>
 {% endblock %}
+

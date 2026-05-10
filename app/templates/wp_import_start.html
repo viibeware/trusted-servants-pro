@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}WordPress Importer · Trusted Servants Pro{% endblock %}
+{% block heading %}WordPress Importer{% endblock %}
+{% block heading_help %}Pull recovery stories, announcements, or events out of an existing WordPress site. Connect over the REST API or upload a WP All Export CSV — both paths land you on the same review and dry-run preview before anything is created.{% endblock %}
+{% block content %}
+<div class="wp-wizard-header">
+  {% if not embed %}
+  <div class="wp-actionbar">
+    <a class="btn" href="{{ url_for('main.index', settings='data') }}">← Back to Settings</a>
+  </div>
+  {% endif %}
+  <div class="wp-wizard-stepper">
+    <ol>
+      <li class="is-active"><span class="wp-step-num">1</span><span class="wp-step-label">Source</span></li>
+      <li><span class="wp-step-num">2</span><span class="wp-step-label">Review &amp; map</span></li>
+      <li><span class="wp-step-num">3</span><span class="wp-step-label">Dry run</span></li>
+      <li><span class="wp-step-num">4</span><span class="wp-step-label">Import</span></li>
+    </ol>
+  </div>
+</div>
+
+<div class="wp-source-grid">
+  <section class="card wp-source-card">
+    <div class="card-head">
+      <h2>{{ icon('globe') }} Connect to WordPress</h2>
+      <span class="muted smaller">Fetch posts directly via the WP REST API.</span>
+    </div>
+    <p class="muted small">
+      Recommended path. Uses your WordPress <b>Application Password</b> (Users
+      → Profile → Application Passwords) for authentication, which means you
+      don't have to expose your real admin password.
+    </p>
+    <p class="muted smaller">
+      Drafts and private posts only come back when authenticated. The fetch is
+      capped at <b>500 posts</b>; rerun the wizard or filter on the WordPress
+      side if you need more.
+    </p>
+    <form class="form" method="post"
+          action="{{ url_for('main.wp_import_connect') }}"
+          data-wp-fetch-form>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+      <label>WordPress site URL
+        <input type="url" name="site_url" required
+               placeholder="https://example.com"
+               autocomplete="off">
+      </label>
+      <div class="form-row">
+        <label>Username
+          <input type="text" name="wp_user"
+                 placeholder="admin"
+                 autocomplete="username">
+        </label>
+        <label>Application password
+          <input type="password" name="wp_password"
+                 placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"
+                 autocomplete="current-password">
+        </label>
+      </div>
+      <p class="muted smaller" style="margin: -.25rem 0 .5rem;">
+        Leave both blank to fetch only <b>publicly visible</b> posts (no
+        drafts, no private). The credentials are used once to fetch the post
+        list and are never stored on this server.
+      </p>
+      <div class="form-actions">
+        <button class="btn btn-primary">{{ icon('arrow-right') }} Connect &amp; fetch posts</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card wp-source-card">
+    <div class="card-head">
+      <h2>{{ icon('cloud-upload') }} Upload a CSV</h2>
+      <span class="muted smaller">Use a WP All Export "Posts" file or a generic posts CSV.</span>
+    </div>
+    <p class="muted small">
+      Best when the WP REST API is locked down or the site is offline. Accepts
+      either WP All Export's column names (<code>Title</code>,
+      <code>Categories</code>, <code>Content</code>, <code>Date</code>,
+      <code>Featured Image</code>, <code>Author</code>, …) or the raw
+      WordPress columns (<code>post_title</code>, <code>post_content</code>,
+      <code>post_category</code>, …).
+    </p>
+    <p class="muted smaller">
+      Featured-image URLs in the CSV are downloaded only at <b>commit</b>
+      time, not when the CSV is uploaded.
+    </p>
+    <form class="form" method="post"
+          action="{{ url_for('main.wp_import_upload_csv') }}"
+          enctype="multipart/form-data"
+          data-wp-fetch-form data-wp-fetch-mode="csv">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+      <label>Posts CSV
+        <input type="file" name="csv" accept=".csv,text/csv" required>
+      </label>
+      <div class="form-actions">
+        <button class="btn btn-primary">{{ icon('arrow-right') }} Parse &amp; review</button>
+      </div>
+    </form>
+  </section>
+</div>
+
+<section class="card wp-help-card">
+  <div class="card-head">
+    <h2>{{ icon('help-circle') }} How this works</h2>
+  </div>
+  <ol class="wp-help-steps">
+    <li>
+      <span class="wp-help-num">1</span>
+      <span class="wp-help-body"><b>Choose a source.</b> Connect to a live WP site or upload a CSV.</span>
+    </li>
+    <li>
+      <span class="wp-help-num">2</span>
+      <span class="wp-help-body"><b>Review &amp; map.</b> Each post can be sent to <i>Stories</i>, <i>Announcements</i>, <i>Events</i>, or skipped. Bulk-map an entire WordPress category in one click.</span>
+    </li>
+    <li>
+      <span class="wp-help-num">3</span>
+      <span class="wp-help-body"><b>Dry run.</b> The wizard reports exactly what it would create — title, target, slug, image — so you can correct course before any rows land.</span>
+    </li>
+    <li>
+      <span class="wp-help-num">4</span>
+      <span class="wp-help-body"><b>Import.</b> Type <code>IMPORT</code> to confirm. Featured images are downloaded and deduplicated by content hash; duplicate slugs auto-suffix with <code>-2</code>, <code>-3</code>, etc.</span>
+    </li>
+  </ol>
+</section>
+
+<style>
+  .wp-source-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  @media (max-width: 880px) { .wp-source-grid { grid-template-columns: 1fr; } }
+  .wp-source-card { display: flex; flex-direction: column; }
+  .wp-source-card .form { margin-top: auto; }
+  .wp-source-card .card-head h2 {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+  }
+  .wp-source-card .card-head h2 .icon {
+    color: var(--primary, #0B5CFF);
+  }
+
+  .wp-help-card .card-head h2 .icon { color: var(--primary, #0B5CFF); }
+  .wp-help-steps {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: .85rem;
+  }
+  .wp-help-steps li {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: .9rem;
+    align-items: baseline;
+  }
+  .wp-help-num {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--primary, #0B5CFF);
+    color: #fff;
+    display: inline-grid; place-items: center;
+    font-weight: 600;
+    font-size: .85rem;
+  }
+  .wp-help-body { line-height: 1.55; }
+</style>
+
+{% include "_wp_fetch_overlay.html" %}
+{% endblock %}

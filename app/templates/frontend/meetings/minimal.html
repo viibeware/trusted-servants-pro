@@ -1,7 +1,8 @@
 {% extends "frontend/base.html" %}
 {% block title %}{{ meeting.name }} · {{ frontend_title }}{% endblock %}
 {% block content %}
-<section class="fe-meeting-min" id="meeting" style="{{ tpl_style or '' }}">
+<section class="fe-meeting-min{% if tpl_dynbg_key or tpl_dynbg_overlay %} fe-dynbg-host{% endif %}" id="meeting" style="{{ tpl_style or '' }}{% if tpl_dynbg_config %}; {% set _resolved = dynbg_resolve_colors(tpl_dynbg_config) %}{% for _c in _resolved %}--fe-dynbg-c{{ loop.index }}: {{ _c }};{% endfor %} {{ dynbg_resolve_positions(tpl_dynbg_config, tpl_dynbg_key) }}{% endif %}">
+  {% if tpl_dynbg_key or tpl_dynbg_overlay %}{% with dynbg_key=tpl_dynbg_key, dynbg_config=tpl_dynbg_config %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}
   <div class="fe-container fe-meeting-min-inner">
     <div class="fe-edit-bar">
       <a class="fe-meeting-min-back" href="{{ url_for('frontend.meetings_list') }}">← All meetings</a>
@@ -50,6 +51,11 @@
           </li>
           {% endfor %}
         </ul>
+        <a class="fe-meeting-min-link fe-meeting-detail-ics-link"
+           href="{{ url_for('frontend.meeting_calendar_ics', slug=meeting.public_slug) }}"
+           download="{{ meeting.public_slug }}.ics">
+          {{ icon('calendar-check') }} Add to Calendar (.ics)
+        </a>
       </dd>
       {% endif %}
 

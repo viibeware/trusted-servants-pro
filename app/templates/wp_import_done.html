@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}Import complete · WordPress Importer{% endblock %}
+{% block heading %}Import complete{% endblock %}
+{% block heading_help %}{{ result.counts.stories + result.counts.announcements + result.counts.events }} row{% if (result.counts.stories + result.counts.announcements + result.counts.events) != 1 %}s{% endif %} created from your {{ 'WordPress site' if source == 'rest' else 'CSV upload' }}.{% endblock %}
+{% block content %}
+<div class="wp-wizard-header">
+  <div class="wp-actionbar">
+    <a class="btn" href="{{ url_for('main.wp_import_start', embed=1 if embed else None) }}">Run another import</a>
+    {% if embed %}
+    <button type="button" class="btn btn-primary" data-wp-close>Done</button>
+    {% else %}
+    <a class="btn" href="{{ url_for('main.index', settings='data') }}">← Back to Settings</a>
+    {% endif %}
+  </div>
+
+  <div class="wp-wizard-stepper">
+    <ol>
+      <li class="is-done"><span class="wp-step-num">✓</span><span class="wp-step-label">Source</span></li>
+      <li class="is-done"><span class="wp-step-num">✓</span><span class="wp-step-label">Review &amp; map</span></li>
+      <li class="is-done"><span class="wp-step-num">✓</span><span class="wp-step-label">Dry run</span></li>
+      <li class="is-done"><span class="wp-step-num">✓</span><span class="wp-step-label">Import</span></li>
+    </ol>
+  </div>
+</div>
+
+{% set c = result.counts %}
+<section class="card wp-counts-card">
+  <div class="card-head">
+    <h2>{{ icon('check-circle') }} Created</h2>
+  </div>
+  <div class="wp-counts-grid">
+    {% if c.stories %}
+    <a class="wp-count wp-count-stories" href="{{ url_for('main.stories') }}">
+      <div class="wp-count-num">{{ c.stories }}</div>
+      <div class="wp-count-label">Stor{% if c.stories == 1 %}y{% else %}ies{% endif %}</div>
+    </a>
+    {% endif %}
+    {% if c.announcements or c.events %}
+    <a class="wp-count wp-count-announcements" href="{{ url_for('main.posts') }}">
+      <div class="wp-count-num">{{ c.announcements }}</div>
+      <div class="wp-count-label">Announcement{% if c.announcements != 1 %}s{% endif %}</div>
+    </a>
+    <a class="wp-count wp-count-events" href="{{ url_for('main.posts') }}">
+      <div class="wp-count-num">{{ c.events }}</div>
+      <div class="wp-count-label">Event{% if c.events != 1 %}s{% endif %}</div>
+    </a>
+    {% endif %}
+    {% if c.skipped %}
+    <div class="wp-count wp-count-skipped">
+      <div class="wp-count-num">{{ c.skipped }}</div>
+      <div class="wp-count-label">Skipped</div>
+    </div>
+    {% endif %}
+    {% if c.renamed %}
+    <div class="wp-count wp-count-warning">
+      <div class="wp-count-num">{{ c.renamed }}</div>
+      <div class="wp-count-label">Slug renamed</div>
+    </div>
+    {% endif %}
+    {% if c.image_failed %}
+    <div class="wp-count wp-count-warning">
+      <div class="wp-count-num">{{ c.image_failed }}</div>
+      <div class="wp-count-label">Image failed</div>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+{% if result.warnings %}
+<section class="card wp-warn-card">
+  <div class="card-head">
+    <h2>{{ icon('alert-triangle') }} Warnings</h2>
+  </div>
+  <ul class="wp-warn-list">
+    {% for w in result.warnings %}<li>{{ w }}</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% set _created = result.rows | rejectattr('target', 'equalto', 'skip') | list %}
+{% if _created %}
+<section class="card wp-result-card">
+  <div class="card-head">
+    <h2>{{ icon('list') }} Imported posts</h2>
+  </div>
+  <div class="wp-result-table-wrap">
+    <table class="tbl wp-result-table">
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Target</th>
+          <th>Open</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in _created %}
+        <tr>
+          <td>{{ r.title }}</td>
+          <td><span class="wp-target-pill wp-target-pill--{{ r.target }} is-active">{{ r.target | title }}</span></td>
+          <td>
+            {% if r.target == 'stories' and r.id %}
+              <a class="btn btn-sm" href="{{ url_for('main.story_edit', sid=r.id) }}">Edit →</a>
+            {% elif r.target in ('announcements', 'events') and r.id %}
+              <a class="btn btn-sm" href="{{ url_for('main.post_edit', pid=r.id) }}">Edit →</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<style>
+  /* Reuse the same chrome as the dry-run page. */
+  .wp-counts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+  }
+  .wp-count {
+    border-radius: 12px;
+    padding: 1rem 1.1rem;
+    background: var(--surface-alt, rgba(0,0,0,.04));
+    border: 1px solid var(--border, rgba(0,0,0,.08));
+    text-align: center;
+    color: inherit;
+    text-decoration: none;
+    transition: transform .12s ease;
+  }
+  a.wp-count:hover { transform: translateY(-2px); }
+  .wp-count-num {
+    font-size: 2.2rem; font-weight: 700; line-height: 1;
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .wp-count-label {
+    font-size: .85rem; margin-top: .35rem;
+    color: var(--text-soft, rgba(0,0,0,.6)); letter-spacing: .04em;
+  }
+  .wp-count-stories       { background: #fef3c7; border-color: #fcd34d; color: #78350f; }
+  .wp-count-announcements { background: #dbeafe; border-color: #93c5fd; color: #1e3a8a; }
+  .wp-count-events        { background: #dcfce7; border-color: #86efac; color: #166534; }
+  .wp-count-skipped       { background: #f3f4f6; border-color: #d1d5db; color: #4b5563; }
+  .wp-count-warning       { background: #fef3c7; border-color: #f59e0b; color: #78350f; }
+  [data-theme="dark"] .wp-count-stories       { background: #4a3008; border-color: #b45309; color: #fde68a; }
+  [data-theme="dark"] .wp-count-announcements { background: #14264e; border-color: #2563eb; color: #bfdbfe; }
+  [data-theme="dark"] .wp-count-events        { background: #14391f; border-color: #15803d; color: #bbf7d0; }
+  [data-theme="dark"] .wp-count-skipped       { background: #2a2d34; border-color: #4b5563; color: #d1d5db; }
+  [data-theme="dark"] .wp-count-warning       { background: #4a3008; border-color: #b45309; color: #fde68a; }
+
+  .wp-warn-card .card-head h2 { color: #b45309; }
+  .wp-warn-list { margin: 0; padding-left: 1.25rem; line-height: 1.65; }
+
+  .wp-result-table-wrap { overflow-x: auto; }
+  .wp-result-table th { font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; }
+  .wp-target-pill {
+    padding: 4px 11px;
+    border-radius: 999px;
+    font-size: .82rem;
+    display: inline-block;
+  }
+  .wp-target-pill--stories.is-active       { background: #fef3c7; color: #78350f; }
+  .wp-target-pill--announcements.is-active { background: #dbeafe; color: #1e3a8a; }
+  .wp-target-pill--events.is-active        { background: #dcfce7; color: #166534; }
+  [data-theme="dark"] .wp-target-pill--stories.is-active       { background: #4a3008; color: #fde68a; }
+  [data-theme="dark"] .wp-target-pill--announcements.is-active { background: #14264e; color: #bfdbfe; }
+  [data-theme="dark"] .wp-target-pill--events.is-active        { background: #14391f; color: #bbf7d0; }
+
+</style>
+{% if embed %}
+<script>
+  document.querySelectorAll('[data-wp-close]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      try { window.parent.postMessage({ type: 'wp-import-close' }, window.location.origin); }
+      catch (e) { /* fall through */ }
+    });
+  });
+</script>
+{% endif %}
+{% endblock %}

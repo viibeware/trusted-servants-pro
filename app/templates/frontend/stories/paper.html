@@ -1,0 +1,294 @@
+{% extends "frontend/base.html" %}
+{% block title %}{{ story.title }} · {{ frontend_title }}{% endblock %}
+{% block content %}
+{# Paper detail layout — classic creased-paper sheet on a warm
+   backdrop. Serif title, byline italicised, drop-cap on the opening
+   paragraph, and small wavy rule between the body and the author's
+   note. Featured image rendered as a tipped-in plate above the title. #}
+<section class="fe-story-paper{% if tpl_dynbg_key or tpl_dynbg_overlay %} fe-dynbg-host{% endif %}" style="{{ tpl_style }}{% if tpl_dynbg_config %}; {% set _resolved = dynbg_resolve_colors(tpl_dynbg_config) %}{% for _c in _resolved %}--fe-dynbg-c{{ loop.index }}: {{ _c }};{% endfor %} {{ dynbg_resolve_positions(tpl_dynbg_config, tpl_dynbg_key) }}{% endif %}">
+  {% if tpl_dynbg_key or tpl_dynbg_overlay %}{% with dynbg_key=tpl_dynbg_key, dynbg_config=tpl_dynbg_config %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}
+  <div class="fe-story-paper-bg" aria-hidden="true"></div>
+  <article class="fe-story-paper-sheet">
+    <div class="fe-story-paper-inner">
+      <a class="fe-story-paper-back" href="{{ url_for('frontend.stories_list') }}">
+        <span aria-hidden="true">←</span> Back to all stories
+      </a>
+
+      {% if story.featured_image_filename %}
+      <figure class="fe-story-paper-plate">
+        <img src="{{ url_for('public.story_featured_image', sid=story.id) }}" alt="">
+        <figcaption>{{ story.title }}</figcaption>
+      </figure>
+      {% endif %}
+
+      <header class="fe-story-paper-head">
+        <span class="fe-story-paper-eyebrow">— A Recovery Story —</span>
+        <h1 class="fe-story-paper-title">{{ story.title }}</h1>
+        <div class="fe-story-paper-meta">
+          {% if story.author_name %}<span class="fe-story-paper-byline">by <i>{{ story.author_name }}</i></span>{% endif %}
+          {% if story.author_name and story.display_date %}<span class="fe-story-paper-meta-dot">·</span>{% endif %}
+          {% if story.display_date %}<span class="fe-story-paper-date">{{ story.display_date.strftime('%B %-d, %Y') }}</span>{% endif %}
+          {% if story.sobriety_date %}
+          <span class="fe-story-paper-meta-dot">·</span>
+          <span class="fe-story-paper-sober">Clean since {{ story.sobriety_date.strftime('%B %Y') }}</span>
+          {% endif %}
+        </div>
+      </header>
+
+      {% if story.body %}
+      <div class="fe-story-paper-body markdown-body">
+        {{ story.body|markdown }}
+      </div>
+      {% endif %}
+
+      {% if story.author_bio %}
+      <div class="fe-story-paper-rule" aria-hidden="true">
+        <span></span><i>❦</i><span></span>
+      </div>
+      <aside class="fe-story-paper-bio">
+        <h2>About the author</h2>
+        {% if story.author_name %}<p class="fe-story-paper-bio-name">{{ story.author_name }}</p>{% endif %}
+        <p class="fe-story-paper-bio-body">{{ story.author_bio }}</p>
+      </aside>
+      {% endif %}
+
+      <footer class="fe-story-paper-foot">
+        <a class="fe-story-paper-foot-link" href="{{ url_for('frontend.stories_list') }}">
+          Read more stories →
+        </a>
+      </footer>
+    </div>
+  </article>
+</section>
+
+<style>
+  .fe-story-paper {
+    --pp-bg-1: #f3ecdb;
+    --pp-bg-2: #e6dabd;
+    --pp-paper: #fbf5e3;
+    --pp-ink: #211a10;
+    --pp-ink-soft: #6a5a3e;
+    --pp-rule: #c2ad7a;
+    --pp-accent: #8a3713;
+    background:
+      radial-gradient(1100px 500px at 12% -10%, rgba(255,250,235,.5), transparent 60%),
+      radial-gradient(800px 400px at 90% 110%, rgba(190,160,90,.18), transparent 60%),
+      linear-gradient(180deg, var(--pp-bg-1) 0%, var(--pp-bg-2) 100%);
+    color: var(--pp-ink);
+    padding: clamp(2.5rem, 5vw, 4.5rem) 1rem clamp(4rem, 8vw, 7rem);
+    font-family: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+    position: relative;
+  }
+  [data-theme="dark"] .fe-story-paper {
+    --pp-bg-1: #1c1812;
+    --pp-bg-2: #14110d;
+    --pp-paper: #25201a;
+    --pp-ink: #ece1c8;
+    --pp-ink-soft: #a89878;
+    --pp-rule: #5a4a30;
+  }
+  .fe-story-paper-bg {
+    position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(circle at 0% 0%, rgba(120,90,30,.06), transparent 40%),
+      radial-gradient(circle at 100% 100%, rgba(40,20,5,.10), transparent 40%);
+  }
+  .fe-story-paper-sheet {
+    position: relative;
+    max-width: 760px;
+    margin: 0 auto;
+    background: var(--pp-paper);
+    box-shadow:
+      0 1px 0 rgba(0,0,0,.04) inset,
+      0 12px 24px rgba(70,50,20,.16),
+      0 36px 72px -22px rgba(70,50,20,.32);
+    border-radius: 2px;
+    transform: rotate(-.15deg);
+  }
+  .fe-story-paper-sheet::before, .fe-story-paper-sheet::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+  }
+  .fe-story-paper-sheet::before {
+    background:
+      repeating-linear-gradient(0deg, rgba(120,90,40,.025) 0 1px, transparent 1px 4px),
+      radial-gradient(circle at 0% 0%, rgba(140,100,40,.08), transparent 30%);
+    border-radius: inherit;
+    mix-blend-mode: multiply;
+  }
+  .fe-story-paper-sheet::after {
+    border: 1px solid rgba(120,90,40,.13);
+    border-radius: inherit;
+  }
+  .fe-story-paper-inner {
+    position: relative;
+    padding: clamp(2rem, 5vw, 4rem) clamp(1.5rem, 5vw, 4rem) clamp(2.5rem, 6vw, 5rem);
+  }
+  .fe-story-paper-back {
+    display: inline-block;
+    color: var(--pp-ink-soft);
+    text-decoration: none;
+    font-style: italic;
+    font-size: .92rem;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid transparent;
+    transition: color .15s ease, border-color .15s ease;
+  }
+  .fe-story-paper-back:hover { color: var(--pp-accent); border-bottom-color: currentColor; }
+
+  .fe-story-paper-plate {
+    margin: 0 auto 2.4rem;
+    max-width: 560px;
+    background: var(--pp-paper);
+    padding: .55rem .55rem 1.1rem;
+    border: 1px solid rgba(120,90,40,.18);
+    box-shadow: 0 1px 0 rgba(0,0,0,.05), 0 8px 18px -8px rgba(70,50,20,.4);
+    transform: rotate(.5deg);
+    text-align: center;
+  }
+  .fe-story-paper-plate img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    filter: sepia(.10) saturate(.95) contrast(1.02);
+  }
+  .fe-story-paper-plate figcaption {
+    margin-top: .8rem;
+    font-style: italic;
+    color: var(--pp-ink-soft);
+    font-size: .9rem;
+  }
+
+  .fe-story-paper-head { text-align: center; margin-bottom: 2.2rem; }
+  .fe-story-paper-eyebrow {
+    display: inline-block;
+    letter-spacing: .26em;
+    text-transform: uppercase;
+    font-size: .72rem;
+    color: var(--pp-accent);
+    margin-bottom: 1rem;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  .fe-story-paper-title {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-style: italic;
+    font-size: clamp(2.4rem, 6vw, 4rem);
+    line-height: 1.05;
+    letter-spacing: -.01em;
+    margin: 0 0 1.1rem;
+  }
+  .fe-story-paper-deck {
+    font-style: italic;
+    color: var(--pp-ink-soft);
+    font-size: 1.15rem;
+    line-height: 1.55;
+    margin: 0 auto 1.2rem;
+    max-width: 32rem;
+  }
+  .fe-story-paper-meta {
+    color: var(--pp-ink-soft);
+    font-size: .92rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: .35rem;
+    align-items: baseline;
+  }
+  .fe-story-paper-byline i { color: var(--pp-ink); }
+  .fe-story-paper-meta-dot { opacity: .55; }
+  .fe-story-paper-sober { color: var(--pp-accent); }
+
+  .fe-story-paper-body {
+    font-size: 1.13rem;
+    line-height: 1.78;
+    max-width: 36rem;
+    margin: 2.4rem auto 0;
+    color: var(--pp-ink);
+  }
+  .fe-story-paper-body p { margin: 0 0 1.25rem; }
+  .fe-story-paper-body p:first-of-type::first-letter {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: 4.5rem;
+    line-height: .85;
+    float: left;
+    padding: 6px .55rem 0 0;
+    color: var(--pp-accent);
+  }
+  .fe-story-paper-body h2 {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: 1.5rem;
+    margin: 2.2rem 0 .9rem;
+    text-align: center;
+  }
+  .fe-story-paper-body h3 {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-size: 1.2rem;
+    margin: 1.7rem 0 .7rem;
+  }
+  .fe-story-paper-body blockquote {
+    border-left: 2px solid var(--pp-rule);
+    padding: 0 0 0 1.25rem;
+    margin: 1.5rem 0;
+    font-style: italic;
+    color: var(--pp-ink-soft);
+  }
+  .fe-story-paper-body a {
+    color: var(--pp-accent);
+    border-bottom: 1px solid currentColor;
+    text-decoration: none;
+  }
+
+  .fe-story-paper-rule {
+    display: flex; align-items: center; gap: .9rem;
+    color: var(--pp-rule);
+    margin: 3rem auto 2rem;
+    max-width: 36rem;
+  }
+  .fe-story-paper-rule span { flex: 1; height: 1px; background: currentColor; opacity: .55; }
+  .fe-story-paper-rule i { font-size: 1.05rem; font-style: normal; }
+
+  .fe-story-paper-bio {
+    max-width: 36rem;
+    margin: 0 auto;
+    text-align: center;
+    color: var(--pp-ink-soft);
+  }
+  .fe-story-paper-bio h2 {
+    font-family: 'Inter', system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: .22em;
+    font-size: .72rem;
+    color: var(--pp-accent);
+    font-weight: 600;
+    margin: 0 0 .9rem;
+  }
+  .fe-story-paper-bio-name {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-style: italic;
+    color: var(--pp-ink);
+    font-size: 1.15rem;
+    margin: 0 0 .4rem;
+  }
+  .fe-story-paper-bio-body {
+    font-size: 1rem;
+    line-height: 1.65;
+    margin: 0;
+  }
+
+  .fe-story-paper-foot { text-align: center; margin-top: 3rem; }
+  .fe-story-paper-foot-link {
+    color: var(--pp-accent);
+    text-decoration: none;
+    font-style: italic;
+    border-bottom: 1px solid currentColor;
+    padding-bottom: 1px;
+  }
+</style>
+{% endblock %}

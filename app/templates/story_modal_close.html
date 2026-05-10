@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Closing… · Trusted Servants Pro{% endblock %}
+{% block content %}
+{# Tiny stub rendered after a destructive action (delete) inside the
+   new-story modal. JS immediately postMessages the parent which closes
+   the modal and reloads the stories list. The visible card is shown
+   only briefly while the message bubbles up. #}
+<section class="card" style="text-align:center; padding: 3rem 2rem;">
+  <h2 style="margin-bottom:.5rem;">{{ message or 'Saved' }}</h2>
+  <p class="muted">Closing…</p>
+</section>
+<script>
+  try { window.parent.postMessage({ type: 'story-modal-close' }, window.location.origin); }
+  catch (e) { /* ignore */ }
+</script>
+{% endblock %}

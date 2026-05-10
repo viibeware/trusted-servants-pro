@@ -1,0 +1,287 @@
+{% extends "frontend/base.html" %}
+{% block title %}{{ story.title }} · {{ frontend_title }}{% endblock %}
+{% block content %}
+{# Journal detail layout — ruled-paper journal page with a margin date
+   stamp on the left. Big serif title, ruled body lines, the sobriety
+   date hand-stamped at the top, and a soft pencil-shading edge to
+   the page. #}
+<section class="fe-story-journal{% if tpl_dynbg_key or tpl_dynbg_overlay %} fe-dynbg-host{% endif %}" style="{{ tpl_style }}{% if tpl_dynbg_config %}; {% set _resolved = dynbg_resolve_colors(tpl_dynbg_config) %}{% for _c in _resolved %}--fe-dynbg-c{{ loop.index }}: {{ _c }};{% endfor %} {{ dynbg_resolve_positions(tpl_dynbg_config, tpl_dynbg_key) }}{% endif %}">
+  {% if tpl_dynbg_key or tpl_dynbg_overlay %}{% with dynbg_key=tpl_dynbg_key, dynbg_config=tpl_dynbg_config %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}
+  <div class="fe-story-journal-room">
+    <article class="fe-story-journal-page">
+      <div class="fe-story-journal-margin" aria-hidden="true"></div>
+      <div class="fe-story-journal-content">
+        <a class="fe-story-journal-back" href="{{ url_for('frontend.stories_list') }}">
+          <span aria-hidden="true">←</span> All stories
+        </a>
+
+        <header class="fe-story-journal-head">
+          {% if story.sobriety_date %}
+          <div class="fe-story-journal-stamp" aria-hidden="true">
+            <div class="fe-story-journal-stamp-inner">
+              <span class="fe-story-journal-stamp-eyebrow">CLEAN SINCE</span>
+              <span class="fe-story-journal-stamp-date">{{ story.sobriety_date.strftime('%-d %b %Y') }}</span>
+            </div>
+          </div>
+          {% endif %}
+          {% if story.display_date %}
+          <span class="fe-story-journal-when">— Entry · {{ story.display_date.strftime('%A, %B %-d, %Y') }} —</span>
+          {% endif %}
+          <h1 class="fe-story-journal-title">{{ story.title }}</h1>
+          {% if story.author_name %}
+          <p class="fe-story-journal-byline">in the words of <i>{{ story.author_name }}</i></p>
+          {% endif %}
+        </header>
+
+        {% if story.featured_image_filename %}
+        <figure class="fe-story-journal-photo">
+          <img src="{{ url_for('public.story_featured_image', sid=story.id) }}" alt="">
+        </figure>
+        {% endif %}
+
+        {% if story.body %}
+        <div class="fe-story-journal-body markdown-body">
+          {{ story.body|markdown }}
+        </div>
+        {% endif %}
+
+        {% if story.author_bio %}
+        <aside class="fe-story-journal-aside">
+          <h2>About the author</h2>
+          <p>{{ story.author_bio }}</p>
+        </aside>
+        {% endif %}
+
+        <footer class="fe-story-journal-foot">
+          <a href="{{ url_for('frontend.stories_list') }}">More stories →</a>
+        </footer>
+      </div>
+    </article>
+  </div>
+</section>
+
+<style>
+  .fe-story-journal {
+    --jr-bg: #2a261d;
+    --jr-paper: #f5edd2;
+    --jr-paper-2: #ece2bc;
+    --jr-rule: rgba(60,80,160,.18);
+    --jr-margin: rgba(170,30,30,.28);
+    --jr-ink: #1a140d;
+    --jr-ink-soft: #5d4f33;
+    --jr-accent: #1f3d8a;
+    --jr-stamp: #b1431a;
+    background:
+      radial-gradient(900px 500px at 50% -10%, #3a3225 0%, transparent 60%),
+      linear-gradient(180deg, #2a241b 0%, #1c1610 100%);
+    color: var(--jr-ink);
+    padding: clamp(2.5rem, 5vw, 4rem) 1rem clamp(4rem, 8vw, 6rem);
+    font-family: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  }
+  [data-theme="dark"] .fe-story-journal {
+    --jr-paper: #221c12;
+    --jr-paper-2: #15110a;
+    --jr-rule: rgba(120,150,220,.16);
+    --jr-margin: rgba(220,80,80,.32);
+    --jr-ink: #ece1c8;
+    --jr-ink-soft: #b39e76;
+    --jr-accent: #6996f0;
+    --jr-stamp: #d8794d;
+  }
+  .fe-story-journal-room { max-width: 760px; margin: 0 auto; }
+  .fe-story-journal-page {
+    position: relative;
+    background:
+      var(--jr-paper);
+    box-shadow:
+      0 1px 0 rgba(0,0,0,.05) inset,
+      0 14px 28px rgba(0,0,0,.4),
+      0 32px 64px -20px rgba(0,0,0,.55);
+    border-radius: 1px;
+    overflow: hidden;
+    transform: rotate(-.18deg);
+  }
+  .fe-story-journal-page::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 100% 100%, rgba(60,40,10,.10), transparent 35%),
+      radial-gradient(circle at 0% 0%, rgba(60,40,10,.08), transparent 30%);
+    pointer-events: none;
+  }
+  .fe-story-journal-margin {
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 60px;
+    width: 1px;
+    background: var(--jr-margin);
+  }
+  .fe-story-journal-margin::before {
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0;
+    right: 4px;
+    width: 1px;
+    background: var(--jr-margin);
+    opacity: .55;
+  }
+  .fe-story-journal-content {
+    position: relative;
+    padding: clamp(2rem, 5vw, 3.5rem) clamp(1.5rem, 5vw, 4rem) clamp(2.5rem, 6vw, 4.5rem);
+    padding-left: clamp(80px, 8vw, 96px);
+    background:
+      repeating-linear-gradient(transparent 0 32px, var(--jr-rule) 32px 33px);
+  }
+  .fe-story-journal-back {
+    display: inline-block;
+    color: var(--jr-ink-soft);
+    text-decoration: none;
+    font-style: italic;
+    font-size: .9rem;
+    margin-bottom: 1.6rem;
+    border-bottom: 1px solid transparent;
+  }
+  .fe-story-journal-back:hover { color: var(--jr-accent); border-bottom-color: currentColor; }
+
+  .fe-story-journal-head { position: relative; margin-bottom: 2rem; }
+  .fe-story-journal-stamp {
+    position: absolute;
+    top: -.25rem;
+    right: 0;
+    transform: rotate(7deg);
+    z-index: 1;
+  }
+  .fe-story-journal-stamp-inner {
+    border: 3px double var(--jr-stamp);
+    color: var(--jr-stamp);
+    padding: .5rem .9rem;
+    text-align: center;
+    font-family: 'Inter', system-ui, sans-serif;
+    background: rgba(255,250,235,.4);
+  }
+  .fe-story-journal-stamp-eyebrow {
+    display: block;
+    font-size: .58rem;
+    letter-spacing: .26em;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .fe-story-journal-stamp-date {
+    display: block;
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-style: italic;
+    font-size: 1.05rem;
+    font-weight: 500;
+  }
+  .fe-story-journal-when {
+    display: inline-block;
+    color: var(--jr-ink-soft);
+    font-style: italic;
+    font-size: .92rem;
+    margin-bottom: .85rem;
+  }
+  .fe-story-journal-title {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-size: clamp(2.1rem, 4.8vw, 3rem);
+    line-height: 1.1;
+    margin: 0 0 .55rem;
+    letter-spacing: -.005em;
+    max-width: 30ch;
+  }
+  .fe-story-journal-byline {
+    color: var(--jr-ink-soft);
+    font-size: 1rem;
+    margin: 0 0 1rem;
+    font-style: italic;
+  }
+  .fe-story-journal-byline i { color: var(--jr-ink); }
+  .fe-story-journal-deck {
+    font-style: italic;
+    color: var(--jr-ink-soft);
+    font-size: 1.08rem;
+    line-height: 1.65;
+    margin: 0;
+    max-width: 36rem;
+  }
+
+  .fe-story-journal-photo {
+    margin: 1.4rem 0 2rem;
+    transform: rotate(-1deg);
+    background: var(--jr-paper);
+    padding: .55rem;
+    border: 1px solid rgba(120,90,40,.22);
+    box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 6px 16px -8px rgba(70,50,20,.4);
+    max-width: 320px;
+  }
+  .fe-story-journal-photo img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    filter: sepia(.10) saturate(.95);
+  }
+
+  .fe-story-journal-body {
+    font-size: 1.08rem;
+    line-height: 2;
+    color: var(--jr-ink);
+  }
+  .fe-story-journal-body p { margin: 0 0 1.1rem; }
+  .fe-story-journal-body h2 {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-style: italic;
+    font-weight: 500;
+    font-size: 1.4rem;
+    margin: 1.7rem 0 .8rem;
+    text-decoration: underline solid var(--jr-margin) 2px;
+    text-underline-offset: 6px;
+  }
+  .fe-story-journal-body h3 {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-size: 1.18rem;
+    margin: 1.4rem 0 .6rem;
+  }
+  .fe-story-journal-body blockquote {
+    border-left: 3px solid var(--jr-margin);
+    padding-left: 1.1rem;
+    margin: 1.4rem 0;
+    font-style: italic;
+    color: var(--jr-ink-soft);
+  }
+  .fe-story-journal-body a {
+    color: var(--jr-accent);
+    border-bottom: 1px solid currentColor;
+    text-decoration: none;
+  }
+
+  .fe-story-journal-aside {
+    margin-top: 2.5rem;
+    padding: 1.25rem 1.4rem;
+    background: rgba(60,40,10,.04);
+    border: 1px dashed rgba(60,40,10,.2);
+    border-radius: 2px;
+    color: var(--jr-ink-soft);
+  }
+  .fe-story-journal-aside h2 {
+    font-family: 'Inter', system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: .22em;
+    font-size: .7rem;
+    color: var(--jr-stamp);
+    font-weight: 700;
+    margin: 0 0 .55rem;
+  }
+  .fe-story-journal-aside p { margin: 0; line-height: 1.65; font-size: .98rem; }
+
+  .fe-story-journal-foot { margin-top: 2.5rem; text-align: right; }
+  .fe-story-journal-foot a {
+    color: var(--jr-accent);
+    text-decoration: none;
+    font-style: italic;
+    border-bottom: 1px solid currentColor;
+  }
+</style>
+{% endblock %}

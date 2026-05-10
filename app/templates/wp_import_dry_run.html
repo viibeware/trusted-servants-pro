@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+{% block title %}Dry run · WordPress Importer{% endblock %}
+{% block heading %}Dry run preview{% endblock %}
+{% block heading_help %}This is exactly what would be created. Nothing has been saved yet — the totals + table below describe the plan, not actuals. Type <code>IMPORT</code> at the bottom to commit.{% endblock %}
+{% block content %}
+<div class="wp-wizard-header">
+  <div class="wp-actionbar">
+    <a class="btn" href="{{ url_for('main.wp_import_map', token=token, embed=1 if embed else None) }}">← Back to mapping</a>
+    <form method="post" action="{{ url_for('main.wp_import_cancel', token=token) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+      <button type="submit" class="btn"
+              onclick="return confirm('Discard this import? Nothing has been changed.')">Cancel</button>
+    </form>
+  </div>
+
+  <div class="wp-wizard-stepper">
+    <ol>
+      <li class="is-done"><span class="wp-step-num">✓</span><span class="wp-step-label">Source</span></li>
+      <li class="is-done"><span class="wp-step-num">✓</span><span class="wp-step-label">Review &amp; map</span></li>
+      <li class="is-active"><span class="wp-step-num">3</span><span class="wp-step-label">Dry run</span></li>
+      <li><span class="wp-step-num">4</span><span class="wp-step-label">Import</span></li>
+    </ol>
+  </div>
+</div>
+
+{% set c = preview.counts %}
+<section class="card wp-counts-card">
+  <div class="card-head">
+    <h2>{{ icon('check-circle') }} Plan summary</h2>
+  </div>
+  <div class="wp-counts-grid">
+    <div class="wp-count wp-count-stories">
+      <div class="wp-count-num">{{ c.stories }}</div>
+      <div class="wp-count-label">Stor{% if c.stories == 1 %}y{% else %}ies{% endif %}</div>
+    </div>
+    <div class="wp-count wp-count-announcements">
+      <div class="wp-count-num">{{ c.announcements }}</div>
+      <div class="wp-count-label">Announcement{% if c.announcements != 1 %}s{% endif %}</div>
+    </div>
+    <div class="wp-count wp-count-events">
+      <div class="wp-count-num">{{ c.events }}</div>
+      <div class="wp-count-label">Event{% if c.events != 1 %}s{% endif %}</div>
+    </div>
+    <div class="wp-count wp-count-skipped">
+      <div class="wp-count-num">{{ c.skipped }}</div>
+      <div class="wp-count-label">Skipped</div>
+    </div>
+    {% if c.renamed %}
+    <div class="wp-count wp-count-warning">
+      <div class="wp-count-num">{{ c.renamed }}</div>
+      <div class="wp-count-label">Slug renamed</div>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+{% if preview.warnings %}
+<section class="card wp-warn-card">
+  <div class="card-head">
+    <h2>{{ icon('alert-triangle') }} Heads up</h2>
+  </div>
+  <ul class="wp-warn-list">
+    {% for w in preview.warnings %}
+    <li>{{ w }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section class="card wp-preview-card">
+  <div class="card-head">
+    <h2>{{ icon('list') }} What would be created</h2>
+    <span class="muted smaller">{{ preview.rows|length }} row{% if preview.rows|length != 1 %}s{% endif %} planned</span>
+  </div>
+  {% set _create_rows = preview.rows | rejectattr('target', 'equalto', 'skip') | list %}
+  {% if _create_rows %}
+  <div class="wp-preview-table-wrap">
+    <table class="tbl wp-preview-table">
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Target</th>
+          <th>Slug</th>
+          <th>Image</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in _create_rows %}
+        <tr>
+          <td>
+            <span class="wp-preview-title">{{ r.title }}</span>
+            {% if r.was_renamed %}
+            <span class="post-chip post-chip-warning" title="Slug already taken — auto-suffixed on save">renamed</span>
+            {% endif %}
+          </td>
+          <td><span class="wp-target-pill wp-target-pill--{{ r.target }} is-active">{{ target_labels[r.target] }}</span></td>
+          <td><code class="wp-slug">{{ r.slug or '—' }}</code></td>
+          <td>
+            {% if r.image_status == 'would-download' %}
+            <span class="post-chip">{{ icon('download') }} Will download</span>
+            {% else %}
+            <span class="muted smaller">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Nothing's been mapped — every post is set to <b>Skip</b>. Go back and pick a target for at least one post.</p>
+  {% endif %}
+
+  {% set _skipped = preview.rows | selectattr('target', 'equalto', 'skip') | list %}
+  {% if _skipped %}
+  <details class="wp-skipped-details">
+    <summary>{{ _skipped|length }} skipped post{% if _skipped|length != 1 %}s{% endif %}</summary>
+    <ul class="wp-skipped-list">
+      {% for r in _skipped %}
+      <li>{{ r.title }}</li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+</section>
+
+{% if _create_rows %}
+<section class="card data-card wp-confirm-card">
+  <div class="data-card-head">
+    {{ icon('alert-circle') }}
+    <span>Ready to import</span>
+  </div>
+  <p class="muted small data-card-lead">
+    Featured images will be downloaded and deduplicated by content hash;
+    duplicate slugs will auto-suffix with <code>-2</code>, <code>-3</code>, etc.
+    The original WordPress posts won't be touched. Type <code>IMPORT</code> below
+    to commit.
+  </p>
+  <form method="post" action="{{ url_for('main.wp_import_dry_run', token=token) }}"
+        class="form wp-confirm-form" data-wp-fetch-form data-wp-fetch-mode="import">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+    <label>Type <code>IMPORT</code> to confirm
+      <input type="text" name="confirm" placeholder="IMPORT" autocomplete="off" required pattern="IMPORT">
+    </label>
+    <div class="data-card-actions">
+      <button type="submit" class="btn btn-primary">{{ icon('check') }} Run import</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+
+<style>
+  .wp-counts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+  }
+  .wp-count {
+    border-radius: 12px;
+    padding: 1rem 1.1rem;
+    background: var(--surface-alt, rgba(0,0,0,.04));
+    border: 1px solid var(--border, rgba(0,0,0,.08));
+    text-align: center;
+  }
+  .wp-count-num {
+    font-size: 2.2rem;
+    font-weight: 700;
+    line-height: 1;
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .wp-count-label {
+    font-size: .85rem;
+    margin-top: .35rem;
+    color: var(--text-soft, rgba(0,0,0,.6));
+    letter-spacing: .04em;
+  }
+  .wp-count-stories       { background: #fef3c7; border-color: #fcd34d; color: #78350f; }
+  .wp-count-announcements { background: #dbeafe; border-color: #93c5fd; color: #1e3a8a; }
+  .wp-count-events        { background: #dcfce7; border-color: #86efac; color: #166534; }
+  .wp-count-skipped       { background: #f3f4f6; border-color: #d1d5db; color: #4b5563; }
+  .wp-count-warning       { background: #fef3c7; border-color: #f59e0b; color: #78350f; }
+  [data-theme="dark"] .wp-count-stories       { background: #4a3008; border-color: #b45309; color: #fde68a; }
+  [data-theme="dark"] .wp-count-announcements { background: #14264e; border-color: #2563eb; color: #bfdbfe; }
+  [data-theme="dark"] .wp-count-events        { background: #14391f; border-color: #15803d; color: #bbf7d0; }
+  [data-theme="dark"] .wp-count-skipped       { background: #2a2d34; border-color: #4b5563; color: #d1d5db; }
+  [data-theme="dark"] .wp-count-warning       { background: #4a3008; border-color: #b45309; color: #fde68a; }
+
+  .wp-warn-card .card-head h2 { color: #b45309; }
+  .wp-warn-list { margin: 0; padding-left: 1.25rem; line-height: 1.65; }
+
+  .wp-preview-table-wrap { overflow-x: auto; }
+  .wp-preview-table th { font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--text-soft); }
+  .wp-preview-table td { vertical-align: middle; }
+  .wp-preview-title { font-weight: 500; }
+  .wp-slug { font-size: .82rem; color: var(--text-soft, rgba(0,0,0,.6)); }
+
+  .wp-skipped-details { margin-top: 1rem; }
+  .wp-skipped-details summary {
+    cursor: pointer;
+    color: var(--text-soft, rgba(0,0,0,.6));
+    font-size: .92rem;
+    padding: .35rem 0;
+  }
+  .wp-skipped-list {
+    margin: .5rem 0 0;
+    padding: .75rem 1.25rem;
+    background: var(--surface-alt, rgba(0,0,0,.03));
+    border-radius: 8px;
+    line-height: 1.6;
+  }
+
+  /* Confirm-card scoped overrides — the shared .data-card chrome
+     gives the brand-blue accent + header treatment; these tune the
+     IMPORT input's width + monospace font, plus pin the card to the
+     bottom of the iframe / page as a sticky footer so the Run-import
+     button stays in reach while the admin scrolls the preview table.
+     The card lives inside the normal block flow but `position: sticky`
+     keeps it visible against the bottom of the scrolling ancestor. */
+  .wp-confirm-card {
+    position: sticky;
+    bottom: 0;
+    z-index: 15;
+    margin-bottom: 0;
+    box-shadow: 0 -8px 20px -12px rgba(0, 0, 0, .25),
+                0 1px 0 rgba(0, 0, 0, .04);
+  }
+  /* Pull the sticky footer to the iframe edge so its background covers
+     the full bottom strip rather than leaving a gap on each side from
+     embed-content's padding. */
+  body.embed .wp-confirm-card {
+    margin: 0 -20px;
+    border-radius: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    border-bottom-width: 0;
+    padding-left: calc(20px + 1.75rem);
+    padding-right: calc(20px + 1.75rem);
+  }
+  /* Restore the brand accent bar as a top border in the embed sticky
+     mode (the data-card's left-border accent isn't visible once we
+     drop left/right borders). */
+  body.embed .wp-confirm-card {
+    border-top: 4px solid var(--brand);
+  }
+  .wp-confirm-card .data-card-head { color: #b45309; }
+  .wp-confirm-card .data-card-head .icon { color: #b45309; }
+  .wp-confirm-form { max-width: 440px; }
+  .wp-confirm-form input { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  /* Compact the sticky footer a bit so it doesn't dominate the modal,
+     and give it a bit more breathing room on the top edge. */
+  .wp-confirm-card { padding-top: 2rem; padding-bottom: 1.1rem; }
+  .wp-confirm-card .data-card-head { margin-top: 2rem; margin-bottom: .5rem; }
+  .wp-confirm-card .data-card-lead { margin-bottom: .75rem; font-size: .88rem; }
+  /* On the dry-run page, place the IMPORT input + Run-import button
+     side-by-side so the sticky footer stays a single row tall. The
+     label inside column 1 also lays out horizontally so the prompt
+     "Type IMPORT to confirm" sits flush left of its input field. */
+  .wp-confirm-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: center;
+    max-width: none;
+  }
+  .wp-confirm-form > label {
+    margin: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: .75rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .wp-confirm-form > label > input {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    margin: 0;
+  }
+  .wp-confirm-form .data-card-actions { margin-top: 0; }
+  @media (max-width: 640px) {
+    .wp-confirm-form { grid-template-columns: 1fr; }
+    .wp-confirm-form > label { flex-direction: column; align-items: stretch; gap: .35rem; }
+    .wp-confirm-form .data-card-actions { justify-content: stretch; }
+    .wp-confirm-form .data-card-actions .btn { width: 100%; justify-content: center; }
+  }
+
+  /* Re-use the pillgroup styles from wp_import_map.html for the preview
+     target chips. */
+  .wp-target-pill {
+    cursor: default;
+    user-select: none;
+    padding: 4px 11px;
+    border-radius: 999px;
+    font-size: .82rem;
+    display: inline-block;
+  }
+  .wp-target-pill--stories.is-active       { background: #fef3c7; color: #78350f; }
+  .wp-target-pill--announcements.is-active { background: #dbeafe; color: #1e3a8a; }
+  .wp-target-pill--events.is-active        { background: #dcfce7; color: #166534; }
+  [data-theme="dark"] .wp-target-pill--stories.is-active       { background: #4a3008; color: #fde68a; }
+  [data-theme="dark"] .wp-target-pill--announcements.is-active { background: #14264e; color: #bfdbfe; }
+  [data-theme="dark"] .wp-target-pill--events.is-active        { background: #14391f; color: #bbf7d0; }
+</style>
+
+{% include "_wp_fetch_overlay.html" %}
+{% endblock %}

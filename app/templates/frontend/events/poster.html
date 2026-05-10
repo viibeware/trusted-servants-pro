@@ -2,8 +2,9 @@
 {% block title %}{{ event.title }} · {{ frontend_title }}{% endblock %}
 {% block content %}
 {% set _has_cover = event.featured_image_filename %}
-<section class="fe-event-poster{% if _has_cover %} has-cover{% endif %}" id="event"
-         style="{{ tpl_style or '' }}">
+<section class="fe-event-poster{% if _has_cover %} has-cover{% endif %}{% if tpl_dynbg_key or tpl_dynbg_overlay %} fe-dynbg-host{% endif %}" id="event"
+         style="{{ tpl_style or '' }}{% if tpl_dynbg_config %}; {% set _resolved = dynbg_resolve_colors(tpl_dynbg_config) %}{% for _c in _resolved %}--fe-dynbg-c{{ loop.index }}: {{ _c }};{% endfor %} {{ dynbg_resolve_positions(tpl_dynbg_config, tpl_dynbg_key) }}{% endif %}">
+  {% if tpl_dynbg_key or tpl_dynbg_overlay %}{% with dynbg_key=tpl_dynbg_key, dynbg_config=tpl_dynbg_config %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}
   <div class="fe-event-poster-hero"
        {% if _has_cover %}style="background-image: url('{{ url_for('public.post_featured_image', pid=event.id) }}');"{% endif %}>
     <div class="fe-event-poster-hero-shade" aria-hidden="true"></div>
@@ -83,6 +84,13 @@
         {% if event.website_url %}
         <a class="fe-btn fe-btn-ghost fe-event-poster-cta" href="{{ event.website_url }}" target="_blank" rel="noopener">
           {{ icon('external-link') }} {{ event.website_label or 'Event website' }} <em>↗</em>
+        </a>
+        {% endif %}
+        {% if event.event_starts_at %}
+        <a class="fe-btn fe-btn-ghost fe-event-poster-cta"
+           href="{{ url_for('frontend.event_calendar_ics', slug=event.public_slug) }}"
+           download="{{ event.public_slug }}.ics">
+          {{ icon('calendar-check') }} Add to Calendar
         </a>
         {% endif %}
       </div>

@@ -1,0 +1,48 @@
+{# Render-side helper: emits everything a single dynbg-host needs.
+
+   Caller passes:
+     dynbg_key       — base catalog key (or empty)
+     dynbg_config    — JSON string (or already-decoded dict) carrying
+                       overlay + custom colours; tolerated as None.
+
+   Output:
+     1. The base dynbg <div> (via _dynbg.html), if a key is set.
+     2. The overlay <div> (via _dynbg_overlay.html), if config has one.
+
+   The host element itself (with `class="fe-dynbg-host"` + the inline
+   colour-vars `style`) is the caller's responsibility — we can't
+   close-over the host's own attributes from here. The recommended
+   pattern:
+
+     {%- set _cfg = dynbg_decode(page.bg_dynbg_config_json) -%}
+     {%- set _vars = dynbg_colors_css(_cfg.colors) -%}
+     <article class="… fe-dynbg-host" style="{{ _vars }} …">
+       {% with dynbg_key=page.bg_dynamic_key,
+                dynbg_config=page.bg_dynbg_config_json %}
+         {% include "frontend/_dynbg_apply.html" %}
+       {% endwith %}
+       …content…
+     </article>
+#}
+{%- if dynbg_key -%}
+{% with dynbg_key=dynbg_key %}{% include "frontend/_dynbg.html" %}{% endwith %}
+{%- endif -%}
+{%- set _ck_cfg = dynbg_decode(dynbg_config) -%}
+{%- if _ck_cfg.overlay -%}
+{% with dynbg_overlay_key=_ck_cfg.overlay,
+         dynbg_overlay_scope=_ck_cfg.overlay_scope,
+         dynbg_overlay_size=_ck_cfg.overlay_size,
+         dynbg_overlay_intensity=_ck_cfg.overlay_intensity %}
+  {% include "frontend/_dynbg_overlay.html" %}
+{% endwith %}
+{%- endif -%}
+{# When the admin flipped "Freeze movement" off, this absolutely-
+   positioned no-op span carries a `data-dynbg-no-anim` data attr
+   that a tiny inline script (loaded once per page) reads to add
+   `fe-dynbg-no-anim` to the closest fe-dynbg-host. We could stamp
+   the class server-side at the host, but each surface adds its
+   own class chain; centralising the logic here keeps host call
+   sites identical regardless of animation state. #}
+{%- if _ck_cfg.animate is sameas false -%}
+<span class="fe-dynbg-no-anim-marker" data-dynbg-no-anim hidden></span>
+{%- endif -%}

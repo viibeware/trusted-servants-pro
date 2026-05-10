@@ -1,0 +1,74 @@
+{# Shared loading overlay for the WP importer wizard. Included from
+   each wizard step that has a slow-submit form (start, map, dry-run).
+   Forms opt in by adding `data-wp-fetch-form` plus an optional
+   `data-wp-fetch-mode="rest|csv|map|import"` attribute. The overlay
+   reads the mode and customises the title + message. #}
+<div class="wp-fetch-overlay" id="wp-fetch-overlay" aria-hidden="true" role="status" aria-live="polite">
+  <div class="wp-fetch-overlay-card">
+    <div class="wp-fetch-spinner" aria-hidden="true"></div>
+    <div class="wp-fetch-title" data-wp-fetch-title>Working…</div>
+    <p class="wp-fetch-message" data-wp-fetch-message>Hang tight — this may take a moment.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  var overlay = document.getElementById('wp-fetch-overlay');
+  if (!overlay || overlay.dataset.bound === '1') return;
+  overlay.dataset.bound = '1';
+  var titleEl = overlay.querySelector('[data-wp-fetch-title]');
+  var msgEl = overlay.querySelector('[data-wp-fetch-message]');
+
+  function escape(s) { return String(s).replace(/[<>&"']/g, function (c) {
+    return { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c];
+  }); }
+
+  document.querySelectorAll('[data-wp-fetch-form]').forEach(function (form) {
+    form.addEventListener('submit', function () {
+      var mode = form.dataset.wpFetchMode || 'rest';
+      var title = 'Working…';
+      var msg = 'Hang tight — this may take a moment.';
+      if (mode === 'rest') {
+        var url = (form.querySelector('input[name=site_url]') || {}).value || '';
+        try { url = (new URL(url.startsWith('http') ? url : 'https://' + url)).host; } catch (e) {}
+        title = 'Connecting to WordPress…';
+        msg = 'Fetching posts and categories from <span class="wp-fetch-host">' +
+              escape(url || 'your WordPress site') +
+              '</span>. Up to 500 posts — this may take a moment.';
+      } else if (mode === 'csv') {
+        var f = form.querySelector('input[type=file]');
+        var name = (f && f.files && f.files[0]) ? f.files[0].name : 'your file';
+        title = 'Parsing CSV…';
+        msg = 'Reading <span class="wp-fetch-host">' + escape(name) +
+              '</span> and normalising rows. This usually finishes in a second or two.';
+      } else if (mode === 'map') {
+        title = 'Compiling the import plan…';
+        msg = 'Resolving slugs, checking for conflicts, and rendering the dry-run preview.';
+      } else if (mode === 'import') {
+        title = 'Running the import…';
+        msg = 'Creating rows and downloading featured images. Larger imports can take a while — please don\'t close this window.';
+      }
+      titleEl.textContent = title;
+      msgEl.innerHTML = msg;
+      overlay.classList.add('is-active');
+      overlay.setAttribute('aria-hidden', 'false');
+      // Disable the submit button so a double-tap doesn't fire twice.
+      var btn = form.querySelector('button[type=submit], button:not([type])');
+      if (btn) {
+        btn.disabled = true;
+        btn.classList.add('is-loading');
+      }
+      // Some forms have an external submit button (e.g. wp-map-form's
+      // "Continue to dry run" button lives outside the form via
+      // form="wp-map-form"). Walk those too.
+      var formId = form.id;
+      if (formId) {
+        document.querySelectorAll('button[form="' + formId + '"]').forEach(function (b) {
+          b.disabled = true;
+          b.classList.add('is-loading');
+        });
+      }
+    });
+  });
+})();
+</script>

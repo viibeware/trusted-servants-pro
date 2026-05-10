@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% set _is_new = story is none %}
+{% set _s = story %}
+{% block heading %}{{ 'New story' if _is_new else 'Edit story' }}{% endblock %}
+{% block heading_help %}{% if _is_new %}Compose a recovery story. Add a title, an author byline, the body, a featured image, and any optional dates.{% else %}Update the title, author, content, image, or dates.{% endif %}{% endblock %}
+{% block content %}
+{# Action bar lives in content (not top_actions) so it renders in both
+   the standalone full-page view and the embed-mode iframe modal. The
+   .story-edit-header is sticky-pinned to the top of the iframe / page
+   so the Save buttons stay reachable while the form scrolls. #}
+<div class="story-edit-header">
+  {% if embed %}
+  <div class="story-edit-title">
+    <span class="story-edit-title-text">{{ 'New story' if _is_new else 'Edit story' }}</span>
+    {% if _s and _s.is_draft %}<span class="post-chip post-chip-draft">Draft</span>{% endif %}
+    {% if _s and _s.is_archived %}<span class="post-chip">Archived</span>{% endif %}
+  </div>
+  {% endif %}
+  <div class="story-edit-actions">
+    {% if embed %}
+      <button type="button" class="btn" data-story-close>Cancel</button>
+    {% else %}
+      <a class="btn" href="{{ url_for('main.stories') }}">← All stories</a>
+      {% if _s and _s.is_draft %}<span class="post-chip post-chip-draft post-chip-header">Draft</span>{% endif %}
+    {% endif %}
+    {% if _s and not _s.is_archived %}
+    <form method="post" action="{{ url_for('main.story_archive', sid=_s.id) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+      <button type="submit" class="btn">Archive</button>
+    </form>
+    {% elif _s and _s.is_archived %}
+    <form method="post" action="{{ url_for('main.story_unarchive', sid=_s.id) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+      <button type="submit" class="btn">Restore</button>
+    </form>
+    {% endif %}
+    {% if _is_new %}
+      <button type="submit" form="story-edit-form" name="action" value="draft" class="btn">Save as draft</button>
+      <button type="submit" form="story-edit-form" name="action" value="publish" class="btn btn-primary">Publish story</button>
+    {% elif _s and _s.is_draft %}
+      <button type="submit" form="story-edit-form" name="action" value="draft" class="btn">Save draft</button>
+      <form method="post" action="{{ url_for('main.story_publish', sid=_s.id) }}" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+        <button type="submit" class="btn btn-primary" title="Publish this draft">Publish</button>
+      </form>
+    {% else %}
+      <button type="submit" form="story-edit-form" class="btn btn-primary">Save story</button>
+      {% if _s %}
+      <form method="post" action="{{ url_for('main.story_unpublish', sid=_s.id) }}" style="display:inline"
+            onsubmit="return confirm('Move this published story back to drafts? It will disappear from the public site until republished.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+        <button type="submit" class="btn" title="Move to Drafts">Move to Drafts</button>
+      </form>
+      {% endif %}
+    {% endif %}
+    {% if _s %}
+    <form method="post" action="{{ url_for('main.story_delete', sid=_s.id) }}" style="display:inline"
+          onsubmit="return confirm('Delete this story permanently? Featured image will be cleaned up.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+      <button type="submit" class="btn btn-danger">Delete</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<form id="story-edit-form" class="form post-form" method="post"
+      action="{{ url_for('main.story_save') }}" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+  {% if _s %}<input type="hidden" name="story_id" value="{{ _s.id }}">{% endif %}
+
+  {# ── Title + body ─────────────────────────────────────────── #}
+  <section class="card">
+    <div class="card-head">
+      <h2>Story</h2>
+      <span class="muted smaller">Title sits at the top of the public detail page; body is the long-form content. Markdown supported.</span>
+    </div>
+
+    <label>Title
+      <input type="text" name="title" required maxlength="255"
+             value="{{ (_s.title if _s else '') or '' }}"
+             placeholder="The chase">
+    </label>
+    {% if current_user.is_authenticated and current_user.can_edit_frontend() %}
+    <label>Public URL
+      <span class="muted small" style="display:block; margin: 2px 0 4px;">
+        Only the slug is editable — the public story lives at <code>/stories/&lt;slug&gt;</code>. Leave blank to derive from the title. Lowercase letters, numbers, and hyphens only. If another story already uses this slug we'll append <code>-2</code>, <code>-3</code>, etc. on save.
+      </span>
+      <div class="slug-input-row">
+        <span class="slug-input-prefix" aria-hidden="true">/stories/</span>
+        <input type="text" name="slug" class="slug-input-field"
+               value="{{ (_s.slug if (_s and _s.slug) else '') or '' }}"
+               placeholder="{{ _s.public_slug if _s else 'auto-derived from title' }}"
+               pattern="[a-z0-9-]*" maxlength="200">
+      </div>
+    </label>
+    {% endif %}
+
+    <label>Summary <span class="muted small">(short blurb shown in the stories list and in link previews)</span>
+      <textarea name="summary" rows="2"
+                placeholder="One or two sentences — the hook for this story.">{{ (_s.summary if _s else '') or '' }}</textarea>
+    </label>
+
+    <label>Body <span class="muted small">(the full story, Markdown supported)</span>
+      <textarea name="body" rows="18" class="story-body-field"
+                placeholder="The full body of the story. Use Markdown for headings, emphasis, lists, and links.">{{ (_s.body if _s else '') or '' }}</textarea>
+    </label>
+  </section>
+
+  {# ── Author ─────────────────────────────────────────────── #}
+  <section class="card">
+    <div class="card-head">
+      <h2>Author</h2>
+      <span class="muted smaller">The byline shown on the public page. First name + last initial is common for recovery stories — e.g. "Joe S."</span>
+    </div>
+    <label>Author byline
+      <input type="text" name="author_name" maxlength="120"
+             value="{{ (_s.author_name if _s else '') or '' }}"
+             placeholder="Joe S.">
+    </label>
+    <label>Author bio <span class="muted small">(optional — a short paragraph rendered after the story)</span>
+      <textarea name="author_bio" rows="3"
+                placeholder="Optional: anything else the author wants readers to know.">{{ (_s.author_bio if _s else '') or '' }}</textarea>
+    </label>
+  </section>
+
+  {# ── Dates ──────────────────────────────────────────────── #}
+  <section class="card">
+    <div class="card-head">
+      <h2>Dates</h2>
+      <span class="muted smaller">Optional — both shown on the public page when set. Leave a date blank to hide it.</span>
+    </div>
+    <div class="form-row">
+      <label>Story date <span class="muted small">(the publish / "as of" date the public page shows under the title)</span>
+        <input type="date" name="story_date"
+               value="{% if _s and _s.story_date %}{{ _s.story_date.strftime('%Y-%m-%d') }}{% endif %}">
+      </label>
+      <label>Sobriety / clean date
+        <input type="date" name="sobriety_date"
+               value="{% if _s and _s.sobriety_date %}{{ _s.sobriety_date.strftime('%Y-%m-%d') }}{% endif %}">
+      </label>
+    </div>
+    <label class="check" style="margin-top:.75rem;">
+      <input type="checkbox" name="is_featured" value="1"
+             {% if _s and _s.is_featured %}checked{% endif %}>
+      <span><b>Feature this story</b> — the public list templates highlight featured stories at the top.</span>
+    </label>
+  </section>
+
+  {# ── Featured image ─────────────────────────────────────── #}
+  <section class="card">
+    <div class="card-head">
+      <h2>Featured image</h2>
+      <span class="muted smaller">Hero image at the top of the story. PNG, JPG, or WebP. Optional — paper / minimal templates often look better without one.</span>
+    </div>
+    <div class="og-image-row">
+      <div class="og-image-preview">
+        {% if _s and _s.featured_image_filename %}
+        <img src="{{ url_for('public.story_featured_image', sid=_s.id) }}" alt="Featured image">
+        <label class="check fe-logo-clear-label">
+          <input type="checkbox" name="clear_featured_image" value="1"><span>Remove current image</span>
+        </label>
+        {% else %}
+        <div class="og-image-empty muted small">No image uploaded yet.</div>
+        {% endif %}
+      </div>
+      <div class="og-image-fields">
+        <label>Replace image
+          <input type="file" name="featured_image" accept="image/png,image/jpeg,image/webp">
+        </label>
+      </div>
+    </div>
+  </section>
+</form>
+
+<style>
+  /* Sticky action header — pins the Cancel / Save / Publish / Archive
+     buttons to the top of the iframe (or page) so they stay reachable
+     while the form scrolls. Mirrors the WP importer's `.wp-wizard-
+     header` pattern for consistency across modal-hosted admin forms. */
+  .story-edit-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    margin: 0 0 1.25rem;
+    padding: 1rem 0 .9rem;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 4px 12px -10px rgba(0, 0, 0, .25);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+  }
+  body.embed .story-edit-header {
+    margin: -20px -20px 1.25rem;
+    padding: 16px 20px;
+  }
+  .story-edit-title {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text);
+  }
+  .story-edit-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    margin-left: auto;
+  }
+</style>
+
+{% if embed %}
+<script>
+  // Cancel / Close buttons inside the embed iframe ask the parent
+  // window to close the modal. Parent listener (in app.js) catches the
+  // postMessage, closes the story-new-modal, and reloads the stories
+  // list so any newly-saved row shows up immediately.
+  document.querySelectorAll('[data-story-close]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      try { window.parent.postMessage({ type: 'story-modal-close' }, window.location.origin); }
+      catch (e) { /* ignore */ }
+    });
+  });
+</script>
+{% endif %}
+{% endblock %}

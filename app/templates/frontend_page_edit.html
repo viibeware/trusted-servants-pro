@@ -1,0 +1,959 @@
+{% extends "base.html" %}
+{% from "_frontend_template_picker.html" import template_picker %}
+{% from "_frontend_layout_picker.html" import layout_picker %}
+{% from "_frontend_structure_card.html" import structure_card, structure_page_tree, structure_orphans_card, structure_block_palette %}
+{% set _active_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
+{% block heading %}{{ 'Edit page' if page else 'New page' }}{% endblock %}
+{% block heading_help %}{% if page %}Editing <code>/{{ page.slug }}</code>.{% else %}Create a new content page.{% endif %}{% endblock %}
+
+{% block top_actions %}
+{% if page %}
+{{ layout_picker(page_layouts, active_layout_key,
+                  url_for('main.frontend_page_layout_save', page_id=page.id),
+                  "layout_key",
+                  "page-layout-modal", "page-layout-builder-modal",
+                  page_block_catalog,
+                  url_for('main.frontend_custom_layout_save'),
+                  kind='page') }}
+{% endif %}
+{{ template_picker(frontend_themes, _active_theme,
+                    "frontend_theme",
+                    url_for('main.frontend_theme_save'),
+                    "site-theme-modal", "page", "Site theme", label="Theme") }}
+<a class="btn" href="{{ url_for('main.frontend_pages') }}">← All pages</a>
+{% if page %}<a class="btn" href="{{ url_for('frontend.page_detail', slug=page.slug) }}" target="_blank" rel="noopener">View ↗</a>{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="fe-admin-layout">
+  {% include "_frontend_subnav.html" %}
+  <div class="fe-admin-main">
+
+    {# Page-title banner above the first card so the admin always sees
+       which page they're editing. New pages have no title yet, so this
+       is gated on `page`. #}
+    {% if page %}
+    {%- set _page_status = 'draft' if not page.is_published else ('private' if page.is_private else 'published') -%}
+    <div class="fe-page-edit-title-banner">
+      <div class="fe-page-edit-title-banner-eyebrow muted smaller">Editing page</div>
+      <h1 class="fe-page-edit-title-banner-title">{{ page.title }}</h1>
+      <div class="fe-page-edit-title-banner-meta muted smaller">
+        <code>/{{ page.slug }}</code>
+        {% if _page_status == 'draft' %} · <span class="post-chip post-chip-draft">Draft</span>{% endif %}
+        {% if _page_status == 'private' %} · <span class="post-chip post-chip-private">Private</span>{% endif %}
+        {% if _page_status == 'published' %} · <span class="post-chip post-chip-online">Published</span>{% endif %}
+      </div>
+      {# Quick-action pills — clicking a pill selects the matching
+         visibility radio in the page-settings form below and triggers
+         the standard save-bar (it picks up the radio's `change` event
+         and shows "Unsaved changes"). Nothing is committed until the
+         admin clicks the save bar's Save button — same round-trip as
+         editing any other field. #}
+      <div class="fe-page-edit-status-actions" data-fe-page-status-actions
+           data-current-status="{{ _page_status }}">
+        {% for key, label in [('draft', 'Draft'), ('published', 'Publish'), ('private', 'Make Private')] %}
+        <button type="button"
+                class="btn btn-sm fe-page-edit-status-pill{% if _page_status == key %} active{% endif %}"
+                data-fe-page-status="{{ key }}"
+                aria-pressed="{{ 'true' if _page_status == key else 'false' }}">
+          {{ label }}{% if _page_status == key %} ✓{% endif %}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# ── Active layout structure ────────────────────────────────────
+       Shown for both existing AND new pages. New pages start with an
+       empty structure card + palette so the admin can drag blocks in
+       before the first save (the form's hidden `blocks_json` input
+       carries the dragged structure into `frontend_page_save`). Each
+       pill opens the BlockEditor modal scrolled to that block; the
+       top-right "Change layout" button opens the layout PICKER (the
+       same modal the top-bar Layout pill uses) so the admin can
+       switch layouts or build a custom one. #}
+    {% set _PAGE_BLOCK_LABELS = {
+      'paragraph':   ('Text',         'type'),
+      'heading':     ('Heading',      'heading'),
+      'image':       ('Image',        'image'),
+      'icon':        ('Icon',         'star'),
+      'button':      ('Button',       'mouse-pointer-click'),
+      'container':   ('Container',    'layout-grid'),
+      'video':       ('Video',        'video'),
+      'code':        ('Code',         'code'),
+      'callout':     ('Callout',      'alert-triangle'),
+      'list':        ('List',         'list'),
+      'separator':   ('Divider',      'minus'),
+      'toc_sidebar': ('Wiki sidebar', 'panel-left'),
+    } %}
+    {% set _editable = ['paragraph','heading','image','icon','button','container',
+                        'video','code','callout','list','toc_sidebar'] %}
+    {% call structure_card('Active layout', active_layout=active_layout,
+                            builder_modal_id='page-layout-builder-modal',
+                            picker_modal_id='page-layout-modal',
+                            is_customized=active_layout_customized,
+                            help_text='Drag pills to rearrange. Drag from the “Add blocks” palette below to drop in new blocks. Click any pill to edit its content. Use “Change layout” to pick a different layout or switch to free-form custom.') %}
+      {% if active_layout_tree %}
+      {{ structure_page_tree(active_layout_tree, 'page-layout-edit-modal',
+                              _PAGE_BLOCK_LABELS, _editable,
+                              block_previews, block_payloads) }}
+      {% else %}
+      <p class="muted">This page has no blocks yet. Open the floating palette in the lower-right corner to drag in blocks, or pick a layout via “Edit layout”.</p>
+      <div class="fe-page-structure-rows" data-be-tree data-be-zone="root">
+        <div class="fe-page-structure-root-empty muted small" data-be-root-empty>
+          Drop a Container or Two-panel here to add a new row, or drag any block to start.
+        </div>
+      </div>
+      {% endif %}
+    {% endcall %}
+
+    {{ structure_orphans_card(active_layout_orphans, 'page-layout-edit-modal',
+                               _PAGE_BLOCK_LABELS, block_previews, block_payloads) }}
+    {{ structure_block_palette(page_block_catalog) }}
+
+    {# ── Page settings + content forms ─────────────────────────────
+       Single form, multiple cards. The BlockEditor lives inside the
+       Edit-layout modal (rendered after the form); its `blocks_json`
+       hidden input sits in this form so a normal save round-trips
+       both the page settings AND the modal-edited block content. #}
+    <form method="post" action="{{ url_for('main.frontend_page_save') }}"
+          class="form" id="page-edit-form" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if page %}<input type="hidden" name="page_id" value="{{ page.id }}">{% endif %}
+
+      {# blocks_json hidden input — populated by the modal's BlockEditor
+         on submit / formdata so the save round-trips the latest tree. #}
+      <input type="hidden" name="blocks_json" id="page-blocks-json">
+
+      {# Single "Page settings" card — title / URL / publish toggle,
+         then page-width controls, then background. Three subsections
+         separated by hairline dividers + sub-headings so the form
+         stays scannable while collapsing three previously-separate
+         cards into one. #}
+      <section class="card fe-page-settings-card">
+        <div class="card-head"><h2>Page settings</h2></div>
+
+        <div class="fe-page-settings-section">
+          <div class="form-grid">
+            <label>Title
+              <input type="text" name="title" value="{{ page.title if page else '' }}" required>
+            </label>
+            <label>URL slug
+              <input type="text" name="slug" value="{{ page.slug if page else '' }}"
+                     placeholder="auto from title">
+              <small class="muted">Will be served at <code>/&lt;slug&gt;</code>. Letters, numbers, hyphens.</small>
+            </label>
+            {%- set _form_status = 'draft' if (page is not none and not page.is_published)
+                                    else ('private' if (page is not none and page.is_private)
+                                    else 'published') -%}
+            {# Visibility is controlled by the status pills at the top of
+               the page (Draft / Publish / Private), which post directly
+               to /frontend/pages/<id>/status. The main Save form keeps a
+               hidden `status` field reflecting whatever the pills last
+               applied so a Save round-trip doesn't accidentally drop the
+               page back to Draft when this fieldset isn't on the form. #}
+            <input type="hidden" name="status" value="{{ _form_status }}">
+          </div>
+        </div>
+
+        <div class="fe-page-settings-section">
+          <h3 class="fe-page-settings-sub">Page width
+            <span class="muted smaller">Boxed centers the content at a max width. Full-width spans the viewport with optional left/right padding.</span>
+          </h3>
+          <div class="form-grid page-width-grid">
+            <div class="template-toggle-row">
+              <div class="template-toggle-label">Width mode</div>
+              <div class="view-toggle" id="page-width-toggle">
+                <input type="hidden" name="width_mode" id="page-width-value"
+                       value="{{ (page.width_mode if page and page.width_mode else 'boxed') }}">
+                {% set _wm = (page.width_mode if page and page.width_mode else 'boxed') %}
+                <button type="button" class="btn btn-sm {% if _wm == 'boxed' %}active{% endif %}" data-width="boxed">Boxed</button>
+                <button type="button" class="btn btn-sm {% if _wm == 'full' %}active{% endif %}" data-width="full">Full-width</button>
+              </div>
+            </div>
+            <label id="page-max-width-label" class="page-width-num">
+              <span>Max width <output id="page-max-width-out">{{ page.max_width if page and page.max_width else 1160 }}px</output></span>
+              <input type="range" name="max_width" id="page-max-width"
+                     min="640" max="1600" step="20"
+                     value="{{ page.max_width if page and page.max_width else 1160 }}">
+              <small class="muted">Boxed mode: max content width on wide viewports.</small>
+            </label>
+            <label id="page-pad-pct-label" class="page-width-num">
+              <span>Side padding <output id="page-pad-pct-out">{{ page.full_padding_pct if page and page.full_padding_pct is not none else 4 }}%</output></span>
+              <input type="range" name="full_padding_pct" id="page-pad-pct"
+                     min="0" max="20" step="1"
+                     value="{{ page.full_padding_pct if page and page.full_padding_pct is not none else 4 }}">
+              <small class="muted">Full-width mode: % of viewport width reserved as left/right gutter.</small>
+            </label>
+          </div>
+        </div>
+
+        <div class="fe-page-settings-section">
+          <h3 class="fe-page-settings-sub">Dynamic background
+            <span class="muted smaller">CSS-driven backdrop layered behind the page. Pairs cleanly with a colour or uploaded image (the dynamic background paints on top of those). Each preset is dark-mode aware.</span>
+          </h3>
+          {% from "_dynbg_picker.html" import dynbg_trigger with context %}
+          {{ dynbg_trigger(field_name='bg_dynamic_key',
+                       current=(page.bg_dynamic_key if page else None),
+                       config_field='bg_dynbg_config_json',
+                       config=(page.bg_dynbg_config_json if page else None),
+                       button_id='page-bg-dynamic-trigger') }}
+        </div>
+
+        <div class="fe-page-settings-section">
+          <h3 class="fe-page-settings-sub">Background colour
+            <span class="muted smaller">Solid colour painted under the page. Pairs with a dynamic backdrop or image (the colour sits behind both). Pick a Light-mode hex, then choose how Dark-mode handles it: stay the same, auto-derive a dark variant, or set a custom dark hex.</span>
+          </h3>
+          <input type="hidden" name="bg_color_present" value="1">
+          {# Build the design-token roster once for the popover. Each
+             entry has the token key, label, and current resolved hex
+             — clicking a swatch writes `token:<key>` into the text
+             input and the swatch preview shows the resolved colour
+             at that moment. When the token's value changes globally
+             in Settings → Design, every page using the token gets
+             the new colour automatically because the public renderer
+             emits `var(--fe-color-<key>)` instead of a frozen hex. #}
+          {%- set _design_resolved = resolve_design(site) -%}
+          {%- set _color_tokens = [] -%}
+          {%- for f in design_fields if f.kind == 'color' -%}
+            {%- set _ = _color_tokens.append({'key': f.key,
+                                              'label': f.label,
+                                              'group': f.group,
+                                              'hex': _design_resolved.get(f.key)}) -%}
+          {%- endfor -%}
+          <div class="fe-page-bg-color-row">
+            <label class="fe-page-bg-color-label">Light mode
+              <span class="fe-page-bg-color-pair" data-token-pair="light">
+                <input type="color" id="page-bg-color-swatch"
+                       value="{{ page.bg_color or '#ffffff' }}"
+                       aria-label="Light-mode background colour">
+                <input type="text" name="bg_color" id="page-bg-color-text"
+                       value="{{ page.bg_color or '' }}"
+                       placeholder="hex (e.g. #f8fafc) or token:color_brand"
+                       maxlength="64" spellcheck="false" autocomplete="off">
+                <button type="button" class="btn btn-sm" id="page-bg-color-tokens"
+                        data-token-target="page-bg-color-text"
+                        data-token-swatch="page-bg-color-swatch"
+                        title="Pick a design token">{{ icon('palette') }}</button>
+                <button type="button" class="btn btn-sm" id="page-bg-color-clear">Clear</button>
+              </span>
+            </label>
+            <label class="fe-page-bg-color-label">Dark mode
+              {% set _bg_dm = page.bg_color_dark_mode or 'same' %}
+              <select name="bg_color_dark_mode" id="page-bg-color-dm-mode">
+                <option value="same"   {% if _bg_dm == 'same' %}selected{% endif %}>Same as light</option>
+                <option value="auto"   {% if _bg_dm == 'auto' %}selected{% endif %}>Auto-derive dark variant</option>
+                <option value="manual" {% if _bg_dm == 'manual' %}selected{% endif %}>Manual (set custom hex or token)</option>
+              </select>
+            </label>
+            <label class="fe-page-bg-color-label" id="page-bg-color-dm-label"
+                   {% if _bg_dm != 'manual' %}hidden{% endif %}>
+              <span>Dark-mode value</span>
+              <span class="fe-page-bg-color-pair" data-token-pair="dark">
+                <input type="color" id="page-bg-color-dark-swatch"
+                       value="{{ page.bg_color_dark or '#1a1a2e' }}"
+                       aria-label="Dark-mode background colour">
+                <input type="text" name="bg_color_dark" id="page-bg-color-dark-text"
+                       value="{{ page.bg_color_dark or '' }}"
+                       placeholder="hex or token:color_surface (blank → auto-derive)"
+                       maxlength="64" spellcheck="false" autocomplete="off">
+                <button type="button" class="btn btn-sm" id="page-bg-color-dark-tokens"
+                        data-token-target="page-bg-color-dark-text"
+                        data-token-swatch="page-bg-color-dark-swatch"
+                        title="Pick a design token">{{ icon('palette') }}</button>
+                <button type="button" class="btn btn-sm" id="page-bg-color-dark-clear">Clear</button>
+              </span>
+            </label>
+          </div>
+          {# Token popover — single instance shared by both pickers.
+             Anchored next to whichever button opened it. The grid lists
+             every color token from Settings → Design with a swatch
+             showing its current resolved value; clicking writes
+             `token:<key>` to the linked text input, which the renderer
+             translates to `var(--fe-color-<key>)` so the page picks up
+             token edits live. #}
+          <div class="fe-page-bg-token-popover" id="page-bg-token-popover" hidden
+               role="dialog" aria-label="Design token picker">
+            <div class="fe-page-bg-token-popover-head">
+              <h4>Design tokens</h4>
+              <button type="button" class="icon-btn" data-token-popover-close
+                      aria-label="Close">{{ icon('x') }}</button>
+            </div>
+            <p class="muted smaller">Pick a colour token. Updating it under <b>Settings → Design</b> propagates to every page that uses it.</p>
+            <div class="fe-page-bg-token-grid">
+              {% for tok in _color_tokens %}
+              <button type="button" class="fe-page-bg-token-tile"
+                      data-token-key="{{ tok.key }}"
+                      title="{{ tok.label }} · {{ tok.hex }}">
+                <span class="fe-page-bg-token-swatch"
+                      style="background: {{ tok.hex }};"></span>
+                <span class="fe-page-bg-token-meta">
+                  <span class="fe-page-bg-token-label">{{ tok.label }}</span>
+                  <span class="fe-page-bg-token-hex muted smaller">{{ tok.hex }}</span>
+                </span>
+              </button>
+              {% endfor %}
+            </div>
+          </div>
+          {# Token-key → resolved-hex map, surfaced for the JS so the
+             swatch input next to a token-bound text field shows the
+             token's current colour even when the text reads
+             `token:color_brand`. #}
+          <script>
+            window.tspDesignColorTokens = {
+              {%- for tok in _color_tokens %}
+              {{ tok.key|tojson }}: {{ tok.hex|tojson }}{% if not loop.last %},{% endif %}
+              {%- endfor %}
+            };
+          </script>
+        </div>
+
+        <div class="fe-page-settings-section">
+          <h3 class="fe-page-settings-sub">Background image
+            <span class="muted smaller">Optional image painted behind the page content. PNG, JPG, WEBP, GIF, and SVG accepted. <b>Cover</b> stretches the image; <b>Tile</b> repeats it at the chosen scale.</span>
+          </h3>
+          <div class="form-grid page-bg-grid">
+            <div class="page-bg-controls">
+              <label>Image
+                <input type="file" name="bg_image" id="page-bg-file"
+                       accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,.svg">
+              </label>
+              {% if page and page.bg_image_filename %}
+              <label class="checkbox-row">
+                <input type="checkbox" name="clear_bg" value="1" id="page-bg-clear">
+                <span>Remove current background</span>
+              </label>
+              <p class="muted small">Currently set: <code>{{ page.bg_image_filename }}</code></p>
+              {% endif %}
+              <div class="template-toggle-row">
+                <div class="template-toggle-label">Mode</div>
+                <div class="view-toggle" id="page-bg-mode-toggle">
+                  <input type="hidden" name="bg_mode" id="page-bg-mode-value"
+                         value="{{ (page.bg_mode if page else 'cover') or 'cover' }}">
+                  <button type="button" class="btn btn-sm {% if (page.bg_mode if page else 'cover') != 'tile' %}active{% endif %}" data-bg-mode="cover">Cover</button>
+                  <button type="button" class="btn btn-sm {% if page and page.bg_mode == 'tile' %}active{% endif %}" data-bg-mode="tile">Tile</button>
+                </div>
+              </div>
+              <label id="page-bg-scale-label" class="page-bg-scale">
+                <span>Tile scale <output id="page-bg-scale-out">{{ page.bg_tile_scale if page else 100 }}%</output></span>
+                <input type="range" name="bg_tile_scale" id="page-bg-scale"
+                       min="25" max="400" step="5"
+                       value="{{ page.bg_tile_scale if page else 100 }}">
+                <small class="muted">Tiles are sized off a 120px base, scaled by this slider. Drag to taste — the preview reflects the live size.</small>
+              </label>
+            </div>
+            <div class="page-bg-preview-wrap">
+              <div class="page-bg-preview-label">Preview</div>
+              <div class="page-bg-preview" id="page-bg-preview"
+                   data-current-url="{% if page and page.bg_image_filename %}{{ url_for('public.public_page_bg', page_id=page.id, v=page.updated_at.timestamp()|int if page.updated_at else 0) }}{% endif %}">
+                <span class="page-bg-preview-empty muted">No background</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="form-actions">
+        <a class="btn" href="{{ url_for('main.frontend_pages') }}">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Edit-layout modal — hosts the full BlockEditor.
+   Lives outside .fe-admin-main so it covers the whole viewport.
+   The modal panel scrolls; the BlockEditor mounts on its root div
+   on first open. JS scrolls the editor to a specific block when
+   the admin clicks a structure-card pill carrying data-page-block-id. #}
+<div class="modal fe-page-edit-modal fe-page-edit-modal--wide" id="page-layout-edit-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="page-layout-edit-modal-title">
+    <div class="modal-head">
+      <h2 id="page-layout-edit-modal-title">Edit layout</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted small fe-block-editor-help">
+        Drag blocks to reorder. Click <code>+ Container</code> to nest blocks with their own padding, gap, and background. Changes save with the page when you hit <b>Save</b> below.
+      </p>
+      <div id="page-editor-root" data-initial='{{ blocks_json|e }}'></div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" data-close>Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Surface the admin's available fonts to BlockEditor so the per-block
+// typography panel can populate its Font family dropdown. Each entry is
+// {key, name, stack} — `stack` is the full CSS `font-family` value the
+// block's inline style uses; `name` is the human label shown in the
+// dropdown.
+window.tspFonts = [
+  {%- for f in frontend_fonts() %}
+  { key: {{ f.key|tojson }}, name: {{ f.name|tojson }}, stack: {{ font_stack(f.key)|tojson }} }{% if not loop.last %},{% endif %}
+  {%- endfor %}
+];
+// Surface the Intergroup officer roster so the `intergroup_member`
+// block's editor dropdown can list every saved officer and the live
+// preview card can render the chosen row's contact info. Editing
+// officers in Settings → Global persists immediately; refreshing
+// the page-edit screen re-renders this array with the new values.
+window.tspIntergroupOfficers = [
+  {%- for o in intergroup_officers() %}
+  { id: {{ o.id|tojson }},
+    role: {{ (o.role or '')|tojson }},
+    name: {{ (o.name or '')|tojson }},
+    phone: {{ (o.phone or '')|tojson }},
+    email: {{ (o.email or '')|tojson }} }{% if not loop.last %},{% endif %}
+  {%- endfor %}
+];
+// Surface every Library + its items for the `library` block's
+// settings panel (picker dropdown + granular item checkboxes). Each
+// item carries enough metadata for the editor to render a clean
+// chooser: title, plus a hint of its kind ('file' / 'link' / 'text').
+window.tspLibraries = [
+  {%- for lib in all_libraries() %}
+  { id: {{ lib.id|tojson }},
+    name: {{ lib.name|tojson }},
+    description: {{ (lib.description or '')|tojson }},
+    public_visible: {{ lib.public_visible|tojson }},
+    items: [
+      {%- for it in lib.items.all() %}
+      { id: {{ it.id|tojson }},
+        title: {{ (it.title or '')|tojson }},
+        kind: {% if it.stored_filename %}'file'{% elif it.url %}'link'{% else %}'text'{% endif %},
+        url: {{ (it.url or '')|tojson }} }{% if not loop.last %},{% endif %}
+      {%- endfor %}
+    ] }{% if not loop.last %},{% endif %}
+  {%- endfor %}
+];
+</script>
+<script src="{{ url_for('static', filename='js/vendor/Sortable.min.js', v=app_build_id) }}"></script>
+<script src="{{ url_for('static', filename='js/block_editor.js', v=app_build_id) }}"></script>
+<script src="{{ url_for('static', filename='js/page_structure.js', v=app_build_id) }}"></script>
+<script>
+(function () {
+  const root = document.getElementById('page-editor-root');
+  const hidden = document.getElementById('page-blocks-json');
+  const form = document.getElementById('page-edit-form');
+  let initial = [];
+  try { initial = JSON.parse(root.dataset.initial || '[]'); }
+  catch (e) { console.warn('page editor: initial JSON parse failed', e); }
+  let editor = null;
+  // Mount lazily on first modal-open so a hidden modal panel doesn't
+  // confuse Sortable's measurements. Tracking `editor` at IIFE scope
+  // means subsequent opens reuse the same instance + state.
+  const editModal = document.getElementById('page-layout-edit-modal');
+
+  function ensureEditor() {
+    if (editor) return editor;
+    try { editor = BlockEditor.mount(root, { initial }); }
+    catch (e) { console.warn('page editor: mount failed', e); }
+    return editor;
+  }
+  // ── Focus mode ─────────────────────────────────────────────────
+  // Pill click → enter focus mode on a single block: every other
+  // top-level block + section-head is hidden via .is-focus-mode on
+  // the modal panel, so the admin sees just the block they came in
+  // to edit. Closing the modal (× / Done / backdrop) clears focus.
+  const modalTitle = document.getElementById('page-layout-edit-modal-title');
+  const editorHelp = editModal.querySelector('.fe-block-editor-help');
+  const defaultTitle = modalTitle ? modalTitle.textContent : 'Edit layout';
+
+  function clearFocus() {
+    editModal.classList.remove('is-focus-mode');
+    root.querySelectorAll('.be-block-focused, .be-block-focused-path').forEach(el => {
+      el.classList.remove('be-block-focused', 'be-block-focused-path');
+    });
+    if (modalTitle) modalTitle.textContent = defaultTitle;
+    if (editorHelp) editorHelp.hidden = false;
+  }
+  // Close affordances clear focus too so the next open lands fresh.
+  editModal.querySelectorAll('[data-close]').forEach(el =>
+    el.addEventListener('click', clearFocus));
+  function focusBlock(id) {
+    if (!id) return;
+    const target = root.querySelector('.be-block[data-id="' + id + '"]');
+    if (!target) return;
+    // Path = target + every .be-block / .be-section ancestor up to root.
+    root.querySelectorAll('.be-block-focused, .be-block-focused-path').forEach(el => {
+      el.classList.remove('be-block-focused', 'be-block-focused-path');
+    });
+    target.classList.add('be-block-focused');
+    let node = target.parentElement;
+    while (node && node !== root) {
+      if (node.classList && (node.classList.contains('be-block')
+                              || node.classList.contains('be-section'))) {
+        node.classList.add('be-block-focused-path');
+      }
+      node = node.parentElement;
+    }
+    editModal.classList.add('is-focus-mode');
+    if (modalTitle) {
+      const typeLabel = (target.querySelector('.be-block-type') || {}).textContent || 'block';
+      modalTitle.textContent = 'Edit ' + typeLabel;
+    }
+    if (editorHelp) editorHelp.hidden = true;
+    requestAnimationFrame(() => {
+      // Reset the modal's scroll container to the top instead of
+      // calling scrollIntoView({ block: 'center' }) on the target —
+      // with focus-mode hiding every other block, the target IS the
+      // only thing in the body, and centering it just nudges the
+      // scroll a few pixels down for no benefit. Pinning the body to
+      // scrollTop=0 guarantees the first control is in view on open.
+      const body = editModal.querySelector('.modal-body');
+      if (body) body.scrollTop = 0;
+      target.classList.add('be-block-flash');
+      setTimeout(() => target.classList.remove('be-block-flash'), 1400);
+    });
+  }
+  // Expose ensureEditor + focusBlock + a force-remount helper so the
+  // structure-card (page_structure.js) can drive the modal after
+  // drag-drop mutations without re-binding per-pill. The structure-
+  // card's delegated click handler calls these for newly-created
+  // pills; server-rendered pills go through the per-element binder
+  // below.
+  window.ensurePageBlockEditor = ensureEditor;
+  window.focusPageBlock = focusBlock;
+  window.remountPageBlockEditor = () => {
+    if (editor && root) {
+      try { root.innerHTML = ''; } catch (_) {}
+    }
+    editor = null;
+    try { initial = JSON.parse(root.dataset.initial || '[]'); }
+    catch (_) { initial = []; }
+  };
+
+  // Clicking a structure-card pill opens the modal, focuses the matching
+  // block, and scrolls it into view. Pills carry data-page-block-id so
+  // the same handler works for top-level blocks AND ones nested in a
+  // 2-column container, since BlockEditor recurses container children
+  // with the same .be-block[data-id] markup. Mark each as bound so the
+  // delegated fallback in page_structure.js doesn't double-fire.
+  document.querySelectorAll('[data-page-block-id]').forEach(pill => {
+    if (pill.dataset.pillBound === '1') return;
+    pill.dataset.pillBound = '1';
+    pill.addEventListener('click', e => {
+      // Don't open the editor when the click is specifically on an
+      // inner remove button — those have their own handlers and we
+      // don't want to ALSO focus the block before the row/pill is
+      // about to be deleted. Settings buttons (which carry their own
+      // data-page-block-id at the row-label level) should fall
+      // THROUGH to the focus flow, since "click Settings → edit this
+      // container" is the whole point.
+      if (e.target.closest('[data-be-remove-block], [data-be-remove-row]')) {
+        return;
+      }
+      requestAnimationFrame(() => {
+        ensureEditor();
+        const id = pill.dataset.pageBlockId;
+        requestAnimationFrame(() => focusBlock(id));
+      });
+    });
+  });
+  // Plain "Edit layout" / "Add blocks" buttons open the full editor
+  // (no focus). Clear any prior focus state so the admin sees the
+  // whole tree, not the previously-focused block.
+  document.querySelectorAll('[data-open-modal="page-layout-edit-modal"]:not([data-page-block-id])').forEach(btn => {
+    btn.addEventListener('click', () => {
+      requestAnimationFrame(() => { ensureEditor(); clearFocus(); });
+    });
+  });
+
+  // The modal-based BlockEditor's `notifyChange()` fires `input` on
+  // `#page-editor-root`, but the modal is rendered OUTSIDE the
+  // page-edit form, so that event never bubbles to the form's
+  // listener — the global save-bar IIFE only sees changes when the
+  // user touches a form-level input or the structure card mutates
+  // the hidden field. Listen at the modal level and re-dispatch
+  // onto the form so any block-content edit (heading text,
+  // paragraph md, button URL, image src, container settings,
+  // typography panel, etc.) lights up the yellow bar exactly like
+  // a structure-card drop. Capture so we still see the event if a
+  // child stops propagation.
+  editModal.addEventListener('input', () => {
+    try { form.dispatchEvent(new Event('input', { bubbles: true })); }
+    catch (_) {}
+    const bar = document.getElementById('fe-save-bar');
+    if (bar && bar.hasAttribute('hidden')) {
+      bar.hidden = false;
+      const m = bar.querySelector('.fe-save-bar-msg');
+      if (m) m.textContent = 'Unsaved changes';
+    }
+  }, true);
+  editModal.addEventListener('change', () => {
+    try { form.dispatchEvent(new Event('change', { bubbles: true })); }
+    catch (_) {}
+  }, true);
+
+  // Block deletion inside the modal — close the modal whenever the
+  // focused block (the one the admin opened the modal to edit) is the
+  // one being deleted. Without this the modal hangs around in
+  // focus-mode showing an empty panel where the block used to be, and
+  // the admin has to click × / Done to get back to the structure
+  // card. BlockEditor fires `blockremove` with the deleted block's id
+  // (or its lifted children's ids), so we just compare against
+  // whatever's currently focused.
+  editModal.addEventListener('blockremove', (e) => {
+    const focused = root.querySelector('.be-block-focused');
+    if (!editModal.classList.contains('is-focus-mode')) return;
+    if (focused) return;     // a non-focused block was deleted — keep modal open
+    // Animate-out via the existing close affordance so the backdrop
+    // fade matches the manual × dismiss.
+    const closer = editModal.querySelector('[data-close]');
+    if (closer) closer.click();
+    else editModal.classList.remove('is-focus-mode');
+  }, true);
+
+  // Same dual-path serialise we shipped before: form's submit (real
+  // form button) + formdata (sticky save bar uses new FormData()).
+  // Only OVERWRITE the hidden input when the modal-based BlockEditor
+  // is currently mounted with an authoritative state. When it isn't
+  // (admin only edited via the structure card's drag-drop, never
+  // opened the per-block modal), the hidden input already carries
+  // the canonical sections JSON — page_structure.js's syncStateFromDom
+  // wrote it on every drop. Wiping it here would silently drop those
+  // edits the moment the form submits.
+  function serialise(handler) {
+    try {
+      if (editor && typeof editor.serialize === 'function') return editor.serialize();
+    } catch (err) {
+      console.warn('[page editor] serialise threw (' + handler + ').', err);
+    }
+    return null;
+  }
+  form.addEventListener('submit', () => {
+    const v = serialise('submit');
+    if (v != null) hidden.value = v;
+  });
+  form.addEventListener('formdata', (e) => {
+    const v = serialise('formdata');
+    if (v != null) {
+      e.formData.set('blocks_json', v);
+      hidden.value = v;
+    }
+    // else: hidden input already carries the structure-card's state;
+    // leave both `hidden.value` and `e.formData` alone so the save
+    // round-trips it unchanged.
+  });
+
+  // ── Page width controls ──────────────────────────────────────────
+  const widthToggle = document.getElementById('page-width-toggle');
+  const widthValue = document.getElementById('page-width-value');
+  const maxWidthLbl = document.getElementById('page-max-width-label');
+  const padPctLbl = document.getElementById('page-pad-pct-label');
+  const maxWidthInp = document.getElementById('page-max-width');
+  const maxWidthOut = document.getElementById('page-max-width-out');
+  const padPctInp = document.getElementById('page-pad-pct');
+  const padPctOut = document.getElementById('page-pad-pct-out');
+  function syncWidthVis() {
+    const boxed = widthValue.value === 'boxed';
+    if (maxWidthLbl) maxWidthLbl.style.display = boxed ? '' : 'none';
+    if (padPctLbl) padPctLbl.style.display = boxed ? 'none' : '';
+  }
+  if (widthToggle) widthToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-width]');
+    if (!btn) return;
+    widthValue.value = btn.dataset.width;
+    widthToggle.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+    syncWidthVis();
+    widthValue.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  if (maxWidthInp) maxWidthInp.addEventListener('input', () => {
+    maxWidthOut.textContent = maxWidthInp.value + 'px';
+  });
+  if (padPctInp) padPctInp.addEventListener('input', () => {
+    padPctOut.textContent = padPctInp.value + '%';
+  });
+  syncWidthVis();
+
+  // ── Background colour ────────────────────────────────────────────
+  // Each value can be a hex (`#fef3c7`) OR a token reference
+  // (`token:color_brand`). Tokens stay live: the public renderer
+  // emits `var(--fe-color-<key>)` so when the token is updated under
+  // Settings → Design, the page's bg colour follows automatically.
+  // The native `<input type="color">` still shows the resolved hex
+  // (looked up from window.tspDesignColorTokens) so admins always
+  // see the current visual.
+  (function () {
+    const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+    const TOKEN_RE = /^token:([a-z0-9_]+)$/i;
+    const tokenMap = window.tspDesignColorTokens || {};
+
+    // Translate a stored value (hex or `token:key`) into a hex usable
+    // by the swatch input. Falls back to `#ffffff` so the swatch has
+    // SOMETHING to render even when the field is empty.
+    function resolveSwatchHex(v) {
+      v = (v || '').trim();
+      if (!v) return '#ffffff';
+      const m = v.match(TOKEN_RE);
+      if (m) return tokenMap[m[1]] || '#ffffff';
+      if (HEX_RE.test(v)) return v.length === 4
+        ? '#' + v[1] + v[1] + v[2] + v[2] + v[3] + v[3]
+        : v.toLowerCase();
+      return '#ffffff';
+    }
+
+    function bindSwatch(textId, swatchId, clearId) {
+      const text = document.getElementById(textId);
+      const swatch = document.getElementById(swatchId);
+      const clear = document.getElementById(clearId);
+      if (!text || !swatch) return;
+      // Initialise: swatch reflects whatever the text says (hex or token).
+      swatch.value = resolveSwatchHex(text.value);
+      // Text → swatch (hex literal OR token).
+      text.addEventListener('input', () => {
+        swatch.value = resolveSwatchHex(text.value);
+      });
+      // Swatch → text (always writes a literal hex — picking from the
+      // native colour dialogue exits "token mode" and pins the value).
+      swatch.addEventListener('input', () => {
+        text.value = swatch.value;
+      });
+      if (clear) clear.addEventListener('click', () => {
+        text.value = '';
+        swatch.value = '#ffffff';
+      });
+    }
+    bindSwatch('page-bg-color-text', 'page-bg-color-swatch', 'page-bg-color-clear');
+    bindSwatch('page-bg-color-dark-text', 'page-bg-color-dark-swatch', 'page-bg-color-dark-clear');
+
+    // Dark-mode reveal toggle.
+    const dmMode = document.getElementById('page-bg-color-dm-mode');
+    const dmLabel = document.getElementById('page-bg-color-dm-label');
+    if (dmMode && dmLabel) {
+      dmMode.addEventListener('change', () => {
+        dmLabel.hidden = dmMode.value !== 'manual';
+      });
+    }
+
+    // ── Token popover ───────────────────────────────────────────
+    // Single shared popover. Each "Tokens" trigger button carries
+    // `data-token-target` (the text-input id to write into) and
+    // `data-token-swatch` (the colour-input id to mirror). Opening
+    // memoises the trigger so the next swatch click writes to the
+    // right field. Click-outside / × / Escape all dismiss.
+    const popover = document.getElementById('page-bg-token-popover');
+    if (!popover) return;
+    let _activeTrigger = null;
+
+    function openPopover(trigger) {
+      _activeTrigger = trigger;
+      popover.hidden = false;
+      // Position using viewport coords directly — popover is
+      // position:fixed so getBoundingClientRect()'s viewport-relative
+      // numbers map straight onto top/left without any container
+      // offset math. Clamp the right edge to the viewport so a
+      // narrow window doesn't push the panel off-screen.
+      const r = trigger.getBoundingClientRect();
+      popover.style.top  = (r.bottom + 6) + 'px';
+      const left = Math.min(r.left, window.innerWidth - popover.offsetWidth - 16);
+      popover.style.left = Math.max(8, left) + 'px';
+    }
+    function closePopover() {
+      popover.hidden = true;
+      _activeTrigger = null;
+    }
+    document.querySelectorAll('[data-token-target]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (!popover.hidden && _activeTrigger === btn) {
+          closePopover();
+        } else {
+          openPopover(btn);
+        }
+      });
+    });
+    popover.addEventListener('click', e => {
+      e.stopPropagation();
+      if (e.target.closest('[data-token-popover-close]')) {
+        closePopover(); return;
+      }
+      const tile = e.target.closest('[data-token-key]');
+      if (!tile || !_activeTrigger) return;
+      const key = tile.dataset.tokenKey;
+      const text = document.getElementById(_activeTrigger.dataset.tokenTarget);
+      const swatch = document.getElementById(_activeTrigger.dataset.tokenSwatch);
+      if (text) text.value = 'token:' + key;
+      if (swatch) swatch.value = tokenMap[key] || '#ffffff';
+      closePopover();
+    });
+    document.addEventListener('click', e => {
+      if (popover.hidden) return;
+      if (popover.contains(e.target)) return;
+      if (e.target.closest('[data-token-target]')) return;
+      closePopover();
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !popover.hidden) closePopover();
+    });
+  })();
+
+  // ── Background controls ──────────────────────────────────────────
+  const bgFile = document.getElementById('page-bg-file');
+  const bgClear = document.getElementById('page-bg-clear');
+  const bgModeToggle = document.getElementById('page-bg-mode-toggle');
+  const bgModeValue = document.getElementById('page-bg-mode-value');
+  const bgScale = document.getElementById('page-bg-scale');
+  const bgScaleOut = document.getElementById('page-bg-scale-out');
+  const bgScaleLabel = document.getElementById('page-bg-scale-label');
+  const bgPreview = document.getElementById('page-bg-preview');
+  let pickedUrl = null;
+
+  function currentUrl() {
+    if (bgClear && bgClear.checked) return '';
+    if (pickedUrl) return pickedUrl;
+    return bgPreview.dataset.currentUrl || '';
+  }
+  function applyPreview() {
+    const url = currentUrl();
+    const mode = bgModeValue.value || 'cover';
+    if (!url) {
+      bgPreview.style.backgroundImage = '';
+      bgPreview.classList.remove('has-bg');
+      return;
+    }
+    bgPreview.classList.add('has-bg');
+    bgPreview.style.backgroundImage = `url("${url}")`;
+    if (mode === 'tile') {
+      const scale = parseInt(bgScale.value, 10) || 100;
+      const px = Math.round(120 * (scale / 100));
+      bgPreview.style.backgroundSize = `${px}px ${px}px`;
+      bgPreview.style.backgroundRepeat = 'repeat';
+      bgPreview.style.backgroundPosition = '0 0';
+    } else {
+      bgPreview.style.backgroundSize = 'cover';
+      bgPreview.style.backgroundRepeat = 'no-repeat';
+      bgPreview.style.backgroundPosition = 'center';
+    }
+  }
+  function syncScaleVisibility() {
+    const isTile = bgModeValue.value === 'tile';
+    bgScaleLabel.style.display = isTile ? '' : 'none';
+  }
+  if (bgFile) bgFile.addEventListener('change', () => {
+    if (pickedUrl) { URL.revokeObjectURL(pickedUrl); pickedUrl = null; }
+    const f = bgFile.files && bgFile.files[0];
+    if (f) {
+      pickedUrl = URL.createObjectURL(f);
+      if (bgClear) bgClear.checked = false;
+    }
+    applyPreview();
+  });
+  if (bgClear) bgClear.addEventListener('change', () => {
+    if (bgClear.checked && bgFile) bgFile.value = '';
+    if (pickedUrl) { URL.revokeObjectURL(pickedUrl); pickedUrl = null; }
+    applyPreview();
+  });
+  if (bgModeToggle) bgModeToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-bg-mode]');
+    if (!btn) return;
+    bgModeValue.value = btn.dataset.bgMode;
+    bgModeToggle.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+    syncScaleVisibility();
+    applyPreview();
+    bgModeValue.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  if (bgScale) bgScale.addEventListener('input', () => {
+    bgScaleOut.textContent = bgScale.value + '%';
+    applyPreview();
+  });
+  syncScaleVisibility();
+  applyPreview();
+})();
+
+// Status pills under the title banner. Clicking a pill selects the
+// matching `status` radio in the page-settings form and dispatches a
+// `change` event so the shared save-bar picks up the dirty state.
+// Nothing is committed until the admin hits Save — same round-trip
+// as flipping the radio directly. The pills' visual "active" state
+// reflects the in-form choice live so the admin sees what will be
+// saved.
+(function () {
+  const wrap = document.querySelector('[data-fe-page-status-actions]');
+  if (!wrap) return;
+  const form = document.getElementById('page-edit-form');
+  if (!form) return;
+  const pills = wrap.querySelectorAll('[data-fe-page-status]');
+  const radios = form.querySelectorAll('input[type="radio"][name="status"]');
+
+  function syncPills(activeKey) {
+    pills.forEach(p => {
+      const isActive = p.dataset.fePageStatus === activeKey;
+      p.classList.toggle('active', isActive);
+      p.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+  }
+
+  pills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      const next = pill.dataset.fePageStatus;
+      const target = form.querySelector(
+        `input[type="radio"][name="status"][value="${next}"]`);
+      if (!target) return;
+      if (!target.checked) {
+        target.checked = true;
+        // Bubbling change event so the save-bar IIFE registers the form
+        // as dirty.
+        target.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      syncPills(next);
+    });
+  });
+
+  // Keep pills in sync if the admin flips the radio directly.
+  radios.forEach(r => {
+    r.addEventListener('change', () => {
+      const checked = form.querySelector(
+        'input[type="radio"][name="status"]:checked');
+      if (checked) syncPills(checked.value);
+    });
+  });
+})();
+</script>
+
+{# ── Shared icon-picker modal ──────────────────────────────────────
+   The same modal that powers nav-link / footer / homepage icon
+   pickers. Opened by `[data-open-icon-picker]` triggers — including
+   the icon block's "Pick an icon…" button inside the BlockEditor —
+   which carry CSS-selector `data-icon-target` / `data-size-target`
+   attributes pointing at hidden inputs the picker writes back into
+   on Save. Search + custom-icon upload + Lucide catalog all live
+   inside the modal already. #}
+<div class="modal icon-picker-modal" id="icon-picker-modal" aria-hidden="true"
+     data-catalog-url="{{ url_for('static', filename='vendor/lucide/icons.json') }}"
+     data-custom-list-url="{{ url_for('main.frontend_custom_icons_list') }}"
+     data-custom-upload-url="{{ url_for('main.frontend_custom_icon_upload') }}"
+     data-custom-delete-url="{{ url_for('main.frontend_custom_icon_delete', cid=0) }}"
+     data-csrf-token="{{ csrf_token() }}">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <div class="modal-head"><h2>Pick an icon</h2>
+      <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button></div>
+    <div class="modal-body icon-picker-body">
+      <div class="icon-picker-toolbar">
+        <input type="search" class="icon-picker-search" placeholder="Search icons…" data-icon-search autocomplete="off">
+        <label class="icon-picker-size-label">
+          <span class="muted smaller">Size <output data-icon-size-out>20</output>px</span>
+          <input type="range" min="12" max="64" step="1" value="20" data-icon-modal-size>
+        </label>
+        <label class="icon-picker-upload-btn btn btn-sm">
+          {{ icon('upload') }} <span>Upload</span>
+          <input type="file" accept=".svg,.png,image/svg+xml,image/png" data-icon-upload hidden>
+        </label>
+      </div>
+      <div class="icon-picker-catalog" data-icon-catalog>
+        <p class="muted smaller" style="padding: 16px;">Loading icons…</p>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" data-close>Close</button>
+      <button type="button" class="btn btn-danger" data-icon-picker-remove hidden>Remove icon</button>
+      <button type="button" class="btn btn-primary" data-icon-picker-save hidden>Save</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

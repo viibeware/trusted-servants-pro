@@ -1,0 +1,54 @@
+{# Dashboard widget chrome — single source of truth for the
+   draggable-card / card-head / "View all →" recipe used by every
+   list-style dashboard widget. Keeps the visual treatment consistent
+   so a new widget added in the future picks up the same look without
+   having to invent its own classes.
+
+   Usage (from index.html, with-context import so `can_reorder` and
+   the `icon` global resolve inside the macro):
+
+     {% from "_dash_widget.html" import dash_widget with context %}
+     {% call dash_widget(
+            key='meetings',
+            title='Recent Meetings',
+            view_all_url=url_for('main.meetings')) %}
+       {% if items %}
+       <ul class="list">…</ul>
+       {% else %}<p class="muted">Empty.</p>{% endif %}
+     {% endcall %}
+
+   Optional kwargs:
+     view_all_label  — link text (default 'View all').
+     badge_count     — non-zero shows a warn-tinted nav-badge in the
+                        title row (e.g. unread / pending count). The
+                        badge alone signals "needs attention" without
+                        recoloring the card itself, keeping every
+                        widget visually consistent at rest.
+     badge_title     — tooltip on the badge.
+     wide            — use the wide-grid variant (full row span).
+
+   Three of the existing widgets opt out of this macro because their
+   inner shape is genuinely different (server metrics is a 2-column
+   panel, currently-online is its own partial, access-requests pairs
+   two blocks side-by-side). Everything new should default to using
+   the macro unless it has a structural reason not to. #}
+{% macro dash_widget(key, title, view_all_url=None, view_all_label='View all',
+                     badge_count=0, badge_title='', wide=False) %}
+<div class="dash-widget{% if wide %} dash-widget-wide{% endif %}"
+     data-widget-key="{{ key }}"
+     {% if can_reorder %}draggable="true"{% endif %}>
+  {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
+  <section class="card">
+    <div class="card-head">
+      <h2>
+        {{ title }}
+        {%- if badge_count %} <span class="nav-badge nav-badge-warn"{% if badge_title %} title="{{ badge_title }}"{% endif %}>{{ badge_count }}</span>{% endif -%}
+      </h2>
+      {% if view_all_url %}
+      <a href="{{ view_all_url }}" class="link">{{ view_all_label }} {{ icon('arrow-right') }}</a>
+      {% endif %}
+    </div>
+    {{ caller() }}
+  </section>
+</div>
+{% endmacro %}

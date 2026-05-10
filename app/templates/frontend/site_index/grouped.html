@@ -1,0 +1,41 @@
+{# Site Index — Grouped layout. Sections by content type with a
+   small eyebrow heading and a count chip; cards within each group
+   already arrive alphabetical. Designed to read elegantly with the
+   site's existing typography — no extra fonts or weights pulled in. #}
+<section class="fe-section fe-site-index fe-site-index-grouped{% if tpl_dynbg_key or tpl_dynbg_overlay %} fe-dynbg-host{% endif %}"
+         id="site-index"
+         style="{{ tpl_style or '' }}{% if tpl_dynbg_config %}; {% set _resolved = dynbg_resolve_colors(tpl_dynbg_config) %}{% for _c in _resolved %}--fe-dynbg-c{{ loop.index }}: {{ _c }};{% endfor %} {{ dynbg_resolve_positions(tpl_dynbg_config, tpl_dynbg_key) }}{% endif %}">
+  {% if tpl_dynbg_key or tpl_dynbg_overlay %}{% with dynbg_key=tpl_dynbg_key, dynbg_config=tpl_dynbg_config %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}
+  <div class="fe-container fe-site-index-shell">
+    <header class="fe-site-index-head">
+      <h1 class="fe-site-index-title">{{ heading }}</h1>
+      {% if subheading %}<p class="fe-site-index-blurb">{{ subheading }}</p>{% endif %}
+    </header>
+
+    {% if not groups %}
+    <p class="fe-site-index-empty muted">Nothing to index yet — add some pages, meetings, or events to start populating this list.</p>
+    {% endif %}
+
+    {% for g in groups %}
+    <section class="fe-site-index-group" data-site-index-kind="{{ g.kind }}">
+      <header class="fe-site-index-group-head">
+        <span class="fe-site-index-eyebrow">{{ g.label }}</span>
+        <span class="fe-site-index-count">{{ g['items']|length }}</span>
+      </header>
+      <ul class="fe-site-index-list">
+        {% for it in g['items'] %}
+        <li class="fe-site-index-row fe-site-index-row-{{ it.kind }}">
+          <a class="fe-site-index-row-link" href="{{ it.url }}">
+            <span class="fe-site-index-row-text">
+              <span class="fe-site-index-row-title">{{ it.title }}</span>
+              {% if it.subtitle %}<span class="fe-site-index-row-sub muted smaller">{{ it.subtitle }}</span>{% endif %}
+            </span>
+            <span class="fe-site-index-row-arrow" aria-hidden="true">→</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endfor %}
+  </div>
+</section>

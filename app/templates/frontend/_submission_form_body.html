@@ -93,7 +93,7 @@
       </label>
     </div>
     <label class="check">
-      <input type="checkbox" name="is_online" value="1">
+      <input type="checkbox" name="is_online" value="1" data-submission-online>
       <span>Online event (Zoom, video, etc.)</span>
     </label>
     <label>
@@ -106,34 +106,42 @@
     </label>
     <label>
       <span>Google Maps URL <span class="muted smaller">(optional)</span></span>
-      <input name="google_maps_url" type="url" maxlength="500">
+      <input name="google_maps_url" type="text" inputmode="url" maxlength="500">
     </label>
     <div class="fe-submission-grid-2">
       <label>
         <span>Website URL</span>
-        <input name="website_url" type="url" maxlength="500">
+        <input name="website_url" type="text" inputmode="url" maxlength="500">
       </label>
       <label>
         <span>Website label</span>
         <input name="website_label" type="text" maxlength="120" placeholder="Visit website">
       </label>
     </div>
-    <div class="fe-submission-grid-2">
+    {# Zoom fields only show when "Online event" is checked above —
+       JS toggles the [hidden] attribute on this block in response to
+       the checkbox. Hidden by default; events submitted as in-person
+       rarely have Zoom credentials and the fields would just be
+       noise. #}
+    <div class="fe-submission-zoom-block" data-submission-zoom-block hidden>
+      <div class="fe-submission-grid-2">
+        <label>
+          <span>Zoom meeting ID</span>
+          <input name="zoom_meeting_id" type="text" maxlength="64">
+        </label>
+        <label>
+          <span>Zoom passcode</span>
+          <input name="zoom_passcode" type="text" maxlength="128">
+        </label>
+      </div>
       <label>
-        <span>Zoom meeting ID</span>
-        <input name="zoom_meeting_id" type="text" maxlength="64">
-      </label>
-      <label>
-        <span>Zoom passcode</span>
-        <input name="zoom_passcode" type="text" maxlength="128">
+        <span>Zoom URL</span>
+        <input name="zoom_url" type="text" inputmode="url" maxlength="500">
       </label>
     </div>
-    <label>
-      <span>Zoom URL</span>
-      <input name="zoom_url" type="url" maxlength="500">
-    </label>
     <fieldset class="fe-submission-event-contact">
       <legend>Public contact for this event <span class="muted smaller">(optional)</span></legend>
+      <p class="muted small fe-submission-public-warning"><strong>Heads up:</strong> anything you put here will be displayed publicly on the event's page once it's published. Leave blank if you don't want a contact shown.</p>
       <div class="fe-submission-grid-2">
         <label>
           <span>Name</span>

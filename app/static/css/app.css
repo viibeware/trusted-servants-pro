@@ -258,6 +258,10 @@ p { margin: .25rem 0; }
 .fe-template-picker-modal .modal-body { overflow-y: auto; }
 .fe-layout-picker-modal .modal-panel { width: min(960px, 96vw); max-height: 88vh; }
 
+/* New-page modal: small gap below the title input before the layout
+   grid hint, so the two sections of the form read as distinct steps. */
+.fe-new-page-layout-hint { margin-top: 18px; }
+
 /* Block-stripe preview rendered inside layout cards (one stripe per
    block in the layout's blocks_json). */
 .template-card-preview-blocks {
@@ -503,6 +507,23 @@ p { margin: .25rem 0; }
 }
 .fe-builder-split-col.is-drop-target { border-color: var(--access); background: var(--brand-soft); }
 .fe-builder-split-col .fe-builder-canvas-block { background: var(--panel); }
+
+/* Container block in the builder canvas — same head + drop-zone
+   chrome shape as a split, but a single full-width drop area instead
+   of two side-by-side panels. The drop zone reuses the split-col
+   styling (dashed border, panel-2 bg, drop-target highlight). */
+.fe-builder-container { flex-direction: column; padding: 0; gap: 0; cursor: default; }
+.fe-builder-container-drop {
+  min-height: 80px;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px; margin: 10px;
+  border-radius: 8px;
+  background: var(--panel-2); border: 1px dashed var(--border);
+}
+.fe-builder-container-drop.is-drop-target {
+  border-color: var(--access); background: var(--brand-soft);
+}
+.fe-builder-container-drop .fe-builder-canvas-block { background: var(--panel); }
 
 /* Per-card visibility toggle pill in the head row. */
 .fe-block-vis { margin-left: auto; }
@@ -835,11 +856,13 @@ html[data-theme="dark"] .perm-badge-viewer { background: rgba(100, 116, 139, 0.2
 .post-chip-online       { background: rgba(20, 184, 166, 0.12); color: #0f766e; border-color: rgba(20, 184, 166, 0.32); }
 .post-chip-draft        { background: rgba(100, 116, 139, 0.14); color: #475569; border-color: rgba(100, 116, 139, 0.34); }
 .post-chip-warning      { background: rgba(245, 158, 11, 0.18);  color: #b45309; border-color: rgba(245, 158, 11, 0.5); }
+.post-chip-private      { background: rgba(168, 85, 247, 0.14); color: #6b21a8; border-color: rgba(168, 85, 247, 0.36); }
 html[data-theme="dark"] .post-chip-announcement { background: rgba(245, 158, 11, 0.18); color: #fbbf24; border-color: rgba(245, 158, 11, 0.5); }
 html[data-theme="dark"] .post-chip-event        { background: rgba(11, 92, 255, 0.22);  color: #93c5fd; border-color: rgba(11, 92, 255, 0.45); }
 html[data-theme="dark"] .post-chip-online       { background: rgba(20, 184, 166, 0.20); color: #5eead4; border-color: rgba(20, 184, 166, 0.45); }
 html[data-theme="dark"] .post-chip-draft        { background: rgba(100, 116, 139, 0.22); color: #cbd5e1; border-color: rgba(100, 116, 139, 0.45); }
 html[data-theme="dark"] .post-chip-warning      { background: rgba(245, 158, 11, 0.25); color: #fbbf24; border-color: rgba(245, 158, 11, 0.55); }
+html[data-theme="dark"] .post-chip-private      { background: rgba(168, 85, 247, 0.22); color: #d8b4fe; border-color: rgba(168, 85, 247, 0.5); }
 /* Pending-submission banner on the post edit screen — sits above the
    normal edit form so admins see who submitted before they touch
    any field. */
@@ -2347,6 +2370,66 @@ button.chip { font-family: inherit; }
 .ig-cat-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .ig-cat-row { display: flex; gap: 6px; align-items: center; }
 .ig-cat-row input[type="text"] { flex: 1; }
+
+/* === Library import wizard ===
+   Modal that stages a batch of files before submission. Drop-zone +
+   per-file row pattern: each row exposes a title input pre-filled with
+   the derived title, the original filename underneath as muted text,
+   and a remove button. The footer shows the queued-file count and
+   keeps the Import button disabled until at least one file is staged. */
+.lib-import-panel { width: min(720px, 96vw); max-height: 88vh; }
+.lib-import-panel .modal-body { display: flex; flex-direction: column; gap: 14px; }
+.lib-import-hint { margin: 0; }
+.lib-import-drop {
+  border: 2px dashed var(--border); border-radius: 12px;
+  background: var(--panel-2); padding: 22px 18px; text-align: center;
+  transition: background-color 120ms ease, border-color 120ms ease;
+  cursor: pointer; outline: none;
+}
+.lib-import-drop:hover,
+.lib-import-drop:focus-visible { border-color: var(--brand); background: var(--brand-soft); }
+.lib-import-drop.is-dragging { border-color: var(--brand); background: var(--brand-soft); }
+.lib-import-drop-inner { display: inline-flex; flex-direction: column; align-items: center; gap: 8px; }
+.lib-import-drop-icon { color: var(--brand); display: inline-flex; }
+.lib-import-drop-icon .icon { width: 32px; height: 32px; }
+.lib-import-pick-btn { position: relative; overflow: hidden; cursor: pointer; }
+.lib-import-pick-btn input[type="file"] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer;
+  font-size: 100px;
+}
+.lib-import-list {
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 320px; overflow-y: auto;
+}
+.lib-import-list:empty { display: none; }
+.lib-import-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel-2);
+}
+.lib-import-row .ftype-sm { flex: 0 0 auto; }
+.lib-import-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lib-import-row-main input[type="text"] {
+  width: 100%; padding: 6px 9px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--panel);
+  color: var(--text); font-size: 0.9375rem; font-weight: 600;
+}
+.lib-import-row-meta {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  font-size: 0.75rem; color: var(--muted);
+}
+.lib-import-row-meta .lib-import-row-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 100%;
+}
+.lib-import-row-remove {
+  flex: 0 0 auto; background: transparent; border: 0; color: var(--muted);
+  cursor: pointer; padding: 4px; border-radius: 6px; line-height: 0;
+}
+.lib-import-row-remove:hover { color: var(--danger); background: var(--brand-soft); }
+.lib-import-empty[hidden] { display: none; }
+.lib-import-panel .modal-foot { gap: 8px; align-items: center; }
+.lib-import-count { margin-right: auto; }
 .meta-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
 
 .btn {
@@ -3193,6 +3276,7 @@ html.login-fade-in body { animation: login-page-fade-in 650ms ease-out both; }
 .locked-accounts-form { margin-left: auto; }
 .locked-accounts-empty { margin: 4px 0 0; }
 .nav-badge-warn { background: #f59e0b; }
+
 .user-locked-row { background: color-mix(in srgb, #fef3c7 20%, transparent); }
 [data-theme="dark"] .user-locked-row,
 [data-theme="neobrutal-dark"] .user-locked-row,
@@ -3376,6 +3460,12 @@ form.hide-zoom .zoom-only, form.hide-zoom .zoom-only-field { display: none; }
 /* Settings modal */
 .modal-lg .modal-panel { max-width: 1180px; }
 #settings-modal .modal-panel { height: calc(100vh - 10vh); max-width: 1180px; }
+
+/* WordPress importer modal — same full-height treatment as the
+   settings modal so the iframe has a tall canvas to render the
+   wizard pages without scrolling the wrapper. */
+#wp-import-modal .modal-panel { height: calc(100vh - 10vh); max-width: 1180px; }
+#wp-import-frame { flex: 1 1 auto; width: 100%; height: 100%; min-height: 0; border: 0; background: var(--panel); }
 #settings-modal .settings-body { flex: 1 1 auto; height: auto; min-height: 0; }
 .user-chip-name { flex: 1; min-width: 0; }
 .icon-btn-inline { width: 40px; height: 40px; flex: 0 0 auto; font-size: 1.35rem; }
@@ -4002,6 +4092,236 @@ body.embed .card:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom
   .settings-pane[data-pane="data"] .data-col:first-child { border-right: 0; border-bottom: 1px solid var(--border); padding-bottom: 20px; }
 }
 .settings-pane[data-pane="data"] .u-name { font-size: 1rem; }
+
+/* WordPress importer wizard — shared chrome used by every step
+   (start / map / dry-run / done). Lives here rather than inline so the
+   layout is consistent across pages and embed mode (modal iframe) and
+   standalone mode render identically.
+
+   The actionbar + stepper sit inside `.wp-wizard-header` which is
+   `position: sticky` so the back/cancel/continue buttons and the
+   step indicator stay pinned to the top of the iframe / page while
+   the post list or preview table scrolls underneath. */
+.wp-wizard-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin: 0 0 1.25rem;
+  padding: 1rem 0 .5rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 4px 12px -10px rgba(0, 0, 0, .25);
+}
+/* Pull the header to the edge of the iframe in embed mode so the
+   sticky background covers the whole top strip (otherwise the
+   embed-content padding leaves a gap on the sides). */
+body.embed .wp-wizard-header {
+  margin: -20px -20px 1.25rem;
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-top: 20px;
+}
+.wp-wizard-header .wp-actionbar { margin-bottom: 1rem; }
+.wp-wizard-header .wp-wizard-stepper { margin-bottom: .5rem; }
+
+.wp-actionbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+  margin: 0 0 1.25rem;
+}
+.wp-actionbar .btn-primary { margin-left: auto; }
+
+/* Loading overlay shown when the wizard kicks off a long-running step
+   (REST fetch, CSV parse, dry-run compile, or commit). Lives once in
+   the page DOM and is toggled visible via .is-active. */
+.wp-fetch-overlay {
+  position: fixed; inset: 0;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 17, 26, .55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.wp-fetch-overlay.is-active { display: flex; }
+.wp-fetch-overlay-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.75rem 2.25rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .35);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  max-width: min(420px, 90vw);
+  text-align: center;
+}
+.wp-fetch-spinner {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  border-top-color: var(--brand);
+  animation: wp-fetch-spin .9s linear infinite;
+}
+@keyframes wp-fetch-spin { to { transform: rotate(360deg); } }
+.wp-fetch-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text);
+}
+.wp-fetch-message {
+  color: var(--muted);
+  font-size: .92rem;
+  line-height: 1.5;
+  margin: 0;
+}
+.wp-fetch-host {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: .85rem;
+  color: var(--brand);
+  word-break: break-all;
+}
+
+.wp-wizard-stepper { margin: 0 0 1.5rem; }
+.wp-wizard-stepper ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  align-items: stretch;
+}
+.wp-wizard-stepper li {
+  flex: 1 1 0;
+  min-width: 140px;
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  padding: .65rem .9rem;
+  background: var(--panel-2, var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted, var(--text));
+  font-size: .92rem;
+}
+.wp-wizard-stepper li.is-active {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--text);
+}
+.wp-wizard-stepper li.is-done {
+  border-color: #1f9d55;
+  color: #1f9d55;
+}
+.wp-step-num {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 1px solid currentColor;
+  display: inline-grid; place-items: center;
+  font-weight: 600;
+  font-size: .82rem;
+}
+.wp-wizard-stepper li.is-active .wp-step-num {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+.wp-step-label { font-weight: 500; }
+
+/* Feature card chrome — `.data-card` layers a brand-colour left accent
+   on the standard `.card` (background, border, radius, padding,
+   shadow). Block flow only — no positioning pseudo-elements — so the
+   card height always grows naturally with its contents. The header
+   row uses a Lucide icon + label; sub-layouts (`.data-card-grid` for
+   two-column Import/Export, `.data-card-actions` for trailing CTA
+   rows) sit inside the card. Originally for the Data settings tab,
+   reused by the WordPress importer wizard. */
+.data-card {
+  border-left: 4px solid var(--brand);
+  margin-bottom: 16px;
+}
+.data-card:last-child {
+  margin-bottom: 0;
+}
+.data-card-head {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  font-weight: 700;
+  font-size: 1.1rem;
+  line-height: 1.3;
+  color: var(--text);
+  margin: 0 0 .9rem;
+}
+.data-card-head .icon {
+  color: var(--brand);
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.data-card-lead,
+.data-card-sub {
+  margin: 0 0 .9rem;
+  line-height: 1.55;
+}
+.data-card-sub:last-of-type {
+  margin-bottom: 0;
+}
+.data-card-actions {
+  margin-top: 1.1rem;
+  display: flex;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.data-card-actions .btn {
+  white-space: nowrap;
+}
+/* Two-column inner grid (Import / Export, etc.) inside a data-card.
+   Mirrors the legacy `.data-grid` shape with the spacing tuned to
+   sit inside the card's padding. Collapses to a single column on
+   narrow viewports. */
+.data-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  align-items: stretch;
+  width: 100%;
+}
+.data-card-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 24px;
+}
+.data-card-col:first-child {
+  padding-left: 0;
+  border-right: 1px solid var(--border);
+}
+.data-card-col:last-child {
+  padding-right: 0;
+}
+@media (max-width: 720px) {
+  .data-card-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .data-card-col {
+    padding: 0;
+  }
+  .data-card-col:first-child {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+  }
+}
 .settings-pane[data-pane="data"] p { margin: 0 0 8px; max-width: 60ch; }
 .settings-pane[data-pane="data"] .settings-rule { border: 0; border-top: 1px solid var(--border); margin: 22px 0 18px; }
 .settings-pane[data-pane="data"] .form-actions { margin-top: 4px; margin-bottom: 4px; justify-content: flex-start; }
@@ -4237,8 +4557,336 @@ h3.block-heading { font-size: 0.95rem; font-weight: 700; margin: 16px 0 6px; }
 h4.block-heading { font-size: 0.9rem; font-weight: 600; margin: 14px 0 4px; }
 h5.block-heading { font-size: 0.875rem; font-weight: 600; margin: 12px 0 4px; }
 .block { margin: 12px 0; }
-.block-image img, .block-video video { max-width: 100%; height: auto; border-radius: 6px; display: block; }
+.block-image img, .block-video video {
+  max-width: 100%; height: auto; display: block;
+  /* Image-block corner roundness uses `--img-radius` set inline by
+     the renderer. Default of 6px keeps unedited blocks softly
+     rounded (pre-existing behaviour); the admin's slider value
+     overrides via the inline custom property when set. The mobile
+     halving lives in frontend.css's media query so admin previews
+     and public renders behave the same. */
+  border-radius: var(--img-radius, 6px);
+}
 .block-image figcaption { color: var(--muted); font-size: .9rem; margin-top: 4px; }
+/* Lottie block — the figure is the layout slot (alignment / max-width
+   / bg ride inline styles from the renderer); the inner stage is what
+   lottie-web injects an SVG/Canvas into. The stage stretches to the
+   figure's width and uses an aspect-ratio of 1 by default so admins get
+   a square stage even before the animation has loaded its own intrinsic
+   ratio (lottie sizes itself to match once the JSON resolves, which
+   overrides the placeholder). */
+/* Intergroup member card — public render of the `intergroup_member`
+   block. Lightweight stack of fields (position / name / phone /
+   email); each field gets its own row so the renderer can drop any
+   subset based on the block's `show_*` toggles without leaving
+   visible gaps. Container layout / background lives on the parent
+   container block, so the card itself stays neutral by default. */
+.block-officer { margin: 12px 0; }
+.block-officer-card {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.block-officer-role {
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted);
+}
+.block-officer-name { font-size: 1.1rem; font-weight: 700; }
+.block-officer-phone, .block-officer-email { font-size: 0.95rem; }
+
+/* ── Container-removal confirm modal ──────────────────────────────
+   Two-choice prompt shown when an admin × a container row that
+   holds blocks. Each choice is a full-width card-like button so
+   admins read the trade-off before clicking — the safe path
+   (move to Unplaced) is visually neutral, the destructive path
+   (remove everything) tints red on hover. */
+.be-container-remove-modal .modal-panel {
+  max-width: 540px;
+}
+.be-container-remove-msg {
+  margin: 0 0 12px;
+  color: var(--text);
+}
+.be-container-remove-choices {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.be-container-remove-choice {
+  display: flex; flex-direction: column; gap: 4px;
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--panel-2, var(--panel));
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-align: left; cursor: pointer;
+  font: inherit;
+  transition: border-color 140ms ease, background 140ms ease,
+              transform 140ms ease, box-shadow 140ms ease;
+}
+.be-container-remove-choice:hover {
+  border-color: var(--brand, var(--access));
+  background: var(--panel);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15,23,42,0.08);
+}
+.be-container-remove-choice-title {
+  font-weight: 700; font-size: 0.95rem;
+}
+.be-container-remove-choice-desc {
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.be-container-remove-all:hover {
+  border-color: #b91c1c;
+  background: color-mix(in srgb, #ef4444 8%, var(--panel));
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+}
+.be-container-remove-all .be-container-remove-choice-title {
+  color: #b91c1c;
+}
+
+/* ── Library block ────────────────────────────────────────────────
+   Three rendering styles share the same data shape; styles are
+   keyed off `.block-library-style-{bulleted|list|cards}` on the
+   wrapper. Each style lives in its own block below so adding a
+   new style later just means another wrapper class + ruleset. */
+.block-library { margin: 12px 0; }
+.block-library-title {
+  font-size: 1.1rem; font-weight: 700; margin: 0 0 12px;
+}
+/* Bulleted list — actual <ul> with markers, title-only. The link
+   styling rides whatever the page's anchor rule already provides. */
+.block-library-bulleted {
+  margin: 0; padding-left: 1.5rem;
+  list-style-type: disc;
+}
+.block-library-bulleted li { margin: 4px 0; }
+
+/* Plain list — stacked rows separated by hairline borders, with
+   title + optional description + category chips. Reads as a content
+   roster rather than a bullet/UL. */
+.block-library-list {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.block-library-list-item {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.block-library-list-item:last-child { border-bottom: 0; }
+.block-library-list-title { font-weight: 600; font-size: 1rem; }
+.block-library-list-desc {
+  margin-top: 4px;
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* Cards — grid layout (column count + gap ride inline styles from
+   the renderer). Each card has a thumbnail strip on top (when
+   thumbnails are enabled and the item carries one) plus the title /
+   description / category chips. Hover lifts to telegraph clickable
+   linked items. */
+.block-library-card {
+  display: flex; flex-direction: column; gap: 0;
+  background: var(--panel, #fff);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06);
+  overflow: hidden;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+.block-library-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06), 0 12px 24px rgba(0,0,0,0.10);
+}
+.block-library-card-thumb {
+  aspect-ratio: 16 / 9;
+  background: var(--panel-2, var(--panel));
+  overflow: hidden;
+}
+.block-library-card-thumb img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.block-library-card-body {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 14px 16px;
+}
+.block-library-card-title { font-weight: 700; font-size: 1rem; }
+.block-library-card-desc {
+  font-size: 0.88rem; color: var(--muted); line-height: 1.5;
+}
+
+/* Category chips — shared across all three styles. Tinted with the
+   active brand colour at low opacity so they read as metadata
+   rather than calls-to-action. */
+.block-library-cats {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin-top: 6px;
+}
+.block-library-cat {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  background: color-mix(in srgb, var(--brand, var(--access)) 12%, transparent);
+  color: var(--text);
+  border-radius: 999px;
+}
+
+@media (max-width: 720px) {
+  /* Card grids drop to a single column on narrow viewports so cards
+     don't squeeze. The inline grid-template-columns style on the
+     wrapper gets overridden via !important since column count is the
+     admin's choice on desktop. */
+  .block-library-cards {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Items past the configured `max_items` start the page hidden; the
+   Load more button progressively reveals them in `data-lib-block-step`-
+   sized batches. `display: none !important` beats the inline grid /
+   flex declarations the wrapper rules emit. */
+.block-library .block-library-hidden {
+  display: none !important;
+}
+
+/* Load more button — neutral pill that sits below the rendered items
+   and is removed from the DOM once nothing's left to reveal. The
+   inline "(N more)" count chip gives a hint about how much remains so
+   visitors don't feel like they're clicking blindly. */
+.block-library-more {
+  margin-top: 14px;
+  text-align: center;
+}
+.block-library-more-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 18px;
+  border: 1px solid var(--border);
+  background: var(--panel-2, var(--panel));
+  color: var(--text);
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+.block-library-more-btn:hover {
+  background: color-mix(in srgb, var(--brand, var(--access)) 10%, var(--panel-2, var(--panel)));
+  border-color: var(--brand, var(--access));
+}
+.block-library-more-btn:active { transform: translateY(1px); }
+.block-library-more-count {
+  font-weight: 500; font-size: 0.78rem; color: var(--muted);
+}
+
+/* ── Library block — admin settings panel ───────────────────── */
+.be-library-body { gap: 12px; }
+.be-library-select { width: 100%; }
+.be-library-cards-controls {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 8px 10px;
+  background: var(--panel-2, var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.be-library-granular {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 8px 10px;
+  background: var(--panel-2, var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.be-library-granular-actions {
+  display: flex; gap: 6px;
+}
+.be-library-granular-list {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.be-library-granular-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.be-library-granular-row:hover { background: var(--panel); }
+.be-library-granular-title { font-size: 0.92rem; }
+.be-library-granular-kind {
+  text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--brand, var(--access)) 10%, transparent);
+}
+.be-library-fields {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px 10px;
+  background: var(--panel-2, var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+/* Officer roster — each card is a discrete unit with shadow +
+   rounded corners + subtle hover lift. The grid layout (column count
+   + gap) rides inline styles from the renderer so the same template
+   handles 2-col and 3-col without forking CSS. */
+.block-officer-roster { margin: 12px 0; }
+.block-officer-roster-card {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 1.25rem 1.5rem;
+  background: var(--panel, #fff);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+.block-officer-roster-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06), 0 12px 24px rgba(0,0,0,0.10);
+}
+.block-officer-roster-card .block-officer-role {
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted);
+}
+.block-officer-roster-card .block-officer-name {
+  font-size: 1.1rem; font-weight: 700;
+}
+.block-officer-roster-card .block-officer-phone,
+.block-officer-roster-card .block-officer-email { font-size: 0.95rem; }
+@media (max-width: 720px) {
+  /* Collapse to a single column on narrow viewports so cards never
+     squeeze too tight regardless of the admin's chosen column count. */
+  .block-officer-roster {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.block-lottie { margin: 12px 0; }
+/* `--lottie-ratio` is stamped by the public init script after the
+   animation's `DOMLoaded` event fires, reading
+   `animationData.w / animationData.h` from lottie-web. The `1 / 1`
+   fallback covers the brief window before that lands so the stage
+   has a definite size during the first paint instead of collapsing
+   to zero height. */
+.block-lottie-stage {
+  width: 100%;
+  aspect-ratio: var(--lottie-ratio, 1 / 1);
+  display: block;
+}
+.block-lottie-stage > svg,
+.block-lottie-stage > canvas { display: block; width: 100%; height: 100%; }
+/* Hover playback mode — the `data-lottie-playback="hover"` attribute
+   is the cue. `cursor: pointer` and a subtle scale on hover/tap nudge
+   the user that the wrapper is interactive. */
+.block-lottie-stage[data-lottie-playback="hover"] {
+  cursor: pointer;
+  transition: transform 220ms ease;
+}
+.block-lottie-stage[data-lottie-playback="hover"]:hover { transform: scale(1.02); }
 .block-code { background: var(--code-bg, #0f1117); color: #e6e6e6; padding: 12px 14px;
   border-radius: 8px; overflow: auto; font-size: .92rem; }
 .block-callout { display: flex; gap: 12px; padding: 12px 14px; border-radius: 8px;
@@ -4274,27 +4922,47 @@ h5.block-heading { font-size: 0.875rem; font-weight: 600; margin: 12px 0 4px; }
 .template-toggle-label { display: flex; align-items: center; gap: 6px; font-size: .9rem;
   color: var(--muted); }
 
-/* Block editor */
+/* Block editor — visual hierarchy is modal-panel → section (panel-2,
+   slightly tinted) → block (panel, clean elevated card) → block-head
+   (panel-2, sub-zone tint). Same logical depth in both light and dark
+   mode; the dark theme's panel/panel-2 deltas are subtle but readable. */
 .be-root { display: flex; flex-direction: column; gap: 12px; }
 .be-sections { display: flex; flex-direction: column; gap: 12px; }
 .be-section { border: 1px solid var(--border); border-radius: 10px; padding: 12px;
-  background: var(--panel, var(--bg)); }
+  background: var(--panel-2); color: var(--text); }
 .be-section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .be-section-drag, .be-block-drag { cursor: grab; color: var(--muted); user-select: none;
   padding: 4px 6px; }
-.be-section-title { flex: 1; font-size: 1rem; font-weight: 600; }
+.be-section-title { flex: 1; font-size: 1rem; font-weight: 600;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
 .be-blocks { display: flex; flex-direction: column; gap: 8px; min-height: 8px;
   padding: 4px; border: 1px dashed transparent; border-radius: 6px; }
 .be-blocks:empty { border-color: var(--border); padding: 16px; text-align: center;
   color: var(--muted); }
 .be-blocks:empty::before { content: "Drop blocks here or use + below"; font-size: .85rem; }
-.be-block { border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.be-block { border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel); color: var(--text); }
 .be-block-head { display: flex; align-items: center; gap: 8px; padding: 6px 8px;
-  border-bottom: 1px solid var(--border); background: var(--panel, transparent); }
+  border-bottom: 1px solid var(--border); background: var(--panel-2); }
 .be-block-type { font-size: .8rem; text-transform: uppercase; color: var(--muted);
   letter-spacing: .04em; flex: 1; }
-.be-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-.be-body textarea, .be-body input[type=text], .be-body select { width: 100%; }
+.be-body { padding: 10px; display: flex; flex-direction: column; gap: 8px;
+  color: var(--text); }
+.be-body textarea, .be-body input[type=text], .be-body input[type=number],
+.be-body select { width: 100%;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
+.be-body textarea { font: inherit; }
+/* Inside a .be-row (flex container), inputs/selects sit side-by-side.
+   The blanket width: 100% above would force every flex child to claim
+   the full row, so we override here: select shrinks to content (with
+   a sane min for short labels like "H2"), text/number inputs flex to
+   fill the remaining space, and any tiny utility buttons keep their
+   intrinsic size. */
+.be-body .be-row > select { width: auto; flex: 0 0 auto; min-width: 80px; }
+.be-body .be-row > input[type=text],
+.be-body .be-row > input[type=number] { flex: 1 1 0; min-width: 0; }
 .be-body label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem;
   color: var(--muted); }
 .be-row { display: flex; gap: 8px; align-items: center; }
@@ -4660,7 +5328,13 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
   box-shadow: 0 12px 32px -8px rgba(17,24,39,.28), 0 4px 10px -2px rgba(17,24,39,.12);
   padding: 14px 16px;
   display: flex; flex-direction: column; gap: 10px;
-  z-index: 400;
+  /* Pinned to the top of the stacking order — must beat the floating
+     block palette (1000), modals (100), wp-fetch overlay (9999), and
+     any future floating UI. The "Update available" toast is the
+     highest-priority interruption: a stale bundle is now in front of
+     the admin and we need them to see it regardless of what else
+     they have open. Max signed 32-bit int = the CSS z-index ceiling. */
+  z-index: 2147483647;
   animation: tspVersionBannerIn .28s cubic-bezier(.4,0,.2,1);
 }
 @keyframes tspVersionBannerIn {
@@ -5915,6 +6589,52 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
   font-weight: 700; font-size: 0.78rem; letter-spacing: 0.08em;
   text-transform: uppercase; color: var(--muted);
 }
+/* When the admin set a custom container label, render it as a
+   normal-cased title rather than the all-caps "CONTAINER" tag, so
+   "Officers" reads as the actual subject. The role chip below ("container · single column")
+   keeps the structural context. */
+.fe-page-structure .fe-page-structure-row-num--labelled {
+  font-weight: 700; font-size: 0.95rem; letter-spacing: normal;
+  text-transform: none; color: var(--text);
+}
+/* Inline-editable container label input. Looks like a static title
+   by default; gains a subtle border + focus ring on hover/focus to
+   telegraph "this is editable." When the field is empty, the
+   placeholder reverts to the all-caps muted "CONTAINER"-style label
+   so admins still see the structural fallback. */
+.fe-page-structure .fe-page-structure-row-label-input {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin: -4px -6px 0;  /* keep visual position when border appears */
+  font-family: inherit;
+  font-weight: 700; font-size: 0.78rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted);
+  outline: none;
+  cursor: text;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.fe-page-structure .fe-page-structure-row-label-input.is-labelled {
+  font-size: 0.95rem; letter-spacing: normal;
+  text-transform: none; color: var(--text);
+}
+.fe-page-structure .fe-page-structure-row-label-input::placeholder {
+  color: var(--muted);
+  font-weight: 700; font-size: 0.78rem; letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 1;
+}
+.fe-page-structure .fe-page-structure-row-label-input:hover {
+  border-color: var(--border);
+  background: var(--panel);
+}
+.fe-page-structure .fe-page-structure-row-label-input:focus {
+  border-color: var(--brand, var(--access));
+  background: var(--panel);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand, var(--access)) 18%, transparent);
+}
 /* Single-block rows (homepage non-split entries) drop the label gutter
    and let the pill span the whole width, since "Row 1 / 1 column" is
    noise when every row is one block. */
@@ -6018,9 +6738,25 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
   padding-top: 4px;
 }
 
-/* "Edit layout" shortcut button on the structure card head — opens the
-   builder modal pre-loaded with the active custom layout's blocks. Only
-   rendered for editable layouts (active_layout exists). */
+/* "(Customized)" tag in the structure card heading — shown when the
+   page has structurally edited away from its prebuilt layout's stamp.
+   Subtle accent so it reads as a status, not a warning. */
+.fe-page-customized-tag {
+  display: inline-flex; align-items: center;
+  margin-left: 4px; padding: 1px 8px;
+  font-size: 0.7rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--brand, var(--access));
+  background: var(--brand-soft, var(--panel-2));
+  border: 1px solid var(--brand-soft, var(--border));
+  border-radius: 999px;
+  cursor: help;
+}
+
+/* "Change layout" shortcut button on the structure card head — opens
+   the picker modal so the admin can swap to a different layout (or
+   Custom for free-form). Only rendered for layouts that have an
+   active key. */
 .fe-page-structure-edit-btn {
   display: inline-flex; align-items: center; gap: 6px;
   margin-left: auto;
@@ -6034,6 +6770,57 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
 .fe-page-structure .fe-page-structure-block-icon .icon { width: 14px; height: 14px; }
 .fe-page-structure .fe-page-structure-empty {
   padding: 12px 0; font-style: italic; text-align: center; color: var(--muted);
+}
+
+/* Single-column container row inside the structure tree — keeps the
+   row-label gutter (so the admin sees "Container · single column")
+   and renders its lone cell with the same panel-card chrome a
+   2-column row uses, instead of stripping it like a single-block row
+   would. The pills inside stack vertically so a Container holding
+   heading + paragraph + list reads as a column of 3 pills, not a
+   single opaque "Container" pill. */
+.fe-page-structure .fe-page-structure-row--single-container .fe-page-structure-col {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 10px 12px 12px;
+}
+
+/* Section-title divider in the page admin's structure tree. Renders
+   between rows as a low-volume label so the admin can tell which
+   section a block belongs to without burying the block pills inside
+   nested cards. */
+.fe-page-structure .fe-page-structure-section-label {
+  font-weight: 700; font-size: 0.7rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted);
+  padding: 6px 4px 0; margin-top: 4px;
+}
+.fe-page-structure .fe-page-structure-section-label:first-child { margin-top: 0; }
+
+/* Page-edit screen title banner — sits above the first card so the
+   admin always knows which page they're editing. Uses the same panel
+   tokens as a card but with reduced padding and no shadow so it reads
+   as a header strip rather than a content card. */
+.fe-page-edit-title-banner {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.fe-page-edit-title-banner-eyebrow {
+  font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.fe-page-edit-title-banner-title {
+  font-size: 1.5rem; font-weight: 700; margin: 0; line-height: 1.2;
+  color: var(--text);
+}
+.fe-page-edit-title-banner-meta {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.fe-page-edit-title-banner-meta code {
+  background: var(--panel-2); padding: 1px 8px; border-radius: 6px;
+  font-size: 0.8125rem;
 }
 
 /* ---- Per-block content-edit modals ----
@@ -6356,7 +7143,7 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
   padding: 12px; border: 1px solid var(--border);
   border-radius: 8px; cursor: pointer;
 }
-.fe-mlist-width-row .check:hover { background: var(--surface-2, #f8fafc); }
+.fe-mlist-width-row .check:hover { background: var(--panel-2); }
 .fe-mlist-width-row .check input { margin-top: 3px; }
 .fe-mlist-width-controls {
   display: grid;
@@ -6390,7 +7177,7 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--surface, #fff);
+  background: var(--panel);
   font: inherit;
   line-height: 1.5;
   box-sizing: border-box;
@@ -6402,7 +7189,7 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
 }
 .md-editor-preview {
   overflow: auto;
-  background: var(--surface-2, #f8fafc);
+  background: var(--panel-2);
 }
 .md-editor-preview > *:first-child { margin-top: 0; }
 .md-editor-preview > *:last-child { margin-bottom: 0; }
@@ -6435,7 +7222,7 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
    carries the same weight, only the value-text colour is muted to
    suggest hierarchy without bolding. */
 .loc-name { font-weight: 400; }
-.loc-line { color: var(--ink-muted, #475569); }
+.loc-line { color: var(--muted); }
 .loc-notes {
   margin-top: 6px;
   padding-left: 10px;
@@ -6494,7 +7281,7 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
   grid-template-columns: minmax(0, 1fr) 32px;
   gap: 12px;
   padding: 12px;
-  background: var(--surface-2, #f8fafc);
+  background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: 10px;
   align-items: start;
@@ -6516,7 +7303,7 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
   width: 32px; height: 32px;
   display: flex; align-items: center; justify-content: center;
   background: transparent; border: 1px solid transparent;
-  border-radius: 6px; color: var(--ink-muted, #64748b);
+  border-radius: 6px; color: var(--muted);
   cursor: pointer;
 }
 .fe-meeting-extended-card-remove:hover {
@@ -6553,7 +7340,7 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
   grid-template-columns: 56px minmax(0, 1fr) 32px;
   gap: 12px;
   padding: 12px;
-  background: var(--surface-2, #f8fafc);
+  background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: 10px;
   align-items: start;
@@ -6563,7 +7350,7 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
   width: 56px; height: 56px;
   display: flex; align-items: center; justify-content: center;
   background: #fff; border: 1px dashed var(--border); border-radius: 8px;
-  cursor: pointer; color: var(--ink-muted, #64748b);
+  cursor: pointer; color: var(--muted);
   font: inherit;
 }
 .fe-protips-item-icon.has-icon .fe-protips-icon-trigger {
@@ -6614,7 +7401,7 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
   width: 32px; height: 32px;
   display: flex; align-items: center; justify-content: center;
   background: transparent; border: 1px solid transparent;
-  border-radius: 6px; color: var(--ink-muted, #64748b);
+  border-radius: 6px; color: var(--muted);
   cursor: pointer;
 }
 .fe-protips-item-remove:hover { background: rgba(220, 38, 38, 0.08); color: #dc2626; border-color: rgba(220, 38, 38, 0.24); }
@@ -6679,4 +7466,1688 @@ body.setup-body { margin: 0; min-height: 100vh; background: var(--bg);
     grid-column: 1 / -1; justify-content: space-between;
     border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px;
   }
+}
+
+/* ===== Block editor: Button block ===== */
+.be-button-body { display: flex; flex-direction: column; gap: 10px; }
+.be-button-body input[type="text"] { width: 100%; }
+.be-checkbox-row { display: flex; gap: 8px; align-items: center; }
+.be-button-style-row { gap: 12px; align-items: center; flex-wrap: wrap; }
+.be-button-style-lbl { font-weight: 600; min-width: 60px; font-size: 0.875rem; }
+.be-button-style-toggle { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+
+.be-button-custom-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+}
+.be-button-custom-panel[hidden] { display: none; }
+.be-button-color-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.be-button-color-lbl {
+  flex: 0 0 auto; min-width: 140px;
+  font-size: 0.875rem; font-weight: 500;
+}
+.be-button-color-row input[type="color"] {
+  width: 44px; height: 32px; border: 1px solid var(--border);
+  border-radius: 6px; padding: 2px; background: var(--panel);
+  cursor: pointer;
+}
+/* Editable hex input next to each picker. Either the visual swatch
+   or this text field can drive the colour; the other side mirrors. */
+input.be-button-color-val {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.8125rem;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  width: 9ch;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+input.be-button-color-val::placeholder {
+  text-transform: none; color: var(--muted); letter-spacing: 0;
+}
+input.be-button-color-val.is-invalid {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+/* Page background colour — three labelled rows (light / mode /
+   dark hex). The dark-hex row hides when mode != 'manual'. Swatch
+   + hex text + Clear sit on a single line for tight horizontal
+   composition. */
+.fe-page-bg-color-row {
+  display: flex; flex-direction: column; gap: 12px;
+}
+.fe-page-bg-color-label {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 0.875rem; font-weight: 500;
+}
+.fe-page-bg-color-pair {
+  display: flex; gap: 8px; align-items: center;
+}
+.fe-page-bg-color-pair input[type="color"] {
+  width: 44px; height: 36px; padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+.fe-page-bg-color-pair input[type="text"] {
+  flex: 1 1 auto;
+  font-family: ui-monospace, Menlo, monospace;
+}
+/* Tokens trigger button — Lucide palette icon, sized to match the
+   adjacent Clear button so the row reads as a tight pill cluster. */
+.fe-page-bg-color-pair .icon { width: 16px; height: 16px; }
+
+/* Block-editor color clusters get the same 🎨 token button via
+   `attachTokenButton()`. Sized to align with the existing Clear
+   button without dominating the row. */
+.be-container-color .be-token-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  padding: 0;
+}
+.be-container-color .be-token-btn svg { display: block; margin: auto; }
+
+/* Token popover — anchored under whichever Tokens trigger fired
+   it. Uses `position: fixed` so its top/left are simple viewport
+   coords (matches what `getBoundingClientRect()` returns), avoiding
+   the absolute-relative-to-which-ancestor mismatch that caused the
+   popover to land off-screen on first build. */
+.fe-page-bg-token-popover {
+  position: fixed;
+  z-index: 1100;
+  max-width: 480px;
+  min-width: 320px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18),
+              0 4px 12px rgba(15, 23, 42, 0.10);
+}
+.fe-page-bg-token-popover[hidden] { display: none !important; }
+.fe-page-bg-token-popover-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 4px;
+}
+.fe-page-bg-token-popover-head h4 {
+  margin: 0; font-size: 1rem; font-weight: 700;
+}
+.fe-page-bg-token-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.fe-page-bg-token-tile {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  background: var(--panel-2, var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit; color: var(--text);
+  transition: border-color 120ms ease, transform 120ms ease,
+              background 120ms ease;
+}
+.fe-page-bg-token-tile:hover {
+  border-color: var(--brand, var(--access));
+  background: var(--panel);
+  transform: translateY(-1px);
+}
+.fe-page-bg-token-swatch {
+  flex: 0 0 auto;
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+}
+.fe-page-bg-token-meta {
+  display: flex; flex-direction: column; gap: 1px;
+  min-width: 0;
+}
+.fe-page-bg-token-label {
+  font-size: 0.86rem; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fe-page-bg-token-hex {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.72rem;
+}
+
+/* ===== Pages admin: background editor preview ===== */
+.page-bg-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+@media (max-width: 720px) {
+  .page-bg-grid { grid-template-columns: 1fr; }
+}
+.page-bg-controls { display: flex; flex-direction: column; gap: 16px; }
+.page-bg-scale { display: flex; flex-direction: column; gap: 6px; }
+.page-bg-scale > span { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-weight: 600; }
+.page-bg-scale > span output { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+.page-bg-preview-wrap { display: flex; flex-direction: column; gap: 8px; }
+.page-bg-preview-label { font-size: 0.8125rem; font-weight: 600; color: var(--muted); }
+.page-bg-preview {
+  position: relative;
+  min-height: 240px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background-color: var(--panel-2);
+  background-image:
+    linear-gradient(45deg, rgba(15,23,42,0.05) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(15,23,42,0.05) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(15,23,42,0.05) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(15,23,42,0.05) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.page-bg-preview.has-bg { background-color: transparent; }
+.page-bg-preview.has-bg .page-bg-preview-empty { display: none; }
+.page-bg-preview-empty { padding: 20px; text-align: center; }
+
+/* ===== Pages admin: typography editor ===== */
+.page-typo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+@media (max-width: 720px) { .page-typo-grid { grid-template-columns: 1fr; } }
+.page-typo-col {
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--panel);
+}
+.page-typo-col legend { font-weight: 600; padding: 0 6px; font-size: 0.875rem; }
+.page-typo-color { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.page-typo-color input[type="color"] {
+  width: 44px; height: 32px; border: 1px solid var(--border, #e2e8f0);
+  border-radius: 6px; padding: 2px; background: var(--panel);
+  cursor: pointer;
+}
+/* Editable hex input. Empty state shows the "Theme default"
+   placeholder; invalid hex flags red until the field is fixed or
+   blurred (blur snaps back to the last valid value). */
+input.page-typo-color-text {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.8125rem;
+  padding: 4px 8px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  width: 12ch;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+input.page-typo-color-text::placeholder {
+  text-transform: none; color: var(--muted, #64748b); letter-spacing: 0;
+}
+input.page-typo-color-text.is-invalid {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  color: #b91c1c;
+}
+.page-typo-align { gap: 6px; flex-wrap: wrap; }
+
+/* ===== Block editor: Container block ===== */
+.be-container-body {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.be-container-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+}
+.be-container-panel > summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  list-style: revert;
+  color: var(--text);
+}
+.be-container-panel > summary::-webkit-details-marker { display: revert; }
+.be-container-panel[open] > summary { border-bottom: 1px solid var(--border); }
+.be-container-panel-body {
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.be-container-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+.be-container-row-lbl { font-size: 0.875rem; font-weight: 500; }
+
+/* ── Grid-column GUI controls ───────────────────────────────────
+   Replaces the free-form `grid-template-columns` text input with a
+   stepper, preset chips, per-track selectors, and a visual preview
+   bar. The CSS is structural only — the JS does all the value
+   marshalling. */
+.be-container-grid-controls {
+  display: flex; flex-direction: column; gap: 0.5rem;
+}
+.be-grid-stepper {
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.be-grid-stepper .btn { width: 30px; padding: 0; font-size: 1.1rem; line-height: 1; }
+.be-grid-count {
+  display: inline-block; min-width: 92px; text-align: center;
+  font-weight: 600; font-size: 0.92rem;
+}
+.be-grid-presets {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.be-grid-presets .btn { padding: 4px 10px; font-size: 0.82rem; }
+.be-grid-presets .btn.active {
+  background: var(--brand, var(--access));
+  color: #fff;
+  border-color: var(--brand, var(--access));
+}
+.be-grid-tracks {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.be-grid-track-row {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  align-items: center; gap: 8px;
+}
+.be-grid-track-row .be-grid-track-custom {
+  grid-column: 2 / -1;
+  margin-top: 4px;
+}
+.be-grid-track-label {
+  font-size: 0.78rem; font-weight: 700; color: var(--muted);
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+.be-grid-track-select { width: 100%; }
+/* Live proportion preview — flex segments scale to each track's
+   relative weight (1fr → 1, 200px → 2, auto → 1, etc. — see
+   trackWeight in block_editor.js). Each segment shows its raw value
+   in a monospace caption so the admin can verify the mapping. */
+.be-grid-preview {
+  display: flex; gap: 4px;
+  height: 36px;
+  padding: 4px;
+  background: var(--panel-2, var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.be-grid-preview-seg {
+  display: flex; align-items: center; justify-content: center;
+  min-width: 0;
+  background: color-mix(in srgb, var(--brand, var(--access)) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand, var(--access)) 40%, transparent);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.be-grid-preview-label {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.72rem;
+  color: var(--text);
+  white-space: nowrap;
+  padding: 0 6px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.be-grid-advanced-toggle {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  opacity: 0.85;
+}
+.be-grid-advanced-toggle:hover { opacity: 1; }
+.be-container-row-hint {
+  grid-column: 2 / -1;
+  margin-top: -4px;
+}
+.be-container-row > select,
+.be-container-row > input[type="text"],
+.be-container-row > input[type="number"] { width: 100%; }
+.be-container-num-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.be-container-num-wrap input[type="number"] { width: 80px; }
+.be-container-num-suffix { font-variant-numeric: tabular-nums; }
+.be-container-checkbox {
+  display: inline-flex; align-items: center; gap: 6px; font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.be-container-color { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.be-container-color input[type="color"] {
+  width: 40px; height: 30px; border: 1px solid var(--border);
+  border-radius: 6px; padding: 2px; background: var(--panel);
+  cursor: pointer;
+}
+input.be-container-color-text {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.8125rem;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  width: 11ch;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+input.be-container-color-text::placeholder {
+  text-transform: none; color: var(--muted); letter-spacing: 0;
+}
+input.be-container-color-text.is-invalid {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.be-container-width-toggle { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+
+/* Children area — visually distinct from the settings panels above
+   so the admin reads "this is the nested content" at a glance. */
+.be-container-children {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+.be-container-children-head {
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin-bottom: 8px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.be-container-children .be-blocks {
+  background: var(--panel);
+  border: 1px dashed var(--border, #e2e8f0);
+  border-radius: 8px;
+  padding: 8px;
+  min-height: 40px;
+}
+.be-container-children .be-blocks:empty::before {
+  content: "Drop blocks here or use + below to nest content.";
+  font-size: 0.8125rem;
+  color: var(--muted, #64748b);
+  display: block;
+  text-align: center;
+  padding: 12px 8px;
+}
+
+/* ===== Pages admin: layout-structure card actions + block-flash ===== */
+.fe-page-structure-actions {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  padding: 12px 0 4px;
+}
+/* Soft yellow flash applied to a .be-block when the admin clicks its
+   structure-card pill. Fades back to the resting state after the
+   keyframe runs once. Only used inside the page-edit modal — keeps
+   focus visible without a hard outline. */
+@keyframes be-block-flash {
+  0%   { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.55); }
+  60%  { box-shadow: 0 0 0 6px rgba(250, 204, 21, 0.25); }
+  100% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0); }
+}
+.be-block-flash {
+  animation: be-block-flash 1.4s ease-out;
+}
+
+/* Focus mode — set on .fe-page-edit-modal when the admin enters by
+   clicking a structure pill (vs clicking "Edit layout"). Hides every
+   block + section that isn't on the path to the focused block, so
+   the modal reads as a per-block editor instead of the whole tree.
+   Closing the modal clears focus so the next open lands fresh. */
+.fe-page-edit-modal.is-focus-mode .be-section-head,
+.fe-page-edit-modal.is-focus-mode .be-add-section,
+.fe-page-edit-modal.is-focus-mode .be-add-block-bar { display: none; }
+.fe-page-edit-modal.is-focus-mode .be-section { border: 0; padding: 0; }
+.fe-page-edit-modal.is-focus-mode .be-section:not(.be-block-focused-path) { display: none; }
+.fe-page-edit-modal.is-focus-mode .be-block:not(.be-block-focused):not(.be-block-focused-path) {
+  display: none;
+}
+/* Path-only blocks (containers wrapping the focused block) keep their
+   chrome but drop the drag handle / type label / remove button — the
+   admin is editing INSIDE them, not editing them. Container settings
+   (layout / spacing / background / hover details panels + the
+   "Children" label) also hide so the focused descendant is the only
+   thing the admin sees. The child blocks list itself stays visible
+   so the focused block keeps rendering through its container chain. */
+.fe-page-edit-modal.is-focus-mode .be-block-focused-path > .be-block-head { display: none; }
+.fe-page-edit-modal.is-focus-mode .be-block-focused-path > .be-container-body > .be-container-panel,
+.fe-page-edit-modal.is-focus-mode .be-block-focused-path .be-container-children-head { display: none; }
+.fe-page-edit-modal.is-focus-mode .be-block-focused-path { border: 0; padding: 0; background: transparent; }
+/* The focused block IS the modal's subject — its drag handle, type
+   label, and × remove button are all redundant once we're in
+   per-block edit mode. Hide the head and drop the outline so the
+   modal reads as a clean settings sheet for whatever block was
+   clicked. The body keeps rendering normally so the actual controls
+   (Layout / Spacing / etc.) sit at the top of the modal. */
+.fe-page-edit-modal.is-focus-mode .be-block-focused > .be-block-head { display: none; }
+.fe-page-edit-modal.is-focus-mode .be-block-focused {
+  outline: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+/* Edit-block modal head — push the × close button 1rem away from
+   the title so they don't sit visually glued together. The modal-
+   head is a flex row whose `space-between` lets the title fill
+   middle space; the explicit gap on the close button reserves a
+   minimum air-gap regardless of viewport width. */
+.fe-page-edit-modal .modal-head { gap: 1rem; }
+.fe-page-edit-modal .modal-head > .icon-btn[data-close] { margin-left: 1rem; }
+
+/* Icon block — visual preview card. The visual box renders the
+   actual SVG (or <img> for custom icons) at the chosen `font-size`
+   so `.icon { width: 1em; height: 1em }` scales it up. A meta row
+   below shows the icon ref + size + colour so the admin can reach
+   the exact stored values without inspecting the JSON. The card
+   uses a checkered background so transparent / tinted icons stay
+   visible against the panel. */
+.be-icon-picker-trigger { width: auto; align-self: flex-start; }
+.be-icon-preview-card {
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--panel-2); border: 1px solid var(--border);
+}
+.be-icon-visual {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 96px;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--panel);
+  background-image:
+    linear-gradient(45deg, var(--border) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--border) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--border) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--border) 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0px;
+  color: var(--text);
+  /* SVG inherits font-size from its parent's inline `font-size` (set
+     by the editor's renderVisualPreview), and `.icon { 1em }` does
+     the rest. Cap height generously so icons up to 256px can render
+     without the card growing absurdly tall on small viewports. */
+  overflow: hidden;
+  max-height: 320px;
+}
+.be-icon-visual.is-empty {
+  font-style: italic; color: var(--muted);
+  background-image: none;
+  font-size: 0.875rem;
+}
+.be-icon-visual .icon { display: block; }
+.be-icon-visual img.icon-custom { max-width: 100%; max-height: 100%; }
+.be-icon-visual-meta {
+  font-family: ui-monospace, Menlo, monospace;
+  text-align: center;
+}
+
+/* Image block — Browse / Upload row + live preview. Buttons sit
+   inline so the admin sees both options without scrolling. */
+.be-image-source-row {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin-top: 4px;
+}
+.be-image-source-row .btn { flex: 0 0 auto; }
+.be-preview { display: block; max-width: 220px; max-height: 160px;
+  border-radius: 8px; margin-top: 6px;
+  background: var(--panel-2); border: 1px solid var(--border); }
+
+/* Intergroup member block — admin preview card. Same styling as the
+   public render but boxed and tinted so admins can see the result
+   inside the editor without it blending into surrounding controls. */
+.be-officer-body { gap: 12px; }
+.be-officer-select { width: 100%; }
+.be-officer-fields {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px 10px;
+  background: var(--panel-2, var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.be-officer-fields-label { margin-bottom: 2px; }
+.be-officer-preview-wrap {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.be-officer-preview {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2, var(--panel));
+  min-height: 40px;
+}
+.be-officer-preview.is-empty {
+  font-style: italic; color: var(--muted);
+  font-size: 0.875rem;
+  text-align: center;
+}
+.be-officer-preview-card {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.be-officer-preview-card .be-officer-role {
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted);
+}
+.be-officer-preview-card .be-officer-name {
+  font-size: 1.1rem; font-weight: 700;
+}
+.be-officer-preview-card .be-officer-phone,
+.be-officer-preview-card .be-officer-email {
+  font-size: 0.92rem; color: var(--text);
+}
+
+/* Officer roster preview — mirrors the public-side card chrome so
+   admins see the same shadow + rounded corners they'll get on the
+   live page. The grid template / gap ride inline styles set by JS. */
+.be-officer-roster-preview {
+  display: grid;
+  padding: 4px;
+}
+.be-officer-roster-card {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 1rem 1.25rem;
+  background: var(--panel, #fff);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 10px rgba(0,0,0,0.06);
+}
+.be-officer-roster-card.is-empty {
+  font-style: italic; color: var(--muted);
+  text-align: center;
+  padding: 1rem;
+}
+.be-officer-roster-card .be-officer-role {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted);
+}
+.be-officer-roster-card .be-officer-name {
+  font-size: 0.95rem; font-weight: 700;
+}
+.be-officer-roster-card .be-officer-phone,
+.be-officer-roster-card .be-officer-email {
+  font-size: 0.82rem; color: var(--text);
+}
+
+/* Lottie block — preview card mirrors the icon block's checkered
+   stage so admins can see the animation against a non-solid backdrop
+   (most lottie files are transparent). The stage is fixed-height so
+   tall animations don't push the modal layout around; the SVG
+   lottie-web injects scales itself to fit. */
+.be-lottie-preview-card {
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--panel-2); border: 1px solid var(--border);
+}
+.be-lottie-stage {
+  /* Aspect ratio mirrors the public stage — set after the editor
+     preview's animation finishes loading. The fallback is 16/9 (a
+     reasonable mid-shape for unknown content) which is overridden as
+     soon as the JSON resolves. `max-height` clamps tall animations so
+     the modal doesn't grow unwieldy; the SVG inside scales itself
+     proportionally via lottie-web's preserveAspectRatio. */
+  width: 100%;
+  aspect-ratio: var(--lottie-ratio, 16 / 9);
+  max-height: 280px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  background: var(--panel);
+  background-image:
+    linear-gradient(45deg, var(--border) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--border) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--border) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--border) 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0px;
+  overflow: hidden;
+}
+.be-lottie-stage.is-empty {
+  font-style: italic; color: var(--muted);
+  background-image: none;
+  font-size: 0.875rem;
+}
+.be-lottie-stage > svg,
+.be-lottie-stage > canvas {
+  display: block;
+  width: 100%; height: 100%; max-height: 240px;
+}
+.be-lottie-meta {
+  font-family: ui-monospace, Menlo, monospace;
+  text-align: center;
+  word-break: break-all;
+}
+
+/* Image library picker modal — thumbnail grid + drop-zone uploader.
+   Sized wide so a generous grid fits on desktop; falls back to a
+   single column on mobile. */
+.fe-image-picker-modal .modal-panel {
+  width: min(960px, calc(100vw - 32px));
+  max-width: min(960px, calc(100vw - 32px));
+  max-height: 90vh;
+  display: flex; flex-direction: column;
+}
+.fe-image-picker-modal .modal-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+}
+.fe-image-picker-modal .modal-head h2 { margin: 0; flex: 0 0 auto; }
+.be-image-picker-search {
+  flex: 1 1 0; min-width: 0; padding: 6px 10px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel); color: var(--text);
+}
+.fe-image-picker-modal .modal-body {
+  padding: 16px 18px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.be-image-picker-uploader {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.be-image-picker-drop {
+  display: block; border: 2px dashed var(--border); border-radius: 12px;
+  padding: 22px 16px; text-align: center; cursor: pointer;
+  background: var(--panel-2); color: var(--muted);
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+.be-image-picker-drop:hover,
+.be-image-picker-drop.is-drop-target {
+  border-color: var(--brand, var(--access));
+  background: var(--brand-soft);
+  color: var(--text);
+}
+.be-image-picker-drop input[type=file] { display: none; }
+.be-image-picker-drop-label b { color: var(--text); }
+.be-image-picker-status { min-height: 1em; }
+
+.be-image-picker-grid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+.be-image-picker-tile {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px; border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--border);
+  cursor: pointer; text-align: left; font: inherit; color: var(--text);
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+.be-image-picker-tile:hover {
+  border-color: var(--brand, var(--access));
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+.be-image-picker-thumb {
+  display: block; aspect-ratio: 4 / 3;
+  background: var(--panel-2); border-radius: 6px; overflow: hidden;
+}
+.be-image-picker-thumb img {
+  display: block; width: 100%; height: 100%; object-fit: contain;
+}
+.be-image-picker-name {
+  font-size: 0.78rem; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.be-image-picker-empty { text-align: center; padding: 24px 0; }
+
+/* Color picker with dark-mode mode toggle — used by typography,
+   container bg/border, etc. Three rows stacked: light swatch + hex
+   + clear; mode toggle [Same | Auto | Manual]; manual dark swatch
+   + hex + clear (visible only in Manual mode); auto-derived preview
+   chip (visible only in Auto mode). */
+.be-color-with-dm {
+  display: flex; flex-direction: column; gap: 6px;
+  width: 100%;
+}
+.be-color-dm-mode-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-size: 0.75rem;
+}
+.be-color-dm-mode-row .be-color-dm-label {
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+.be-color-dm-row { /* manual hex+swatch row */ }
+.be-color-dm-auto-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.78rem;
+}
+.be-color-dm-auto-swatch {
+  display: inline-block; width: 14px; height: 14px;
+  border-radius: 4px; border: 1px solid var(--border);
+  vertical-align: middle;
+}
+.be-color-dm-auto-preview {
+  font-family: ui-monospace, Menlo, monospace;
+}
+
+/* Per-block typography panel (heading / paragraph / list). Reuses the
+   container-panel chrome so the visual rhythm of "click block →
+   collapsible settings panel below the body" stays consistent. */
+.be-typo-panel { margin-top: 4px; }
+.be-typo-align { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.be-typo-align .btn.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+
+/* Range slider in the image block ("Width  100%") — inline output
+   uses the same muted style the bg-scale slider does. */
+.be-body label > output { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ── Hover preview popover ──────────────────────────────────────
+   Floating card shown when the admin hovers a structure-card pill /
+   orphan-bin pill. Body content is JS-rendered from each pill's
+   `data-preview` JSON. Pinned to viewport via fixed positioning so
+   sticky / scrolled sections don't clip it. */
+.fe-pill-preview {
+  position: fixed; z-index: 1000;
+  max-width: 320px; min-width: 180px;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+  font-size: 0.875rem; line-height: 1.45;
+  pointer-events: none;
+  opacity: 0; transform: translateY(-4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.fe-pill-preview.is-visible { opacity: 1; transform: translateY(0); }
+.fe-pill-preview-label {
+  font-weight: 700; font-size: 0.7rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted);
+  margin-bottom: 6px;
+}
+.fe-pill-preview-text {
+  white-space: pre-wrap; word-break: break-word;
+  display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.fe-pill-preview-sub { margin-top: 6px; }
+.fe-pill-preview-img {
+  display: block; max-width: 100%; max-height: 120px;
+  border-radius: 6px; margin-bottom: 8px;
+  background: var(--panel-2);
+}
+
+/* ── Block palette (floating) ───────────────────────────────────
+   Anchored to the lower-right corner of the page-edit screen as a
+   collapsible floating panel. Two states:
+     • Collapsed → only the FAB pill is visible.
+     • Expanded → the full panel slides up from the FAB with a scale
+       + fade animation; the FAB tucks away.
+   The wrapper itself is `position: fixed`, sitting above page content
+   but below modal overlays (z-index 1000 vs the page-edit-modal's
+   higher stack). Drag-drop wiring keys off `[data-be-palette]` on
+   the inner grid, so positioning is purely cosmetic — palette tiles
+   stay HTML5-draggable to anywhere a Sortable zone exists. */
+.fe-page-palette-floating {
+  position: fixed;
+  right: clamp(16px, 2vw, 28px);
+  bottom: clamp(16px, 2vw, 28px);
+  z-index: 1000;
+  /* Reserve space so the FAB has somewhere to sit when the panel
+     animates out of the way; height is dictated by whichever child
+     is showing. The wrapper itself never has a backdrop. */
+  pointer-events: none;
+}
+.fe-page-palette-floating > * { pointer-events: auto; }
+
+/* ── FAB (collapsed state) ─────────────────────────────────────
+   A pill-shaped button that reads "+ Add block" — visible whenever
+   the panel is closed. Hovers lift slightly for affordance, and on
+   the wrapper's `is-open` state the FAB tucks down + fades to clear
+   the panel's stage. */
+.fe-page-palette-fab {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 48px;
+  padding: 0 20px 0 16px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--brand, var(--access));
+  color: #fff;
+  font-weight: 600; font-size: 0.92rem;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18),
+              0 2px 6px rgba(15, 23, 42, 0.08);
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition: transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              opacity 200ms ease,
+              box-shadow 240ms ease;
+}
+.fe-page-palette-fab:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.22),
+              0 4px 8px rgba(15, 23, 42, 0.1);
+}
+.fe-page-palette-fab:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--brand, var(--access)) 35%, transparent);
+  outline-offset: 3px;
+}
+.fe-page-palette-fab .fe-page-palette-fab-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+}
+.fe-page-palette-fab .fe-page-palette-fab-icon .icon {
+  width: 14px; height: 14px;
+}
+.fe-page-palette-floating.is-open .fe-page-palette-fab {
+  transform: translateY(12px) scale(0.85);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Panel (expanded state) ────────────────────────────────────
+   Rounded card with header + grid. Anchored to the wrapper's
+   bottom-right corner (same origin as the FAB) so the open/close
+   animation reads as the panel growing OUT of the FAB. The grid
+   inside scrolls when the catalog overflows, but the head / hint
+   stay pinned at the top. */
+.fe-page-palette-panel {
+  position: absolute;
+  right: 0; bottom: 0;
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(560px, calc(100vh - 64px));
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.20),
+              0 6px 14px rgba(15, 23, 42, 0.10);
+  transform-origin: bottom right;
+  transform: translateY(8px) scale(0.94);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              opacity 220ms ease;
+}
+.fe-page-palette-floating.is-open .fe-page-palette-panel {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+.fe-page-palette-panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+}
+.fe-page-palette-panel-title {
+  display: flex; align-items: center; gap: 8px;
+}
+.fe-page-palette-panel-title h3 {
+  margin: 0; font-size: 1rem; font-weight: 700;
+}
+.fe-page-palette-panel-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  background: var(--brand-soft, var(--panel-2));
+  color: var(--brand, var(--access));
+  border-radius: 8px;
+}
+.fe-page-palette-panel-icon .icon { width: 14px; height: 14px; }
+.fe-page-palette-close { flex: 0 0 auto; }
+.fe-page-palette-hint { margin: 0; }
+
+/* Grid stretches to fill the remaining vertical space and scrolls
+   when the catalog grows beyond the panel's max-height. The
+   auto-fill column rule keeps tiles tidy whether there are 6 or 16. */
+.fe-page-palette-grid {
+  display: grid; gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  overflow-y: auto;
+  padding: 2px;  /* breathing room so focus rings aren't clipped */
+}
+.fe-page-palette-tile {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  color: var(--text); cursor: grab; user-select: none;
+  transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
+}
+.fe-page-palette-tile:hover {
+  border-color: var(--brand, var(--access));
+  transform: translateY(-1px);
+  background: var(--panel);
+}
+.fe-page-palette-tile:active,
+.fe-page-palette-tile.is-dragging { cursor: grabbing; opacity: 0.55; }
+.fe-page-palette-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; flex: 0 0 30px;
+  background: var(--brand-soft, var(--panel)); border-radius: 6px;
+  color: var(--brand, var(--access));
+}
+.fe-page-palette-icon .icon { width: 16px; height: 16px; }
+.fe-page-palette-name { font-weight: 600; font-size: 0.875rem; }
+
+/* ── Orphan-bin card ────────────────────────────────────────────
+   Hidden when there are no orphans. Pills inside reuse the structure-
+   card pill chrome so they read as the same kind of object — the bin
+   is just a parking spot. The drop zone gets a dashed outline so it's
+   discoverable as a target. */
+/* When the orphan bin is empty, the card stays visible (so drops
+   are always possible) but reads as muted + collapsed-ish. Used to
+   `display: none` here, but that broke the "drag any unwanted block
+   into the bin" workflow because the zone wasn't reachable. */
+.fe-page-orphans.is-empty { opacity: 0.6; }
+.fe-page-orphans.is-empty .fe-page-orphans-list {
+  min-height: 56px;
+}
+.fe-page-orphans.is-empty .fe-page-orphans-list::before {
+  content: 'Drop blocks here to park them — they survive layout switches and saves.';
+  display: block;
+  text-align: center; padding: 14px 16px;
+  color: var(--muted); font-style: italic; font-size: 0.85rem;
+}
+.fe-page-orphans.is-empty .fe-page-orphans-list:has(> .fe-page-structure-block)::before {
+  display: none;
+}
+.fe-page-orphans-list {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 12px; border: 1px dashed var(--border); border-radius: 10px;
+  background: var(--panel-2); min-height: 56px;
+}
+.fe-page-orphans-list .fe-page-structure-block {
+  background: var(--panel);
+}
+
+/* ── Drag-drop affordances ──────────────────────────────────────
+   While dragging, the source pill / palette tile dims, the hovered
+   zone gets a brand-tinted outline, and the Sortable ghost shows the
+   intended drop position. */
+.fe-page-structure .fe-page-structure-block-list[data-be-zone] {
+  min-height: 36px; transition: background 120ms ease, border-color 120ms ease;
+  border: 1px dashed transparent; border-radius: 8px; padding: 4px;
+}
+
+/* Root zone — the rows container itself is a top-level drop target
+   for Container / Two-panel / leaf palette tiles. The dashed outline
+   only shows during a palette drag-over so it doesn't visually
+   compete with normal browsing. */
+.fe-page-structure-rows[data-be-zone="root"].is-drop-target {
+  outline: 2px dashed var(--brand, var(--access));
+  outline-offset: 6px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand, var(--access)) 5%, transparent);
+}
+
+/* Empty-state placeholder — visible only when the active layout has
+   no rows at all. JS removes it on the first drop. */
+.fe-page-structure-root-empty {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 28px 20px;
+  text-align: center;
+  background: var(--panel-2);
+}
+.fe-page-structure-rows[data-be-zone="root"]:has(> .fe-page-structure-row) > .fe-page-structure-root-empty,
+.fe-page-structure-rows[data-be-zone="root"]:has(> .fe-page-structure-section-label) > .fe-page-structure-root-empty {
+  display: none;
+}
+
+/* Row drag handle — small grip on the left of row-single rows, plus
+   a clickable cursor on row-split rows' label gutter so the admin
+   knows the whole label is grabbable. */
+.fe-page-row-handle {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; min-height: 28px;
+  color: var(--muted);
+  cursor: grab; user-select: none;
+  border-radius: 6px;
+  align-self: center;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem; letter-spacing: -2px;
+}
+.fe-page-row-handle:hover { color: var(--brand, var(--access)); background: var(--panel-2); }
+.fe-page-row-handle:active { cursor: grabbing; }
+
+/* Layout-picker — "Custom" radio preview blocks. Three small dashed
+   tiles to differentiate from the prebuilt previews (which are typed
+   block colour-blocks). */
+.template-card-preview-custom {
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px; padding: 16px;
+}
+.template-card-preview-custom .tcp-block {
+  width: 28px; height: 28px; border-radius: 6px;
+  background: var(--panel); border: 1px dashed var(--border);
+}
+.template-card.template-card-custom-radio.active .template-card-preview-custom .tcp-block {
+  border-color: var(--brand, var(--access));
+}
+
+/* Build-a-template tools strip — sits below the picker grid as a
+   secondary action. Lower visual weight than the radio cards so
+   "Custom" reads as the default free-form path. */
+.fe-layout-picker-template-tools {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-top: 14px; padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.fe-layout-picker-template-tools .btn .icon { width: 14px; height: 14px; }
+.fe-page-row-handle .icon { width: 16px; height: 16px; }
+.fe-page-structure-row--single { display: flex; align-items: stretch; gap: 8px; }
+.fe-page-structure-row--single > .fe-page-structure-cols { flex: 1 1 auto; min-width: 0; }
+.fe-page-structure-row-label { cursor: grab; }
+.fe-page-structure-row-label:active { cursor: grabbing; }
+
+/* Row drag visual states — a row being moved fades; the gap where
+   it'll land gets a brand-tinted hint. */
+.fe-page-structure-row.is-row-dragging { opacity: 0.55; }
+.fe-page-structure-row.is-row-ghost {
+  outline: 2px dashed var(--brand, var(--access));
+  outline-offset: 4px;
+  background: color-mix(in srgb, var(--brand, var(--access)) 8%, var(--panel-2));
+}
+.fe-page-structure-row.is-row-chosen {
+  box-shadow: 0 0 0 2px var(--brand, var(--access));
+}
+.fe-page-structure .fe-page-structure-block-list[data-be-zone].is-drop-target,
+.fe-page-orphans-list.is-drop-target {
+  border-color: var(--brand, var(--access));
+  background: var(--brand-soft);
+}
+.fe-page-structure-block.is-draggable { cursor: grab; }
+.fe-page-structure-block.is-draggable:active,
+.fe-page-structure-block.is-dragging { cursor: grabbing; opacity: 0.55; }
+.fe-page-structure-block.is-drop-ghost {
+  background: var(--brand-soft) !important;
+  color: var(--brand, var(--access));
+  border-color: var(--brand, var(--access));
+  opacity: 0.6;
+}
+.fe-page-structure-block.is-drop-chosen {
+  outline: 2px solid var(--brand, var(--access));
+  outline-offset: 2px;
+}
+
+/* × delete buttons — small, subtle by default, brighter on hover.
+   Pinned to the right edge of pills via auto margin so the existing
+   "Edit" hint stays visible. Keyboard-focusable for accessibility. */
+.fe-page-structure-block { position: relative; }
+.fe-page-structure-block .fe-page-structure-block-remove {
+  flex: 0 0 auto;
+  width: 22px; height: 22px; padding: 0;
+  border: 0; border-radius: 50%;
+  background: transparent; color: var(--muted);
+  font-size: 1rem; line-height: 1; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-left: 4px;
+  opacity: 0; transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+}
+.fe-page-structure-block:hover .fe-page-structure-block-remove,
+.fe-page-structure-block:focus-within .fe-page-structure-block-remove {
+  opacity: 1;
+}
+.fe-page-structure-block-remove:hover {
+  background: var(--danger);
+  color: #fff;
+}
+.fe-page-structure-block-remove:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--brand, var(--access));
+  outline-offset: 1px;
+}
+/* When hovering the × so the pill turns brand-tinted, keep the ×
+   readable by keeping its bg distinct. */
+.fe-page-structure-block.is-clickable:hover .fe-page-structure-block-remove {
+  color: rgba(255, 255, 255, 0.85);
+}
+.fe-page-structure-block.is-clickable:hover .fe-page-structure-block-remove:hover {
+  background: var(--danger); color: #fff;
+}
+
+/* Row × button — sits in the row label gutter alongside the Settings
+   button on container/2-col rows, and as a top-right icon-button on
+   row-single rows. Always visible (admin needs explicit affordance
+   for destructive action). */
+.fe-page-structure-row-remove { color: var(--danger); }
+.fe-page-structure-row-remove:hover {
+  background: var(--danger); color: #fff;
+  border-color: var(--danger);
+}
+.fe-page-structure-row-remove .icon { width: 14px; height: 14px; }
+.fe-page-structure-row-remove--single {
+  align-self: center; flex: 0 0 auto;
+  width: 32px; height: 32px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+.fe-page-structure-row-remove--single:hover {
+  color: #fff; background: var(--danger); border-color: var(--danger);
+}
+
+/* Merged Page-settings card — three subsections (Title/URL/publish,
+   Page width, Background) live inside one `.fe-page-settings-card`,
+   separated by hairlines + sub-headings. The sub-heading row pairs
+   the title with a muted helper line so the section's purpose stays
+   inline with the section break. */
+.fe-page-settings-card .fe-page-settings-section {
+  padding-top: 18px;
+  margin-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.fe-page-settings-card .fe-page-settings-section:first-of-type {
+  padding-top: 0; margin-top: 0; border-top: 0;
+}
+.fe-page-settings-sub {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
+  font-size: 0.95rem; font-weight: 700;
+  margin: 0 0 12px;
+  color: var(--text);
+}
+.fe-page-settings-sub .muted {
+  font-weight: 400; flex: 1 1 auto; min-width: 0;
+}
+
+/* Page-width card layout — toggle row on top, range labels stacked
+   underneath. Matches `page-bg-grid` rhythm. */
+.page-width-grid { display: flex; flex-direction: column; gap: 14px; }
+.page-width-num { display: flex; flex-direction: column; gap: 6px; }
+.page-width-num > span {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 12px; font-weight: 600;
+}
+.page-width-num > span output {
+  color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums;
+}
+
+/* ── Dynamic-background admin picker ─────────────────────────────
+   Renders alongside the existing color/image bg controls anywhere
+   the admin can configure a frontend background. Each card shows a
+   live thumbnail of the actual dynbg recipe (rendered by the
+   public partial frontend/_dynbg.html) at small scale, so the
+   admin sees exactly what the visitor will see.
+
+   The picker doesn't replace the colour / image fields — it stacks
+   alongside them. A site can use a colour OR a dynbg OR both
+   (dynbg paints over the colour). */
+.fe-dynbg-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 8px 0;
+}
+.fe-dynbg-picker-card {
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  overflow: hidden;
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+.fe-dynbg-picker-card:hover {
+  border-color: var(--access);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+.fe-dynbg-picker-card.active {
+  border-color: var(--access);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--access) 30%, transparent);
+}
+.fe-dynbg-picker-card input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.fe-dynbg-picker-thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 80px;
+  overflow: hidden;
+  background: var(--card-soft, #f1f5f9);
+}
+.fe-dynbg-picker-md .fe-dynbg-picker-thumb { height: 110px; }
+/* The dynbg children are absolutely positioned with sized
+   `width`/`height` (380px blobs, etc.) — far bigger than the
+   thumbnail tile. We scale them down with a CSS transform so a
+   single recipe drives both the live render and the preview. */
+.fe-dynbg-picker-thumb .fe-dynbg {
+  transform: scale(0.45);
+  transform-origin: center center;
+  width: calc(100% / 0.45);
+  height: calc(100% / 0.45);
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  margin-left: calc(-50% / 0.45);
+  margin-top: calc(-50% / 0.45);
+}
+.fe-dynbg-picker-thumb-none {
+  display: grid;
+  place-items: center;
+  background:
+    repeating-linear-gradient(45deg,
+      color-mix(in srgb, var(--text) 6%, transparent) 0 6px,
+      transparent 6px 12px);
+}
+.fe-dynbg-picker-none-icon {
+  font-size: 1.6rem; color: var(--muted); font-weight: 300;
+}
+.fe-dynbg-picker-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+}
+.fe-dynbg-picker-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.fe-dynbg-picker-desc {
+  line-height: 1.35;
+}
+
+/* ── Dynamic-background trigger button ──────────────────────────
+   Drop-in form control that opens the global dynbg picker modal.
+   Renders like a row-style "what's selected" control: a small
+   thumbnail tile + the preset's display name + a chevron. When no
+   preset is selected, the thumbnail is an empty hatched tile with
+   the ∅ glyph and the name reads "Choose…". */
+.fe-dynbg-trigger-wrap { display: block; margin: 8px 0; }
+.fe-dynbg-trigger {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  transition: border-color 120ms ease, transform 120ms ease,
+              box-shadow 120ms ease, background-color 120ms ease;
+}
+.fe-dynbg-trigger:hover {
+  border-color: var(--access);
+  background: color-mix(in srgb, var(--access) 4%, var(--card));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
+}
+.fe-dynbg-trigger:focus-visible {
+  outline: 2px solid var(--access);
+  outline-offset: 2px;
+}
+.fe-dynbg-trigger-thumb {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 44px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--card-soft, #f1f5f9);
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+/* Reuse the same scaling trick the picker grid uses so the trigger
+   thumb is a tiny live preview. */
+.fe-dynbg-trigger-thumb .fe-dynbg {
+  transform: scale(0.18);
+  transform-origin: center center;
+  width: calc(100% / 0.18);
+  height: calc(100% / 0.18);
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  margin-left: calc(-50% / 0.18);
+  margin-top: calc(-50% / 0.18);
+}
+.fe-dynbg-trigger-thumb-none {
+  font-size: 1.5rem;
+  color: var(--muted);
+  font-weight: 300;
+}
+.fe-dynbg-trigger-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fe-dynbg-trigger-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fe-dynbg-trigger-status { line-height: 1.3; }
+.fe-dynbg-trigger-caret {
+  flex: 0 0 auto;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+}
+.fe-dynbg-trigger-caret .icon { width: 16px; height: 16px; }
+
+/* Inside the picker modal — give the grid more breathing room than
+   the inline picker and let the modal scroll if the catalog grows. */
+#dynbg-picker-modal .modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.dynbg-modal-blurb { margin: 0 0 16px; }
+
+/* ── Dynbg modal — tabs + colour controls ───────────────────────
+   The modal grew from a single picker grid into three panels
+   (Background / Overlay / Colours). These rules style the tab bar
+   at the top and the colour-input fieldset on the third panel. */
+.dynbg-modal-tabs {
+  display: flex; gap: 4px;
+  padding: 4px;
+  background: var(--card-soft, color-mix(in srgb, var(--text) 4%, var(--card)));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin: 0 0 16px;
+}
+.dynbg-modal-tab {
+  flex: 1 1 auto;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.dynbg-modal-tab:hover { color: var(--text); }
+.dynbg-modal-tab.is-active {
+  background: var(--card);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.dynbg-modal-panel { display: none; }
+.dynbg-modal-panel.is-active { display: block; }
+
+.dynbg-modal-colors {
+  display: flex; flex-direction: column;
+  gap: 12px;
+}
+.dynbg-modal-color-row {
+  display: flex; align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.dynbg-modal-color-label {
+  flex: 0 0 auto;
+  min-width: 80px;
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+.dynbg-modal-color-controls {
+  flex: 1 1 auto;
+  display: flex; align-items: center;
+  gap: 8px;
+}
+.dynbg-modal-color-controls input[type="color"] {
+  width: 44px; height: 44px;
+  padding: 0; border: 1px solid var(--border);
+  border-radius: 8px; cursor: pointer;
+  background: var(--card);
+}
+.dynbg-modal-color-controls input[type="text"] {
+  flex: 1 1 160px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9375rem;
+}
+.dynbg-modal-color-clear {
+  flex: 0 0 auto;
+}
+
+/* Overlay-tab thumbnails sit on a soft brand-tinted plate so the
+   overlay's translucent texture is visible in isolation. Without
+   this, a 3% noise overlay rendered against the white modal bg is
+   essentially invisible. */
+.fe-dynbg-overlay-thumb { position: relative; overflow: hidden; }
+.fe-dynbg-overlay-thumb-plate {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--access) 18%, var(--card)),
+    color-mix(in srgb, var(--access) 6%, var(--card)));
+}
+
+/* ── Dynbg modal — extra fieldsets (scope / sliders / randomize) */
+.dynbg-modal-fieldset {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 16px 0 0;
+  display: flex; flex-direction: column;
+  gap: 8px;
+}
+.dynbg-modal-fieldset legend {
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0 8px;
+  color: var(--text);
+}
+.dynbg-modal-fieldset[hidden] { display: none; }
+
+.dynbg-modal-scope-row {
+  display: flex; flex-direction: column;
+  gap: 8px;
+}
+.dynbg-modal-scope-opt {
+  display: flex; align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.dynbg-modal-scope-opt:hover { border-color: var(--access); }
+.dynbg-modal-scope-opt input[type="radio"] {
+  margin-top: 4px;
+  accent-color: var(--access);
+}
+
+.dynbg-modal-slider-row {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+.dynbg-modal-slider-label {
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+.dynbg-modal-slider-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--access);
+}
+
+.dynbg-modal-randomize {
+  display: flex; align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+.dynbg-modal-randomize input[type="checkbox"] {
+  width: 18px; height: 18px;
+  margin-top: 2px;
+  accent-color: var(--access);
+  flex-shrink: 0;
+}
+
+/* ── Templates picker · Site Index thumbs ──────────────────────
+   Two layouts share the same base palette as other thumbnails;
+   the .t-eyebrow span anchors a section label and the .t-row
+   spans become content rows. The Alphabet variant centers a
+   single title bar then stacks rows tighter to suggest a flat
+   directory.  */
+.fe-tplgrid-thumb-site-index .t-eyebrow {
+  left: 16px; top: 14px; width: 28%; height: 5px; background: #94a3b8;
+  border-radius: 2px;
+}
+.fe-tplgrid-thumb-site-index .t-eyebrow.t-eyebrow-2 { top: 80px; width: 24%; }
+.fe-tplgrid-thumb-site-index .t-row {
+  left: 16px; right: 16px; height: 8px; border-radius: 3px;
+  background: #cbd5e1;
+}
+.fe-tplgrid-thumb-site-index-grouped .t-row:nth-of-type(1) { top: 30px; }
+.fe-tplgrid-thumb-site-index-grouped .t-row:nth-of-type(2) { top: 48px; width: 70%; }
+.fe-tplgrid-thumb-site-index-grouped .t-row:nth-of-type(3) { top: 96px; }
+.fe-tplgrid-thumb-site-index-grouped .t-row:nth-of-type(4) { top: 114px; width: 80%; }
+.fe-tplgrid-thumb-site-index-alphabet .t-h.centered {
+  top: 18px; width: 40%; left: 50%; transform: translateX(-50%);
+  height: 9px; background: #475569; border-radius: 3px;
+}
+.fe-tplgrid-thumb-site-index-alphabet .t-row:nth-of-type(1) { top: 44px; }
+.fe-tplgrid-thumb-site-index-alphabet .t-row:nth-of-type(2) { top: 62px; width: 86%; }
+.fe-tplgrid-thumb-site-index-alphabet .t-row:nth-of-type(3) { top: 80px; width: 92%; }
+.fe-tplgrid-thumb-site-index-alphabet .t-row:nth-of-type(4) { top: 98px; width: 78%; }
+.fe-tplgrid-thumb-site-index-alphabet .t-row:nth-of-type(5) { top: 116px; width: 88%; }
+
+/* ── Pages list — sortable headers + bulk-action bar ──────────
+   Click-to-sort headers carry a small arrow that fills in once
+   a direction is set. The bulk bar sits above the table and is
+   shown via JS when at least one row is selected. */
+.fe-pages-list-card .tbl thead th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.fe-pages-list-card .tbl thead th.sortable:hover {
+  background: color-mix(in srgb, var(--brand, #0b5cff) 6%, transparent);
+}
+.fe-pages-list-card .tbl thead th .fe-sort-arrow {
+  display: inline-block;
+  margin-left: 4px;
+  width: 0; height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  vertical-align: middle;
+  opacity: 0.35;
+}
+.fe-pages-list-card .tbl thead th.sortable .fe-sort-arrow {
+  border-bottom: 5px solid currentColor;
+  border-top: 5px solid currentColor;
+  height: 0; width: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 0;
+  border-bottom: 0;
+}
+.fe-pages-list-card .tbl thead th.sort-asc .fe-sort-arrow {
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 5px solid currentColor;
+  border-top: 0;
+  opacity: 1;
+}
+.fe-pages-list-card .tbl thead th.sort-desc .fe-sort-arrow {
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  border-bottom: 0;
+  opacity: 1;
+}
+
+.fe-pages-check-col { width: 28px; text-align: center; }
+.fe-pages-check { display: inline-flex; align-items: center; cursor: pointer; }
+.fe-pages-check input[type="checkbox"] { accent-color: var(--brand, #0b5cff); }
+
+.fe-pages-bulk-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  margin: 0 0 8px;
+  background: color-mix(in srgb, var(--brand, #0b5cff) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand, #0b5cff) 24%, transparent);
+  border-radius: 8px;
+}
+.fe-pages-bulk-count {
+  font-weight: 600;
+  color: var(--brand, #0b5cff);
+}
+.fe-pages-bulk-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Page edit — visibility fieldset (Draft / Published / Private) */
+.fe-page-status-fieldset {
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fe-page-status-fieldset legend {
+  padding: 0 6px;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+.fe-page-status-fieldset .check {
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* Page edit — quick-action status pills under the title banner */
+.fe-page-edit-status-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.fe-page-edit-status-actions form { margin: 0; }
+.fe-page-edit-status-actions .btn.active {
+  background: color-mix(in srgb, var(--brand, #0b5cff) 12%, transparent);
+  border-color: color-mix(in srgb, var(--brand, #0b5cff) 28%, transparent);
 }

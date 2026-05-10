@@ -212,7 +212,7 @@
     <div class="nav-megalink-field">
       <span class="nav-megalink-field-lbl">Style</span>
       <div class="nav-megalink-seg">
-        {% for _k, _lbl in [('frosty','Frosty'), ('solid','Solid'), ('gradient','Gradient'), ('image','Image'), ('sinewave','Sinewave'), ('video','Video')] %}
+        {% for _k, _lbl in [('frosty','Frosty'), ('solid','Solid'), ('gradient','Gradient'), ('image','Image'), ('sinewave','Sinewave'), ('video','Video'), ('dynamic','Dynamic')] %}
         <label class="nav-megalink-seg-opt">
           <input type="radio" name="frontend_hero_bg_style" value="{{ _k }}"
                  data-bg-style-radio {% if _bs == _k %}checked{% endif %}>
@@ -385,6 +385,16 @@
             </select>
           </div>
         </div>
+      </div>
+
+      <div class="hero-bg-panel" data-bg-panel="dynamic" {% if _bs != 'dynamic' %}hidden{% endif %}>
+        <p class="muted smaller">Pick a CSS-driven backdrop from the dynamic-background library — animated blobs, mesh gradients, starfields, and more. Each preset is dark-mode aware and adapts to your brand colour.</p>
+        {% from "_dynbg_picker.html" import dynbg_trigger with context %}
+        {{ dynbg_trigger(field_name='frontend_hero_bg_dynamic_key',
+                       current=(site.frontend_hero_bg_dynamic_key if site else None),
+                       config_field='frontend_hero_bg_dynbg_config_json',
+                       config=(site.frontend_hero_bg_dynbg_config_json if site else None),
+                       button_id='hero-bg-dynamic-trigger') }}
       </div>
     </div>
 

@@ -11,11 +11,19 @@ def _recipients(raw):
     return [r.strip() for r in str(raw).replace(";", ",").split(",") if r.strip()]
 
 
-def send_mail(site, to, subject, body_text, body_html=None):
+def send_mail(site, to, subject, body_text, body_html=None, attachments=None):
     """Send a plain-text (optionally HTML) email using SMTP settings on SiteSetting.
+
+    ``attachments`` is an optional list of dicts:
+        {"path": "/abs/path/on/disk",
+         "filename": "what-the-recipient-sees.jpg",
+         "mime_type": "image/jpeg"}     # defaults to application/octet-stream
+    Files that don't exist on disk are silently skipped — the email
+    still goes out, the admin just doesn't get the attachment.
 
     Returns (ok: bool, error: str|None).
     """
+    import os as _os
     if not site or not site.smtp_host or not site.smtp_from_email:
         return False, "SMTP is not configured"
 
@@ -30,6 +38,24 @@ def send_mail(site, to, subject, body_text, body_html=None):
     msg.set_content(body_text or "")
     if body_html:
         msg.add_alternative(body_html, subtype="html")
+
+    for att in (attachments or []):
+        path = att.get("path")
+        if not path or not _os.path.isfile(path):
+            continue
+        try:
+            with open(path, "rb") as fh:
+                data = fh.read()
+        except (OSError, IOError):
+            continue
+        mime = (att.get("mime_type") or "application/octet-stream")
+        if "/" not in mime:
+            mime = "application/octet-stream"
+        maintype, _, subtype = mime.partition("/")
+        msg.add_attachment(
+            data, maintype=maintype, subtype=subtype or "octet-stream",
+            filename=(att.get("filename") or _os.path.basename(path)),
+        )
 
     from .crypto import decrypt
     password = decrypt(site.smtp_password_enc) if site.smtp_password_enc else ""

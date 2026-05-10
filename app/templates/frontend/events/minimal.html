@@ -1,7 +1,8 @@
 {% extends "frontend/base.html" %}
 {% block title %}{{ event.title }} · {{ frontend_title }}{% endblock %}
 {% block content %}
-<section class="fe-event-min" id="event" style="{{ tpl_style or '' }}">
+<section class="fe-event-min{% if tpl_dynbg_key or tpl_dynbg_overlay %} fe-dynbg-host{% endif %}" id="event" style="{{ tpl_style or '' }}{% if tpl_dynbg_config %}; {% set _resolved = dynbg_resolve_colors(tpl_dynbg_config) %}{% for _c in _resolved %}--fe-dynbg-c{{ loop.index }}: {{ _c }};{% endfor %} {{ dynbg_resolve_positions(tpl_dynbg_config, tpl_dynbg_key) }}{% endif %}">
+  {% if tpl_dynbg_key or tpl_dynbg_overlay %}{% with dynbg_key=tpl_dynbg_key, dynbg_config=tpl_dynbg_config %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}
   <div class="fe-container fe-event-min-inner">
     <div class="fe-edit-bar">
       <a class="fe-event-min-back" href="{{ url_for('frontend.index') }}#events">← back</a>
@@ -18,6 +19,13 @@
       <span class="dot">·</span>
       {{ event.event_starts_at.strftime('%-I:%M %p') }}
       {%- if event.event_ends_at %} – {{ event.event_ends_at.strftime('%-I:%M %p') }}{% endif %}
+    </p>
+    <p class="fe-event-min-ics">
+      <a class="fe-meeting-min-link fe-meeting-detail-ics-link"
+         href="{{ url_for('frontend.event_calendar_ics', slug=event.public_slug) }}"
+         download="{{ event.public_slug }}.ics">
+        {{ icon('calendar-check') }} Add to Calendar (.ics)
+      </a>
     </p>
     {% endif %}
 

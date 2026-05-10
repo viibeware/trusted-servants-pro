@@ -64,11 +64,17 @@
               {% set _link_style = _link_style ~ ' --link-color-light: ' ~ link.custom_color ~ '; --link-color-dark: ' ~ (link.custom_color | dark_variant) ~ ';' %}
             {% endif %}
             {%- set _ft = ' data-fe-form-trigger="' ~ link.form_trigger ~ '"' if link.form_trigger else '' -%}
+            {# External links (absolute http(s)/mailto/tel) get an
+               external-link glyph instead of the chevron so the
+               admin/visitor can tell at a glance which links leave
+               the site. Same 20px sizing + currentColor stroke as
+               the chevron path so visual weight stays uniform. #}
+            {%- set _is_external = link.url and (link.url.startswith('http://') or link.url.startswith('https://') or link.url.startswith('mailto:') or link.url.startswith('tel:')) -%}
             <a href="{{ link.url or '#' }}"{{ _tgt|safe }}{{ _ft|safe }} class="{{ _link_cls }}" style="{{ _link_style }}">
               {% if link.icon_before %}<span class="fe-megamenu-icon fe-megamenu-icon-before"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before) }}</span>{% endif %}
               <span class="fe-megamenu-label">{{ link.label }}</span>
               {% if link.icon_after %}<span class="fe-megamenu-icon fe-megamenu-icon-after"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>{% endif %}
-              <span class="fe-megamenu-chevron" aria-hidden="true">{{ icon('arrow-right') }}</span>
+              <span class="fe-megamenu-chevron{% if _is_external %} fe-megamenu-chevron--external{% endif %}" aria-hidden="true">{{ icon('external-link' if _is_external else 'chevron-right') }}</span>
             </a>
           {% endif %}
         {% endfor %}

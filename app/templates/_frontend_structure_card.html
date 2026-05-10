@@ -135,24 +135,257 @@
 
 {# Outer card wrapper — title row with optional "Edit layout" button
    + a {% call %} body slot the page fills with one of the structure_*
-   macros above. #}
+   macros above.
+
+   When `picker_modal_id` is supplied, the "Edit layout" button opens
+   the layout PICKER (the prebuilt grid + Custom-layout tile) — the
+   same destination the top-bar Layout pill targets. Otherwise it
+   falls back to opening the drag-drop BUILDER for the active layout
+   directly (legacy footer behaviour). #}
 {% macro structure_card(title, active_layout=None, builder_modal_id=None,
-                         help_text=None) %}
+                         help_text=None, picker_modal_id=None,
+                         is_customized=False) %}
 <section class="card fe-page-structure">
   <div class="card-head">
-    <h2>{{ title }}{% if active_layout %} — <span class="muted">{{ active_layout.name }}</span>{% endif %}</h2>
+    <h2>{{ title }}{% if active_layout %} — <span class="muted">{{ active_layout.name }}</span>{% if is_customized %} <span class="fe-page-customized-tag" title="The page's structure has been edited away from this layout's defaults — added/removed/rearranged blocks, or items in the Unplaced bin.">(Customized)</span>{% endif %}{% endif %}</h2>
     <span class="muted smaller">{{ help_text or 'Click any block to edit its content.' }}{% if not active_layout %} Reorder + restructure isn't available — this layout's shape is fixed. Switch to a custom layout via the Layout picker to drag blocks around.{% endif %}</span>
-    {% if active_layout and builder_modal_id %}
+    {% if active_layout and picker_modal_id %}
+    <button type="button" class="btn btn-sm fe-page-structure-edit-btn"
+            data-open-modal="{{ picker_modal_id }}">
+      {{ icon('edit') }} <span>Change layout</span>
+    </button>
+    {% elif active_layout and builder_modal_id %}
     <button type="button" class="btn btn-sm fe-page-structure-edit-btn"
             data-edit-layout="{{ active_layout.key }}"
             data-builder-modal="{{ builder_modal_id }}"
             data-layout-key="{{ active_layout.key }}"
             data-layout-name="{{ active_layout.name }}"
             data-layout-blocks="{{ active_layout.blocks_json or '[]' }}">
-      {{ icon('edit') }} <span>Edit layout</span>
+      {{ icon('edit') }} <span>Change layout</span>
     </button>
     {% endif %}
   </div>
   {{ caller() }}
 </section>
+{% endmacro %}
+
+
+{# Page-specific tree visualisation. Consumes the output of
+   `_page_active_tree` in routes.py — a flat list of row entries:
+
+     {type:'block',          block_id, t}
+     {type:'columns',        block_id, cols: [[…pills…], …]}
+     {type:'section_label',  label}
+
+   Each pill carries `data-page-block-id` so the host page's JS can
+   open the editor modal scrolled to the matching block.
+
+   `labels` and `editable_types` follow the same shape used by
+   `block_pill` above (so the pill chrome stays consistent across
+   homepage / footer / page admin). #}
+{# Helper: render a single page-block pill with hover preview + drag
+   support. Centralised so the columns / single-block / orphan-bin
+   branches all stamp the same chrome on each pill. #}
+{# Pill markup. The outer wrapper is a `<div>` (not a `<button>`) so
+   the × delete button can sit alongside the clickable edit area
+   without being a nested button (which is invalid HTML). The inner
+   `<button>` carries the open-modal hook + drag-drop attributes. #}
+{% macro page_pill(pill, modal_id, labels, previews, payloads={}) -%}
+  {%- set _meta = labels.get(pill.t, (pill.t, 'square')) -%}
+  {%- set _pv = previews.get(pill.block_id) if previews else None -%}
+  {%- set _pl = payloads.get(pill.block_id) if payloads else None -%}
+  <div class="fe-page-structure-block fe-page-structure-block--{{ pill.t }} is-clickable is-draggable"
+       data-open-modal="{{ modal_id }}"
+       data-page-block-id="{{ pill.block_id }}"
+       data-block-type="{{ pill.t }}"
+       {% if _pv %}data-preview='{{ _pv|tojson|forceescape }}'{% endif %}
+       {% if _pl %}data-block-payload='{{ _pl|tojson|forceescape }}'{% endif %}
+       title="Edit {{ _meta[0] }}">
+    <span class="fe-page-structure-block-icon">{{ icon(_meta[1]) }}</span>
+    <span class="fe-page-structure-block-name">{{ _meta[0] }}</span>
+    <span class="fe-page-structure-block-edit-hint" aria-hidden="true">Edit</span>
+    <button type="button" class="fe-page-structure-block-remove"
+            data-be-remove-block aria-label="Remove this block"
+            title="Remove block">×</button>
+  </div>
+{%- endmacro %}
+
+
+{# Renders a single tree node (block pill OR container row). Calls
+   itself recursively so a Container nested inside a column cell
+   renders AS a row inside that cell, with its own drop zones. Macro
+   recursion: Jinja macros can self-reference within the same file. #}
+{% macro render_tree_node(entry, modal_id, labels, previews, payloads) %}
+  {% set _t = entry.type %}
+  {% if _t == 'block' %}
+    {{ page_pill(entry, modal_id, labels, previews, payloads) }}
+  {% elif _t == 'columns' %}
+    {% set _n = entry.cols|length %}
+    {% set _is_single_col = (_n == 1) %}
+    <div class="fe-page-structure-row fe-page-structure-row--split{% if _is_single_col %} fe-page-structure-row--single-container{% endif %}"
+         data-be-row-block-id="{{ entry.block_id }}">
+      <div class="fe-page-structure-row-label">
+        {% set _label = entry.label or '' %}
+        {# Inline label input — admins type the container's friendly
+           name straight into the structure card here; oninput rides
+           through `containerPayloadById` and `syncStateFromDom` so the
+           hidden form value updates live. The placeholder folds back
+           to the structural fallback ("Container", "N-column row") so
+           an unlabeled row still reads sensibly. #}
+        {% set _placeholder = ('Container' if _is_single_col else (_n ~ '-column row')) %}
+        <input type="text"
+               class="fe-page-structure-row-label-input{% if _label %} is-labelled{% endif %}"
+               value="{{ _label }}"
+               placeholder="{{ _placeholder }}"
+               aria-label="Container label"
+               data-be-row-label-input
+               data-be-row-block-id="{{ entry.block_id }}">
+        <span class="muted smaller">{{ 'container · single column' if _is_single_col else (_n ~ '-column container') }}</span>
+        {% if entry.block_id %}
+        <button type="button" class="btn btn-sm fe-page-structure-row-action"
+                data-open-modal="{{ modal_id }}"
+                data-page-block-id="{{ entry.block_id }}"
+                title="Edit container settings (flex/grid, padding, gap, borders, shadow, hover)">
+          {{ icon('sliders') }} <span>Settings</span>
+        </button>
+        <button type="button" class="btn btn-sm fe-page-structure-row-action fe-page-structure-row-remove"
+                data-be-remove-row aria-label="Remove this row"
+                title="Remove row (any blocks inside go to Unplaced blocks)">
+          {{ icon('x') }} <span>Remove</span>
+        </button>
+        {% endif %}
+      </div>
+      <div class="fe-page-structure-cols fe-page-structure-cols--{{ _n if _n in [1,2,3,4] else 4 }}">
+        {% for col in entry.cols %}
+        <div class="fe-page-structure-col">
+          {% if not _is_single_col %}
+          <div class="fe-page-structure-col-label muted smaller">Column {{ loop.index }}</div>
+          {% endif %}
+          <div class="fe-page-structure-block-list" data-be-zone="container-col"
+               data-be-parent-block-id="{{ entry.block_id }}"
+               data-be-col-index="{{ loop.index0 }}">
+            {% for child in col %}{{ render_tree_node(child, modal_id, labels, previews, payloads) }}{% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+{% endmacro %}
+
+
+{% macro structure_page_tree(tree, modal_id, labels, editable_types, previews={}, payloads={}) %}
+<div class="fe-page-structure-rows" data-be-tree data-be-zone="root">
+  <div class="fe-page-structure-root-empty muted small" data-be-root-empty>
+    Drop a Container or Two-panel here to add a new row, or drag any block to start.
+  </div>
+  {% for entry in tree %}
+    {% if entry.type == 'section_label' %}
+    <div class="fe-page-structure-section-label">{{ entry.label }}</div>
+    {% elif entry.type == 'columns' %}
+    {{ render_tree_node(entry, modal_id, labels, previews, payloads) }}
+    {% else %}
+    {# 'block' at the TOP level renders inside a row-single wrapper so
+       it gets a drag handle + remove button matching the chrome of
+       multi-column rows. Inside cells we just render the pill bare. #}
+    <div class="fe-page-structure-row fe-page-structure-row--single">
+      <div class="fe-page-row-handle" title="Drag to reorder">{{ icon('grip-vertical') }}</div>
+      <div class="fe-page-structure-cols fe-page-structure-cols--1">
+        <div class="fe-page-structure-col">
+          <div class="fe-page-structure-block-list" data-be-zone="row-single">
+            {{ page_pill(entry, modal_id, labels, previews, payloads) }}
+          </div>
+        </div>
+      </div>
+      <button type="button" class="icon-btn fe-page-structure-row-remove fe-page-structure-row-remove--single"
+              data-be-remove-row aria-label="Remove this row"
+              title="Remove row">{{ icon('x') }}</button>
+    </div>
+    {% endif %}
+  {% endfor %}
+</div>
+{% endmacro %}
+
+
+{# Orphan bin — separate card holding blocks displaced by a layout
+   switch. Visible only when there are orphans. Uses the same pill
+   chrome + hover preview as the active layout tree, but the zone is
+   tagged `data-be-zone="orphans"` so the drag-drop JS knows blocks
+   in this zone are unplaced. The card itself is a drop target too —
+   admins can drag a placed block back here if they want to retire
+   it temporarily without deleting it. #}
+{% macro structure_orphans_card(orphans, modal_id, labels, previews={}, payloads={}) %}
+{# The card itself stays in the DOM whether there are orphans or not so
+   drag-drop has a stable destination, but it hides itself via CSS when
+   the list is empty. JS shows it again when an orphan lands inside. #}
+<section class="card fe-page-orphans{% if not orphans %} is-empty{% endif %}" data-be-orphans-card>
+  <div class="card-head">
+    <h2>Unplaced blocks
+      <span class="muted smaller fe-page-orphans-count">({{ orphans|length }})</span>
+    </h2>
+    <span class="muted smaller">Blocks lifted from the previous layout — drag back into the active layout to use them again. Hover any pill to preview its content.</span>
+  </div>
+  <div class="fe-page-structure-block-list fe-page-orphans-list" data-be-zone="orphans">
+    {% for pill in orphans %}{{ page_pill(pill, modal_id, labels, previews, payloads) }}{% endfor %}
+  </div>
+</section>
+{% endmacro %}
+
+
+{# Block palette — floating draggable source of fresh blocks. Anchored
+   to the bottom-right corner of the page-edit screen as a collapsible
+   floating panel: a small "Add block" pill in collapsed state, a full
+   tile grid in expanded state. Click the pill to expand, the × or
+   click-outside to collapse. Drag tiles into the structure tree.
+
+   Implementation notes:
+     • The grid keeps its `data-be-palette` selector so the existing
+       drag-drop wiring in page_structure.js works unchanged.
+     • Tiles keep `draggable="true"` + their `data-be-block-*` attrs.
+     • State toggles via the `is-open` class on the wrapper; CSS drives
+       the FAB → panel animation (scale + translate + opacity).
+     • Open/close persists across drags so admins can drop several
+       blocks without reopening; click-outside dismiss is suppressed
+       while a drag is in flight.
+#}
+{% macro structure_block_palette(catalog) %}
+<div class="fe-page-palette-floating" data-fe-palette-floating>
+  <button type="button" class="fe-page-palette-fab"
+          data-fe-palette-toggle
+          aria-expanded="false"
+          aria-controls="fe-page-palette-panel"
+          aria-label="Open block palette">
+    <span class="fe-page-palette-fab-icon" aria-hidden="true">{{ icon('plus') }}</span>
+    <span class="fe-page-palette-fab-label">Add block</span>
+  </button>
+  <section class="fe-page-palette-panel"
+           id="fe-page-palette-panel"
+           role="dialog"
+           aria-label="Block palette"
+           aria-hidden="true">
+    <header class="fe-page-palette-panel-head">
+      <div class="fe-page-palette-panel-title">
+        <span class="fe-page-palette-panel-icon" aria-hidden="true">{{ icon('grip-vertical') }}</span>
+        <h3>Add blocks</h3>
+      </div>
+      <button type="button" class="icon-btn fe-page-palette-close"
+              data-fe-palette-toggle
+              aria-label="Close block palette">{{ icon('x') }}</button>
+    </header>
+    <p class="muted smaller fe-page-palette-hint">
+      Drag any tile into the structure tree to add a new block. Drop into a column cell or between existing pills.
+    </p>
+    <div class="fe-page-palette-grid" data-be-palette>
+      {% for entry in catalog %}
+      <div class="fe-page-palette-tile" draggable="true"
+           data-be-block-type="{{ entry.key }}"
+           data-be-block-name="{{ entry.name }}"
+           title="{{ entry.desc }}">
+        <span class="fe-page-palette-icon">{{ icon(entry.icon or 'square') }}</span>
+        <span class="fe-page-palette-name">{{ entry.name }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
 {% endmacro %}

@@ -79,6 +79,7 @@ class User(UserMixin, db.Model):
     dash_show_server_metrics = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_online_users = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_access_requests = db.Column(db.Boolean, nullable=False, default=True)
+    dash_show_contact_form = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_deletions = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_currently_online = db.Column(db.Boolean, nullable=False, default=True)
     dash_order_json = db.Column(db.Text)
@@ -672,6 +673,13 @@ class SiteSetting(db.Model):
     frontend_hero_bg_image_mode = db.Column(db.String(16), nullable=False, default="cover")  # cover | tile
     frontend_hero_bg_image_scale = db.Column(db.Integer, nullable=False, default=100)       # percent
     # Video bg: muted, autoplay, object-fit: cover (no letterboxing).
+    # Optional dynamic-background catalog key for the hero. When set
+    # (and `frontend_hero_bg_style == 'dynamic'`), the hero renders the
+    # matching `app/dynbg.py` preset behind the heading + CTA. Stored
+    # separately from the bg-style picker so the admin can flip back
+    # and forth between dynamic and the other modes without losing
+    # their preset selection.
+    frontend_hero_bg_dynamic_key = db.Column(db.String(64))
     frontend_hero_bg_video_filename = db.Column(db.String(500))
     frontend_hero_bg_video_mode = db.Column(db.String(16), nullable=False, default="loop")  # loop | bounce
     frontend_hero_bg_video_speed = db.Column(db.Integer, nullable=False, default=100)       # percent (50/100/150/200/300)
@@ -722,6 +730,19 @@ class SiteSetting(db.Model):
     frontend_announcements_list_padding_pct = db.Column(db.Integer, nullable=False, default=5)
     frontend_announcements_list_heading = db.Column(db.String(200))
     frontend_announcements_list_subheading = db.Column(db.String(500))
+    # Stories module — recovery-story long-form posts at /stories and
+    # /stories/<slug>. Toggle hides the admin entry + 404s the public
+    # routes; required role gates who in the admin area can create /
+    # edit them. List + detail templates pick the public layout.
+    stories_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    stories_required_role = db.Column(db.String(32), nullable=False, default="admin")
+    frontend_stories_list_template = db.Column(db.String(64), nullable=False, default="paper-stack")
+    frontend_stories_list_width_mode = db.Column(db.String(16), nullable=False, default="boxed")
+    frontend_stories_list_max_width = db.Column(db.Integer, nullable=False, default=1160)
+    frontend_stories_list_padding_pct = db.Column(db.Integer, nullable=False, default=5)
+    frontend_stories_list_heading = db.Column(db.String(200))
+    frontend_stories_list_subheading = db.Column(db.String(500))
+    frontend_story_template = db.Column(db.String(64), nullable=False, default="paper")
     # Printlist (/printlist) — printable schedule. Subheading sits under
     # the page title; website appears in the header band; page_size
     # drives both the @page CSS rule and the on-screen paper aspect.
@@ -744,6 +765,48 @@ class SiteSetting(db.Model):
     # fall back to the layout-supplied copy in the templates.
     frontend_meetings_list_heading = db.Column(db.String(200))
     frontend_meetings_list_subheading = db.Column(db.String(500))
+    # Per-section dynamic-background keys. Each is an optional reference
+    # into app/dynbg.py CATALOG; None = no dynamic backdrop. Stored as
+    # flat columns (rather than via the per-template settings JSON
+    # bucket) because each list/index page renders one layout at a time
+    # and the dynbg should follow the page, not the layout variant.
+    frontend_meetings_list_bg_dynamic_key = db.Column(db.String(64))
+    frontend_events_list_bg_dynamic_key = db.Column(db.String(64))
+    frontend_announcements_list_bg_dynamic_key = db.Column(db.String(64))
+    frontend_stories_list_bg_dynamic_key = db.Column(db.String(64))
+    frontend_story_bg_dynamic_key = db.Column(db.String(64))
+    frontend_literature_library_bg_dynamic_key = db.Column(db.String(64))
+    frontend_printlist_bg_dynamic_key = db.Column(db.String(64))
+    # ── Site Index — auto-populated /siteindex page that lists every
+    #     public page (custom Pages + Meetings + Events + Announcements
+    #     + Stories + Library items). Each section is independently
+    #     toggleable so a fellowship that doesn't use Stories can hide
+    #     that group without touching the module flag. Sort mode is
+    #     'grouped' (sections by type, alphabetical within) or 'alpha'
+    #     (single A-Z list, no grouping).
+    frontend_site_index_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    frontend_site_index_template = db.Column(db.String(64), nullable=False, default="grouped")
+    frontend_site_index_heading = db.Column(db.String(200))
+    frontend_site_index_subheading = db.Column(db.String(500))
+    frontend_site_index_sort_mode = db.Column(db.String(32), nullable=False, default="grouped")
+    frontend_site_index_show_pages = db.Column(db.Boolean, nullable=False, default=True)
+    frontend_site_index_show_meetings = db.Column(db.Boolean, nullable=False, default=True)
+    frontend_site_index_show_events = db.Column(db.Boolean, nullable=False, default=True)
+    frontend_site_index_show_announcements = db.Column(db.Boolean, nullable=False, default=True)
+    frontend_site_index_show_stories = db.Column(db.Boolean, nullable=False, default=True)
+    frontend_site_index_show_library = db.Column(db.Boolean, nullable=False, default=True)
+    frontend_site_index_bg_dynamic_key = db.Column(db.String(64))
+    frontend_site_index_bg_dynbg_config_json = db.Column(db.Text)
+    # Sibling JSON config for each of the dynbg keys above (overlay +
+    # custom colours). Same shape as Page.bg_dynbg_config_json.
+    frontend_meetings_list_bg_dynbg_config_json = db.Column(db.Text)
+    frontend_events_list_bg_dynbg_config_json = db.Column(db.Text)
+    frontend_announcements_list_bg_dynbg_config_json = db.Column(db.Text)
+    frontend_stories_list_bg_dynbg_config_json = db.Column(db.Text)
+    frontend_story_bg_dynbg_config_json = db.Column(db.Text)
+    frontend_literature_library_bg_dynbg_config_json = db.Column(db.Text)
+    frontend_printlist_bg_dynbg_config_json = db.Column(db.Text)
+    frontend_hero_bg_dynbg_config_json = db.Column(db.Text)
     # "Pro Tips" FAQ-style section rendered at the bottom of /meetings.
     # JSON blob with: enabled, heading, subheading, icon, icon_color,
     # bg_color, items[]. NULL = use defaults from
@@ -861,6 +924,36 @@ class SiteSetting(db.Model):
     # rendering, so what the server thinks is "right now" matches the
     # fellowship's wall clock regardless of where the host runs.
     timezone = db.Column(db.String(64), nullable=False, default="UTC")
+
+    # ── Contact form (public /contact page) ────────────────────────
+    # Independent of the existing /submissionform (which collects
+    # announcements + events). The contact form is a generic "get in
+    # touch" page whose submissions email the public information chair
+    # and land in the admin's Contact Form section. Turnstile is
+    # reused from the site-wide settings above.
+    contact_form_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    # Recipient(s) — comma-separated. Falls back to pic_email then
+    # access_request_to so a fresh install still routes mail somewhere
+    # sensible. The form's reply-to header is set to the visitor's
+    # address so admins can reply directly from their inbox.
+    contact_form_to = db.Column(db.String(500))
+    contact_form_heading = db.Column(db.String(200))
+    contact_form_subheading = db.Column(db.String(500))
+    contact_form_intro = db.Column(db.Text)
+    contact_form_success_message = db.Column(db.String(500))
+    contact_form_submit_label = db.Column(db.String(100))
+    contact_form_subject_required = db.Column(db.Boolean, nullable=False, default=False)
+    contact_form_show_phone = db.Column(db.Boolean, nullable=False, default=True)
+    # Per-channel toggles for the PIC contact panel rendered on the
+    # /contact page aside. Each channel is shown only when (a) the
+    # underlying SiteSetting field is populated AND (b) the matching
+    # toggle below is on. Lets admins surface email-only / name-only
+    # combinations without having to clear the dashboard PIC fields
+    # they still want to use elsewhere in the portal.
+    contact_form_show_pic_name = db.Column(db.Boolean, nullable=False, default=True)
+    contact_form_show_pic_email = db.Column(db.Boolean, nullable=False, default=True)
+    contact_form_show_pic_phone = db.Column(db.Boolean, nullable=False, default=True)
+
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
@@ -871,6 +964,26 @@ class IntergroupAccount(db.Model):
     email = db.Column(db.String(255), nullable=False)
     position = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class IntergroupOfficer(db.Model):
+    """Repeatable contact rows surfaced under Settings → Global. Distinct
+    from `IntergroupAccount` (which stores email-account credentials for
+    the legacy /intergroupemail tooling): officer rows are public-facing
+    contact metadata — position / name / phone / email — that admins
+    edit through the Global tab and that page blocks pull at render time
+    via the `intergroup_member` block. Stored separately so changes to
+    the officer roster don't churn IMAP credentials and vice versa.
+    """
+    __tablename__ = "intergroup_officer"
+    id = db.Column(db.Integer, primary_key=True)
+    role = db.Column(db.String(200), nullable=False)   # position name, e.g. "Chair"
+    name = db.Column(db.String(200))
+    phone = db.Column(db.String(64))
+    email = db.Column(db.String(255))
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class ZoomOtpEmail(db.Model):
@@ -1036,6 +1149,30 @@ class AccessRequest(db.Model):
         except (ValueError, TypeError):
             return []
         return data if isinstance(data, list) else []
+
+
+class ContactSubmission(db.Model):
+    """A single contact-form submission from the public /contact page.
+
+    Email goes out to the public information chair at submission time
+    with reply-to set to the visitor's email so the admin can reply
+    straight from their inbox; the row persists here for audit / when
+    the SMTP delivery fails. Mirrors AccessRequest's read/archive
+    pattern so the admin UX stays consistent."""
+    __tablename__ = "contact_submission"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    email = db.Column(db.String(255), nullable=False)
+    phone = db.Column(db.String(64))
+    subject = db.Column(db.String(255))
+    message = db.Column(db.Text, nullable=False)
+    ip_address = db.Column(db.String(64))
+    is_read = db.Column(db.Boolean, nullable=False, default=False)
+    is_archived = db.Column(db.Boolean, nullable=False, default=False)
+    archived_at = db.Column(db.DateTime)
+    email_sent = db.Column(db.Boolean, nullable=False, default=False)
+    email_error = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class LibraryItem(db.Model):
@@ -1303,6 +1440,46 @@ class Post(db.Model):
         return slugify(self.slug) if self.slug else slugify(self.title)
 
 
+class Story(db.Model):
+    """Recovery story — long-form first-person post.
+
+    Modeled loosely on Post but with blog-style metadata: an explicit
+    author byline (often a first name + initial of last name, since
+    these are recovery stories), an optional sobriety / clean date,
+    and a story_date (the publish / "as of" date the public page shows
+    instead of created_at). Drafts and archives behave the same way as
+    Post — drafts hide from the public site, archives are kept around
+    but hidden too. URLs live at /stories and /stories/<slug>."""
+    __tablename__ = "story"
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+    slug = db.Column(db.String(255))
+    summary = db.Column(db.Text)
+    body = db.Column(db.Text)
+    featured_image_filename = db.Column(db.String(500))
+    author_name = db.Column(db.String(120))
+    author_bio = db.Column(db.Text)
+    sobriety_date = db.Column(db.Date)
+    story_date = db.Column(db.Date)
+    is_featured = db.Column(db.Boolean, nullable=False, default=False)
+    is_draft = db.Column(db.Boolean, nullable=False, default=False)
+    is_archived = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"))
+
+    @property
+    def public_slug(self):
+        from .colors import slugify
+        return slugify(self.slug) if self.slug else slugify(self.title)
+
+    @property
+    def display_date(self):
+        """Date the public page shows under the title. Prefers the
+        admin-set story_date; falls back to created_at."""
+        return self.story_date or (self.created_at.date() if self.created_at else None)
+
+
 class CustomFont(db.Model):
     """Admin-added font available alongside the vendored Inter/Fraunces in the
     Web Frontend font pickers. Source is either an uploaded font file
@@ -1507,3 +1684,87 @@ class PasswordResetToken(db.Model):
         if self.used_at is not None:
             return False
         return self.expires_at > datetime.utcnow()
+
+
+class Page(db.Model):
+    """Admin-authored content page rendered at /<slug> on the public
+    frontend. Body lives in `blocks_json` using the same schema as the
+    Zoom Tech editor (sections of typed blocks rendered through the
+    shared `_blocks.html` macros)."""
+    __tablename__ = "page"
+    id = db.Column(db.Integer, primary_key=True)
+    slug = db.Column(db.String(120), unique=True, nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False)
+    blocks_json = db.Column(db.Text)
+    template = db.Column(db.String(16), nullable=False, default="standard")  # standard | wiki
+    is_published = db.Column(db.Boolean, nullable=False, default=True)
+    # Private pages are reachable only by signed-in editors/admins. The
+    # public catch-all `/<slug>` route 404s anonymous visitors, and the
+    # Site Index / public navigation hides private rows. Combined with
+    # ``is_published`` the three states are: Draft (is_published=False),
+    # Published (is_published=True, is_private=False), Private
+    # (is_published=True, is_private=True).
+    is_private = db.Column(db.Boolean, nullable=False, default=False)
+    # Active layout preset. Mirrors how homepage tracks its layout via
+    # `frontend_homepage_template` — points at a CustomLayout(kind='page')
+    # row's `key`. Selecting a preset copies its blocks_json into
+    # page.blocks_json so the admin can edit freely; layout_key just
+    # tracks "what was last applied" for the picker UI.
+    layout_key = db.Column(db.String(64), nullable=False, default="custom")
+    # Page background. `bg_image_filename` is the UUID-prefixed name in
+    # UPLOAD_FOLDER (None = no bg). `bg_mode` is 'cover' or 'tile'.
+    # `bg_tile_scale` is a percent (25..400) applied to the tile's
+    # natural size when mode='tile'.
+    bg_image_filename = db.Column(db.String(500))
+    bg_mode = db.Column(db.String(16), nullable=False, default="cover")
+    bg_tile_scale = db.Column(db.Integer, nullable=False, default=100)
+    # Optional solid background colour, with separate light + dark
+    # mode values. Layers BENEATH the dynamic backdrop and uploaded
+    # image (so admins can sit a colour-fill behind a tiled SVG, etc.).
+    # `bg_color` is the light-mode hex (#rrggbb / #rgb / blank);
+    # `bg_color_dark_mode` controls the dark-mode behaviour:
+    #   • 'same'   → use the light value in both modes (no override)
+    #   • 'auto'   → derive a dark-mode-friendly variant via
+    #                design.derive_dark_color() at render time
+    #   • 'manual' → use the value in `bg_color_dark` verbatim
+    # Empty `bg_color` means "no colour fill" — the page falls
+    # through to whatever the body / theme paints.
+    bg_color = db.Column(db.String(16))
+    bg_color_dark = db.Column(db.String(16))
+    bg_color_dark_mode = db.Column(db.String(16), nullable=False, default="same")
+    # Optional dynamic backdrop layered over the page bg. Stores a
+    # catalog key from app/dynbg.py (None = no dynbg). When set, the
+    # public renderer paints it as the bottom-most layer, with the
+    # uploaded image (if any) and content stacking on top via
+    # standard z-index. Mixes cleanly with `bg_image_filename` —
+    # admins can pair a tile/cover image with a dynbg or use either
+    # alone.
+    bg_dynamic_key = db.Column(db.String(64))
+    # Overlay + custom-colour config for the dynbg, persisted as a
+    # JSON blob so the schema doesn't need to grow another column
+    # every time a new dimension is added. Shape:
+    #   {"overlay": "<key>", "colors": ["#hex", "#hex", "#hex"]}
+    # Empty / omitted keys mean "fall through to brand defaults".
+    bg_dynbg_config_json = db.Column(db.Text)
+    # Page-wide width formatting. `width_mode` is 'boxed' (centered with
+    # max_width) or 'full' (viewport-spanning with full_padding_pct as
+    # left/right gutter). `max_width` only matters in boxed mode;
+    # `full_padding_pct` only matters in full mode. Together they let
+    # the admin choose whether the page hugs a content column or
+    # bleeds wide with controllable air on the sides.
+    width_mode = db.Column(db.String(16), nullable=False, default="boxed")
+    max_width = db.Column(db.Integer, nullable=False, default=1160)
+    full_padding_pct = db.Column(db.Integer, nullable=False, default=4)
+    # Per-page hero typography overrides. Each is optional — None / blank
+    # falls back to the theme's design tokens (handled by CSS via
+    # default values in `var(--fe-pp-*, …)`). `heading_align` is one of
+    # 'auto' | 'left' | 'center' | 'right' where 'auto' means the
+    # layout chooses (left for two-column, center otherwise).
+    heading_color = db.Column(db.String(16))
+    heading_align = db.Column(db.String(16), nullable=False, default="auto")
+    heading_font = db.Column(db.String(64))
+    subheading_color = db.Column(db.String(16))
+    subheading_font = db.Column(db.String(64))
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow,
+                           onupdate=datetime.utcnow)

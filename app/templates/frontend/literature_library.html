@@ -10,7 +10,15 @@
    chrome reuses the .fe-mlist-rail / .fe-mlist-day-pill classes from
    the archive so the two pages read as siblings — same rail
    geometry, same pill colours, same search input shape. #}
-<section class="fe-section fe-mlist fe-mlist-sidebar fe-events fe-archive fe-library fe-mlist--w-{{ list_width_mode }}" id="library">
+{%- set _literature_library_tpl = template_settings(site, 'literature_library', site.frontend_literature_library_template) if site else {} -%}
+{%- set _dynbg = _literature_library_tpl.get('bg_dynamic_key') or (site.frontend_literature_library_bg_dynamic_key if site else None) -%}
+{%- set _dynbg_cfg_raw = {'overlay': _literature_library_tpl.get('bg_dynbg_overlay'), 'colors': _literature_library_tpl.get('bg_dynbg_colors') or [], 'overlay_scope': _literature_library_tpl.get('bg_dynbg_overlay_scope'), 'overlay_size': _literature_library_tpl.get('bg_dynbg_overlay_size'), 'overlay_intensity': _literature_library_tpl.get('bg_dynbg_overlay_intensity'), 'randomize_colors': _literature_library_tpl.get('bg_dynbg_randomize_colors'), 'randomize_positions': _literature_library_tpl.get('bg_dynbg_randomize_positions'), 'animate': _literature_library_tpl.get('bg_dynbg_animate', True)} if _literature_library_tpl.get('bg_dynamic_key') or _literature_library_tpl.get('bg_dynbg_overlay') else (site.frontend_literature_library_bg_dynbg_config_json if site else None) -%}
+{%- set _dynbg_cfg = dynbg_decode(_dynbg_cfg_raw) -%}
+{%- set _dynbg_color_vars = dynbg_colors_css(dynbg_resolve_colors(_dynbg_cfg)) -%}
+{%- set _dynbg_active = _dynbg or _dynbg_cfg.overlay -%}
+<section class="fe-section fe-mlist fe-mlist-sidebar fe-events fe-archive fe-library fe-mlist--w-{{ list_width_mode }}{% if _dynbg_active %} fe-dynbg-host{% endif %}" id="library"
+         {% if _dynbg_active and _dynbg_color_vars %}style="{{ _dynbg_color_vars }}"{% endif %}>
+  {% if _dynbg_active %}{% with dynbg_key=_dynbg, dynbg_config=_dynbg_cfg_raw %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}
   <div class="{% if list_width_mode == 'boxed' %}fe-container{% else %}fe-mlist-fullwrap{% endif %} fe-mlist-shell"
        {% if list_width_mode == 'boxed' %}style="max-width: {{ list_max_width }}px;"
        {%- elif list_padding_pct %}style="padding-left: {{ list_padding_pct }}vw; padding-right: {{ list_padding_pct }}vw;"{% endif %}>

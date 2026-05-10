@@ -151,17 +151,46 @@
   }
 
   // Modal open/close
-  function openModal(id) {
+  function openModal(id, srcOverride, titleOverride) {
     const m = document.getElementById(id);
     if (!m) return;
     m.classList.add("open");
     m.setAttribute("aria-hidden", "false");
     document.body.style.overflow = "hidden";
+    // Lazy-load any iframe inside the modal whose source we can
+    // resolve. `srcOverride` (from the trigger's `data-modal-src`)
+    // wins; otherwise we fall back to the iframe's `data-src`. Any
+    // iframe with no resolvable target stays untouched. This lets the
+    // same modal be repointed at different URLs by different triggers
+    // — e.g. + New story vs. per-row Edit on the stories list.
+    m.querySelectorAll("iframe").forEach(f => {
+      const target = srcOverride || f.dataset.src;
+      if (!target) return;
+      if (!f.src || f.src === "about:blank" || f.src === window.location.href || (srcOverride && f.src !== target)) {
+        f.src = target;
+      }
+    });
+    // Optional dynamic title — used by triggers that share a modal but
+    // need a different head label (e.g. "New story" vs. "Edit story").
+    if (titleOverride) {
+      const head = m.querySelector(".modal-head h2");
+      if (head) head.textContent = titleOverride;
+    }
   }
   function closeModal(m) {
     m.classList.remove("open");
     m.setAttribute("aria-hidden", "true");
     document.body.style.overflow = "";
+    // When the closed modal hosts a lazy-loaded iframe, blank it out so
+    // the next open starts a clean wizard / form session — otherwise
+    // the iframe would resume on whatever step it last landed on.
+    // Match by id (not by [data-src]) since the story modal repoints
+    // the iframe per-trigger via data-modal-src, not via data-src.
+    m.querySelectorAll("iframe").forEach(f => {
+      if (f.id === "wp-import-frame" || f.id === "story-edit-frame") {
+        f.src = "about:blank";
+      }
+    });
   }
   document.querySelectorAll("[data-open-modal]").forEach(el => {
     el.addEventListener("click", (e) => {
@@ -173,7 +202,16 @@
       if (tab && targetId === "settings-modal" && el.tagName === "A") {
         e.preventDefault();
       }
-      openModal(targetId);
+      // Optional `data-close-modal="<id>"` companion — the trigger
+      // closes a sibling modal before opening the target. Used by the
+      // WordPress importer launch button to dismiss the Settings
+      // modal so the wizard isn't stacked on top of it.
+      const closeId = el.dataset.closeModal;
+      if (closeId) {
+        const toClose = document.getElementById(closeId);
+        if (toClose && toClose.classList.contains("open")) closeModal(toClose);
+      }
+      openModal(targetId, el.dataset.modalSrc, el.dataset.modalTitle);
       if (tab && targetId === "settings-modal") {
         const modal = document.getElementById("settings-modal");
         const tabBtn = modal && modal.querySelector('.settings-tab[data-tab="' + tab + '"]');
@@ -881,6 +919,32 @@
       el.classList.add("flash-hide");
       el.addEventListener("animationend", () => el.remove(), { once: true });
     }, 3000);
+  });
+
+  // WordPress importer iframe → parent: close the wizard modal. Sent
+  // from inside the iframe by the wizard's Cancel / Close buttons so
+  // the user doesn't have to mouse to the modal's X.
+  window.addEventListener("message", (e) => {
+    if (e.origin !== window.location.origin) return;
+    if (!e.data || e.data.type !== "wp-import-close") return;
+    const m = document.getElementById("wp-import-modal");
+    if (m && m.classList.contains("open")) closeModal(m);
+  });
+
+  // Story modal iframe → parent: close the new/edit story modal and
+  // reload the stories list so saved/deleted rows reflect immediately.
+  // Sent by the story_edit.html Cancel button or the post-delete
+  // close stub. Accepts both the legacy "story-new-close" type and
+  // the canonical "story-modal-close" so older iframe loads keep
+  // working until the next refresh.
+  window.addEventListener("message", (e) => {
+    if (e.origin !== window.location.origin) return;
+    if (!e.data || (e.data.type !== "story-modal-close" && e.data.type !== "story-new-close")) return;
+    const m = document.getElementById("story-edit-modal");
+    if (m && m.classList.contains("open")) closeModal(m);
+    // Reload so the saved/deleted row reflects in the list. Defer one
+    // frame so the modal close animation can start before navigation.
+    setTimeout(() => { window.location.reload(); }, 50);
   });
 
   // Live-update sidebar custom nav links when edited in Settings
@@ -2009,6 +2073,23 @@
               '<div class="fe-builder-empty muted smaller">Right panel</div>' +
             '</div>' +
           '</div>';
+      } else if (type === "container") {
+        // Containers carry a single nested drop zone so the admin can
+        // compose a container block + its children inside the layout
+        // builder. Same chrome shape as split (head + drop-zone) so
+        // styling stays consistent.
+        el.className = "fe-builder-canvas-block fe-builder-container";
+        el.innerHTML =
+          '<div class="fe-builder-split-head">' +
+            '<div class="fe-builder-block-icon">' + (iconHtml || '') + '</div>' +
+            '<div class="fe-builder-block-meta"><div class="fe-builder-block-name">' +
+            escapeHtml(name) + '</div><div class="fe-builder-block-desc muted smaller">' +
+            'Drop other blocks inside to nest them in this container.</div></div>' +
+            '<button type="button" class="fe-builder-canvas-remove" title="Remove">&times;</button>' +
+          '</div>' +
+          '<div class="fe-builder-container-drop" data-container-drop>' +
+            '<div class="fe-builder-empty muted smaller">Drag blocks here</div>' +
+          '</div>';
       } else {
         el.className = "fe-builder-canvas-block";
         el.innerHTML =
@@ -2040,7 +2121,13 @@
     // valid drop zones; we look up the closest such zone on dragover/drop.
     let dragging = null;
     function dropZoneFor(target) {
-      return target.closest(".fe-builder-split-col") || target.closest("[data-builder-canvas]");
+      return target.closest(".fe-builder-split-col")
+          || target.closest(".fe-builder-container-drop")
+          || target.closest("[data-builder-canvas]");
+    }
+    function isNestedZone(zone) {
+      return zone && (zone.classList.contains("fe-builder-split-col")
+                   || zone.classList.contains("fe-builder-container-drop"));
     }
     function handleDragOver(e) {
       const zone = dropZoneFor(e.target);
@@ -2052,7 +2139,10 @@
       zone.classList.add("is-drop-target");
       if (dragging) {
         // Don't allow nesting splits inside splits — too much complexity.
-        if (dragging.dataset.blockType === "split" && zone.classList.contains("fe-builder-split-col")) return;
+        // Splits inside containers are also blocked; stick to leaf-only
+        // children inside container drop-zones (containers can still
+        // nest containers though).
+        if (dragging.dataset.blockType === "split" && isNestedZone(zone)) return;
         const after = [...zone.querySelectorAll(":scope > .fe-builder-canvas-block:not(.dragging)")]
           .find(b => e.clientY < b.getBoundingClientRect().top + b.offsetHeight / 2);
         if (after) zone.insertBefore(dragging, after);
@@ -2069,8 +2159,9 @@
       const type = e.dataTransfer.getData("application/x-fe-block-type");
       const name = e.dataTransfer.getData("application/x-fe-block-name");
       if (!type) return;
-      // Block split from being placed inside another split's panel.
-      if (type === "split" && zone.classList.contains("fe-builder-split-col")) return;
+      // Block split from being placed inside another split's panel OR
+      // inside a container's drop zone (keeps the tree shallow).
+      if (type === "split" && isNestedZone(zone)) return;
       const libBlock = library.querySelector(
         '.fe-builder-block[data-block-type="' + CSS.escape(type) + '"]');
       const iconHtml = libBlock ? libBlock.querySelector(".fe-builder-block-icon").innerHTML : '';
@@ -2108,7 +2199,8 @@
     });
 
     function serializeBlocks(zone) {
-      // Walk direct children of `zone` and capture nested split panels.
+      // Walk direct children of `zone` and capture nested split panels
+      // and container drop-zones so the tree round-trips intact.
       return [...zone.querySelectorAll(":scope > .fe-builder-canvas-block")].map(b => {
         const t = b.dataset.blockType;
         if (t === "split") {
@@ -2127,6 +2219,13 @@
           if (b.dataset.splitMargin)  out.margin  = b.dataset.splitMargin;
           if (b.dataset.splitPadding) out.padding = b.dataset.splitPadding;
           return out;
+        }
+        if (t === "container") {
+          const drop = b.querySelector(":scope > .fe-builder-container-drop");
+          return {
+            type: "container",
+            blocks: drop ? serializeBlocks(drop) : [],
+          };
         }
         return { type: t };
       });
@@ -2180,6 +2279,18 @@
               side.appendChild(ph);
             }
           });
+        } else if (t === "container") {
+          const drop = node.querySelector(":scope > .fe-builder-container-drop");
+          if (drop) {
+            drop.querySelectorAll(":scope > .fe-builder-empty").forEach(el => el.remove());
+            hydrateZone(drop, b.blocks || []);
+            if (!drop.querySelector(":scope > .fe-builder-canvas-block")) {
+              const ph = document.createElement("div");
+              ph.className = "fe-builder-empty muted smaller";
+              ph.textContent = "Drag blocks here";
+              drop.appendChild(ph);
+            }
+          }
         }
       });
       refreshEmpty();
@@ -2214,13 +2325,19 @@
       const editBtn = e.target.closest("[data-edit-layout]");
       if (editBtn && editBtn.getAttribute("data-builder-modal") === builderModalId) {
         e.preventDefault(); e.stopPropagation();
+        // Edit button can either live inside a picker `.template-card`
+        // (carrying data-layout-* attrs on the card) OR be standalone
+        // (the structure-card "Edit layout" shortcut, which carries
+        // those attrs on the button itself). Fall back to the button's
+        // own dataset when no card ancestor is present so both shapes
+        // hydrate the builder canvas.
         const card = editBtn.closest(".template-card");
-        if (!card) return;
+        const data = card ? card.dataset : editBtn.dataset;
         let blocks = [];
-        try { blocks = JSON.parse(card.dataset.layoutBlocks || "[]"); } catch (_) {}
-        enterEditMode(card.dataset.layoutKey, card.dataset.layoutName, blocks);
+        try { blocks = JSON.parse(data.layoutBlocks || "[]"); } catch (_) {}
+        enterEditMode(data.layoutKey, data.layoutName, blocks);
         // Close the picker modal and open the builder modal.
-        const pickerModal = card.closest(".fe-layout-picker-modal");
+        const pickerModal = card && card.closest(".fe-layout-picker-modal");
         if (pickerModal) {
           pickerModal.classList.remove("open");
           pickerModal.setAttribute("aria-hidden", "true");
@@ -3783,3 +3900,436 @@
   });
 })();
 
+
+// ── Dynamic-background picker (shared admin modal) ─────────────────
+//
+// One global modal lives in base.html (`#dynbg-picker-modal`). Any
+// admin form that wants a dynbg control drops in the
+// `dynbg_trigger(...)` macro, which renders a hidden input + a
+// trigger button. The handler below pairs trigger clicks with the
+// modal: it copies the trigger's current selection into the modal's
+// radios on open, then writes the chosen key back to the trigger's
+// hidden input on Save (and updates the trigger's preview thumbnail
+// + name so the form reflects the new state without a reload).
+//
+// One trigger is "active" at a time — the handler stashes a ref to
+// the trigger in modal-scoped state on open and consumes it on Save
+// / Clear / Cancel. Multiple triggers on the same page work without
+// any extra wiring; each trigger carries `data-dynbg-trigger-input`
+// pointing at its own hidden input, so the modal always knows which
+// field to update.
+(function dynbgPickerHandler () {
+  // Lazy DOM lookup. The modal markup lives near the bottom of
+  // <body> — AFTER the <script src="app.js"> tag — so caching at
+  // script-load time would resolve to null. Every reference is
+  // re-fetched inside the click handlers so the IIFE is order-
+  // independent.
+  function getModal () { return document.getElementById('dynbg-picker-modal'); }
+  function $$  (sel)  { const m = getModal(); return m ? m.querySelectorAll(sel) : []; }
+  function $   (sel)  { const m = getModal(); return m ? m.querySelector(sel) : null; }
+
+  // The trigger currently bound to the modal. Reset on close.
+  let activeTrigger = null;
+  // Modal-internal listeners (Save / Clear / X / backdrop / cards /
+  // tabs / colours) bind on first open so the modal element is
+  // guaranteed to be in the DOM by then.
+  let wired = false;
+
+  // ── Background grid ────────────────────────────────────────────
+  function setSelectedKey (key) {
+    $$('[data-dynbg-modal-card]').forEach(card => {
+      const isMatch = (card.dataset.dynbgKey || '') === (key || '');
+      card.classList.toggle('active', isMatch);
+      const radio = card.querySelector('input[type="radio"]');
+      if (radio) radio.checked = isMatch;
+    });
+    // Show the Freeze-movement toggle only when the active preset
+    // actually animates. Static presets (dotted-grid, lines, paper,
+    // mesh-gradient, spotlight) hide the row entirely.
+    syncAnimRowVisibility(key || '');
+  }
+  function entryByKey (key) {
+    if (!key) return null;
+    const card = $('[data-dynbg-key="' + CSS.escape(key) + '"]');
+    if (!card) return null;
+    const name = card.querySelector('.fe-dynbg-picker-name');
+    const thumb = card.querySelector('.fe-dynbg-picker-thumb');
+    return {
+      key,
+      name: name ? name.textContent.trim() : key,
+      thumbHtml: thumb ? thumb.innerHTML : '',
+    };
+  }
+
+  // ── Animation toggle ───────────────────────────────────────────
+  // Only a subset of presets actually animate (aurora-blobs / bands
+  // / starfield). The toggle row is `hidden` for the others so the
+  // admin never sees a useless checkbox. The `data-dynbg-animated-
+  // keys` attribute on the row carries the comma-separated key set
+  // so this JS doesn't need its own copy of the catalog.
+  function getAnimatedKeys () {
+    const row = $('#dynbg-picker-modal-anim-row');
+    if (!row) return [];
+    return (row.dataset.dynbgAnimatedKeys || '').split(',').filter(Boolean);
+  }
+  function syncAnimRowVisibility (activeKey) {
+    const row = $('#dynbg-picker-modal-anim-row');
+    if (!row) return;
+    row.hidden = !getAnimatedKeys().includes(activeKey || '');
+  }
+  function setAnimateOff (on) {
+    const el = $('#dynbg-picker-modal-animate-off');
+    if (el) el.checked = !!on;
+  }
+  function getAnimateOff () {
+    const el = $('#dynbg-picker-modal-animate-off');
+    return el && el.checked ? '1' : '';
+  }
+
+  // ── Overlay grid ───────────────────────────────────────────────
+  function setSelectedOverlay (key) {
+    $$('[data-dynbg-modal-overlay-card]').forEach(card => {
+      const isMatch = (card.dataset.dynbgOverlayKey || '') === (key || '');
+      card.classList.toggle('active', isMatch);
+      const radio = card.querySelector('input[type="radio"]');
+      if (radio) radio.checked = isMatch;
+    });
+    // Show the noise-grain knobs only when noise-grain is the active
+    // overlay; other overlays don't expose tunable size/intensity.
+    const knobs = $('#dynbg-picker-modal-noise-knobs');
+    if (knobs) knobs.hidden = key !== 'noise-grain';
+  }
+
+  // ── Scope toggle ───────────────────────────────────────────────
+  function setSelectedScope (scope) {
+    const value = scope === 'bg' ? 'bg' : 'all';
+    const all = $('#dynbg-picker-modal-scope-all');
+    const bg  = $('#dynbg-picker-modal-scope-bg');
+    if (all) all.checked = (value === 'all');
+    if (bg)  bg.checked  = (value === 'bg');
+  }
+  function getSelectedScope () {
+    const bg = $('#dynbg-picker-modal-scope-bg');
+    return bg && bg.checked ? 'bg' : 'all';
+  }
+
+  // ── Noise-grain knobs ──────────────────────────────────────────
+  // Defaults match dynbg.NOISE_*_DEFAULT — the modal's slider html
+  // already initialises them with the same values, so leaving them
+  // at default means we omit the values from the saved config (they
+  // round-trip through dynbg.encode_config which strips defaults).
+  const NOISE_DEFAULTS = { size: 0.9, intensity: 0.03 };
+  function setNoiseSize (v) {
+    const el = $('#dynbg-picker-modal-noise-size');
+    const out = $('#dynbg-picker-modal-noise-size-out');
+    const numeric = (v === '' || v == null || isNaN(parseFloat(v)))
+      ? NOISE_DEFAULTS.size : parseFloat(v);
+    if (el) el.value = numeric;
+    if (out) out.textContent = numeric;
+  }
+  function setNoiseIntensity (v) {
+    const el = $('#dynbg-picker-modal-noise-intensity');
+    const out = $('#dynbg-picker-modal-noise-intensity-out');
+    const numeric = (v === '' || v == null || isNaN(parseFloat(v)))
+      ? NOISE_DEFAULTS.intensity : parseFloat(v);
+    if (el) el.value = numeric;
+    if (out) out.textContent = numeric.toFixed(3);
+  }
+  function getNoiseSize () {
+    const el = $('#dynbg-picker-modal-noise-size');
+    if (!el) return '';
+    const v = parseFloat(el.value);
+    if (isNaN(v) || Math.abs(v - NOISE_DEFAULTS.size) < 1e-6) return '';
+    return String(v);
+  }
+  function getNoiseIntensity () {
+    const el = $('#dynbg-picker-modal-noise-intensity');
+    if (!el) return '';
+    const v = parseFloat(el.value);
+    if (isNaN(v) || Math.abs(v - NOISE_DEFAULTS.intensity) < 1e-6) return '';
+    return String(v);
+  }
+
+  // ── Randomize toggles ──────────────────────────────────────────
+  // Two independent flags: colours (re-tints palette per render) and
+  // positions (blobs/gradients/bands/spotlights spawn at fresh
+  // coordinates per render). Either can be on without the other.
+  function setRandomizeColors (on) {
+    const el = $('#dynbg-picker-modal-randomize-colors');
+    if (el) el.checked = !!on;
+  }
+  function getRandomizeColors () {
+    const el = $('#dynbg-picker-modal-randomize-colors');
+    return el && el.checked ? '1' : '';
+  }
+  function setRandomizePositions (on) {
+    const el = $('#dynbg-picker-modal-randomize-positions');
+    if (el) el.checked = !!on;
+  }
+  function getRandomizePositions () {
+    const el = $('#dynbg-picker-modal-randomize-positions');
+    return el && el.checked ? '1' : '';
+  }
+
+  // ── Colour inputs ──────────────────────────────────────────────
+  // Each slot has a paired <input type=color> + <input type=text>.
+  // The text input is the source-of-truth — admins can type a hex
+  // (with or without alpha) or leave it blank to fall back to the
+  // brand default. Setting either input syncs the other.
+  function setColor (slot, hex) {
+    const colorEl = $('#dynbg-picker-modal-c' + slot + '-color');
+    const textEl  = $('#dynbg-picker-modal-c' + slot + '-text');
+    if (textEl) textEl.value = hex || '';
+    // Native color input requires a #rrggbb shape; fall back to a
+    // sensible default when the field is empty / shaped weirdly so
+    // the swatch isn't confusing.
+    if (colorEl) {
+      const m = (hex || '').match(/^#([0-9a-fA-F]{6})$/);
+      colorEl.value = m ? hex : '#0b5cff';
+    }
+  }
+  function getColor (slot) {
+    const textEl = $('#dynbg-picker-modal-c' + slot + '-text');
+    const v = textEl ? textEl.value.trim() : '';
+    return /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(v) ? v : '';
+  }
+  function getColors () { return [getColor(1), getColor(2), getColor(3)]; }
+
+  // ── Tab switching ──────────────────────────────────────────────
+  function setActiveTab (key) {
+    $$('[data-dynbg-modal-tab]').forEach(t => {
+      const on = t.dataset.dynbgModalTab === key;
+      t.classList.toggle('is-active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    $$('[data-dynbg-modal-panel]').forEach(p => {
+      p.classList.toggle('is-active', p.dataset.dynbgModalPanel === key);
+    });
+  }
+
+  // ── Trigger sync ───────────────────────────────────────────────
+  function applyToTrigger (trigger, payload) {
+    if (!trigger) return;
+    const key       = payload.key       || '';
+    const overlay   = payload.overlay   || '';
+    const colors    = payload.colors    || ['', '', ''];
+    const scope     = payload.scope     || '';
+    const noiseSize = payload.noiseSize || '';
+    const noiseInt  = payload.noiseIntensity || '';
+    const randomColors    = payload.randomizeColors ? '1' : '';
+    const randomPositions = payload.randomizePositions ? '1' : '';
+    const animateOff      = payload.animateOff ? '1' : '';
+    const inputBy = (camel) => {
+      const sel = trigger.dataset[camel];
+      return sel ? document.querySelector(sel) : null;
+    };
+    const baseInput      = inputBy('dynbgTriggerInput');
+    const overlayInput   = inputBy('dynbgTriggerOverlayInput');
+    const c1Input        = inputBy('dynbgTriggerC1Input');
+    const c2Input        = inputBy('dynbgTriggerC2Input');
+    const c3Input        = inputBy('dynbgTriggerC3Input');
+    const scopeInput     = inputBy('dynbgTriggerScopeInput');
+    const sizeInput      = inputBy('dynbgTriggerNoiseSizeInput');
+    const intensityIn    = inputBy('dynbgTriggerNoiseIntensityInput');
+    const randomColorsIn = inputBy('dynbgTriggerRandomizeColorsInput');
+    const randomPosIn    = inputBy('dynbgTriggerRandomizePositionsInput');
+    const animateOffIn   = inputBy('dynbgTriggerAnimateOffInput');
+    if (baseInput)      baseInput.value      = key;
+    if (overlayInput)   overlayInput.value   = overlay;
+    if (c1Input)        c1Input.value        = colors[0] || '';
+    if (c2Input)        c2Input.value        = colors[1] || '';
+    if (c3Input)        c3Input.value        = colors[2] || '';
+    if (scopeInput)     scopeInput.value     = scope;
+    if (sizeInput)      sizeInput.value      = noiseSize;
+    if (intensityIn)    intensityIn.value    = noiseInt;
+    if (randomColorsIn) randomColorsIn.value = randomColors;
+    if (randomPosIn)    randomPosIn.value    = randomPositions;
+    if (animateOffIn)   animateOffIn.value   = animateOff;
+    trigger.dataset.dynbgCurrent = key;
+    trigger.dataset.dynbgOverlay = overlay;
+    trigger.dataset.dynbgC1 = colors[0] || '';
+    trigger.dataset.dynbgC2 = colors[1] || '';
+    trigger.dataset.dynbgC3 = colors[2] || '';
+    trigger.dataset.dynbgScope = scope;
+    trigger.dataset.dynbgNoiseSize = noiseSize;
+    trigger.dataset.dynbgNoiseIntensity = noiseInt;
+    trigger.dataset.dynbgRandomizeColors = randomColors;
+    trigger.dataset.dynbgRandomizePositions = randomPositions;
+    trigger.dataset.dynbgAnimateOff = animateOff;
+    const entry = entryByKey(key);
+    const nameEl = trigger.querySelector('[data-dynbg-trigger-name]');
+    const statusEl = trigger.querySelector('[data-dynbg-trigger-status]');
+    const thumbEl = trigger.querySelector('[data-dynbg-trigger-thumb]');
+    if (nameEl) nameEl.textContent = entry ? entry.name : 'Choose…';
+    if (statusEl) {
+      let bits = [];
+      if (entry) bits.push('Click to change or clear');
+      else bits.push('No dynamic background — click to add');
+      const extras = [];
+      if (overlay) {
+        // Pull the overlay's display name from its catalog card so the
+        // status text reads "Noise grain overlay" rather than the
+        // generic "overlay set". The grid is the source of truth.
+        const overlayCard = document.querySelector(
+          '#dynbg-picker-modal-overlay-grid [data-dynbg-overlay-key="' + CSS.escape(overlay) + '"]');
+        const overlayNameEl = overlayCard && overlayCard.querySelector('.fe-dynbg-picker-name');
+        const overlayName = overlayNameEl ? overlayNameEl.textContent.trim() : overlay;
+        extras.push(overlayName + ' overlay');
+      }
+      if (randomColors) {
+        extras.push('random colours');
+      } else {
+        const colorCount = colors.filter(Boolean).length;
+        if (colorCount) extras.push(colorCount + ' colour' + (colorCount === 1 ? '' : 's'));
+      }
+      if (randomPositions) extras.push('random positions');
+      if (animateOff) extras.push('static');
+      if (extras.length) bits.push('· ' + extras.join(', '));
+      statusEl.textContent = bits.join(' ');
+    }
+    if (thumbEl) {
+      thumbEl.innerHTML = entry
+        ? entry.thumbHtml
+        : '<span class="fe-dynbg-trigger-thumb-none" aria-hidden="true">∅</span>';
+    }
+    // Notify consumers (block editor uses change events to mark the
+    // form dirty / re-serialise the block JSON). Fire on every input
+    // we touched so listeners pick up the consolidated change.
+    [baseInput, overlayInput, c1Input, c2Input, c3Input,
+     scopeInput, sizeInput, intensityIn,
+     randomColorsIn, randomPosIn, animateOffIn].forEach(el => {
+      if (el) el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+
+  function closeSelf () {
+    const modal = getModal();
+    if (!modal) return;
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    activeTrigger = null;
+  }
+
+  function wireModalOnce () {
+    if (wired) return;
+    const modal = getModal();
+    if (!modal) return;
+    wired = true;
+    const saveBtn = modal.querySelector('#dynbg-picker-modal-save');
+    const clearBtn = modal.querySelector('#dynbg-picker-modal-clear');
+    if (saveBtn) saveBtn.addEventListener('click', () => {
+      const baseCard = modal.querySelector('[data-dynbg-modal-card].active');
+      const overlayCard = modal.querySelector('[data-dynbg-modal-overlay-card].active');
+      const key = baseCard ? baseCard.dataset.dynbgKey || '' : '';
+      const overlay = overlayCard ? overlayCard.dataset.dynbgOverlayKey || '' : '';
+      applyToTrigger(activeTrigger, {
+        key, overlay,
+        colors: getColors(),
+        scope: getSelectedScope(),
+        noiseSize: getNoiseSize(),
+        noiseIntensity: getNoiseIntensity(),
+        randomizeColors: !!getRandomizeColors(),
+        randomizePositions: !!getRandomizePositions(),
+        animateOff: !!getAnimateOff(),
+      });
+      closeSelf();
+    });
+    if (clearBtn) clearBtn.addEventListener('click', () => {
+      applyToTrigger(activeTrigger, {
+        key: '', overlay: '', colors: ['', '', ''],
+        scope: '', noiseSize: '', noiseIntensity: '',
+        randomizeColors: false, randomizePositions: false,
+        animateOff: false,
+      });
+      closeSelf();
+    });
+    // Card click -> mark active immediately on whichever grid the
+    // click landed in. Delegated on the modal so we don't need to
+    // re-bind if the catalogs ever change.
+    modal.addEventListener('click', e => {
+      const baseCard = e.target.closest('[data-dynbg-modal-card]');
+      if (baseCard) setSelectedKey(baseCard.dataset.dynbgKey || '');
+      const overlayCard = e.target.closest('[data-dynbg-modal-overlay-card]');
+      if (overlayCard) setSelectedOverlay(overlayCard.dataset.dynbgOverlayKey || '');
+    });
+    // Tab switching.
+    $$('[data-dynbg-modal-tab]').forEach(t => {
+      t.addEventListener('click', () => setActiveTab(t.dataset.dynbgModalTab));
+    });
+    // Colour input pairs — text input is canonical; <input type=color>
+    // syncs on change. Per-slot Clear button blanks both inputs.
+    [1, 2, 3].forEach(slot => {
+      const colorEl = $('#dynbg-picker-modal-c' + slot + '-color');
+      const textEl  = $('#dynbg-picker-modal-c' + slot + '-text');
+      const clearEl = modal.querySelector('[data-dynbg-modal-color-clear="' + slot + '"]');
+      if (colorEl) colorEl.addEventListener('input', () => {
+        if (textEl) textEl.value = colorEl.value;
+      });
+      if (textEl) textEl.addEventListener('input', () => {
+        const m = textEl.value.match(/^#([0-9a-fA-F]{6})$/);
+        if (m && colorEl) colorEl.value = textEl.value;
+      });
+      if (clearEl) clearEl.addEventListener('click', () => setColor(slot, ''));
+    });
+    // Noise-grain slider live-output sync. Save / reset buttons wire
+    // through the same setter helpers so a Reset event repopulates
+    // the live-output spans alongside the slider position.
+    const sizeEl = $('#dynbg-picker-modal-noise-size');
+    const sizeOut = $('#dynbg-picker-modal-noise-size-out');
+    if (sizeEl && sizeOut) sizeEl.addEventListener('input', () => {
+      sizeOut.textContent = sizeEl.value;
+    });
+    const intensityEl = $('#dynbg-picker-modal-noise-intensity');
+    const intensityOut = $('#dynbg-picker-modal-noise-intensity-out');
+    if (intensityEl && intensityOut) intensityEl.addEventListener('input', () => {
+      intensityOut.textContent = parseFloat(intensityEl.value).toFixed(3);
+    });
+    const noiseReset = $('#dynbg-picker-modal-noise-reset');
+    if (noiseReset) noiseReset.addEventListener('click', () => {
+      setNoiseSize(NOISE_DEFAULTS.size);
+      setNoiseIntensity(NOISE_DEFAULTS.intensity);
+    });
+    // Close affordances — backdrop + X.
+    modal.querySelectorAll('[data-close]').forEach(el => {
+      el.addEventListener('click', closeSelf);
+    });
+  }
+
+  // Trigger -> open. Delegated so triggers added later in the page
+  // lifecycle (e.g. by the block editor) still pair up automatically.
+  document.addEventListener('click', e => {
+    const trigger = e.target.closest('[data-dynbg-trigger]');
+    if (!trigger) return;
+    const modal = getModal();
+    if (!modal) return;  // template missing the global modal — no-op
+    e.preventDefault();
+    wireModalOnce();
+    activeTrigger = trigger;
+    setSelectedKey(trigger.dataset.dynbgCurrent || '');
+    setSelectedOverlay(trigger.dataset.dynbgOverlay || '');
+    setColor(1, trigger.dataset.dynbgC1 || '');
+    setColor(2, trigger.dataset.dynbgC2 || '');
+    setColor(3, trigger.dataset.dynbgC3 || '');
+    setSelectedScope(trigger.dataset.dynbgScope || 'all');
+    setNoiseSize(trigger.dataset.dynbgNoiseSize || NOISE_DEFAULTS.size);
+    setNoiseIntensity(trigger.dataset.dynbgNoiseIntensity || NOISE_DEFAULTS.intensity);
+    setRandomizeColors(trigger.dataset.dynbgRandomizeColors === '1');
+    setRandomizePositions(trigger.dataset.dynbgRandomizePositions === '1');
+    setAnimateOff(trigger.dataset.dynbgAnimateOff === '1');
+    setActiveTab('background');
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  });
+
+  // Esc closes whichever modal is currently open.
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    const modal = getModal();
+    if (modal && modal.classList.contains('open')) {
+      e.preventDefault();
+      closeSelf();
+    }
+  });
+})();

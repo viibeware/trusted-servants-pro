@@ -1,0 +1,156 @@
+{# Dynamic-background trigger button.
+
+   Drop-in replacement for any admin form that needs a "pick a
+   dynamic background" affordance. Renders:
+
+     1. Five hidden <input>s carrying the current selection — base
+        key, overlay key, and three custom colour slots — so a
+        normal form POST submits everything in one shot. The
+        consumer routes each value through ``app.dynbg.normalize*``
+        / ``normalize_color`` server-side to clamp tampered values.
+     2. A button that opens the global dynbg modal (rendered once in
+        base.html). The modal reads the trigger's current values,
+        lets the admin pick a different background / overlay / paint
+        a custom palette, and writes the chosen values back to the
+        hidden inputs on Save.
+
+   The trigger preview re-uses the same inline thumbnail recipe the
+   modal does, so the button shows what's currently selected without
+   having to crack open the modal.
+
+   Usage:
+     {% from "_dynbg_picker.html" import dynbg_trigger with context %}
+     {{ dynbg_trigger(field_name='bg_dynamic_key',
+                       current=(page.bg_dynamic_key if page else None),
+                       config_field='bg_dynbg_config_json',
+                       config=(page.bg_dynbg_config_json if page else None)) }}
+
+   Optional kwargs:
+     button_id  — DOM id for the trigger; auto-generated when blank.
+                  Pass an explicit id when multiple triggers live on
+                  the same page so the JS pairing stays unambiguous.
+     label      — text shown next to the preview (default: 'Choose…').
+                  When a preset is already selected the button text
+                  swaps to its display name. #}
+{%- macro dynbg_trigger(field_name='bg_dynamic_key', current=None,
+                         config_field='bg_dynbg_config_json',
+                         config=None,
+                         button_id=None, label='Choose…') -%}
+{%- set _bid = button_id or ('dynbg-trigger-' ~ field_name|replace('[','-')|replace(']','-')|replace('.','-')) -%}
+{# Resolve the catalog entry for the currently-saved key. Jinja's
+   `{% set %}` inside `{% for %}` doesn't leak outside the loop
+   scope (loops are their own scope unless namespace() is used), so
+   we resolve via selectattr|first which DOES return a value the
+   surrounding template can read. Without this fix, `_entry` was
+   always None even when `current` matched a catalog key, which
+   caused the trigger to render "Choose…" / "No dynamic background"
+   after every save instead of reflecting the persisted value. #}
+{%- set _entry = (dynbg_catalog() | selectattr('key', 'equalto', current) | list | first) if current else none -%}
+{%- set _cfg = dynbg_decode(config) -%}
+{%- set _overlay = _cfg.overlay or '' -%}
+{%- set _overlay_entry = (dynbg_overlays() | selectattr('key', 'equalto', _overlay) | list | first) if _overlay else none -%}
+{%- set _colors = _cfg.colors or [] -%}
+{%- set _c1 = _colors[0] if _colors|length > 0 else '' -%}
+{%- set _c2 = _colors[1] if _colors|length > 1 else '' -%}
+{%- set _c3 = _colors[2] if _colors|length > 2 else '' -%}
+{%- set _scope = _cfg.overlay_scope or '' -%}
+{%- set _nsize = _cfg.overlay_size if _cfg.overlay_size is not none else '' -%}
+{%- set _nint = _cfg.overlay_intensity if _cfg.overlay_intensity is not none else '' -%}
+{%- set _rand_c = '1' if _cfg.randomize_colors else '' -%}
+{%- set _rand_p = '1' if _cfg.randomize_positions else '' -%}
+{# Animations default to ON. Persist '0' (disabled) as the only
+   non-default state; '' = default = animated. #}
+{%- set _anim = '0' if _cfg.animate is sameas false else '' -%}
+<div class="fe-dynbg-trigger-wrap" data-dynbg-trigger-wrap>
+  <input type="hidden" name="{{ field_name }}" id="{{ _bid }}-input"
+         value="{{ current or '' }}" data-dynbg-trigger-input>
+  {# Overlay + colour fields persist alongside the base key. The
+     server-side save handler bundles them into ``config_field`` as
+     a single JSON blob via ``dynbg.encode_config(...)``. #}
+  <input type="hidden" name="{{ config_field }}__overlay"
+         id="{{ _bid }}-overlay" value="{{ _overlay }}"
+         data-dynbg-trigger-overlay>
+  <input type="hidden" name="{{ config_field }}__c1"
+         id="{{ _bid }}-c1" value="{{ _c1 }}"
+         data-dynbg-trigger-c1>
+  <input type="hidden" name="{{ config_field }}__c2"
+         id="{{ _bid }}-c2" value="{{ _c2 }}"
+         data-dynbg-trigger-c2>
+  <input type="hidden" name="{{ config_field }}__c3"
+         id="{{ _bid }}-c3" value="{{ _c3 }}"
+         data-dynbg-trigger-c3>
+  <input type="hidden" name="{{ config_field }}__scope"
+         id="{{ _bid }}-scope" value="{{ _scope }}"
+         data-dynbg-trigger-scope>
+  <input type="hidden" name="{{ config_field }}__noise_size"
+         id="{{ _bid }}-noise-size" value="{{ _nsize }}"
+         data-dynbg-trigger-noise-size>
+  <input type="hidden" name="{{ config_field }}__noise_intensity"
+         id="{{ _bid }}-noise-intensity" value="{{ _nint }}"
+         data-dynbg-trigger-noise-intensity>
+  <input type="hidden" name="{{ config_field }}__randomize_colors"
+         id="{{ _bid }}-randomize-colors" value="{{ _rand_c }}"
+         data-dynbg-trigger-randomize-colors>
+  <input type="hidden" name="{{ config_field }}__randomize_positions"
+         id="{{ _bid }}-randomize-positions" value="{{ _rand_p }}"
+         data-dynbg-trigger-randomize-positions>
+  <input type="hidden" name="{{ config_field }}__animate_off"
+         id="{{ _bid }}-animate-off" value="{{ _anim }}"
+         data-dynbg-trigger-animate-off>
+  <button type="button" class="fe-dynbg-trigger" id="{{ _bid }}"
+          data-dynbg-trigger
+          data-dynbg-trigger-input="#{{ _bid }}-input"
+          data-dynbg-trigger-overlay-input="#{{ _bid }}-overlay"
+          data-dynbg-trigger-c1-input="#{{ _bid }}-c1"
+          data-dynbg-trigger-c2-input="#{{ _bid }}-c2"
+          data-dynbg-trigger-c3-input="#{{ _bid }}-c3"
+          data-dynbg-trigger-scope-input="#{{ _bid }}-scope"
+          data-dynbg-trigger-noise-size-input="#{{ _bid }}-noise-size"
+          data-dynbg-trigger-noise-intensity-input="#{{ _bid }}-noise-intensity"
+          data-dynbg-trigger-randomize-colors-input="#{{ _bid }}-randomize-colors"
+          data-dynbg-trigger-randomize-positions-input="#{{ _bid }}-randomize-positions"
+          data-dynbg-trigger-animate-off-input="#{{ _bid }}-animate-off"
+          data-dynbg-current="{{ current or '' }}"
+          data-dynbg-overlay="{{ _overlay }}"
+          data-dynbg-c1="{{ _c1 }}"
+          data-dynbg-c2="{{ _c2 }}"
+          data-dynbg-c3="{{ _c3 }}"
+          data-dynbg-scope="{{ _scope }}"
+          data-dynbg-noise-size="{{ _nsize }}"
+          data-dynbg-noise-intensity="{{ _nint }}"
+          data-dynbg-randomize-colors="{{ _rand_c }}"
+          data-dynbg-randomize-positions="{{ _rand_p }}"
+          data-dynbg-animate-off="{{ _anim }}">
+    <span class="fe-dynbg-trigger-thumb" data-dynbg-trigger-thumb>
+      {%- if _entry -%}
+      {% with dynbg_key=_entry.key %}{% include "frontend/_dynbg.html" %}{% endwith %}
+      {%- else -%}
+      <span class="fe-dynbg-trigger-thumb-none" aria-hidden="true">∅</span>
+      {%- endif -%}
+    </span>
+    <span class="fe-dynbg-trigger-text">
+      <span class="fe-dynbg-trigger-name" data-dynbg-trigger-name>
+        {{ _entry.name if _entry else (label or 'Choose…') }}
+      </span>
+      <span class="fe-dynbg-trigger-status muted smaller" data-dynbg-trigger-status>
+        {%- if _entry -%}
+        Click to change or clear
+        {%- else -%}
+        No dynamic background — click to add
+        {%- endif -%}
+        {%- set _extras = [] -%}
+        {%- if _overlay_entry -%}{%- set _ = _extras.append(_overlay_entry.name ~ ' overlay') -%}{%- endif -%}
+        {%- if _cfg.randomize_colors -%}{%- set _ = _extras.append('random colours') -%}
+        {%- elif _colors|length -%}
+          {%- set _color_count = _colors|length -%}
+          {%- set _ = _extras.append(_color_count ~ (' colour' if _color_count == 1 else ' colours')) -%}
+        {%- endif -%}
+        {%- if _cfg.randomize_positions -%}{%- set _ = _extras.append('random positions') -%}{%- endif -%}
+        {%- if _cfg.animate is sameas false -%}{%- set _ = _extras.append('static') -%}{%- endif -%}
+        {%- if _extras -%} · {{ _extras | join(', ') }}{%- endif -%}
+      </span>
+    </span>
+    <span class="fe-dynbg-trigger-caret" aria-hidden="true">{{ icon('chevron-right') }}</span>
+  </button>
+</div>
+{%- endmacro -%}

@@ -352,7 +352,25 @@
   }
 </style>
 </head>
-<body>
+{%- set _pl_tpl = template_settings(site, 'printlist', 'default') if site else {} -%}
+{%- set _pl_dynbg_key = _pl_tpl.get('bg_dynamic_key') or (site.frontend_printlist_bg_dynamic_key if site else None) -%}
+{%- set _pl_cfg = dynbg_decode({'overlay': _pl_tpl.get('bg_dynbg_overlay'), 'colors': _pl_tpl.get('bg_dynbg_colors') or [], 'overlay_scope': _pl_tpl.get('bg_dynbg_overlay_scope'), 'overlay_size': _pl_tpl.get('bg_dynbg_overlay_size'), 'overlay_intensity': _pl_tpl.get('bg_dynbg_overlay_intensity'), 'randomize_colors': _pl_tpl.get('bg_dynbg_randomize_colors'), 'randomize_positions': _pl_tpl.get('bg_dynbg_randomize_positions'), 'animate': _pl_tpl.get('bg_dynbg_animate', True)} if _pl_tpl.get('bg_dynamic_key') or _pl_tpl.get('bg_dynbg_overlay') else (site.frontend_printlist_bg_dynbg_config_json if site else None)) -%}
+{%- set _pl_color_vars = dynbg_colors_css(dynbg_resolve_colors(_pl_cfg)) -%}
+{%- set _pl_pos_vars = dynbg_resolve_positions(_pl_cfg, _pl_dynbg_key) -%}
+{%- set _pl_inline = (_pl_color_vars ~ " " ~ _pl_pos_vars) | trim -%}
+{%- set _pl_active = (not is_pdf) and (_pl_dynbg_key or _pl_cfg.overlay) -%}
+<body{% if _pl_active %} class="fe-dynbg-host"{% if _pl_inline %} style="{{ _pl_inline }}"{% endif %}{% endif %}>
+{% if _pl_active %}
+{# Dynamic page background. Suppressed on PDF + print so the printable
+   document stays clean monochrome — admins set it for the on-screen
+   preview only. The .fe-dynbg-host class lifts <body> into a
+   positioned + isolated stacking context so the absolutely-positioned
+   dynbg paints behind everything else. #}
+{% with dynbg_key=_pl_dynbg_key, dynbg_config=(site.frontend_printlist_bg_dynbg_config_json if site else None) %}
+  {% include "frontend/_dynbg_apply.html" %}
+{% endwith %}
+<style>@media print { .fe-dynbg, .fe-dynbg-overlay { display: none !important; } }</style>
+{% endif %}
 {# Action bar — never rendered in the PDF. The two buttons cover both
    workflows: Print sends the page through the browser's print dialog
    (the @page rules above shape the output), Download PDF hits the

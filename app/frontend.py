@@ -7,9 +7,9 @@ screen. When the toggle is off, the root URL redirects to the admin login.
 
 Admin pages remain at /tspro/* and the authenticated dashboard is at /tspro/.
 """
-from flask import Blueprint, render_template, redirect, url_for, abort, request
+from flask import Blueprint, render_template, redirect, url_for, abort, request, current_app
 from flask_login import current_user
-from .models import SiteSetting, Meeting, FrontendNavItem, Post
+from .models import SiteSetting, Meeting, FrontendNavItem, Post, Story
 
 bp = Blueprint("frontend", __name__)
 
@@ -461,6 +461,107 @@ EVENT_TEMPLATES = [
 ]
 
 
+# Layouts for the public /stories LIST page (every published recovery
+# story). Each layout shares the same `all_stories` list and applies a
+# distinct visual treatment — paper-textured stacks, magazine grids,
+# minimal type, etc. Drop a partial in frontend/stories_list/ and append
+# an entry here to add a new option.
+# Site Index — auto-populated /siteindex page that lists every public
+# surface on the site. Two layout variants today; each is a self-
+# contained partial under frontend/site_index/.
+SITE_INDEX_TEMPLATES = [
+    {
+        "key": "grouped",
+        "name": "Grouped",
+        "description": "Sections by content type (Pages, Meetings, Events, Announcements, Stories, Library), each headed by a small eyebrow with a count chip. Cards within each group land alphabetically. The default — best when the site has a wide mix of content kinds.",
+        "partial": "frontend/site_index/grouped.html",
+    },
+    {
+        "key": "alphabet",
+        "name": "Alphabet",
+        "description": "Single A-Z list — every page from every kind merged into one alphabetical column with a tiny type-chip on each row. Best for sites that want a clean, table-of-contents feel without grouping.",
+        "partial": "frontend/site_index/alphabet.html",
+    },
+]
+
+
+STORIES_LIST_TEMPLATES = [
+    {
+        "key": "paper-stack",
+        "name": "Paper Stack",
+        "description": "Each story rendered as a creased index-card on a warm paper backdrop. Featured-image thumb on the left, serif title + byline + summary on the right. Soft drop shadow + subtle edge-fray for an organic, archive-of-letters feel.",
+        "partial": "frontend/stories_list/paper-stack.html",
+    },
+    {
+        "key": "ledger",
+        "name": "Ledger",
+        "description": "Hand-bound ledger book aesthetic — ruled cream paper sheet with each story as a numbered entry. Marginalia-style date block on the left, serif title + summary inline, hairline rules between rows. No images.",
+        "partial": "frontend/stories_list/ledger.html",
+    },
+    {
+        "key": "manuscript",
+        "name": "Manuscript",
+        "description": "Single column on textured cream stock with a drop-cap initial on each story preview, italic byline, and a small thumbnail floated right. Reads like a literary anthology table-of-contents.",
+        "partial": "frontend/stories_list/manuscript.html",
+    },
+    {
+        "key": "broadsheet",
+        "name": "Broadsheet",
+        "description": "Two-column newspaper-broadsheet layout on aged newsprint. Big serif headlines, small caps bylines, hairline column rule, and a hero story spanning the top. Optional featured image as a halftone-style thumbnail.",
+        "partial": "frontend/stories_list/broadsheet.html",
+    },
+    {
+        "key": "minimal-serif",
+        "name": "Minimal Serif",
+        "description": "Centered, generous white space, big serif titles stacked with fine-print bylines underneath. No images, no cards — just titles + summaries flowing down the page like a literary index.",
+        "partial": "frontend/stories_list/minimal-serif.html",
+    },
+    {
+        "key": "magazine",
+        "name": "Magazine",
+        "description": "Featured story as a hero with cover image; remaining stories as a 3-up grid of illustrated cards. Serif headlines, sans-serif bylines, modern editorial polish.",
+        "partial": "frontend/stories_list/magazine.html",
+    },
+]
+
+
+# Layouts for the public /stories/<slug> DETAIL page (a single recovery
+# story). Each template renders the same `story` row but emphasises a
+# different reading experience.
+STORY_TEMPLATES = [
+    {
+        "key": "paper",
+        "name": "Paper",
+        "description": "Classic creased-paper sheet on a warm backdrop — serif title, byline italicised, drop-cap on the opening paragraph, and small wavy rule between the body and the author's note. Featured image rendered as a tipped-in plate above the title.",
+        "partial": "frontend/stories/paper.html",
+    },
+    {
+        "key": "letter",
+        "name": "Letter",
+        "description": "Reads like a hand-typed letter on textured stock — typewriter / serif title, an italic 'Dear reader,' opener line, the story body, and the author's signature byline at the bottom. No featured image; the focus is the writing.",
+        "partial": "frontend/stories/letter.html",
+    },
+    {
+        "key": "journal",
+        "name": "Journal",
+        "description": "Ruled-paper journal page with a margin date stamp on the left. Big serif title, ruled body lines, the sobriety date hand-stamped at the top, and a soft pencil-shading edge to the page.",
+        "partial": "frontend/stories/journal.html",
+    },
+    {
+        "key": "anthology",
+        "name": "Anthology",
+        "description": "Literary anthology layout — a small eyebrow line ('A Recovery Story · 2025'), a centered serif title, a thin rule, italic byline, and a single column of body copy. No image. Maximum focus on the story.",
+        "partial": "frontend/stories/anthology.html",
+    },
+    {
+        "key": "magazine",
+        "name": "Magazine",
+        "description": "Full-bleed featured image with the title overlaid, then a two-column reading layout below — body copy on the left, a sticky author card on the right with the byline, dates, and bio. Modern editorial chrome.",
+        "partial": "frontend/stories/magazine.html",
+    },
+]
+
+
 def _template_meta(templates, key):
     for t in templates:
         if t["key"] == key:
@@ -525,6 +626,20 @@ def template_settings(site, kind, key):
                 out[k] = round(v, 1)
         except (TypeError, ValueError):
             pass
+    # Pass through every dynbg-related leaf key so the admin's
+    # customize panel and the public-render shell can both read what
+    # was saved. Earlier the function silently dropped these keys
+    # (returning only the bg/font/size five), which made every save
+    # via the new customize panel appear to "not stick" — the picker
+    # opened the next time with an empty current value because
+    # `settings.get('bg_dynamic_key')` always returned None even
+    # after the JSON had recorded `aurora-blobs`.
+    for k in ("bg_dynamic_key", "bg_dynbg_overlay", "bg_dynbg_colors",
+              "bg_dynbg_overlay_scope", "bg_dynbg_overlay_size",
+              "bg_dynbg_overlay_intensity", "bg_dynbg_randomize_colors",
+              "bg_dynbg_randomize_positions", "bg_dynbg_animate"):
+        if k in leaf:
+            out[k] = leaf[k]
     return out
 
 
@@ -798,7 +913,28 @@ def meeting_detail(slug):
     ctx = _frontend_context(site)
     tpl = _template_meta(MEETING_TEMPLATES,
                          (site.frontend_meeting_template if site else None) or "classic")
-    tpl_style = template_css_vars(template_settings(site, "meeting", tpl["key"]))
+    _tpl_settings = template_settings(site, "meeting", tpl["key"])
+    tpl_style = template_css_vars(_tpl_settings)
+    tpl_dynbg_key = _tpl_settings.get("bg_dynamic_key")
+    tpl_dynbg_overlay = _tpl_settings.get("bg_dynbg_overlay")
+    tpl_dynbg_colors = _tpl_settings.get("bg_dynbg_colors") or []
+    # Full per-template dynbg config — carries the randomize
+    # flags / scope / noise knobs / animate state alongside the
+    # base key + overlay + palette so each entity-detail partial
+    # has every dimension the apply-partial expects. Earlier
+    # only key/overlay/colors were threaded through, so the
+    # randomize / freeze-movement settings persisted in JSON
+    # but never applied on the public render.
+    tpl_dynbg_config = {
+        "overlay": tpl_dynbg_overlay,
+        "colors": tpl_dynbg_colors,
+        "overlay_scope": _tpl_settings.get("bg_dynbg_overlay_scope"),
+        "overlay_size": _tpl_settings.get("bg_dynbg_overlay_size"),
+        "overlay_intensity": _tpl_settings.get("bg_dynbg_overlay_intensity"),
+        "randomize_colors": _tpl_settings.get("bg_dynbg_randomize_colors", False),
+        "randomize_positions": _tpl_settings.get("bg_dynbg_randomize_positions", False),
+        "animate": _tpl_settings.get("bg_dynbg_animate", True),
+    }
     # Resolve the meeting's free-text location to a saved Location row
     # so the public templates can render the full split address (name /
     # street / city/state/zip on separate lines) instead of a single
@@ -813,8 +949,52 @@ def meeting_detail(slug):
             if _l.name and _l.name.strip().lower() == loc_norm:
                 location_record = _l
                 break
-    return render_template(tpl["partial"], meeting=m, tpl_style=tpl_style,
+    return render_template(tpl["partial"], meeting=m, tpl_style=tpl_style, tpl_dynbg_key=tpl_dynbg_key, tpl_dynbg_overlay=tpl_dynbg_overlay, tpl_dynbg_colors=tpl_dynbg_colors, tpl_dynbg_config=tpl_dynbg_config,
                            meeting_location_record=location_record, **ctx)
+
+
+@bp.route("/meetings/<slug>/calendar.ics")
+def meeting_calendar_ics(slug):
+    """One-tap "Add to Calendar" download for a meeting. Serves an
+    RFC-5545 VCALENDAR with one weekly-recurring VEVENT per
+    ``MeetingSchedule`` row. Same slug-resolution logic as
+    ``meeting_detail`` (current slug → history → 404)."""
+    from .colors import slugify  # noqa: F401  — keeps parity w/ detail route
+    from .calendar_export import meeting_to_ics
+    site = _site()
+    gate = _frontend_gate(site)
+    if gate is not None:
+        return gate
+    candidates = (Meeting.query
+                  .filter(Meeting.archived_at.is_(None))
+                  .order_by(Meeting.id)
+                  .all())
+    m = next((mt for mt in candidates if mt.public_slug == slug), None)
+    if m is None:
+        from .models import EntitySlugHistory
+        hist = (EntitySlugHistory.query
+                .filter_by(entity_type="meeting", old_slug=slug)
+                .order_by(EntitySlugHistory.changed_at.desc())
+                .first())
+        if hist:
+            target = next((mt for mt in candidates if mt.id == hist.entity_id), None)
+            if target:
+                return redirect(url_for("frontend.meeting_calendar_ics",
+                                        slug=target.public_slug), code=301)
+        abort(404)
+    base = request.url_root or ""
+    body = meeting_to_ics(m, site, base_url=base)
+    # Filename derived from the slug so users see e.g. "tuesday-night.ics"
+    # in their download tray instead of a generic "calendar.ics".
+    fname = (m.public_slug or "meeting") + ".ics"
+    # `mimetype="text/calendar"` lets Flask append a single `charset=utf-8`;
+    # passing the charset in the mimetype string would double it.
+    resp = current_app.response_class(body, mimetype="text/calendar")
+    resp.headers["Content-Disposition"] = 'attachment; filename="' + fname + '"'
+    # Don't cache — admins editing schedules expect the next download
+    # to reflect the change immediately.
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @bp.route("/meeting/<slug>", endpoint="meeting_detail_legacy")
@@ -1282,39 +1462,119 @@ def submission_submit():
     # Email notification to the configured recipients. Falls back to
     # access_request_to when submission_to is blank so installs that
     # already configured admin notifications get submissions routed
-    # without separate setup.
+    # without separate setup. Body includes every populated field
+    # from the submission so admins can review without first opening
+    # the holding tank; the featured image (when one was uploaded)
+    # rides along as an attachment.
     recipients = (site.submission_to or site.access_request_to or "").strip()
     if site.smtp_host and recipients:
         kind_label = " + ".join([k for k, v in
                                  (("Announcement", is_announcement),
                                   ("Event", is_event)) if v])
-        lines = [
+        section_break = ["", "─" * 60, ""]
+
+        def _line(label, value):
+            return f"{label:<14} {value}" if value else None
+
+        def _section(heading, pairs):
+            present = [p for p in pairs if p]
+            if not present:
+                return []
+            return [heading] + ["-" * len(heading)] + present + [""]
+
+        intro = [
             f"A new {kind_label.lower()} submission has come in via "
             f"the public {site.frontend_title or 'Trusted Servants'} site.",
             "",
-            f"Title:     {title}",
-            f"Submitter: {submitter_name} <{submitter_email}>",
-        ]
-        if p.submitter_phone:
-            lines.append(f"Phone:     {p.submitter_phone}")
-        if is_event and p.event_starts_at:
-            lines.append(f"Starts:    {p.event_starts_at.isoformat()}")
-        if is_event and p.event_ends_at:
-            lines.append(f"Ends:      {p.event_ends_at.isoformat()}")
-        if p.location_name:
-            lines.append(f"Location:  {p.location_name}")
-        if p.summary:
-            lines += ["", "Summary:", p.summary]
-        if p.submitter_notes:
-            lines += ["", "Submitter notes:", p.submitter_notes]
-        review_url = url_for("main.post_edit", pid=p.id, _external=True)
-        lines += [
+            "Reply directly to this email to reach the submitter.",
             "",
-            f"Review and publish: {review_url}",
         ]
+
+        # Submitter details — always present (name + email required).
+        submitter_section = _section("Submitter", [
+            _line("Name:", submitter_name),
+            _line("Email:", submitter_email),
+            _line("Phone:", p.submitter_phone),
+            (f"\nNotes from submitter:\n{p.submitter_notes}"
+             if p.submitter_notes else None),
+        ])
+
+        # Headline + body. Falls through gracefully when summary /
+        # body are blank (form allows them empty).
+        content_section = _section("Submission", [
+            _line("Title:", title),
+            _line("Type:", kind_label),
+            (f"\nSummary:\n{p.summary}" if p.summary else None),
+            (f"\nFull content:\n{p.body}" if p.body else None),
+            (f"\nFeatured image: {p.featured_image_filename} "
+             f"(attached to this email)" if p.featured_image_filename else None),
+        ])
+
+        # Event-specific block — skipped when the post isn't tagged
+        # as an event so an announcement-only submission email isn't
+        # padded with empty event headers.
+        event_pairs = []
+        if is_event:
+            event_pairs.append(_line(
+                "Starts:",
+                p.event_starts_at.strftime("%a %b %-d, %Y · %-I:%M %p")
+                if p.event_starts_at else None))
+            event_pairs.append(_line(
+                "Ends:",
+                p.event_ends_at.strftime("%a %b %-d, %Y · %-I:%M %p")
+                if p.event_ends_at else None))
+            event_pairs.append(_line(
+                "Online:", "Yes" if p.is_online else "No"))
+            event_pairs.append(_line("Location:", p.location_name))
+            event_pairs.append(_line("Address:", p.location_address))
+            event_pairs.append(_line("Maps URL:", p.google_maps_url))
+            event_pairs.append(_line("Zoom ID:", p.zoom_meeting_id))
+            event_pairs.append(_line("Zoom pass:", p.zoom_passcode))
+            event_pairs.append(_line("Zoom URL:", p.zoom_url))
+            event_pairs.append(_line("Website:", p.website_url))
+            event_pairs.append(_line("Web label:", p.website_label))
+        event_section = _section("Event details", event_pairs) if is_event else []
+
+        # Public contact (event posts only — that's where these
+        # fields are admin-visible too).
+        contact_section = _section("Public contact (will be shown on the post)", [
+            _line("Name:", p.contact_name),
+            _line("Phone:", p.contact_phone),
+            _line("Email:", p.contact_email),
+        ]) if is_event else []
+
+        review_url = url_for("main.post_edit", pid=p.id, _external=True)
+        footer = [
+            "─" * 60,
+            f"Review, edit, approve, or reject in the holding tank:",
+            f"  {review_url}",
+        ]
+
+        body = "\n".join(intro + submitter_section + content_section
+                        + event_section + contact_section + footer)
+
+        # Featured image rides along as an attachment when present.
+        attachments = []
+        if p.featured_image_filename:
+            from flask import current_app as _ca
+            stored = p.featured_image_filename
+            path = os.path.join(_ca.config["UPLOAD_FOLDER"], stored)
+            # Use a friendlier filename for the email — title +
+            # original extension. Falls back to the stored name when
+            # the title doesn't yield anything safe.
+            ext = os.path.splitext(stored)[1].lower()
+            safe = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_"
+                           for c in (title or "")).strip()[:120]
+            friendly = (safe + ext) if (safe and ext) else stored
+            mime_guess = ({".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                           ".png": "image/png", ".gif": "image/gif",
+                           ".webp": "image/webp"}).get(ext, "application/octet-stream")
+            attachments.append({"path": path, "filename": friendly,
+                                "mime_type": mime_guess})
+
         send_mail(site, recipients,
                   f"New {kind_label.lower()} submission: {title}",
-                  "\n".join(lines))
+                  body, attachments=attachments)
         # Mail failures are not surfaced to the visitor — the submission
         # is already persisted; the admin can find it in the holding
         # tank regardless of whether the notification email landed.
@@ -1740,8 +2000,29 @@ def archive_detail(slug):
     ctx = _frontend_context(site)
     tpl = _template_meta(EVENT_TEMPLATES,
                          (site.frontend_event_template if site else None) or "classic")
-    tpl_style = template_css_vars(template_settings(site, "event", tpl["key"]))
-    return render_template(tpl["partial"], event=post, tpl_style=tpl_style,
+    _tpl_settings = template_settings(site, "event", tpl["key"])
+    tpl_style = template_css_vars(_tpl_settings)
+    tpl_dynbg_key = _tpl_settings.get("bg_dynamic_key")
+    tpl_dynbg_overlay = _tpl_settings.get("bg_dynbg_overlay")
+    tpl_dynbg_colors = _tpl_settings.get("bg_dynbg_colors") or []
+    # Full per-template dynbg config — carries the randomize
+    # flags / scope / noise knobs / animate state alongside the
+    # base key + overlay + palette so each entity-detail partial
+    # has every dimension the apply-partial expects. Earlier
+    # only key/overlay/colors were threaded through, so the
+    # randomize / freeze-movement settings persisted in JSON
+    # but never applied on the public render.
+    tpl_dynbg_config = {
+        "overlay": tpl_dynbg_overlay,
+        "colors": tpl_dynbg_colors,
+        "overlay_scope": _tpl_settings.get("bg_dynbg_overlay_scope"),
+        "overlay_size": _tpl_settings.get("bg_dynbg_overlay_size"),
+        "overlay_intensity": _tpl_settings.get("bg_dynbg_overlay_intensity"),
+        "randomize_colors": _tpl_settings.get("bg_dynbg_randomize_colors", False),
+        "randomize_positions": _tpl_settings.get("bg_dynbg_randomize_positions", False),
+        "animate": _tpl_settings.get("bg_dynbg_animate", True),
+    }
+    return render_template(tpl["partial"], event=post, tpl_style=tpl_style, tpl_dynbg_key=tpl_dynbg_key, tpl_dynbg_overlay=tpl_dynbg_overlay, tpl_dynbg_colors=tpl_dynbg_colors, tpl_dynbg_config=tpl_dynbg_config,
                            is_in_archive=True, **ctx)
 
 
@@ -1805,6 +2086,108 @@ def announcements_archive():
     return redirect(url_for("frontend.archive"), code=301)
 
 
+@bp.route("/stories")
+def stories_list():
+    """Public list of every published recovery story. Layout selected
+    via SiteSetting.frontend_stories_list_template; defaults to the
+    paper-stack layout. Drafts and archives are filtered out."""
+    site = _site()
+    gate = _frontend_gate(site)
+    if gate is not None:
+        return gate
+    if not site or not getattr(site, "stories_enabled", False):
+        abort(404)
+    ctx = _frontend_context(site)
+    rows = (Story.query
+            .filter(Story.is_archived.is_(False),
+                    Story.is_draft.is_(False))
+            .order_by(Story.is_featured.desc(),
+                      Story.story_date.desc().nulls_last(),
+                      Story.created_at.desc())
+            .all())
+    tpl = _template_meta(STORIES_LIST_TEMPLATES,
+                         (site.frontend_stories_list_template if site else None) or "paper-stack")
+    width_mode = (site.frontend_stories_list_width_mode if site else None) or "boxed"
+    if width_mode not in ("boxed", "full"):
+        width_mode = "boxed"
+    try:
+        max_width = int(site.frontend_stories_list_max_width) if site else 1160
+    except (TypeError, ValueError):
+        max_width = 1160
+    max_width = max(640, min(2400, max_width))
+    try:
+        pad_pct = int(site.frontend_stories_list_padding_pct) if site else 5
+    except (TypeError, ValueError):
+        pad_pct = 5
+    pad_pct = max(0, min(20, pad_pct))
+    list_heading = (site.frontend_stories_list_heading if site else None) or ""
+    list_subheading = (site.frontend_stories_list_subheading if site else None) or ""
+    return render_template("frontend/stories_list.html",
+                           list_partial=tpl["partial"],
+                           list_template_key=tpl["key"],
+                           list_width_mode=width_mode,
+                           list_max_width=max_width,
+                           list_padding_pct=pad_pct,
+                           list_heading=list_heading,
+                           list_subheading=list_subheading,
+                           all_stories=rows,
+                           **ctx)
+
+
+@bp.route("/stories/<slug>")
+def story_detail(slug):
+    """Public story detail page. The slug is the story title with
+    non-alphanumerics collapsed to hyphens (or the explicit slug an
+    editor set on the admin form). Drafts + archives are not viewable.
+    Old slugs 301-redirect to the current one via EntitySlugHistory."""
+    site = _site()
+    gate = _frontend_gate(site)
+    if gate is not None:
+        return gate
+    if not site or not getattr(site, "stories_enabled", False):
+        abort(404)
+    candidates = (Story.query
+                  .filter(Story.is_archived.is_(False),
+                          Story.is_draft.is_(False))
+                  .order_by(Story.id)
+                  .all())
+    story = next((s for s in candidates if s.public_slug == slug), None)
+    if story is None:
+        from .models import EntitySlugHistory
+        hist = (EntitySlugHistory.query
+                .filter_by(entity_type="story", old_slug=slug)
+                .order_by(EntitySlugHistory.changed_at.desc())
+                .first())
+        if hist:
+            target = next((s for s in candidates if s.id == hist.entity_id), None)
+            if target:
+                return redirect(url_for("frontend.story_detail", slug=target.public_slug), code=301)
+        abort(404)
+    ctx = _frontend_context(site)
+    tpl = _template_meta(STORY_TEMPLATES,
+                         (site.frontend_story_template if site else None) or "paper")
+    _tpl_settings = template_settings(site, "story", tpl["key"])
+    tpl_style = template_css_vars(_tpl_settings)
+    # Story-detail dynbg lives on a flat SiteSetting field (`frontend_
+    # story_bg_dynamic_key`) since the Templates admin's Story-detail
+    # section uses a flat picker rather than the per-template-settings
+    # JSON path. Per-template settings could still carry one as a
+    # fallback (no admin UI today, but the plumbing supports it) so we
+    # check the flat field first and fall through if absent.
+    tpl_dynbg_key = (getattr(site, "frontend_story_bg_dynamic_key", None)
+                     or _tpl_settings.get("bg_dynamic_key"))
+    # Overlay + colours travel via the flat SiteSetting JSON column
+    # (matches the Templates admin's flat picker for Story detail).
+    from . import dynbg as _dynbg
+    _story_cfg = _dynbg.decode_config(
+        getattr(site, "frontend_story_bg_dynbg_config_json", None))
+    tpl_dynbg_overlay = (_story_cfg["overlay"]
+                         or _tpl_settings.get("bg_dynbg_overlay"))
+    tpl_dynbg_colors = (_story_cfg["colors"]
+                        or _tpl_settings.get("bg_dynbg_colors") or [])
+    return render_template(tpl["partial"], story=story, tpl_style=tpl_style, tpl_dynbg_key=tpl_dynbg_key, tpl_dynbg_overlay=tpl_dynbg_overlay, tpl_dynbg_colors=tpl_dynbg_colors, tpl_dynbg_config=tpl_dynbg_config, **ctx)
+
+
 @bp.route("/api/search-index")
 def api_search_index():
     """JSON feed for the frontend-wide search modal: every active
@@ -1858,9 +2241,70 @@ def event_detail(slug):
     ctx = _frontend_context(site)
     tpl = _template_meta(EVENT_TEMPLATES,
                          (site.frontend_event_template if site else None) or "classic")
-    tpl_style = template_css_vars(template_settings(site, "event", tpl["key"]))
-    return render_template(tpl["partial"], event=ev, tpl_style=tpl_style,
+    _tpl_settings = template_settings(site, "event", tpl["key"])
+    tpl_style = template_css_vars(_tpl_settings)
+    tpl_dynbg_key = _tpl_settings.get("bg_dynamic_key")
+    tpl_dynbg_overlay = _tpl_settings.get("bg_dynbg_overlay")
+    tpl_dynbg_colors = _tpl_settings.get("bg_dynbg_colors") or []
+    # Full per-template dynbg config — carries the randomize
+    # flags / scope / noise knobs / animate state alongside the
+    # base key + overlay + palette so each entity-detail partial
+    # has every dimension the apply-partial expects. Earlier
+    # only key/overlay/colors were threaded through, so the
+    # randomize / freeze-movement settings persisted in JSON
+    # but never applied on the public render.
+    tpl_dynbg_config = {
+        "overlay": tpl_dynbg_overlay,
+        "colors": tpl_dynbg_colors,
+        "overlay_scope": _tpl_settings.get("bg_dynbg_overlay_scope"),
+        "overlay_size": _tpl_settings.get("bg_dynbg_overlay_size"),
+        "overlay_intensity": _tpl_settings.get("bg_dynbg_overlay_intensity"),
+        "randomize_colors": _tpl_settings.get("bg_dynbg_randomize_colors", False),
+        "randomize_positions": _tpl_settings.get("bg_dynbg_randomize_positions", False),
+        "animate": _tpl_settings.get("bg_dynbg_animate", True),
+    }
+    return render_template(tpl["partial"], event=ev, tpl_style=tpl_style, tpl_dynbg_key=tpl_dynbg_key, tpl_dynbg_overlay=tpl_dynbg_overlay, tpl_dynbg_colors=tpl_dynbg_colors, tpl_dynbg_config=tpl_dynbg_config,
                            is_in_archive=False, **ctx)
+
+
+@bp.route("/event/<slug>/calendar.ics")
+def event_calendar_ics(slug):
+    """One-tap "Add to Calendar" download for an event post. Same slug-
+    resolution logic as ``event_detail`` (current → history → 404).
+    Single VEVENT (no RRULE — events are one-time)."""
+    from .calendar_export import event_to_ics
+    site = _site()
+    gate = _frontend_gate(site)
+    if gate is not None:
+        return gate
+    if not site or not getattr(site, "posts_enabled", True):
+        abort(404)
+    candidates = (Post.query
+                  .filter(Post.is_event.is_(True),
+                          Post.is_draft.is_(False),
+                          Post.is_pending_review.is_(False))
+                  .order_by(Post.id)
+                  .all())
+    ev = next((p for p in candidates if p.public_slug == slug), None)
+    if ev is None:
+        from .models import EntitySlugHistory
+        hist = (EntitySlugHistory.query
+                .filter_by(entity_type="post", old_slug=slug)
+                .order_by(EntitySlugHistory.changed_at.desc())
+                .first())
+        if hist:
+            target = next((p for p in candidates if p.id == hist.entity_id), None)
+            if target:
+                return redirect(url_for("frontend.event_calendar_ics",
+                                        slug=target.public_slug), code=301)
+        abort(404)
+    base = request.url_root or ""
+    body = event_to_ics(ev, site, base_url=base)
+    fname = (ev.public_slug or "event") + ".ics"
+    resp = current_app.response_class(body, mimetype="text/calendar")
+    resp.headers["Content-Disposition"] = 'attachment; filename="' + fname + '"'
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @bp.route("/announcement/<slug>")
@@ -1901,8 +2345,572 @@ def announcement_detail(slug):
     ctx = _frontend_context(site)
     tpl = _template_meta(EVENT_TEMPLATES,
                          (site.frontend_event_template if site else None) or "classic")
-    tpl_style = template_css_vars(template_settings(site, "event", tpl["key"]))
+    _tpl_settings = template_settings(site, "event", tpl["key"])
+    tpl_style = template_css_vars(_tpl_settings)
+    tpl_dynbg_key = _tpl_settings.get("bg_dynamic_key")
+    tpl_dynbg_overlay = _tpl_settings.get("bg_dynbg_overlay")
+    tpl_dynbg_colors = _tpl_settings.get("bg_dynbg_colors") or []
+    # Full per-template dynbg config — carries the randomize
+    # flags / scope / noise knobs / animate state alongside the
+    # base key + overlay + palette so each entity-detail partial
+    # has every dimension the apply-partial expects. Earlier
+    # only key/overlay/colors were threaded through, so the
+    # randomize / freeze-movement settings persisted in JSON
+    # but never applied on the public render.
+    tpl_dynbg_config = {
+        "overlay": tpl_dynbg_overlay,
+        "colors": tpl_dynbg_colors,
+        "overlay_scope": _tpl_settings.get("bg_dynbg_overlay_scope"),
+        "overlay_size": _tpl_settings.get("bg_dynbg_overlay_size"),
+        "overlay_intensity": _tpl_settings.get("bg_dynbg_overlay_intensity"),
+        "randomize_colors": _tpl_settings.get("bg_dynbg_randomize_colors", False),
+        "randomize_positions": _tpl_settings.get("bg_dynbg_randomize_positions", False),
+        "animate": _tpl_settings.get("bg_dynbg_animate", True),
+    }
     # Pass the post in as `event` so the existing event-detail templates
     # (which all reference `event.*`) render unchanged.
-    return render_template(tpl["partial"], event=ann, tpl_style=tpl_style,
+    return render_template(tpl["partial"], event=ann, tpl_style=tpl_style, tpl_dynbg_key=tpl_dynbg_key, tpl_dynbg_overlay=tpl_dynbg_overlay, tpl_dynbg_colors=tpl_dynbg_colors, tpl_dynbg_config=tpl_dynbg_config,
                            is_in_archive=False, **ctx)
+
+
+@bp.route("/contact")
+def contact():
+    """Public contact-us page. Honors the ``contact_form_enabled``
+    SiteSetting toggle: when off the page returns 404 (matches every
+    other admin-controlled public surface)."""
+    site = _site()
+    gate = _frontend_gate(site)
+    if gate is not None:
+        return gate
+    if not site or not getattr(site, "contact_form_enabled", False):
+        abort(404)
+    ctx = _frontend_context(site)
+    return render_template("frontend/contact.html", **ctx)
+
+
+@bp.route("/contact/submit", methods=["POST"])
+def contact_submit():
+    """Process a contact-form submission.
+
+    Verifies Turnstile when enabled, persists a ContactSubmission
+    row, and emails the public information chair (or whichever
+    address the admin configured in ``contact_form_to``) with the
+    visitor's email set as the ``Reply-To`` header so the admin
+    can reply directly from their inbox. Mail failures don't block
+    the submission — the row is still saved and the admin can chase
+    the message in the Contact Form admin.
+    """
+    from flask import flash, current_app
+    from .auth import _verify_turnstile
+    from .mail import send_mail
+    from .models import db as _db, ContactSubmission
+
+    site = _site()
+    gate = _frontend_gate(site)
+    if gate is not None:
+        return gate
+    if not site or not getattr(site, "contact_form_enabled", False):
+        abort(404)
+
+    f = request.form
+    # Honeypot — non-empty value means a bot. Silently redirect with
+    # the success flash so the bot can't tell its submission was
+    # rejected and try harder. No row written; no email sent.
+    honeypot = (f.get("website") or "").strip()
+    if honeypot:
+        success_msg = (getattr(site, "contact_form_success_message", None)
+                       or "Thanks — your message has been sent.")
+        flash(success_msg, "success")
+        return redirect(url_for("frontend.contact"))
+
+    name = (f.get("name") or "").strip()[:200]
+    email = (f.get("email") or "").strip()[:255]
+    phone = (f.get("phone") or "").strip()[:64] or None
+    subject = (f.get("subject") or "").strip()[:255] or None
+    message = (f.get("message") or "").strip()[:6000]
+    subj_required = bool(getattr(site, "contact_form_subject_required", False))
+
+    if not name or not email or not message:
+        flash("Name, email, and message are required.", "danger")
+        return redirect(url_for("frontend.contact"))
+    if subj_required and not subject:
+        flash("Please include a subject for your message.", "danger")
+        return redirect(url_for("frontend.contact"))
+    # Cheap email sanity check — anything past this would be caught
+    # by the SMTP server anyway, but we'd rather not write rows that
+    # are obvious typos.
+    if "@" not in email or "." not in email.split("@", 1)[-1]:
+        flash("That email address doesn't look quite right — double-check it?", "danger")
+        return redirect(url_for("frontend.contact"))
+
+    if site.turnstile_enabled:
+        token = f.get("cf-turnstile-response", "")
+        ok, err = _verify_turnstile(site, token, request.remote_addr)
+        if not ok:
+            flash(err or "Security check failed — please try again.", "danger")
+            return redirect(url_for("frontend.contact"))
+
+    sub = ContactSubmission(
+        name=name, email=email, phone=phone, subject=subject,
+        message=message, ip_address=(request.remote_addr or "")[:64],
+    )
+    _db.session.add(sub)
+    _db.session.commit()
+
+    # Recipients fall back through the most specific to the most
+    # generic admin contact: explicit contact_form_to → PIC email →
+    # access-request notifications. That way an install that has
+    # already configured PIC details but never touched the Contact
+    # Form section still routes mail somewhere sensible.
+    recipients = (getattr(site, "contact_form_to", None)
+                  or getattr(site, "pic_email", None)
+                  or getattr(site, "access_request_to", None) or "").strip()
+    if site.smtp_host and recipients:
+        # Build a structured plain-text email. Visitor's email is
+        # echoed in the body too (in addition to the Reply-To
+        # header) so admins reading the message on a phone can
+        # tap the address even when their client buries Reply-To.
+        site_label = (site.frontend_title or "Trusted Servants")
+        subject_line = f"[{site_label} contact] " + (subject or f"Message from {name}")
+        lines = [
+            f"A new contact-form message has come in via the public {site_label} site.",
+            "",
+            "Reply directly to this email — your reply will go to the visitor.",
+            "",
+            f"Name:    {name}",
+            f"Email:   {email}",
+        ]
+        if phone:
+            lines.append(f"Phone:   {phone}")
+        if subject:
+            lines.append(f"Subject: {subject}")
+        if sub.ip_address:
+            lines.append(f"IP:      {sub.ip_address}")
+        lines += ["", "─" * 60, "", message, "", "─" * 60]
+        try:
+            review_url = url_for("main.contact_form", _external=True)
+            lines += ["", f"View in the admin: {review_url}"]
+        except Exception:  # noqa: BLE001 — url_for can fail outside request ctx
+            pass
+        body_text = "\n".join(lines)
+
+        # Override the From + Reply-To so admins can hit Reply in
+        # their mail client and have it route straight back to the
+        # visitor. send_mail() always writes From from SMTP settings
+        # and doesn't accept extras yet, so we hand-build the message
+        # below. Falls back to send_mail() on failure so an install
+        # that customised send_mail() doesn't lose the email path.
+        ok, err = _send_with_reply_to(site, recipients, subject_line,
+                                      body_text, reply_to=email,
+                                      reply_to_name=name)
+        if not ok:
+            # Fall back to the standard helper — drops Reply-To but
+            # still gets the message out.
+            ok, err = send_mail(site, recipients, subject_line, body_text)
+        sub.email_sent = bool(ok)
+        sub.email_error = (err or None) if not ok else None
+        _db.session.commit()
+
+    success_msg = (getattr(site, "contact_form_success_message", None)
+                   or "Thanks — your message has been sent. We'll be in touch shortly.")
+    flash(success_msg, "success")
+    return redirect(url_for("frontend.contact"))
+
+
+def _send_with_reply_to(site, recipients, subject, body_text,
+                        reply_to=None, reply_to_name=None):
+    """Lightweight twin of mail.send_mail that lets us set Reply-To.
+
+    Mirrors the outer helper's transport handling (SSL vs STARTTLS
+    vs plain) so a site whose SMTP server requires implicit TLS still
+    works. Returns ``(ok, error)`` exactly like ``send_mail`` so the
+    caller can branch identically.
+    """
+    import smtplib, ssl
+    from email.message import EmailMessage
+    from email.utils import formataddr
+    from .crypto import decrypt
+    from .mail import _recipients
+
+    if not site or not site.smtp_host or not site.smtp_from_email:
+        return False, "SMTP is not configured"
+    rcpts = recipients if isinstance(recipients, list) else _recipients(recipients)
+    if not rcpts:
+        return False, "No recipients"
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = formataddr((site.smtp_from_name or "", site.smtp_from_email))
+    msg["To"] = ", ".join(rcpts)
+    if reply_to:
+        msg["Reply-To"] = formataddr((reply_to_name or "", reply_to))
+    msg.set_content(body_text or "")
+
+    password = decrypt(site.smtp_password_enc) if site.smtp_password_enc else ""
+    port = int(site.smtp_port or (465 if site.smtp_security == "ssl" else 587))
+    host = site.smtp_host
+    try:
+        if site.smtp_security == "ssl":
+            ctx = ssl.create_default_context()
+            with smtplib.SMTP_SSL(host, port, timeout=20, context=ctx) as s:
+                if site.smtp_username:
+                    s.login(site.smtp_username, password)
+                s.send_message(msg)
+        else:
+            with smtplib.SMTP(host, port, timeout=20) as s:
+                s.ehlo()
+                if site.smtp_security == "starttls":
+                    s.starttls(context=ssl.create_default_context())
+                    s.ehlo()
+                if site.smtp_username:
+                    s.login(site.smtp_username, password)
+                s.send_message(msg)
+        return True, None
+    except Exception as exc:  # noqa: BLE001
+        return False, str(exc)
+
+
+@bp.route("/siteindex")
+def site_index():
+    """Auto-populated index of every public surface on the site.
+
+    Pulls from each content model the admin opted into (Pages,
+    Meetings, Events, Announcements, Stories, Library) and hands the
+    chosen layout partial a unified ``groups`` structure: a list of
+    ``{kind, label, items: [{title, url, kind, subtitle?, date?}]}``
+    dicts. The 'grouped' layout iterates over groups; the 'alphabet'
+    layout flattens everything into one alphabetical list and tags
+    each row with its kind chip.
+
+    Honors the ``frontend_site_index_enabled`` toggle (404s when off,
+    matching every other admin-controlled public surface), the
+    ``frontend_site_index_show_*`` per-kind toggles, and the
+    ``frontend_site_index_sort_mode`` (``grouped`` or ``alpha``).
+    """
+    site = _site()
+    gate = _frontend_gate(site)
+    if gate is not None:
+        return gate
+    if not site or not getattr(site, "frontend_site_index_enabled", False):
+        abort(404)
+
+    groups = _site_index_groups(site)
+
+    tpl = _template_meta(SITE_INDEX_TEMPLATES,
+                         (site.frontend_site_index_template if site else None) or "grouped")
+    _tpl_settings = template_settings(site, "site_index", tpl["key"])
+    tpl_style = template_css_vars(_tpl_settings)
+    tpl_dynbg_key = _tpl_settings.get("bg_dynamic_key") \
+        or (site.frontend_site_index_bg_dynamic_key if site else None)
+    tpl_dynbg_overlay = _tpl_settings.get("bg_dynbg_overlay")
+    tpl_dynbg_colors = _tpl_settings.get("bg_dynbg_colors") or []
+    tpl_dynbg_config = {
+        "overlay": tpl_dynbg_overlay,
+        "colors": tpl_dynbg_colors,
+        "overlay_scope": _tpl_settings.get("bg_dynbg_overlay_scope"),
+        "overlay_size": _tpl_settings.get("bg_dynbg_overlay_size"),
+        "overlay_intensity": _tpl_settings.get("bg_dynbg_overlay_intensity"),
+        "randomize_colors": _tpl_settings.get("bg_dynbg_randomize_colors", False),
+        "randomize_positions": _tpl_settings.get("bg_dynbg_randomize_positions", False),
+        "animate": _tpl_settings.get("bg_dynbg_animate", True),
+    }
+    sort_mode = (site.frontend_site_index_sort_mode or "grouped") if site else "grouped"
+    heading = (site.frontend_site_index_heading if site else None) or "Site index"
+    subheading = (site.frontend_site_index_subheading if site else None) \
+        or "Every public page on the site, automatically updated."
+    ctx = _frontend_context(site)
+    return render_template("frontend/site_index.html",
+                           groups=groups, sort_mode=sort_mode,
+                           heading=heading, subheading=subheading,
+                           list_partial=tpl["partial"],
+                           list_template_key=tpl["key"],
+                           tpl_style=tpl_style,
+                           tpl_dynbg_key=tpl_dynbg_key,
+                           tpl_dynbg_config=tpl_dynbg_config,
+                           **ctx)
+
+
+def _site_index_groups(site):
+    """Collect every public surface the admin opted into (per the
+    ``frontend_site_index_show_*`` toggles) and return them as a list
+    of group dicts. Each item carries (title, url, kind, subtitle,
+    date) so the layouts can render flexibly. Items default to
+    alphabetical-by-title within each group so the layouts can
+    render straight without re-sorting.
+    """
+    from .models import Page, Meeting, Post, Story, Library, LibraryItem
+    groups = []
+
+    # Sections — top-level template pages that index a content type
+    # (e.g. /meetings, /events, /library). These read as the public
+    # site's primary navigation, so they sit ahead of every other
+    # group. Each surface is gated by the same feature toggle the
+    # public route uses, so the index never advertises a 404.
+    if getattr(site, "frontend_site_index_show_pages", True):
+        sections = [
+            ("Home", url_for("frontend.index"), "/", True),
+            ("Meetings", url_for("frontend.meetings_list"), "/meetings", True),
+            ("Events", url_for("frontend.events_list"), "/events",
+             getattr(site, "posts_enabled", True)),
+            ("Announcements", url_for("frontend.announcements_list"),
+             "/announcements", getattr(site, "posts_enabled", True)),
+            ("Stories", url_for("frontend.stories_list"), "/stories",
+             getattr(site, "stories_enabled", False)),
+            ("Library", url_for("frontend.literature_library"), "/library", True),
+            ("Print list", url_for("frontend.printlist"), "/printlist", True),
+        ]
+        items = [{"title": title, "url": url_, "kind": "section",
+                  "subtitle": sub, "date": None}
+                 for title, url_, sub, on in sections if on]
+        items.sort(key=lambda i: (i["title"] or "").lower())
+        if items:
+            groups.append({"kind": "section", "label": "Sections", "items": items})
+
+    # Custom Pages — every admin-authored row that's published.
+    if getattr(site, "frontend_site_index_show_pages", True):
+        items = []
+        for p in (Page.query
+                  .filter_by(is_published=True, is_private=False)
+                  .order_by(Page.title.asc()).all()):
+            items.append({
+                "title": p.title,
+                "url": url_for("frontend.page_detail", slug=p.slug),
+                "kind": "page",
+                "subtitle": "/" + p.slug,
+                "date": p.updated_at,
+            })
+        # Plus the well-known special pages that are part of the public
+        # site when their feature toggles are on. These render through
+        # dedicated routes (not /<slug>) but still belong in a sitemap.
+        specials = []
+        if getattr(site, "submission_form_enabled", True):
+            specials.append(("Submit an event or announcement",
+                              url_for("frontend.submission_form"), "/submissionform"))
+        if getattr(site, "contact_form_enabled", False):
+            specials.append(("Contact us", url_for("frontend.contact"), "/contact"))
+        for title, url_, sub in specials:
+            items.append({"title": title, "url": url_, "kind": "page",
+                          "subtitle": sub, "date": None})
+        items.sort(key=lambda i: (i["title"] or "").lower())
+        if items:
+            groups.append({"kind": "page", "label": "Pages", "items": items})
+
+    # Meetings — active rows only.
+    if getattr(site, "frontend_site_index_show_meetings", True):
+        items = []
+        for m in Meeting.query.filter(Meeting.archived_at.is_(None)).order_by(Meeting.name.asc()).all():
+            items.append({
+                "title": m.name,
+                "url": url_for("frontend.meeting_detail", slug=m.public_slug),
+                "kind": "meeting",
+                "subtitle": (m.location or "").strip()[:80] or None,
+                "date": None,
+            })
+        if items:
+            groups.append({"kind": "meeting", "label": "Meetings", "items": items})
+
+    # Events — published, non-archived event posts.
+    if getattr(site, "frontend_site_index_show_events", True):
+        items = []
+        q = (Post.query.filter_by(is_event=True, is_draft=False, is_pending_review=False)
+             .filter(Post.is_archived.is_(False))
+             .order_by(Post.title.asc()))
+        for ev in q.all():
+            if _post_in_archive(ev):
+                continue
+            items.append({
+                "title": ev.title,
+                "url": _post_url(ev),
+                "kind": "event",
+                "subtitle": (ev.event_starts_at.strftime("%b %d, %Y")
+                             if ev.event_starts_at else None),
+                "date": ev.event_starts_at,
+            })
+        if items:
+            groups.append({"kind": "event", "label": "Events", "items": items})
+
+    # Announcements — published, non-archived announcement posts.
+    if getattr(site, "frontend_site_index_show_announcements", True):
+        items = []
+        q = (Post.query.filter_by(is_announcement=True, is_draft=False, is_pending_review=False)
+             .filter(Post.is_archived.is_(False))
+             .order_by(Post.title.asc()))
+        for an in q.all():
+            if _post_in_archive(an):
+                continue
+            items.append({
+                "title": an.title,
+                "url": _post_url(an),
+                "kind": "announcement",
+                "subtitle": None,
+                "date": an.created_at,
+            })
+        if items:
+            groups.append({"kind": "announcement",
+                           "label": "Announcements", "items": items})
+
+    # Stories — published rows, when the module is on.
+    if getattr(site, "frontend_site_index_show_stories", True) \
+            and getattr(site, "stories_enabled", False):
+        items = []
+        for st in (Story.query
+                   .filter(Story.is_archived.is_(False),
+                           Story.is_draft.is_(False))
+                   .order_by(Story.title.asc()).all()):
+            items.append({
+                "title": st.title,
+                "url": url_for("frontend.story_detail", slug=st.public_slug),
+                "kind": "story",
+                "subtitle": (st.author_name or "").strip() or None,
+                "date": st.created_at,
+            })
+        if items:
+            groups.append({"kind": "story", "label": "Stories", "items": items})
+
+    # Library — public-flagged libraries + items.
+    if getattr(site, "frontend_site_index_show_library", True):
+        items = []
+        for lib in (Library.query.filter_by(public_visible=True)
+                    .order_by(Library.name.asc()).all()):
+            items.append({
+                "title": lib.name,
+                "url": url_for("frontend.literature_library") + "#lib-" + str(lib.id),
+                "kind": "library",
+                "subtitle": "Library",
+                "date": None,
+            })
+            for it in (LibraryItem.query.filter_by(library_id=lib.id, public_visible=True)
+                       .order_by(LibraryItem.title.asc()).all()):
+                items.append({
+                    "title": it.title,
+                    "url": url_for("frontend.literature_library") + "#item-" + str(it.id),
+                    "kind": "library",
+                    "subtitle": lib.name,
+                    "date": None,
+                })
+        if items:
+            groups.append({"kind": "library", "label": "Library", "items": items})
+
+    return groups
+
+
+@bp.route("/<slug>")
+def page_detail(slug):
+    """Public catch-all for admin-authored content pages.
+
+    Werkzeug picks more specific routes first, so /meetings, /events,
+    /library etc. still resolve to their dedicated handlers — only
+    single-segment URLs that don't match anything else fall through here.
+    """
+    import json as _json
+    from .models import Page
+    site = _site()
+    gate = _frontend_gate(site)
+    if gate is not None:
+        return gate
+    q = Page.query.filter_by(slug=slug, is_published=True)
+    # Private pages are visible only to signed-in editors / admins; anon
+    # visitors get the same 404 they'd see for an unpublished slug so the
+    # page's existence isn't leaked.
+    if not (current_user.is_authenticated and current_user.can_edit()):
+        q = q.filter_by(is_private=False)
+    page = q.first()
+    if page is None:
+        abort(404)
+    sections = []
+    if page.blocks_json:
+        try:
+            sections = _json.loads(page.blocks_json)
+        except (ValueError, TypeError):
+            sections = []
+    toc_items = _collect_page_headings(sections)
+    has_lottie = _sections_have_block_type(sections, "lottie")
+    ctx = _frontend_context(site)
+    return render_template("frontend/page.html", page=page,
+                           sections=sections, toc_items=toc_items,
+                           has_lottie=has_lottie, **ctx)
+
+
+def _sections_have_block_type(sections, block_type):
+    """Recursively scan `sections` for any block of `block_type`.
+    Used by the page route to decide whether to load the Lottie player
+    (and any future block type that needs a one-off vendor script).
+    """
+    def _walk(blocks):
+        for b in (blocks or []):
+            if not isinstance(b, dict):
+                continue
+            if b.get("type") == block_type:
+                return True
+            if b.get("type") == "container":
+                if _walk((b.get("data") or {}).get("blocks") or []):
+                    return True
+        return False
+    for sec in (sections or []):
+        if isinstance(sec, dict):
+            if _walk(sec.get("blocks") or []):
+                return True
+    return False
+
+
+def _collect_page_headings(sections):
+    """Walk every block in `sections` (recursing into containers) and
+    return a flat list of `{level, text, anchor}` dicts in document
+    order. Powers the wiki-sidebar block's TOC: each heading block on
+    the page becomes a jump-link in the sidebar list.
+
+    Side effect: mutates each visited heading block in-place to add an
+    `_anchor` key on its `data` dict so the renderer can stamp the
+    matching `id="…"` on its `<hN>` without redoing the slug + dup-
+    counting logic. Anchors are stable for a given page-render but
+    re-derived each request, so heading text edits flow through
+    immediately.
+
+    Only includes blocks of type 'heading' — section titles are not
+    listed here because we no longer auto-render them as headings, and
+    the admin can drop a Heading block at the top of a section if they
+    want it in the TOC."""
+    import re as _re
+    out = []
+    seen = {}
+
+    def _slug(text):
+        s = (text or "").lower()
+        s = _re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+        if not s:
+            s = "section"
+        # Ensure uniqueness — duplicate headings get -2, -3, …
+        if s in seen:
+            seen[s] += 1
+            s = f"{s}-{seen[s]}"
+        else:
+            seen[s] = 1
+        return s
+
+    def _walk(blocks):
+        for b in (blocks or []):
+            if not isinstance(b, dict):
+                continue
+            t = b.get("type")
+            d = b.get("data") or {}
+            if t == "heading":
+                text = (d.get("text") or "").strip()
+                if not text:
+                    continue
+                lvl = d.get("level") or 3
+                try:
+                    lvl = int(lvl)
+                except (TypeError, ValueError):
+                    lvl = 3
+                lvl = max(2, min(lvl, 6))
+                anchor = _slug(text)
+                d["_anchor"] = anchor
+                b["data"] = d
+                out.append({"level": lvl, "text": text, "anchor": anchor})
+            elif t == "container":
+                _walk(d.get("blocks") or [])
+
+    for sec in sections:
+        if isinstance(sec, dict):
+            _walk(sec.get("blocks") or [])
+    return out

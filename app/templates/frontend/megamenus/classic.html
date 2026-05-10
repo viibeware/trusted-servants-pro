@@ -1,6 +1,6 @@
 {# "Classic" mega menu — centered white card with subtle shadow and divider
-   lines between columns. No full-width color wash; links use a small
-   trailing arrow glyph instead of a slide-in chevron. #}
+   lines between columns. No full-width color wash; links carry an
+   always-visible trailing chevron with a subtle slide-right on hover. #}
 {% macro _icon_style(color, size) -%}
   {%- set _parts = [] -%}
   {%- if color %}{% set _ = _parts.append('color: ' ~ color) %}{% endif -%}
@@ -63,11 +63,15 @@
                 {% set _link_style = _link_style ~ '--link-color-light: ' ~ link.custom_color ~ '; --link-color-dark: ' ~ (link.custom_color | dark_variant) ~ ';' %}
               {% endif %}
               {%- set _ft = ' data-fe-form-trigger="' ~ link.form_trigger ~ '"' if link.form_trigger else '' -%}
+              {# External links (absolute http(s)/mailto/tel) swap the
+                 chevron for an external-link glyph so visitors can
+                 spot at a glance which links leave the site. #}
+              {%- set _is_external = link.url and (link.url.startswith('http://') or link.url.startswith('https://') or link.url.startswith('mailto:') or link.url.startswith('tel:')) -%}
               <a href="{{ link.url or '#' }}"{{ _tgt|safe }}{{ _ft|safe }} class="{{ _link_cls }}"{% if _link_style %} style="{{ _link_style }}"{% endif %}>
                 {% if link.icon_before %}<span class="fe-megamenu-classic-icon"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before) }}</span>{% endif %}
                 <span class="fe-megamenu-classic-label">{{ link.label }}</span>
                 {% if link.icon_after %}<span class="fe-megamenu-classic-icon"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>
-                {% else %}<span class="fe-megamenu-classic-arrow" aria-hidden="true">→</span>
+                {% else %}<span class="fe-megamenu-classic-arrow{% if _is_external %} fe-megamenu-classic-arrow--external{% endif %}" aria-hidden="true">{{ icon('external-link' if _is_external else 'chevron-right') }}</span>
                 {% endif %}
               </a>
             {% endif %}

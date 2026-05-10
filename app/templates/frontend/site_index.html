@@ -1,0 +1,14 @@
+{% extends "frontend/base.html" %}
+{% block title %}{{ heading }} · {{ frontend_title }}{% endblock %}
+{# Dispatcher: each layout (grouped / alphabet) lives in
+   frontend/site_index/<key>.html and is selected on the admin's
+   Templates page (SiteSetting.frontend_site_index_template). Both
+   layouts receive the same `groups` list — the dispatcher just
+   chooses the rendering shape. The page-level dynbg + customize
+   colour / position / animate flags wrap the host the same way the
+   per-template entity-detail partials do; that means a Site Index
+   page picks up Background / Fonts / Sizes overrides from the
+   Templates admin's Customize panel automatically. #}
+{% block content %}
+{% include list_partial %}
+{% endblock %}

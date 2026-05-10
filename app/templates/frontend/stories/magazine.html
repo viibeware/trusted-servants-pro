@@ -1,0 +1,329 @@
+{% extends "frontend/base.html" %}
+{% block title %}{{ story.title }} · {{ frontend_title }}{% endblock %}
+{% block content %}
+{# Magazine detail layout — full-bleed featured image with the title +
+   byline overlaid at the bottom (gradient fades smoothly from
+   transparent at the top to dark at the bottom so there's no visible
+   seam between image and overlay), then a single-column reading
+   layout below. The "All stories" link lives in the body, not in the
+   hero. #}
+<section class="fe-story-mag{% if tpl_dynbg_key or tpl_dynbg_overlay %} fe-dynbg-host{% endif %}" style="{{ tpl_style }}{% if tpl_dynbg_config %}; {% set _resolved = dynbg_resolve_colors(tpl_dynbg_config) %}{% for _c in _resolved %}--fe-dynbg-c{{ loop.index }}: {{ _c }};{% endfor %} {{ dynbg_resolve_positions(tpl_dynbg_config, tpl_dynbg_key) }}{% endif %}">
+  {% if tpl_dynbg_key or tpl_dynbg_overlay %}{% with dynbg_key=tpl_dynbg_key, dynbg_config=tpl_dynbg_config %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}
+  {% if story.featured_image_filename %}
+  <div class="fe-story-mag-hero">
+    <span class="fe-story-mag-hero-img" aria-hidden="true">
+      <img src="{{ url_for('public.story_featured_image', sid=story.id, thumb=1080) }}"
+           alt="" loading="eager">
+    </span>
+    <span class="fe-story-mag-hero-shade" aria-hidden="true"></span>
+    <div class="fe-story-mag-hero-overlay">
+      <div class="fe-story-mag-hero-content">
+        <span class="fe-story-mag-eyebrow">A Recovery Story</span>
+        <h1 class="fe-story-mag-title">{{ story.title }}</h1>
+        <div class="fe-story-mag-hero-meta">
+          {% if story.author_name %}
+          <span class="fe-story-mag-hero-meta-item">By {{ story.author_name }}</span>
+          {% endif %}
+          {% if story.author_name and story.display_date %}
+          <span class="fe-story-mag-meta-dot" aria-hidden="true">·</span>
+          {% endif %}
+          {% if story.display_date %}
+          <span class="fe-story-mag-hero-meta-item">{{ story.display_date.strftime('%B %-d, %Y') }}</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <header class="fe-story-mag-no-hero">
+    <span class="fe-story-mag-eyebrow">A Recovery Story</span>
+    <h1 class="fe-story-mag-title">{{ story.title }}</h1>
+    <div class="fe-story-mag-hero-meta">
+      {% if story.author_name %}
+      <span class="fe-story-mag-hero-meta-item">By {{ story.author_name }}</span>
+      {% endif %}
+      {% if story.author_name and story.display_date %}
+      <span class="fe-story-mag-meta-dot" aria-hidden="true">·</span>
+      {% endif %}
+      {% if story.display_date %}
+      <span class="fe-story-mag-hero-meta-item">{{ story.display_date.strftime('%B %-d, %Y') }}</span>
+      {% endif %}
+    </div>
+  </header>
+  {% endif %}
+
+  <div class="fe-story-mag-room">
+    <article class="fe-story-mag-article">
+      <a class="fe-story-mag-back" href="{{ url_for('frontend.stories_list') }}">
+        <span aria-hidden="true">←</span> All stories
+      </a>
+
+      {% if story.sobriety_date %}
+      <div class="fe-story-mag-meta-bar">
+        <span class="fe-story-mag-meta-item">
+          <span class="fe-story-mag-meta-label">Clean since</span>
+          {{ story.sobriety_date.strftime('%B %Y') }}
+        </span>
+      </div>
+      {% endif %}
+
+      <div class="fe-story-mag-body markdown-body">
+        {% if story.body %}{{ story.body|markdown }}{% endif %}
+      </div>
+
+      {% if story.author_bio %}
+      <aside class="fe-story-mag-bio">
+        <h2>About the author</h2>
+        {% if story.author_name %}
+        <p class="fe-story-mag-bio-name">{{ story.author_name }}</p>
+        {% endif %}
+        <p class="fe-story-mag-bio-body">{{ story.author_bio }}</p>
+      </aside>
+      {% endif %}
+
+      <footer class="fe-story-mag-foot">
+        <a href="{{ url_for('frontend.stories_list') }}">More stories <span aria-hidden="true">→</span></a>
+      </footer>
+    </article>
+  </div>
+</section>
+
+<style>
+  .fe-story-mag {
+    --m-bg: var(--tpl-bg, var(--surface, #ffffff));
+    --m-card: var(--surface-alt, #faf6ec);
+    --m-ink: var(--ink, #1c1812);
+    --m-ink-soft: rgba(28,24,18,.62);
+    --m-rule: rgba(28,24,18,.10);
+    --m-accent: #8a3713;
+    background: var(--m-bg);
+    color: var(--m-ink);
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  [data-theme="dark"] .fe-story-mag {
+    --m-bg: var(--tpl-bg, var(--surface, #14110d));
+    --m-card: var(--surface-alt, #1d1812);
+    --m-ink: var(--ink, #ece1c8);
+    --m-ink-soft: rgba(236,225,200,.55);
+    --m-rule: rgba(236,225,200,.12);
+    --m-accent: #d8794d;
+  }
+
+  /* Hero — full-bleed image with a smooth top-to-bottom dark gradient
+     painted on top of the image so the title + byline sit on a
+     readable dark vignette while the upper portion of the image stays
+     untouched. The gradient is a single ::after spanning the whole
+     hero (no separate "overlay" panel), which removes the visible
+     seam the previous design had where the bottom-anchored overlay
+     met the image. */
+  .fe-story-mag-hero {
+    position: relative;
+    min-height: 60vh;
+    display: grid;
+    align-items: end;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .fe-story-mag-hero-img,
+  .fe-story-mag-hero-img img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .fe-story-mag-hero-shade {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0)    0%,
+      rgba(0, 0, 0, 0)    35%,
+      rgba(0, 0, 0, .15) 55%,
+      rgba(0, 0, 0, .55) 80%,
+      rgba(0, 0, 0, .85) 100%
+    );
+  }
+  .fe-story-mag-hero-overlay {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    padding: clamp(2rem, 5vw, 4rem) clamp(1.5rem, 5vw, 4rem) clamp(2.5rem, 6vw, 5rem);
+    color: #fff;
+  }
+  .fe-story-mag-hero-content { max-width: 900px; margin: 0 auto; }
+  .fe-story-mag-eyebrow {
+    display: inline-block;
+    font-size: .72rem;
+    letter-spacing: .26em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .82);
+    margin-bottom: 1rem;
+  }
+  .fe-story-mag-title {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-size: clamp(2.4rem, 6vw, 4.4rem);
+    line-height: 1.04;
+    margin: 0 0 1rem;
+    letter-spacing: -.01em;
+    max-width: 28ch;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, .35);
+  }
+  .fe-story-mag-hero-meta {
+    color: rgba(255, 255, 255, .92);
+    font-size: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    align-items: baseline;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, .35);
+  }
+  .fe-story-mag-hero-meta-item { letter-spacing: .01em; }
+  .fe-story-mag-meta-dot { opacity: .6; }
+
+  .fe-story-mag-no-hero {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: clamp(3rem, 6vw, 5rem) clamp(1.5rem, 5vw, 3rem) 0;
+  }
+  .fe-story-mag-no-hero .fe-story-mag-eyebrow { color: var(--m-accent); }
+  .fe-story-mag-no-hero .fe-story-mag-title { color: var(--m-ink); text-shadow: none; }
+  .fe-story-mag-no-hero .fe-story-mag-hero-meta {
+    color: var(--m-ink-soft);
+    text-shadow: none;
+  }
+
+  .fe-story-mag-room {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: clamp(2.5rem, 5vw, 4rem) clamp(1.5rem, 5vw, 3rem) clamp(4rem, 8vw, 6rem);
+  }
+
+  .fe-story-mag-back {
+    display: inline-block;
+    color: var(--m-ink-soft);
+    text-decoration: none;
+    font-style: italic;
+    font-size: .92rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid transparent;
+    transition: color .15s ease, border-color .15s ease;
+  }
+  .fe-story-mag-back:hover {
+    color: var(--m-accent);
+    border-bottom-color: currentColor;
+  }
+
+  .fe-story-mag-meta-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.4rem;
+    padding: .9rem 0;
+    border-top: 1px solid var(--m-rule);
+    border-bottom: 1px solid var(--m-rule);
+    margin-bottom: clamp(2rem, 4vw, 3rem);
+    color: var(--m-ink);
+    font-size: .92rem;
+  }
+  .fe-story-mag-meta-item { display: flex; gap: .35rem; align-items: baseline; }
+  .fe-story-mag-meta-label {
+    font-size: .7rem;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--m-ink-soft);
+  }
+
+  .fe-story-mag-body {
+    font-family: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+    font-size: 1.18rem;
+    line-height: 1.78;
+    color: var(--m-ink);
+  }
+  .fe-story-mag-body p { margin: 0 0 1.3rem; }
+  .fe-story-mag-body p:first-child::first-letter {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 600;
+    font-size: 4rem;
+    line-height: .9;
+    float: left;
+    padding: 6px .55rem 0 0;
+    color: var(--m-accent);
+  }
+  .fe-story-mag-body h2 {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-size: 1.7rem;
+    margin: 2.2rem 0 1rem;
+    line-height: 1.2;
+    color: var(--m-ink);
+  }
+  .fe-story-mag-body h3 {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-size: 1.3rem;
+    margin: 1.7rem 0 .7rem;
+  }
+  .fe-story-mag-body blockquote {
+    border-left: 3px solid var(--m-accent);
+    padding: 0 0 0 1.4rem;
+    margin: 1.8rem 0;
+    font-style: italic;
+    color: var(--m-ink-soft);
+    font-size: 1.25rem;
+    line-height: 1.55;
+  }
+  .fe-story-mag-body a {
+    color: var(--m-accent);
+    border-bottom: 1px solid currentColor;
+    text-decoration: none;
+  }
+
+  .fe-story-mag-bio {
+    margin-top: clamp(2rem, 4vw, 3rem);
+    padding: 1.5rem 1.75rem;
+    background: var(--m-card);
+    border: 1px solid var(--m-rule);
+    border-left: 4px solid var(--m-accent);
+    border-radius: 8px;
+  }
+  .fe-story-mag-bio h2 {
+    font-family: 'Inter', system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: .22em;
+    font-size: .68rem;
+    color: var(--m-accent);
+    font-weight: 700;
+    margin: 0 0 .5rem;
+  }
+  .fe-story-mag-bio-name {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-size: 1.2rem;
+    margin: 0 0 .5rem;
+    color: var(--m-ink);
+  }
+  .fe-story-mag-bio-body {
+    margin: 0;
+    font-size: .98rem;
+    line-height: 1.65;
+    color: var(--m-ink);
+  }
+
+  .fe-story-mag-foot {
+    margin-top: clamp(2.5rem, 5vw, 3.5rem);
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--m-rule);
+    text-align: right;
+  }
+  .fe-story-mag-foot a {
+    color: var(--m-accent);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: .95rem;
+    border-bottom: 1px solid currentColor;
+    padding-bottom: 1px;
+  }
+</style>
+{% endblock %}

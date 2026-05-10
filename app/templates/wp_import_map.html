@@ -1,0 +1,444 @@
+{% extends "base.html" %}
+{% block title %}Map posts · WordPress Importer{% endblock %}
+{% block heading %}Review &amp; map{% endblock %}
+{% block heading_help %}
+{%- if stash.source == 'rest' -%}
+  Connected to <code>{{ stash.site_url }}</code>. Found {{ stash.posts|length }} post{% if stash.posts|length != 1 %}s{% endif %} across {{ stash.categories|length }} categor{% if stash.categories|length == 1 %}y{% else %}ies{% endif %}.
+{%- else -%}
+  Parsed <code>{{ stash.filename }}</code> — {{ stash.posts|length }} row{% if stash.posts|length != 1 %}s{% endif %} across {{ stash.categories|length }} categor{% if stash.categories|length == 1 %}y{% else %}ies{% endif %}.
+{%- endif -%}
+ Choose where each post lands. Skip anything you don't want.
+{% endblock %}
+{% block content %}
+<div class="wp-wizard-header">
+  <div class="wp-actionbar">
+    <a class="btn" href="{{ url_for('main.wp_import_start', embed=1 if embed else None) }}">← Change source</a>
+    <form method="post" action="{{ url_for('main.wp_import_cancel', token=token) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+      <button type="submit" class="btn"
+              onclick="return confirm('Discard this import and start over?')">Cancel</button>
+    </form>
+    <button type="submit" form="wp-map-form" class="btn btn-primary">Continue to dry run →</button>
+  </div>
+
+  <div class="wp-wizard-stepper">
+    <ol>
+      <li class="is-done"><span class="wp-step-num">✓</span><span class="wp-step-label">Source</span></li>
+      <li class="is-active"><span class="wp-step-num">2</span><span class="wp-step-label">Review &amp; map</span></li>
+      <li><span class="wp-step-num">3</span><span class="wp-step-label">Dry run</span></li>
+      <li><span class="wp-step-num">4</span><span class="wp-step-label">Import</span></li>
+    </ol>
+  </div>
+</div>
+
+<form id="wp-map-form" method="post" action="{{ url_for('main.wp_import_map', token=token) }}"
+      class="form" data-wp-fetch-form data-wp-fetch-mode="map">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+
+  {# Per-category bulk mapping. Sets the default destination for every
+     post tagged with that category — individual posts can override
+     below. Posts with no category fall through to the per-post row. #}
+  {% if stash.categories %}
+  <section class="card wp-cat-card">
+    <div class="card-head">
+      <h2>{{ icon('list-ordered') }} Map by category</h2>
+      <span class="muted smaller">Set a destination for every post in a WordPress category. Use the per-post overrides below to handle exceptions.</span>
+    </div>
+    <ul class="wp-cat-list">
+      {% for cat in stash.categories %}
+      {% set _count = cat_counts.get(cat, 0) %}
+      {% set _curr = (stash.category_mapping or {}).get(cat) or 'skip' %}
+      <li class="wp-cat-row">
+        <div class="wp-cat-info">
+          <span class="wp-cat-name">{{ cat }}</span>
+          <span class="muted smaller">{{ _count }} post{% if _count != 1 %}s{% endif %}</span>
+        </div>
+        <div class="wp-target-pillgroup" role="radiogroup" aria-label="Target for {{ cat }}">
+          {% for t in targets %}
+          <label class="wp-target-pill wp-target-pill--{{ t }}{% if _curr == t %} is-active{% endif %}">
+            <input type="radio" name="cat:{{ cat }}" value="{{ t }}"
+                   {% if _curr == t %}checked{% endif %}
+                   data-cat-radio data-cat="{{ cat }}" data-target="{{ t }}">
+            <span>{{ target_labels[t] }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {# Posts table — one row per post with thumbnail, meta, and a per-post
+     override pillgroup. The per-post default is "category" (inherit
+     from category mapping above); switching to a target overrides. #}
+  <section class="card wp-posts-card">
+    <div class="card-head">
+      <h2>{{ icon('list') }} Posts</h2>
+      <div class="wp-posts-bulk">
+        <span class="muted small">Apply to all visible:</span>
+        {% for t in targets %}
+        <button type="button" class="btn btn-sm wp-bulk-btn" data-bulk-target="{{ t }}">{{ target_labels[t] }}</button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="wp-filterbar">
+      <label class="wp-filter-search">
+        <span class="muted smaller">Filter</span>
+        <input type="search" placeholder="Search title, summary, or category…"
+               data-wp-filter aria-label="Filter posts">
+      </label>
+      <label class="wp-filter-cat">
+        <span class="muted smaller">Category</span>
+        <select data-wp-filter-cat>
+          <option value="">All categories</option>
+          {% for cat in stash.categories %}
+          <option value="{{ cat }}">{{ cat }}</option>
+          {% endfor %}
+          <option value="__none__">— Uncategorised —</option>
+        </select>
+      </label>
+      <span class="muted smaller wp-filter-count" data-wp-filter-count>
+        {{ stash.posts|length }} of {{ stash.posts|length }}
+      </span>
+    </div>
+
+    <ul class="wp-post-list">
+      {% for p in stash.posts %}
+      {% set _post_curr = (stash.post_mapping or {}).get(p.key) %}
+      {% set _resolved = (stash.mapping or {}).get(p.key) or 'skip' %}
+      <li class="wp-post-row" data-wp-post
+          data-title="{{ (p.title or '')|e|lower }}"
+          data-summary="{{ (p.summary or '')|e|lower }}"
+          data-categories="{{ (p.categories or [])|join('|')|e }}">
+        <div class="wp-post-thumb">
+          {% if p.featured_image_url %}
+          <img loading="lazy" src="{{ p.featured_image_url }}" alt="">
+          {% else %}
+          <div class="wp-post-thumb-empty" aria-hidden="true">{{ icon('image') }}</div>
+          {% endif %}
+        </div>
+        <div class="wp-post-body">
+          <div class="wp-post-title-row">
+            <span class="wp-post-title">{{ p.title }}</span>
+            {% if p.is_draft %}<span class="post-chip post-chip-draft">Draft</span>{% endif %}
+          </div>
+          <div class="wp-post-meta muted smaller">
+            {% if p.author_name %}<span>by {{ p.author_name }}</span>{% endif %}
+            {% if p.author_name and p.date %}<span class="wp-meta-dot">·</span>{% endif %}
+            {% if p.date %}<span>{{ p.date }}</span>{% endif %}
+            {% if p.url %}<span class="wp-meta-dot">·</span>
+              <a href="{{ p.url }}" target="_blank" rel="noopener noreferrer">{{ icon('external-link') }} View on WP</a>
+            {% endif %}
+          </div>
+          {% if p.summary %}
+          <p class="wp-post-summary">{{ p.summary[:240] }}{% if p.summary|length > 240 %}…{% endif %}</p>
+          {% endif %}
+          {% if p.categories %}
+          <div class="wp-post-cats">
+            {% for c in p.categories %}<span class="wp-cat-chip">{{ c }}</span>{% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        <div class="wp-post-target">
+          <div class="wp-target-pillgroup wp-target-pillgroup--vertical" role="radiogroup" aria-label="Target for this post">
+            <label class="wp-target-pill wp-target-pill--inherit{% if not _post_curr %} is-active{% endif %}">
+              <input type="radio" name="post:{{ p.key }}" value="category"
+                     {% if not _post_curr %}checked{% endif %}
+                     data-post-radio data-key="{{ p.key }}">
+              <span>From category</span>
+              <span class="wp-target-resolved muted smaller" data-resolved-for="{{ p.key }}">{{ target_labels[_resolved] }}</span>
+            </label>
+            {% for t in targets %}
+            <label class="wp-target-pill wp-target-pill--{{ t }}{% if _post_curr == t %} is-active{% endif %}">
+              <input type="radio" name="post:{{ p.key }}" value="{{ t }}"
+                     {% if _post_curr == t %}checked{% endif %}
+                     data-post-radio data-key="{{ p.key }}" data-target="{{ t }}">
+              <span>{{ target_labels[t] }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+</form>
+
+<script>
+(function () {
+  // Highlight the active option as the radio changes (the underlying
+  // input is hidden via CSS so we drive the visual state via classes).
+  function syncPills(scope) {
+    (scope || document).querySelectorAll('.wp-target-pillgroup').forEach(function (group) {
+      var radios = group.querySelectorAll('input[type=radio]');
+      radios.forEach(function (r) {
+        var lbl = r.closest('label');
+        if (!lbl) return;
+        if (r.checked) lbl.classList.add('is-active');
+        else lbl.classList.remove('is-active');
+      });
+    });
+  }
+  document.addEventListener('change', function (e) {
+    if (e.target.matches('.wp-target-pillgroup input[type=radio]')) {
+      var group = e.target.closest('.wp-target-pillgroup');
+      group.querySelectorAll('label').forEach(function (l) { l.classList.remove('is-active'); });
+      e.target.closest('label').classList.add('is-active');
+
+      // When a category radio changes, refresh every "From category"
+      // resolved label that depends on it.
+      if (e.target.matches('[data-cat-radio]')) updateResolvedFromCategory();
+    }
+  });
+
+  // ---- Resolved-target label updater for "From category" rows ----
+  var TARGET_LABELS = {{ target_labels | tojson }};
+  function currentCategoryMap() {
+    var map = {};
+    document.querySelectorAll('[data-cat-radio]:checked').forEach(function (r) {
+      map[r.dataset.cat] = r.dataset.target;
+    });
+    return map;
+  }
+  function resolvePost(row, catMap) {
+    var raw = row.dataset.categories || '';
+    var cats = raw ? raw.split('|') : [];
+    for (var i = 0; i < cats.length; i++) {
+      var t = catMap[cats[i]];
+      if (t && t !== 'skip') return t;
+    }
+    return 'skip';
+  }
+  function updateResolvedFromCategory() {
+    var catMap = currentCategoryMap();
+    document.querySelectorAll('[data-wp-post]').forEach(function (row) {
+      var resolved = resolvePost(row, catMap);
+      var key = (row.querySelector('[data-post-radio]') || {}).dataset || {};
+      var keyAttr = (row.querySelector('input[name^=post]') || {}).name || '';
+      var k = keyAttr.replace(/^post:/, '');
+      var lbl = row.querySelector('[data-resolved-for="' + k + '"]');
+      if (lbl) lbl.textContent = TARGET_LABELS[resolved] || resolved;
+    });
+  }
+  updateResolvedFromCategory();
+
+  // ---- Bulk-apply buttons ----
+  document.querySelectorAll('[data-bulk-target]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var target = btn.dataset.bulkTarget;
+      document.querySelectorAll('[data-wp-post]').forEach(function (row) {
+        if (row.style.display === 'none') return; // honor active filter
+        var radios = row.querySelectorAll('[data-post-radio]');
+        radios.forEach(function (r) {
+          if (r.value === target) {
+            r.checked = true;
+            r.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        });
+      });
+    });
+  });
+
+  // ---- Filter ----
+  var search = document.querySelector('[data-wp-filter]');
+  var catSel = document.querySelector('[data-wp-filter-cat]');
+  var counter = document.querySelector('[data-wp-filter-count]');
+  var rows = Array.from(document.querySelectorAll('[data-wp-post]'));
+  var total = rows.length;
+  function applyFilter() {
+    var q = (search.value || '').trim().toLowerCase();
+    var cat = catSel.value || '';
+    var shown = 0;
+    rows.forEach(function (row) {
+      var hay = (row.dataset.title || '') + ' ' + (row.dataset.summary || '') + ' ' + (row.dataset.categories || '').toLowerCase();
+      var matchQ = !q || hay.indexOf(q) !== -1;
+      var rowCats = (row.dataset.categories || '').split('|').filter(Boolean);
+      var matchCat = !cat || (cat === '__none__' ? rowCats.length === 0 : rowCats.indexOf(cat) !== -1);
+      var visible = matchQ && matchCat;
+      row.style.display = visible ? '' : 'none';
+      if (visible) shown++;
+    });
+    if (counter) counter.textContent = shown + ' of ' + total;
+  }
+  if (search) search.addEventListener('input', applyFilter);
+  if (catSel) catSel.addEventListener('change', applyFilter);
+
+  syncPills();
+})();
+</script>
+
+<style>
+  .wp-cat-card .wp-cat-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: .55rem;
+  }
+  .wp-cat-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: center;
+    padding: .65rem .75rem;
+    border: 1px solid var(--border, rgba(0,0,0,.08));
+    border-radius: 10px;
+    background: var(--surface, #fff);
+  }
+  @media (max-width: 720px) { .wp-cat-row { grid-template-columns: 1fr; } }
+  .wp-cat-info { display: flex; flex-direction: column; gap: 2px; }
+  .wp-cat-name { font-weight: 600; }
+
+  .wp-target-pillgroup {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    background: var(--surface-alt, rgba(0,0,0,.05));
+    padding: 3px;
+    border-radius: 999px;
+  }
+  .wp-target-pillgroup--vertical {
+    flex-direction: column;
+    border-radius: 12px;
+    align-items: stretch;
+  }
+  .wp-target-pill {
+    cursor: pointer;
+    user-select: none;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: .85rem;
+    color: var(--text-soft, rgba(0,0,0,.6));
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    transition: background .15s ease, color .15s ease, transform .1s ease;
+    white-space: nowrap;
+  }
+  .wp-target-pillgroup--vertical .wp-target-pill {
+    border-radius: 8px;
+    justify-content: space-between;
+    padding: 6px 10px;
+  }
+  .wp-target-pill input[type=radio] {
+    position: absolute;
+    width: 0; height: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .wp-target-pill:hover { color: var(--text, #111); }
+  .wp-target-pill.is-active {
+    background: var(--surface, #fff);
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    color: var(--text, #111);
+    font-weight: 600;
+  }
+  .wp-target-pill--stories.is-active       { background: #fef3c7; color: #78350f; }
+  .wp-target-pill--announcements.is-active { background: #dbeafe; color: #1e3a8a; }
+  .wp-target-pill--events.is-active        { background: #dcfce7; color: #166534; }
+  /* Skip uses sky-blue (distinct from the deep blue announcements
+     palette) so an active skip selection reads as a deliberate
+     decision, not a muted/disabled state. */
+  .wp-target-pill--skip.is-active          { background: #e0f2fe; color: #075985; }
+  .wp-target-pill--inherit.is-active       { background: #ede9fe; color: #5b21b6; }
+  [data-theme="dark"] .wp-target-pill--stories.is-active       { background: #4a3008; color: #fde68a; }
+  [data-theme="dark"] .wp-target-pill--announcements.is-active { background: #14264e; color: #bfdbfe; }
+  [data-theme="dark"] .wp-target-pill--events.is-active        { background: #14391f; color: #bbf7d0; }
+  [data-theme="dark"] .wp-target-pill--skip.is-active          { background: #0c2a45; color: #bae6fd; }
+  [data-theme="dark"] .wp-target-pill--inherit.is-active       { background: #2e1d59; color: #ddd6fe; }
+  .wp-target-resolved { font-style: italic; }
+
+  .wp-posts-card .card-head { gap: 1rem; flex-wrap: wrap; }
+  .wp-posts-bulk { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; margin-left: auto; }
+
+  .wp-filterbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 220px auto;
+    gap: .9rem;
+    padding: .75rem 0 1rem;
+    border-bottom: 1px solid var(--border, rgba(0,0,0,.08));
+    margin-bottom: .9rem;
+    align-items: end;
+  }
+  @media (max-width: 720px) { .wp-filterbar { grid-template-columns: 1fr; } }
+  .wp-filter-search input, .wp-filter-cat select {
+    width: 100%;
+  }
+  .wp-filter-count { white-space: nowrap; }
+
+  .wp-post-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: .85rem;
+  }
+  .wp-post-row {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr) 220px;
+    gap: 1rem;
+    padding: .9rem;
+    border: 1px solid var(--border, rgba(0,0,0,.08));
+    border-radius: 12px;
+    background: var(--surface, #fff);
+    align-items: start;
+  }
+  @media (max-width: 880px) {
+    .wp-post-row { grid-template-columns: 80px 1fr; }
+    .wp-post-target { grid-column: 1 / -1; }
+  }
+  .wp-post-thumb {
+    width: 96px; height: 96px;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--surface-alt, rgba(0,0,0,.04));
+  }
+  .wp-post-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .wp-post-thumb-empty {
+    width: 100%; height: 100%;
+    display: grid; place-items: center;
+    color: var(--text-soft, rgba(0,0,0,.45));
+  }
+  .wp-post-title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .5rem;
+  }
+  .wp-post-title {
+    font-weight: 600;
+    font-size: 1.02rem;
+    line-height: 1.3;
+  }
+  .wp-post-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    align-items: baseline;
+    margin-top: 4px;
+  }
+  .wp-meta-dot { opacity: .55; }
+  .wp-post-summary {
+    margin: .5rem 0 .35rem;
+    line-height: 1.55;
+    color: var(--text, #111);
+    font-size: .95rem;
+  }
+  .wp-post-cats { display: flex; flex-wrap: wrap; gap: 4px; margin-top: .25rem; }
+  .wp-cat-chip {
+    background: var(--surface-alt, rgba(0,0,0,.05));
+    border: 1px solid var(--border, rgba(0,0,0,.08));
+    color: var(--text-soft, rgba(0,0,0,.7));
+    border-radius: 999px;
+    padding: 2px 9px;
+    font-size: .72rem;
+  }
+  .wp-bulk-btn { font-weight: 500; }
+</style>
+
+{% include "_wp_fetch_overlay.html" %}
+{% endblock %}

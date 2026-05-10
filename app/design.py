@@ -61,6 +61,7 @@ THEME_DEFAULTS = {
         "color_accent":       "#f59e0b",
         "color_surface":      "#ffffff",
         "color_surface_alt":  "#f8fafc",
+        "color_card_dark":    "#1f2937",
         "color_border":       "#e2e8f0",
         "color_text":         "#0f172a",
         "color_text_soft":    "#475569",
@@ -107,6 +108,7 @@ THEME_DEFAULTS = {
         "color_accent":       "#0ea5e9",
         "color_surface":      "#ffffff",
         "color_surface_alt":  "#f1f5f9",
+        "color_card_dark":    "#1f2937",
         "color_border":       "#cbd5e1",
         "color_text":         "#1e293b",
         "color_text_soft":    "#64748b",
@@ -165,6 +167,7 @@ DESIGN_FIELDS = [
     {"key": "color_accent",      "kind": "color",  "group": "Colors", "label": "Accent"},
     {"key": "color_surface",     "kind": "color",  "group": "Colors", "label": "Surface (page bg)"},
     {"key": "color_surface_alt", "kind": "color",  "group": "Colors", "label": "Surface — alt"},
+    {"key": "color_card_dark",   "kind": "color",  "group": "Colors", "label": "Card Dark"},
     {"key": "color_border",      "kind": "color",  "group": "Colors", "label": "Border"},
     {"key": "color_text",        "kind": "color",  "group": "Colors", "label": "Text"},
     {"key": "color_text_soft",   "kind": "color",  "group": "Colors", "label": "Text — muted"},
@@ -370,6 +373,7 @@ def design_css_vars(site):
 
     # Colors (raw hex).
     for key in ("color_brand", "color_accent", "color_surface", "color_surface_alt",
+                "color_card_dark",
                 "color_border", "color_text", "color_text_soft",
                 "color_link", "color_link_hover",
                 "color_nav_link", "color_nav_link_hover",

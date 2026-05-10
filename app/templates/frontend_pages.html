@@ -9,15 +9,239 @@
                     url_for('main.frontend_theme_save'),
                     "site-theme-modal", "homepage", "Site theme", label="Theme") }}
 <a class="btn" href="{{ url_for('frontend.index') }}" target="_blank" rel="noopener">View frontend ↗</a>
+<button type="button" class="btn btn-primary" data-open-modal="new-page-modal">New page</button>
 {% endblock %}
 {% block content %}
+
+{# ── New-page modal ────────────────────────────────────────────────
+   Replaces the older flow (click → blank edit screen → save) with
+   an in-place title + layout picker. Submitting POSTs to
+   `frontend_page_create`, which mints the row and redirects into
+   the edit screen for the freshly-created page. The admin can
+   change the layout from the edit screen too — this just gives
+   them a head start. #}
+<div class="modal fe-template-picker-modal fe-layout-picker-modal" id="new-page-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form class="form" method="post" action="{{ url_for('main.frontend_page_create') }}" data-fe-skip-save-bar id="new-page-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-head">
+        <h2>New page</h2>
+        <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button>
+      </div>
+      <div class="modal-body">
+        <label>Page title
+          <input type="text" name="title" required maxlength="200"
+                 placeholder="e.g. Newcomer Welcome" autocomplete="off">
+        </label>
+        <p class="muted small fe-new-page-layout-hint">Pick a starting layout. Custom is the no-template option — drag blocks onto the page yourself in the editor.</p>
+        <div class="template-library-grid">
+          <label class="template-card template-card-custom-radio active"
+                 data-layout-key="custom" data-layout-name="Custom">
+            <input type="radio" name="layout_key" value="custom" checked>
+            <div class="template-card-preview template-card-preview-blocks template-card-preview-custom">
+              <span class="tcp-block tcp-block-custom"></span>
+              <span class="tcp-block tcp-block-custom"></span>
+              <span class="tcp-block tcp-block-custom"></span>
+            </div>
+            <div class="template-card-info">
+              <div class="template-card-name">Custom</div>
+              <div class="template-card-desc muted small">No template — drag blocks onto the page yourself.</div>
+            </div>
+          </label>
+          {% for l in page_layouts %}
+          <label class="template-card{% if not l.is_prebuilt %} template-card-custom{% endif %}"
+                 data-layout-key="{{ l.key }}" data-layout-name="{{ l.name }}">
+            <input type="radio" name="layout_key" value="{{ l.key }}">
+            <div class="template-card-preview template-card-preview-blocks">
+              {% for b in (l.blocks_json|from_json)[:6] %}
+              <span class="tcp-block tcp-block-{{ b.type }}"></span>
+              {% endfor %}
+            </div>
+            <div class="template-card-info">
+              <div class="template-card-name">{{ l.name }}
+                {% if l.is_prebuilt %}<span class="template-card-tag muted smaller">Preset</span>{% endif %}
+              </div>
+              <div class="template-card-desc muted small">{{ l.description }}</div>
+            </div>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Create page</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="fe-admin-layout">
   {% include "_frontend_subnav.html" %}
   <div class="fe-admin-main">
-    <section class="card">
-      <div class="card-head"><h2>Coming soon</h2></div>
-      <p class="muted">A page editor for additional frontend pages (Markdown, slugs, navigation placement) is planned for a future release.</p>
+    <section class="card fe-pages-list-card">
+      <div class="card-head"><h2>All pages</h2></div>
+      {% if pages %}
+      {# Bulk-action toolbar — appears above the list whenever rows are
+         selected. Form submission posts the chosen page IDs + a `status`
+         action key, applied server-side in `frontend_pages_bulk`.
+         Sorting is client-side (no AJAX): clicking a header re-orders
+         the table body in place using each row's `data-sort-*` keys. #}
+      <form method="post" action="{{ url_for('main.frontend_pages_bulk') }}"
+            class="fe-pages-bulk-form" id="fe-pages-bulk-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="fe-pages-bulk-bar" data-fe-pages-bulk-bar hidden>
+          <span class="fe-pages-bulk-count" data-fe-pages-bulk-count>0 selected</span>
+          <span class="fe-pages-bulk-actions">
+            <span class="muted smaller">Set status:</span>
+            <button type="submit" name="status" value="draft" class="btn btn-sm">Draft</button>
+            <button type="submit" name="status" value="published" class="btn btn-sm btn-primary">Publish</button>
+            <button type="submit" name="status" value="private" class="btn btn-sm">Private</button>
+          </span>
+        </div>
+      <table class="tbl fe-pages-tbl" id="fe-pages-tbl">
+        <thead>
+          <tr>
+            <th class="fe-pages-check-col">
+              <label class="fe-pages-check" aria-label="Select all pages">
+                <input type="checkbox" data-fe-pages-check-all>
+              </label>
+            </th>
+            <th class="sortable" data-sort-key="title" data-sort-dir="asc">Title <span class="fe-sort-arrow" aria-hidden="true"></span></th>
+            <th class="sortable" data-sort-key="slug">URL <span class="fe-sort-arrow" aria-hidden="true"></span></th>
+            <th class="sortable" data-sort-key="layout">Layout <span class="fe-sort-arrow" aria-hidden="true"></span></th>
+            <th class="sortable" data-sort-key="status">Status <span class="fe-sort-arrow" aria-hidden="true"></span></th>
+            <th class="nowrap sortable" data-sort-key="updated" data-sort-type="number">Updated <span class="fe-sort-arrow" aria-hidden="true"></span></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody data-fe-pages-tbody>
+          {% for p in pages %}
+          {%- set _status = 'draft' if not p.is_published else ('private' if p.is_private else 'published') -%}
+          {%- set _layout_label = 'Wiki' if p.template == 'wiki' else 'Standard' -%}
+          {%- set _updated = p.updated_at -%}
+          <tr data-page-id="{{ p.id }}"
+              data-sort-title="{{ (p.title or '')|lower }}"
+              data-sort-slug="{{ (p.slug or '')|lower }}"
+              data-sort-layout="{{ _layout_label|lower }}"
+              data-sort-status="{{ _status }}"
+              data-sort-updated="{{ _updated.timestamp()|int if _updated else 0 }}">
+            <td class="fe-pages-check-col">
+              <label class="fe-pages-check">
+                <input type="checkbox" form="fe-pages-bulk-form" name="page_ids"
+                       value="{{ p.id }}" data-fe-pages-check>
+              </label>
+            </td>
+            <td><a href="{{ url_for('main.frontend_page_edit', page_id=p.id) }}">{{ p.title }}</a></td>
+            <td class="nowrap"><code>/{{ p.slug }}</code></td>
+            <td><span class="chip">{{ _layout_label }}</span></td>
+            <td>
+              {% if _status == 'draft' %}
+                <span class="post-chip post-chip-draft">Draft</span>
+              {% elif _status == 'private' %}
+                <span class="post-chip post-chip-private">Private</span>
+              {% else %}
+                <span class="post-chip post-chip-online">Published</span>
+              {% endif %}
+            </td>
+            <td class="nowrap muted">{{ _updated.strftime('%Y-%m-%d') if _updated else '' }}</td>
+            <td class="row-actions">
+              <a class="btn btn-sm" href="{{ url_for('frontend.page_detail', slug=p.slug) }}" target="_blank" rel="noopener">View</a>
+              <a class="btn btn-sm" href="{{ url_for('main.frontend_page_edit', page_id=p.id) }}">Edit</a>
+              <form method="post" action="{{ url_for('main.frontend_page_delete', page_id=p.id) }}"
+                    onsubmit="return confirm('Delete this page? This cannot be undone.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </form>
+      {% else %}
+      <p class="muted">No pages yet. Use <b>New page</b> to create one.</p>
+      {% endif %}
     </section>
   </div>
 </div>
+
+<script>
+  // Pages list — checkbox selection + click-to-sort headers. The sort
+  // is purely client-side: each <tr> carries `data-sort-*` keys the
+  // header click handler reads and re-orders the tbody by. Clicking a
+  // header twice flips direction. The "select all" header checkbox
+  // mirrors the per-row checkboxes; both update the bulk-action bar's
+  // visibility + count. Form submission lives outside this script —
+  // the bulk bar's buttons just submit the surrounding form.
+  (function () {
+    const tbl = document.getElementById('fe-pages-tbl');
+    if (!tbl) return;
+    const tbody = tbl.querySelector('[data-fe-pages-tbody]');
+    const allBox = tbl.querySelector('[data-fe-pages-check-all]');
+    const rowBoxes = () => tbl.querySelectorAll('[data-fe-pages-check]');
+    const bulkBar = document.querySelector('[data-fe-pages-bulk-bar]');
+    const bulkCount = document.querySelector('[data-fe-pages-bulk-count]');
+
+    const updateBulkBar = () => {
+      const checked = Array.from(rowBoxes()).filter(b => b.checked);
+      if (bulkBar) bulkBar.hidden = checked.length === 0;
+      if (bulkCount) {
+        bulkCount.textContent = checked.length === 1
+          ? '1 page selected'
+          : `${checked.length} pages selected`;
+      }
+      if (allBox) {
+        const total = rowBoxes().length;
+        allBox.checked = total > 0 && checked.length === total;
+        allBox.indeterminate = checked.length > 0 && checked.length < total;
+      }
+    };
+
+    if (allBox) {
+      allBox.addEventListener('change', () => {
+        rowBoxes().forEach(b => { b.checked = allBox.checked; });
+        updateBulkBar();
+      });
+    }
+    tbl.addEventListener('change', e => {
+      if (e.target.matches('[data-fe-pages-check]')) updateBulkBar();
+    });
+
+    // Header sort. data-sort-key picks the row attribute; data-sort-type
+    // toggles numeric comparison (used by the Updated column's epoch
+    // timestamp). Click the same header to flip direction.
+    tbl.querySelectorAll('th.sortable').forEach(th => {
+      th.addEventListener('click', () => {
+        const key = th.dataset.sortKey;
+        const numeric = th.dataset.sortType === 'number';
+        const prevDir = th.dataset.sortDir;
+        const dir = prevDir === 'asc' ? 'desc' : 'asc';
+        tbl.querySelectorAll('th.sortable').forEach(other => {
+          delete other.dataset.sortDir;
+          other.classList.remove('sort-asc', 'sort-desc');
+        });
+        th.dataset.sortDir = dir;
+        th.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        rows.sort((a, b) => {
+          const av = a.dataset['sort' + key.charAt(0).toUpperCase() + key.slice(1)] || '';
+          const bv = b.dataset['sort' + key.charAt(0).toUpperCase() + key.slice(1)] || '';
+          if (numeric) {
+            const an = parseFloat(av) || 0; const bn = parseFloat(bv) || 0;
+            return dir === 'asc' ? an - bn : bn - an;
+          }
+          return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+        });
+        rows.forEach(r => tbody.appendChild(r));
+      });
+    });
+
+    // Mark default sort (Title asc) as active so the arrow renders.
+    const defaultTh = tbl.querySelector('th.sortable[data-sort-dir="asc"]');
+    if (defaultTh) defaultTh.classList.add('sort-asc');
+
+    updateBulkBar();
+  })();
+</script>
 {% endblock %}

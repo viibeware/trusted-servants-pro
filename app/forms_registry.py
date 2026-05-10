@@ -55,6 +55,20 @@ def all_forms():
             # future form just needs to declare its own column here.
             "enabled_setting": "submission_form_enabled",
         },
+        {
+            "key": "contact",
+            "name": "Contact Form",
+            "description": (
+                "Public contact-us page at /contact. Visitor messages "
+                "email the public information chair (with reply-to set "
+                "to the visitor) and persist in the Contact Form admin "
+                "section so nothing is lost when the email lands in spam."
+            ),
+            "icon": "mail",
+            "settings_endpoint": "main.frontend_form_contact",
+            "public_url_endpoint": "frontend.contact",
+            "enabled_setting": "contact_form_enabled",
+        },
     ]
 
 

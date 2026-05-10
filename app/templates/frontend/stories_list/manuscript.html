@@ -1,0 +1,244 @@
+{# Manuscript layout — single column on textured cream stock with a
+   drop-cap initial on each story preview, italic byline, and a small
+   thumbnail floated right. Reads like a literary anthology table-of-
+   contents. #}
+<section class="fe-stories fe-stories-manuscript fe-stories-list--w-{{ list_width_mode }}">
+  <div class="{% if list_width_mode == 'boxed' %}fe-container{% else %}fe-stories-fullwrap{% endif %}"
+       {% if list_width_mode == 'boxed' %}style="max-width: {{ list_max_width }}px;"
+       {%- elif list_padding_pct %}style="padding-left: {{ list_padding_pct }}vw; padding-right: {{ list_padding_pct }}vw;"{% endif %}>
+
+    <div class="fe-stories-ms-sheet">
+      <div class="fe-stories-ms-sheet-inner">
+        <header class="fe-stories-ms-head">
+          <div class="fe-stories-ms-rule" aria-hidden="true">
+            <span></span><i>❦</i><span></span>
+          </div>
+          <h1 class="fe-stories-ms-title">{{ list_heading or 'Stories' }}</h1>
+          <p class="fe-stories-ms-sub">{{ list_subheading or 'A collection of recovery stories from members of our fellowship — gathered and kept in print.' }}</p>
+          <div class="fe-stories-ms-rule" aria-hidden="true">
+            <span></span><i>❦</i><span></span>
+          </div>
+        </header>
+
+        {% if not all_stories %}
+        <p class="fe-stories-ms-empty">No stories yet — the next one is just around the corner.</p>
+        {% else %}
+        <ol class="fe-stories-ms-list" role="list">
+          {% for story in all_stories %}
+          {% set _initial = (story.title or '·')[0]|upper %}
+          <li class="fe-stories-ms-item{% if story.is_featured %} is-featured{% endif %}">
+            <a class="fe-stories-ms-item-link" href="{{ url_for('frontend.story_detail', slug=story.public_slug) }}">
+              {% if story.featured_image_filename %}
+              <span class="fe-stories-ms-thumb" aria-hidden="true">
+                <img src="{{ url_for('public.story_featured_image', sid=story.id, thumb=240) }}"
+                     alt="" loading="lazy">
+              </span>
+              {% endif %}
+              <span class="fe-stories-ms-dropcap" aria-hidden="true">{{ _initial }}</span>
+              <h2 class="fe-stories-ms-item-title">{{ story.title }}</h2>
+              <div class="fe-stories-ms-item-meta">
+                {% if story.author_name %}
+                <span class="fe-stories-ms-byline">— <i>{{ story.author_name }}</i></span>
+                {% endif %}
+                {% if story.author_name and story.display_date %}<span class="fe-stories-ms-meta-sep">·</span>{% endif %}
+                {% if story.display_date %}
+                <span class="fe-stories-ms-date">{{ story.display_date.strftime('%B %-d, %Y') }}</span>
+                {% endif %}
+                {% if story.is_featured %}<span class="fe-stories-ms-pin">Editor's pick</span>{% endif %}
+              </div>
+              {% if story.summary %}
+              <p class="fe-stories-ms-summary">{{ story.summary }}</p>
+              {% endif %}
+              <span class="fe-stories-ms-readmore">Continue reading <span aria-hidden="true">→</span></span>
+            </a>
+          </li>
+          {% endfor %}
+        </ol>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .fe-stories-manuscript {
+    --ms-bg-1: #f7f0dd;
+    --ms-bg-2: #ece1bf;
+    --ms-paper: #fdf7e4;
+    --ms-ink: #2b2418;
+    --ms-ink-soft: #6b5c40;
+    --ms-rule: #c0a874;
+    --ms-accent: #8a3713;
+    background:
+      radial-gradient(900px 500px at 50% 0%, rgba(255,250,230,.7), transparent 60%),
+      linear-gradient(180deg, var(--ms-bg-1), var(--ms-bg-2));
+    color: var(--ms-ink);
+    padding: clamp(3rem, 6vw, 5.5rem) 0 clamp(4rem, 8vw, 7rem);
+    font-family: var(--tpl-body-font, 'Fraunces', 'Iowan Old Style', Georgia, serif);
+  }
+  [data-theme="dark"] .fe-stories-manuscript {
+    --ms-bg-1: #1d1810;
+    --ms-bg-2: #14100a;
+    --ms-paper: #221c12;
+    --ms-ink: #f1e6cc;
+    --ms-ink-soft: #b39e76;
+    --ms-rule: #6a553a;
+  }
+  .fe-stories-ms-sheet {
+    background: var(--ms-paper);
+    box-shadow:
+      0 1px 0 rgba(0,0,0,.04) inset,
+      0 8px 16px rgba(80,55,20,.16),
+      0 28px 56px -16px rgba(80,55,20,.24);
+    padding: clamp(1.25rem, 2.5vw, 2.25rem);
+    border-radius: 2px;
+    position: relative;
+  }
+  .fe-stories-ms-sheet::before, .fe-stories-ms-sheet::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .fe-stories-ms-sheet::before {
+    background:
+      repeating-linear-gradient(0deg, rgba(120,90,40,.025) 0 1px, transparent 1px 4px),
+      radial-gradient(circle at 100% 100%, rgba(140,100,40,.05), transparent 40%);
+    mix-blend-mode: multiply;
+  }
+  .fe-stories-ms-sheet::after {
+    border: 1px solid rgba(120,90,40,.18);
+    box-shadow: inset 0 0 0 4px var(--ms-paper), inset 0 0 0 5px var(--ms-rule);
+    margin: 8px;
+  }
+  .fe-stories-ms-sheet-inner {
+    position: relative;
+    padding: clamp(2rem, 4vw, 3.5rem) clamp(1.5rem, 4vw, 3.5rem);
+    max-width: 64ch;
+    margin: 0 auto;
+  }
+  .fe-stories-ms-head { text-align: center; margin-bottom: 2.5rem; }
+  .fe-stories-ms-rule {
+    display: flex;
+    align-items: center;
+    gap: .8rem;
+    color: var(--ms-rule);
+    margin: 1.4rem auto;
+  }
+  .fe-stories-ms-rule span {
+    flex: 1;
+    height: 1px;
+    background: currentColor;
+    opacity: .55;
+  }
+  .fe-stories-ms-rule i { font-size: 1.1rem; font-style: normal; color: var(--ms-rule); }
+  .fe-stories-ms-title {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-style: italic;
+    font-size: clamp(2.4rem, 5vw, 3.4rem);
+    line-height: 1.05;
+    margin: 0;
+  }
+  .fe-stories-ms-sub {
+    margin: 1rem auto 0;
+    max-width: 32rem;
+    color: var(--ms-ink-soft);
+    line-height: 1.65;
+  }
+  .fe-stories-ms-empty {
+    text-align: center;
+    color: var(--ms-ink-soft);
+    font-style: italic;
+    padding: 2rem 0;
+  }
+  .fe-stories-ms-list { list-style: none; padding: 0; margin: 0; }
+  .fe-stories-ms-item {
+    padding: 2rem 0;
+    border-bottom: 1px solid var(--ms-rule);
+  }
+  .fe-stories-ms-item:first-child { padding-top: 0; }
+  .fe-stories-ms-item:last-child { border-bottom: none; }
+  .fe-stories-ms-item-link {
+    color: inherit;
+    text-decoration: none;
+    display: block;
+    position: relative;
+  }
+  .fe-stories-ms-thumb {
+    float: right;
+    width: 130px;
+    height: 130px;
+    margin: 4px 0 1rem 1.5rem;
+    border-radius: 1px;
+    overflow: hidden;
+    box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 6px 14px -6px rgba(80,55,20,.4);
+    background: var(--ms-bg-2);
+    shape-outside: margin-box;
+  }
+  @media (max-width: 540px) { .fe-stories-ms-thumb { width: 90px; height: 90px; margin-left: 1rem; } }
+  .fe-stories-ms-thumb img {
+    width: 100%; height: 100%; object-fit: cover;
+    filter: sepia(.12) saturate(.93);
+  }
+  .fe-stories-ms-dropcap {
+    float: left;
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-size: 4.5rem;
+    line-height: .85;
+    margin: 4px .5rem -.4rem 0;
+    color: var(--ms-accent);
+    font-style: italic;
+  }
+  .fe-stories-ms-item-title {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-size: clamp(1.5rem, 2.6vw, 2rem);
+    line-height: 1.15;
+    margin: 0 0 .35rem;
+    letter-spacing: -.005em;
+  }
+  .fe-stories-ms-item-meta {
+    color: var(--ms-ink-soft);
+    font-size: .92rem;
+    margin: 0 0 .65rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+    align-items: baseline;
+  }
+  .fe-stories-ms-byline i { font-style: italic; color: var(--ms-ink); }
+  .fe-stories-ms-meta-sep { opacity: .55; }
+  .fe-stories-ms-pin {
+    background: var(--ms-accent);
+    color: #fff;
+    font-family: var(--tpl-body-font, 'Inter', system-ui, sans-serif);
+    font-size: .65rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
+  .fe-stories-ms-summary {
+    margin: 0 0 .8rem;
+    line-height: 1.7;
+    color: var(--ms-ink);
+    font-size: 1.04rem;
+  }
+  .fe-stories-ms-readmore {
+    font-style: italic;
+    color: var(--ms-accent);
+    border-bottom: 1px solid currentColor;
+    padding-bottom: 1px;
+    font-size: .95rem;
+  }
+  .fe-stories-ms-item.is-featured .fe-stories-ms-dropcap { color: var(--ms-ink); }
+  .fe-stories-ms-item.is-featured .fe-stories-ms-item-title::after {
+    content: " ✦";
+    color: var(--ms-accent);
+    font-size: .7em;
+    vertical-align: middle;
+  }
+  .fe-stories-ms-item-link::after { content: ""; display: block; clear: both; }
+</style>

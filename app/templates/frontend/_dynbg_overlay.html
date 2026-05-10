@@ -1,0 +1,39 @@
+{# Frontend dynamic-background overlay renderer.
+
+   Mirror of `_dynbg.html` for the OVERLAYS catalog (app/dynbg.py).
+   An overlay paints on top of the base dynbg AND on top of content,
+   with `pointer-events: none`, so it textures the whole surface
+   without intercepting clicks.
+
+   Caller passes `dynbg_overlay_key` and the partial emits the right
+   inner shape for that key. Unknown / blank keys produce no output.
+
+   Lives inside an `.fe-dynbg-host` (the same wrapper the base dynbg
+   uses); its CSS rules pin it absolute and z-index it above content. #}
+{# Default the optional kwargs so call sites that only pass the base
+   key (the modal's catalog thumbnails, for example) don't trip
+   Jinja's StrictUndefined when we test them below. The `default()`
+   filter returns the default value for either undefined OR None,
+   keeping the downstream `is not none` checks safe. #}
+{%- set dynbg_overlay_scope = dynbg_overlay_scope|default(none, true) -%}
+{%- set dynbg_overlay_size = dynbg_overlay_size|default(none, true) -%}
+{%- set dynbg_overlay_intensity = dynbg_overlay_intensity|default(none, true) -%}
+{%- set _ok = dynbg_overlay_key or '' -%}
+{%- set _known = _ok in ('noise-grain', 'scanlines', 'linen',
+                          'vignette', 'crosshatch', 'dot-weave') -%}
+{%- if _known -%}
+{%- set _scope = dynbg_overlay_scope or 'all' -%}
+{%- set _classes = ['fe-dynbg-overlay', 'fe-dynbg-overlay-' ~ _ok] -%}
+{%- if _scope == 'bg' -%}{%- set _ = _classes.append('fe-dynbg-overlay--bg-only') -%}{%- endif -%}
+{%- set _inline = '' -%}
+{%- if _ok == 'noise-grain' and (dynbg_overlay_size is not none or dynbg_overlay_intensity is not none) -%}
+  {# Per-surface noise knobs override the CSS class default. We
+     stamp a fresh data-URL inline so this overlay's grain has the
+     admin-chosen size + intensity baked in (the SVG can't read CSS
+     variables — `feTurbulence`'s baseFrequency must be literal). #}
+  {%- set _url = dynbg_noise_url(dynbg_overlay_size, dynbg_overlay_intensity) -%}
+  {%- set _inline = "background-image: url('" ~ _url ~ "');" -%}
+{%- endif %}
+<div class="{{ _classes | join(' ') }}" aria-hidden="true"
+     {%- if _inline %} style="{{ _inline }}"{% endif %}></div>
+{%- endif %}

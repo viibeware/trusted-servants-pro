@@ -161,6 +161,31 @@ def create_app():
                                protocols=SAFE_PROTOCOLS, strip=True)
         return Markup(cleaned)
 
+    @app.template_filter("markdown_inline")
+    def markdown_inline_filter(value):
+        """Inline-friendly markdown — same processing + bleach allowlist
+        as `markdown`, but strips the single outer `<p>` wrapper that
+        Python-Markdown adds by default. Used for contexts where the
+        rendered fragment sits inside an inline element (`<span>`,
+        `<li>` flow content) — the wrapping `<p>` would force a block
+        boundary the parser can't honour and would inflate spacing
+        with paragraph margins. Multi-paragraph inputs keep all their
+        `<p>` tags intact so authors can still embed line breaks when
+        they want them."""
+        if not value:
+            return ""
+        html = md_lib.markdown(str(value), extensions=["extra", "nl2br", "sane_lists"])
+        cleaned = bleach.clean(html, tags=SAFE_RICH_TAGS, attributes=SAFE_RICH_ATTRS,
+                               protocols=SAFE_PROTOCOLS, strip=True).strip()
+        # Drop the outer <p>...</p> only when the entire fragment is
+        # a SINGLE paragraph — if the inner content has its own <p>
+        # tags, leave them all alone (multi-paragraph input).
+        if cleaned.startswith("<p>") and cleaned.endswith("</p>"):
+            inner = cleaned[3:-4]
+            if "<p>" not in inner and "</p>" not in inner:
+                cleaned = inner
+        return Markup(cleaned)
+
     import re as _re
 
     _MD_FENCE_RE = _re.compile(r"^(?:```|~~~)")
@@ -225,6 +250,21 @@ def create_app():
             return json.loads(value) if value else []
         except (ValueError, TypeError):
             return []
+
+    @app.template_filter("regex_search")
+    def regex_search_filter(value, pattern):
+        """Run `re.search(pattern, value)` and return the match's groups
+        as a list, or None when there's no match. Lets templates branch
+        on a regex hit (e.g. detecting a paragraph whose only content
+        is a single markdown link)."""
+        import re as _re
+        if value is None:
+            return None
+        m = _re.search(pattern, str(value))
+        if not m:
+            return None
+        groups = m.groups()
+        return list(groups) if groups else [m.group(0)]
 
     @app.template_filter("fmt12h")
     def fmt12h(value):
@@ -324,6 +364,7 @@ def create_app():
         _seed_admin(app)
         _seed_custom_layouts(app)
         _seed_footer_layouts(app)
+        _seed_page_layouts(app)
         _backfill_media(app)
         _migrate_unique_post_slugs(app)
         # Boot-time recycle-bin sweep. The Delete Log page also runs
@@ -358,6 +399,40 @@ def create_app():
 
     from .icons import icon as _icon
     app.jinja_env.globals["icon"] = _icon
+
+    # Dynamic-background catalog. The admin's dynbg picker macro and
+    # any future template that wants to enumerate available presets
+    # reads this at render time, so a new entry in app/dynbg.py
+    # appears in every picker the moment it's added.
+    from . import dynbg as _dynbg
+    app.jinja_env.globals["dynbg_catalog"] = lambda: _dynbg.CATALOG
+    app.jinja_env.globals["dynbg_overlays"] = lambda: _dynbg.OVERLAYS
+    # Helpers used by the trigger macro + public render partials so
+    # template authors don't have to import Python to decode a stored
+    # config blob into its (overlay, colors, scope, grain knobs)
+    # shape, generate the noise-grain data-URL with admin-chosen
+    # size/intensity, or resolve the per-render colour palette
+    # (which differs from the saved palette when `randomize` is on).
+    app.jinja_env.globals["dynbg_decode"] = _dynbg.decode_config
+    app.jinja_env.globals["dynbg_colors_css"] = _dynbg.colors_to_css_vars
+    app.jinja_env.globals["dynbg_resolve_colors"] = _dynbg.resolve_colors
+    app.jinja_env.globals["dynbg_resolve_positions"] = _dynbg.resolve_positions_css
+    app.jinja_env.globals["dynbg_noise_url"] = _dynbg.noise_grain_data_url
+    # Per-template settings dict — list-page shells read this so the
+    # admin's customize-panel choices (font / size / dynbg) take
+    # effect on the public site. Falls back to flat columns inside
+    # each shell when the per-template entry is empty.
+    from .frontend import template_settings as _template_settings
+    app.jinja_env.globals["template_settings"] = _template_settings
+    app.jinja_env.globals["dynbg_animated_keys"] = lambda: list(_dynbg.ANIMATED_KEYS)
+    app.jinja_env.globals["dynbg_defaults"] = lambda: {
+        "noise_size": _dynbg.NOISE_SIZE_DEFAULT,
+        "noise_size_min": _dynbg.NOISE_SIZE_MIN,
+        "noise_size_max": _dynbg.NOISE_SIZE_MAX,
+        "noise_intensity": _dynbg.NOISE_INTENSITY_DEFAULT,
+        "noise_intensity_min": _dynbg.NOISE_INTENSITY_MIN,
+        "noise_intensity_max": _dynbg.NOISE_INTENSITY_MAX,
+    }
 
     from .colors import (dark_variant as _dark_variant, hex_lightness as _hex_lightness,
                          avg_lightness as _avg_lightness, slugify as _slugify)
@@ -467,12 +542,127 @@ def create_app():
         font_css_vars as _font_css_vars,
         all_fonts as _all_fonts,
         custom_fonts as _custom_fonts,
+        font_stack as _font_stack,
         ROLES as _FONT_ROLES,
     )
     app.jinja_env.globals["font_css_vars"] = _font_css_vars
     app.jinja_env.globals["frontend_fonts"] = _all_fonts
     app.jinja_env.globals["custom_fonts"] = _custom_fonts
+    app.jinja_env.globals["font_stack"] = _font_stack
     app.jinja_env.globals["frontend_font_roles"] = _FONT_ROLES
+
+    # Intergroup officers — repeatable contact roster managed under
+    # Settings → Global. Two helpers:
+    #   • `intergroup_officers()` returns the full ordered list (used
+    #     by the page editor to populate the `intergroup_member` block's
+    #     dropdown of all officers).
+    #   • `intergroup_officer(id)` resolves a single row by id (used by
+    #     the public block renderer to look up the chosen officer at
+    #     request time).
+    def _intergroup_officers():
+        from .models import IntergroupOfficer
+        return (IntergroupOfficer.query
+                .order_by(IntergroupOfficer.sort_order, IntergroupOfficer.id)
+                .all())
+    def _intergroup_officer(oid):
+        from .models import IntergroupOfficer
+        try:
+            oid = int(oid)
+        except (TypeError, ValueError):
+            return None
+        if not oid:
+            return None
+        return db.session.get(IntergroupOfficer, oid)
+    app.jinja_env.globals["intergroup_officers"] = _intergroup_officers
+    app.jinja_env.globals["intergroup_officer"] = _intergroup_officer
+
+    # Library lookups for the page-block renderer:
+    #   • `library_block_data(library_id, mode, item_ids)` resolves to
+    #     `(library, items)` at request time, applying the granular
+    #     filter when mode='granular'. Returns (None, []) if the library
+    #     doesn't exist so the renderer can short-circuit cleanly.
+    #   • `all_libraries()` returns every library (sorted) for the
+    #     editor's picker dropdown — surfaced via window.tspLibraries
+    #     in frontend_page_edit.html so the Library block's settings
+    #     panel can populate without an extra round-trip.
+    def _library_block_data(library_id, mode='all', item_ids=None, sort='manual'):
+        """Resolve a Library + the items the block should render.
+
+        ``sort`` is applied AFTER the granular filter so hand-picked
+        subsets honour the requested order. Recognised values:
+          - ``manual``     → library position then id (default)
+          - ``name-asc``   → A → Z by title (case-insensitive)
+          - ``name-desc``  → Z → A
+          - ``date-desc``  → newest first by created_at
+          - ``date-asc``   → oldest first
+        Any unrecognised value falls back to manual."""
+        from .models import Library, LibraryItem
+        try:
+            lid = int(library_id or 0)
+        except (TypeError, ValueError):
+            lid = 0
+        if not lid:
+            return (None, [])
+        lib = db.session.get(Library, lid)
+        if lib is None:
+            return (None, [])
+        items = (LibraryItem.query
+                 .filter_by(library_id=lib.id)
+                 .order_by(LibraryItem.position, LibraryItem.id)
+                 .all())
+        if (mode or 'all') == 'granular':
+            wanted = set()
+            for i in (item_ids or []):
+                try:
+                    wanted.add(int(i))
+                except (TypeError, ValueError):
+                    pass
+            items = [it for it in items if it.id in wanted]
+        s = (sort or 'manual').lower()
+        if s == 'name-asc':
+            items = sorted(items, key=lambda it: (it.title or '').lower())
+        elif s == 'name-desc':
+            items = sorted(items, key=lambda it: (it.title or '').lower(), reverse=True)
+        elif s == 'date-desc':
+            from datetime import datetime
+            items = sorted(items,
+                           key=lambda it: it.created_at or datetime.min,
+                           reverse=True)
+        elif s == 'date-asc':
+            from datetime import datetime
+            items = sorted(items,
+                           key=lambda it: it.created_at or datetime.min)
+        return (lib, items)
+    def _all_libraries():
+        from .models import Library
+        return Library.query.order_by(Library.name).all()
+    app.jinja_env.globals["library_block_data"] = _library_block_data
+    app.jinja_env.globals["all_libraries"] = _all_libraries
+
+    # `css_color` Jinja filter — translate stored color values into
+    # CSS-emitable strings. Accepts:
+    #   • blank / None       → ''        (caller usually skips emission)
+    #   • '#rgb' / '#rrggbb' → returned verbatim
+    #   • 'token:<key>'      → 'var(--fe-color-<key-with-dashes>)'
+    # Used everywhere a color stored in block data lands in inline
+    # styles, so the `token:` storage form (writable via the editor's
+    # token picker) round-trips into a live `var(...)` reference. The
+    # CSS variable comes from `design_css_vars()` on <body>, so a
+    # token edit under Settings → Design retints every consumer
+    # automatically — no re-save required.
+    def _css_color(value):
+        if not value:
+            return ""
+        v = str(value).strip()
+        if not v:
+            return ""
+        if v.startswith("token:"):
+            key = v[6:]
+            if not key:
+                return ""
+            return "var(--fe-" + key.replace("_", "-") + ")"
+        return v
+    app.jinja_env.filters["css_color"] = _css_color
 
     # Site-wide design tokens. Same layered model as fonts: theme
     # defaults + per-site overrides → flat dict + a CSS-vars string the
@@ -836,6 +1026,15 @@ def _migrate_sqlite(app):
                          ("frontend_announcements_list_padding_pct", "INTEGER NOT NULL DEFAULT 5"),
                          ("frontend_announcements_list_heading", "VARCHAR(200)"),
                          ("frontend_announcements_list_subheading", "VARCHAR(500)"),
+                         ("stories_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("stories_required_role", "VARCHAR(32) NOT NULL DEFAULT 'admin'"),
+                         ("frontend_stories_list_template", "VARCHAR(64) NOT NULL DEFAULT 'paper-stack'"),
+                         ("frontend_stories_list_width_mode", "VARCHAR(16) NOT NULL DEFAULT 'boxed'"),
+                         ("frontend_stories_list_max_width", "INTEGER NOT NULL DEFAULT 1160"),
+                         ("frontend_stories_list_padding_pct", "INTEGER NOT NULL DEFAULT 5"),
+                         ("frontend_stories_list_heading", "VARCHAR(200)"),
+                         ("frontend_stories_list_subheading", "VARCHAR(500)"),
+                         ("frontend_story_template", "VARCHAR(64) NOT NULL DEFAULT 'paper'"),
                          ("frontend_printlist_subheading", "VARCHAR(500)"),
                          ("frontend_printlist_website", "VARCHAR(200)"),
                          ("frontend_printlist_page_size", "VARCHAR(16) NOT NULL DEFAULT 'letter'"),
@@ -883,6 +1082,7 @@ def _migrate_sqlite(app):
                          ("frontend_hero_bg_video_filename", "VARCHAR(500)"),
                          ("frontend_hero_bg_video_mode", "VARCHAR(16) NOT NULL DEFAULT 'loop'"),
                          ("frontend_hero_bg_video_speed", "INTEGER NOT NULL DEFAULT 100"),
+                         ("frontend_hero_bg_dynamic_key", "VARCHAR(64)"),
                          ("frontend_hero_sinewave_colors", "TEXT"),
                          ("frontend_hero_particle_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
                          ("frontend_hero_particle_effect", "VARCHAR(32) NOT NULL DEFAULT 'stars'"),
@@ -928,6 +1128,7 @@ def _migrate_sqlite(app):
                          ("dash_show_server_metrics", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_online_users", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_access_requests", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("dash_show_contact_form", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_deletions", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_currently_online", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_order_json", "TEXT"),
@@ -955,6 +1156,47 @@ def _migrate_sqlite(app):
         for col, ddl in (("is_archived", "BOOLEAN NOT NULL DEFAULT 0"),
                          ("archived_at", "DATETIME")):
             add("access_request", col, ddl)
+        for col, ddl in (("contact_form_enabled",       "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("contact_form_to",            "VARCHAR(500)"),
+                         ("contact_form_heading",       "VARCHAR(200)"),
+                         ("contact_form_subheading",    "VARCHAR(500)"),
+                         ("contact_form_intro",         "TEXT"),
+                         ("contact_form_success_message", "VARCHAR(500)"),
+                         ("contact_form_submit_label",  "VARCHAR(100)"),
+                         ("contact_form_subject_required", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("contact_form_show_phone",    "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("contact_form_show_pic_name", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("contact_form_show_pic_email","BOOLEAN NOT NULL DEFAULT 1"),
+                         ("contact_form_show_pic_phone","BOOLEAN NOT NULL DEFAULT 1"),
+                         ("frontend_meetings_list_bg_dynamic_key", "VARCHAR(64)"),
+                         ("frontend_events_list_bg_dynamic_key", "VARCHAR(64)"),
+                         ("frontend_announcements_list_bg_dynamic_key", "VARCHAR(64)"),
+                         ("frontend_stories_list_bg_dynamic_key", "VARCHAR(64)"),
+                         ("frontend_story_bg_dynamic_key", "VARCHAR(64)"),
+                         ("frontend_literature_library_bg_dynamic_key", "VARCHAR(64)"),
+                         ("frontend_printlist_bg_dynamic_key", "VARCHAR(64)"),
+                         ("frontend_meetings_list_bg_dynbg_config_json", "TEXT"),
+                         ("frontend_events_list_bg_dynbg_config_json", "TEXT"),
+                         ("frontend_announcements_list_bg_dynbg_config_json", "TEXT"),
+                         ("frontend_stories_list_bg_dynbg_config_json", "TEXT"),
+                         ("frontend_story_bg_dynbg_config_json", "TEXT"),
+                         ("frontend_literature_library_bg_dynbg_config_json", "TEXT"),
+                         ("frontend_printlist_bg_dynbg_config_json", "TEXT"),
+                         ("frontend_hero_bg_dynbg_config_json", "TEXT"),
+                         ("frontend_site_index_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("frontend_site_index_template", "VARCHAR(64) NOT NULL DEFAULT 'grouped'"),
+                         ("frontend_site_index_heading", "VARCHAR(200)"),
+                         ("frontend_site_index_subheading", "VARCHAR(500)"),
+                         ("frontend_site_index_sort_mode", "VARCHAR(32) NOT NULL DEFAULT 'grouped'"),
+                         ("frontend_site_index_show_pages", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("frontend_site_index_show_meetings", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("frontend_site_index_show_events", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("frontend_site_index_show_announcements", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("frontend_site_index_show_stories", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("frontend_site_index_show_library", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("frontend_site_index_bg_dynamic_key", "VARCHAR(64)"),
+                         ("frontend_site_index_bg_dynbg_config_json", "TEXT")):
+            add("site_setting", col, ddl)
         for col, ddl in (("kind", "VARCHAR(16) NOT NULL DEFAULT 'link'"),
                          ("button_style", "VARCHAR(16) NOT NULL DEFAULT 'pill'"),
                          ("open_in_new_tab", "BOOLEAN NOT NULL DEFAULT 0"),
@@ -968,6 +1210,25 @@ def _migrate_sqlite(app):
                          ("custom_color", "VARCHAR(16)"),
                          ("form_trigger", "VARCHAR(64)")):
             add("frontend_nav_link", col, ddl)
+        for col, ddl in (("bg_image_filename", "VARCHAR(500)"),
+                         ("bg_mode", "VARCHAR(16) NOT NULL DEFAULT 'cover'"),
+                         ("bg_tile_scale", "INTEGER NOT NULL DEFAULT 100"),
+                         ("heading_color", "VARCHAR(16)"),
+                         ("heading_align", "VARCHAR(16) NOT NULL DEFAULT 'auto'"),
+                         ("heading_font", "VARCHAR(64)"),
+                         ("subheading_color", "VARCHAR(16)"),
+                         ("subheading_font", "VARCHAR(64)"),
+                         ("layout_key", "VARCHAR(64) NOT NULL DEFAULT 'custom'"),
+                         ("width_mode", "VARCHAR(16) NOT NULL DEFAULT 'boxed'"),
+                         ("max_width", "INTEGER NOT NULL DEFAULT 1160"),
+                         ("full_padding_pct", "INTEGER NOT NULL DEFAULT 4"),
+                         ("bg_dynamic_key", "VARCHAR(64)"),
+                         ("bg_dynbg_config_json", "TEXT"),
+                         ("bg_color", "VARCHAR(16)"),
+                         ("bg_color_dark", "VARCHAR(16)"),
+                         ("bg_color_dark_mode", "VARCHAR(16) NOT NULL DEFAULT 'same'"),
+                         ("is_private", "BOOLEAN NOT NULL DEFAULT 0")):
+            add("page", col, ddl)
 
         # One-shot data migration: when the new frontend_og_* columns are
         # added on an existing deployment, seed them from the legacy og_*
@@ -1153,3 +1414,119 @@ def _seed_footer_layouts(app):
     ))
     db.session.commit()
     app.logger.info("Seeded Recovery Blue footer CustomLayout")
+
+
+def _seed_page_layouts(app):
+    """Seed the prebuilt Page layout presets. Mirrors the homepage's
+    pattern (kind='homepage', is_prebuilt=True, locked from edits) but
+    targets content-page block types — paragraphs, headings, images,
+    buttons, lists, and containers — instead of homepage-specific
+    blocks. Each preset's blocks_json is a sequence of `{type: <key>}`
+    dicts; selecting one in the page editor copies fresh blank blocks
+    of those types into page.blocks_json so the admin can fill in the
+    actual content.
+
+    Keys are prefixed `page-` to avoid colliding with the homepage
+    presets in the shared CustomLayout.key namespace."""
+    import json
+    from .models import CustomLayout
+    PRESETS = [
+        {
+            "key": "page-blank",
+            "name": "Blank",
+            "description": "An empty page with one section. Add any content blocks you like.",
+            "blocks": [],
+        },
+        {
+            "key": "page-article",
+            "name": "Article",
+            "description": "Heading, paragraph, hero image, then more paragraphs. Best for long-form text content.",
+            "blocks": ["heading", "paragraph", "image", "paragraph"],
+        },
+        {
+            "key": "page-marketing",
+            "name": "Marketing landing",
+            "description": "Hero container with a heading + lead paragraph + CTA button, followed by a three-column feature container and a closing CTA.",
+            "blocks": ["container", "container", "button"],
+        },
+        {
+            "key": "page-faq",
+            "name": "FAQ",
+            "description": "Heading, intro paragraph, and a numbered list. Drop in additional sections to expand.",
+            "blocks": ["heading", "paragraph", "list"],
+        },
+        {
+            "key": "page-showcase",
+            "name": "Two-column showcase",
+            "description": "Two-column hero (image left, heading + paragraph + CTA right) plus a single-column content area underneath — heading + paragraph + bulleted list ready for a guidelines / cards / policy block.",
+            # Each entry's `data` field carries the stamped block's
+            # initial styling. The user inherits these on layout
+            # apply and can edit any of them via the block's
+            # settings — they're a starting point, not a constant.
+            "blocks": [
+                {
+                    "type": "split",
+                    "data": {"gap": "3rem", "padding": "0", "align": "center"},
+                    "left":  [{"type": "image"}],
+                    "right": [
+                        {"type": "heading", "data": {"level": 2}},
+                        {"type": "paragraph"},
+                        {"type": "button"},
+                    ],
+                },
+                # Single-column section underneath the hero. Stays
+                # unstyled by default (transparent, no border / shadow
+                # / radius); the admin opts into card chrome via the
+                # container settings if they want it. Carries a small
+                # gap so the heading + paragraph + list have breathing
+                # room without imposing visual chrome.
+                {
+                    "type": "container",
+                    "data": {"gap": "1rem"},
+                    "blocks": [
+                        {"type": "heading", "data": {"level": 2}},
+                        {"type": "paragraph"},
+                        {"type": "list"},
+                    ],
+                },
+            ],
+        },
+        {
+            "key": "page-wiki",
+            "name": "Wiki",
+            "description": "Long-form article on the left with a sticky 'On this page' TOC sidebar on the right. The sidebar auto-populates from heading blocks anywhere on the page.",
+            "blocks": [
+                {
+                    "type": "split",
+                    "data": {"gap": "3rem", "padding": "0",
+                              "grid_columns": "minmax(0, 1fr) 260px"},
+                    "left":  [
+                        {"type": "heading", "data": {"level": 2}},
+                        {"type": "paragraph"},
+                        {"type": "heading", "data": {"level": 2}},
+                        {"type": "paragraph"},
+                    ],
+                    "right": [{"type": "toc_sidebar"}],
+                },
+            ],
+        },
+    ]
+    for p in PRESETS:
+        row = CustomLayout.query.filter_by(key=p["key"]).first()
+        # Preset entries can either be shorthand strings ("image") or
+        # full dicts ({"type":"split","left":[…],"right":[…]}). Strings
+        # get wrapped into {type: ...}; dicts pass through verbatim.
+        blocks_json = json.dumps([
+            (b if isinstance(b, dict) else {"type": b}) for b in p["blocks"]
+        ])
+        if row is None:
+            db.session.add(CustomLayout(
+                key=p["key"], name=p["name"], description=p["description"],
+                blocks_json=blocks_json, kind="page", is_prebuilt=True,
+            ))
+        elif row.is_prebuilt:
+            row.name = p["name"]
+            row.description = p["description"]
+            row.blocks_json = blocks_json
+            row.kind = "page"
+    db.session.commit()

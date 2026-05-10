@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block heading %}Stories{% endblock %}
+{% block heading_help %}Recovery stories — long-form first-person posts. Each story has an author, a featured image, optional sobriety / story dates, and a body.{% endblock %}
+{% block top_actions %}
+  <div class="view-controls">
+    <div class="view-toggle">
+      <a class="btn btn-sm {% if show == 'active' or show not in ('archived', 'drafts') %}active{% endif %}"
+         href="{{ url_for('main.stories', show='active') }}">Published</a>
+      <a class="btn btn-sm {% if show == 'drafts' %}active{% endif %}"
+         href="{{ url_for('main.stories', show='drafts') }}">Drafts</a>
+      <a class="btn btn-sm {% if show == 'archived' %}active{% endif %}"
+         href="{{ url_for('main.stories', show='archived') }}">Archived</a>
+    </div>
+  </div>
+  <button type="button" class="btn btn-primary"
+          data-open-modal="story-edit-modal"
+          data-modal-src="{{ url_for('main.story_new', embed=1) }}"
+          data-modal-title="New story">+ New story</button>
+{% endblock %}
+{% block content %}
+{% if stories %}
+<section class="card posts-card">
+  <table class="tbl posts-tbl">
+    <thead>
+      <tr>
+        <th class="posts-th-thumb"></th>
+        <th>Title</th>
+        <th class="hide-sm">Author</th>
+        <th class="hide-sm">Date</th>
+        <th class="hide-sm">Status</th>
+        <th class="posts-th-actions"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for s in stories %}
+      <tr>
+        <td class="posts-td-thumb">
+          {% if s.featured_image_filename %}
+          <img class="posts-thumb"
+               src="{{ url_for('public.story_featured_image', sid=s.id, thumb=120) }}"
+               alt="" loading="lazy">
+          {% else %}
+          <div class="posts-thumb posts-thumb-empty">{{ icon('book-open') }}</div>
+          {% endif %}
+        </td>
+        <td>
+          <button type="button" class="posts-title posts-title-btn"
+                  data-open-modal="story-edit-modal"
+                  data-modal-src="{{ url_for('main.story_edit', sid=s.id, embed=1) }}"
+                  data-modal-title="Edit story">{{ s.title }}</button>
+          {% if s.summary %}<div class="muted small posts-summary">{{ s.summary[:140] }}{% if s.summary|length > 140 %}…{% endif %}</div>{% endif %}
+        </td>
+        <td class="hide-sm">
+          {% if s.author_name %}<span class="muted small">{{ s.author_name }}</span>{% else %}<span class="muted smaller">—</span>{% endif %}
+        </td>
+        <td class="hide-sm">
+          {% if s.display_date %}
+            <div class="muted small">{{ s.display_date.strftime('%b %d, %Y') }}</div>
+          {% else %}
+            <span class="muted smaller">—</span>
+          {% endif %}
+        </td>
+        <td class="hide-sm">
+          {% if s.is_draft %}<span class="post-chip post-chip-draft">Draft</span>{% endif %}
+          {% if s.is_archived %}<span class="post-chip">Archived</span>{% endif %}
+          {% if s.is_featured and not s.is_draft and not s.is_archived %}<span class="post-chip post-chip-announcement">Featured</span>{% endif %}
+        </td>
+        <td class="posts-td-actions">
+          <div class="row-actions">
+            <button type="button" class="btn btn-sm"
+                    data-open-modal="story-edit-modal"
+                    data-modal-src="{{ url_for('main.story_edit', sid=s.id, embed=1) }}"
+                    data-modal-title="Edit story">Edit</button>
+            {% if s.is_draft %}
+            <form method="post" action="{{ url_for('main.story_publish', sid=s.id) }}" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-primary" title="Publish this draft">Publish</button>
+            </form>
+            {% elif not s.is_archived %}
+            <form method="post" action="{{ url_for('main.story_unpublish', sid=s.id) }}" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm" title="Move to Drafts">Move to Drafts</button>
+            </form>
+            {% endif %}
+            {% if s.is_archived %}
+              <form method="post" action="{{ url_for('main.story_unarchive', sid=s.id) }}" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm" title="Restore">Restore</button>
+              </form>
+            {% else %}
+              <form method="post" action="{{ url_for('main.story_archive', sid=s.id) }}" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm" title="Archive">Archive</button>
+              </form>
+            {% endif %}
+            <form method="post" action="{{ url_for('main.story_delete', sid=s.id) }}" style="display:inline"
+                  onsubmit="return confirm('Delete this story permanently? Featured image will be cleaned up.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% else %}
+<section class="card">
+  <p class="muted">
+    {% if show == 'archived' %}Nothing archived.
+    {% elif show == 'drafts' %}No drafts yet.
+    {% else %}Nothing here yet — click <b>+ New story</b> above to start one.{% endif %}
+  </p>
+</section>
+{% endif %}
+
+{# Story edit modal — used for both creating new stories and editing
+   existing ones. The iframe `src` is set on first open from the
+   trigger's `data-modal-src` (per-row Edit buttons point at the
+   matching /tspro/stories/<id>?embed=1; the "+ New story" button
+   points at /tspro/stories/new?embed=1). On close the iframe is
+   reset to about:blank so the next open lands on a clean state. #}
+<div class="modal modal-lg" id="story-edit-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2>Story</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+    </div>
+    <iframe class="settings-frame" id="story-edit-frame"
+            src="about:blank"></iframe>
+  </div>
+</div>
+
+<style>
+  /* Mirror the WP-import modal's full-height treatment so the form has
+     room to render without the wrapper collapsing. */
+  #story-edit-modal .modal-panel { height: calc(100vh - 10vh); max-width: 1080px; }
+  #story-edit-frame { flex: 1 1 auto; width: 100%; height: 100%; min-height: 0; border: 0; background: var(--panel); }
+  /* The clickable title in the table is a button (so it can open a
+     modal) — strip the default browser button chrome so it still
+     reads as a hyperlink. */
+  .posts-title-btn {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+    text-decoration: none;
+  }
+  .posts-title-btn:hover { text-decoration: underline; }
+</style>
+{% endblock %}

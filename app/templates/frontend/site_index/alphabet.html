@@ -1,0 +1,48 @@
+{# Site Index — Alphabet layout. Single A-Z list across every kind,
+   each row tagged with a small kind chip so admins can still
+   identify what they're looking at. Best for sites that want a
+   clean, table-of-contents feel without grouping headings.
+
+   Items are merged + sorted in this template (vs the grouped
+   layout which uses the natural per-group ordering from the route)
+   so each item only needs (title, url, kind, subtitle). #}
+{%- set _all = [] -%}
+{%- for g in groups -%}
+  {%- for it in g['items'] -%}
+    {%- set _ = _all.append({'title': it.title, 'url': it.url,
+                              'kind': it.kind, 'kind_label': g.label,
+                              'subtitle': it.subtitle}) -%}
+  {%- endfor -%}
+{%- endfor -%}
+{%- set _sorted = _all | sort(attribute='title', case_sensitive=False) -%}
+
+<section class="fe-section fe-site-index fe-site-index-alphabet{% if tpl_dynbg_key or tpl_dynbg_overlay %} fe-dynbg-host{% endif %}"
+         id="site-index"
+         style="{{ tpl_style or '' }}{% if tpl_dynbg_config %}; {% set _resolved = dynbg_resolve_colors(tpl_dynbg_config) %}{% for _c in _resolved %}--fe-dynbg-c{{ loop.index }}: {{ _c }};{% endfor %} {{ dynbg_resolve_positions(tpl_dynbg_config, tpl_dynbg_key) }}{% endif %}">
+  {% if tpl_dynbg_key or tpl_dynbg_overlay %}{% with dynbg_key=tpl_dynbg_key, dynbg_config=tpl_dynbg_config %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}
+  <div class="fe-container fe-site-index-shell">
+    <header class="fe-site-index-head">
+      <h1 class="fe-site-index-title">{{ heading }}</h1>
+      {% if subheading %}<p class="fe-site-index-blurb">{{ subheading }}</p>{% endif %}
+    </header>
+
+    {% if not _sorted %}
+    <p class="fe-site-index-empty muted">Nothing to index yet — add some pages, meetings, or events to start populating this list.</p>
+    {% else %}
+    <ul class="fe-site-index-list fe-site-index-list-flat">
+      {% for it in _sorted %}
+      <li class="fe-site-index-row fe-site-index-row-{{ it.kind }}">
+        <a class="fe-site-index-row-link" href="{{ it.url }}">
+          <span class="fe-site-index-row-chip">{{ it.kind_label }}</span>
+          <span class="fe-site-index-row-text">
+            <span class="fe-site-index-row-title">{{ it.title }}</span>
+            {% if it.subtitle %}<span class="fe-site-index-row-sub muted smaller">{{ it.subtitle }}</span>{% endif %}
+          </span>
+          <span class="fe-site-index-row-arrow" aria-hidden="true">→</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+</section>

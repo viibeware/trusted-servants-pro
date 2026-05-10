@@ -12,9 +12,9 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 from .models import (db, User, Meeting, MeetingFile, MeetingSchedule, MeetingLibrary, CustomIcon, CustomFont, CustomLayout, FrontendHeroButton,
-                     Post, ZoomAccount, ZoomOtpEmail, Location, Library, LibraryItem,
+                     Post, Story, ZoomAccount, ZoomOtpEmail, Location, Library, LibraryItem,
                      LibraryCategory, MediaItem, NavLink, SiteSetting,
-                     IntergroupAccount, AccessRequest, PasswordResetToken,
+                     IntergroupAccount, AccessRequest, ContactSubmission, PasswordResetToken,
                      FrontendNavItem,
                      FrontendNavColumn, FrontendNavLink, FILE_CATEGORIES,
                      DAYS_OF_WEEK, INTERGROUP_LIBRARY_NAMES)
@@ -63,6 +63,46 @@ def _get_site_setting():
         db.session.add(s)
         db.session.commit()
     return s
+
+
+def _dynbg_config_from_form(form, config_field):
+    """Extract the full dynbg config (overlay + 3 colours + scope +
+    noise size/intensity + randomize) from a form submission and
+    return the JSON string to persist in the matching `<config_field>`
+    column.
+
+    The shared dynbg picker macro emits these hidden inputs alongside
+    its base-key input:
+      <config_field>__overlay
+      <config_field>__c1 / __c2 / __c3
+      <config_field>__scope
+      <config_field>__noise_size
+      <config_field>__noise_intensity
+      <config_field>__randomize_colors
+      <config_field>__randomize_positions
+    Each value flows through ``dynbg.encode_config`` (catalog +
+    regex + numeric range gates). Returns None when nothing was set
+    so the column stores NULL rather than an empty `{}` blob.
+    """
+    from . import dynbg as _dynbg
+    import json as _json
+    cfg = _dynbg.encode_config(
+        overlay_key=form.get(f"{config_field}__overlay"),
+        colors=[form.get(f"{config_field}__c{i}") for i in (1, 2, 3)],
+        scope=form.get(f"{config_field}__scope"),
+        noise_size=form.get(f"{config_field}__noise_size"),
+        noise_intensity=form.get(f"{config_field}__noise_intensity"),
+        randomize_colors=form.get(f"{config_field}__randomize_colors") == "1",
+        randomize_positions=form.get(f"{config_field}__randomize_positions") == "1",
+        # Animation is opt-out — only the explicit "1" disables motion.
+        # encode_config drops the field entirely when animate=True so
+        # the JSON stays minimal for the common case.
+        animate=False if form.get(f"{config_field}__animate_off") == "1" else True,
+        # Legacy single-flag input still accepted on the off-chance an
+        # older form posts it — encode_config maps it to both new flags.
+        randomize=form.get(f"{config_field}__randomize") == "1" or None,
+    )
+    return _json.dumps(cfg) if cfg else None
 
 
 def _get_otp_email():
@@ -178,22 +218,27 @@ def inject_globals():
     except Exception:
         nav_links = []
     pending_access_count = 0
+    unread_contact_count = 0
     try:
         if current_user.is_authenticated and current_user.is_admin():
             pending_access_count = AccessRequest.query.filter_by(
                 status="pending", is_archived=False).count()
+            unread_contact_count = ContactSubmission.query.filter_by(
+                is_read=False, is_archived=False).count()
     except Exception:
         pending_access_count = 0
+        unread_contact_count = 0
     try:
         otp = _get_otp_email()
     except Exception:
         otp = None
     return {"CATEGORY_LABELS": CATEGORY_LABELS, "FILE_CATEGORIES": FILE_CATEGORIES,
             "DAYS_OF_WEEK": DAYS_OF_WEEK, "site": site, "nav_links": nav_links,
-            "pending_access_count": pending_access_count, "otp": otp}
+            "pending_access_count": pending_access_count,
+            "unread_contact_count": unread_contact_count, "otp": otp}
 
 
-DASHBOARD_WIDGET_KEYS = ("server-metrics", "currently-online", "meetings", "libraries", "files", "access-requests", "deletions")
+DASHBOARD_WIDGET_KEYS = ("server-metrics", "currently-online", "meetings", "libraries", "files", "access-requests", "contact-form", "deletions")
 
 ONLINE_WINDOW = timedelta(minutes=5)
 LAST_SEEN_THROTTLE = timedelta(seconds=60)
@@ -343,6 +388,7 @@ def index():
     libraries = Library.query.order_by(Library.name).all()
     recent_files = MediaItem.query.order_by(MediaItem.created_at.desc()).limit(6).all()
     access_requests = []
+    unread_contacts = []
     online_count = 0
     online_users = []
     locked_accounts = []
@@ -351,6 +397,14 @@ def index():
         access_requests = (AccessRequest.query
                            .filter_by(status="pending", is_archived=False)
                            .order_by(AccessRequest.created_at.desc())
+                           .limit(6).all())
+        # Unread contact-form messages preview for the dashboard widget.
+        # Cap at 6 so the card stays compact; full list lives at
+        # /tspro/contact-form. Active-only filter mirrors the sidebar
+        # badge so the two stay in lockstep.
+        unread_contacts = (ContactSubmission.query
+                           .filter_by(is_read=False, is_archived=False)
+                           .order_by(ContactSubmission.created_at.desc())
                            .limit(6).all())
         online_count, online_users = _online_users()
         from sqlalchemy import func as _sa_func
@@ -373,6 +427,7 @@ def index():
     dashboard_order = _dashboard_order(current_user)
     return render_template("index.html", meetings=meetings, libraries=libraries,
                            recent_files=recent_files, access_requests=access_requests,
+                           unread_contacts=unread_contacts,
                            online_count=online_count, online_users=online_users,
                            locked_accounts=locked_accounts,
                            recent_deletions=recent_deletions,
@@ -389,6 +444,7 @@ def dashboard_customize():
     current_user.dash_show_server_metrics = request.form.get("dash_show_server_metrics") == "1"
     if current_user.is_admin():
         current_user.dash_show_access_requests = request.form.get("dash_show_access_requests") == "1"
+        current_user.dash_show_contact_form = request.form.get("dash_show_contact_form") == "1"
         current_user.dash_show_deletions = request.form.get("dash_show_deletions") == "1"
         current_user.dash_show_currently_online = request.form.get("dash_show_currently_online") == "1"
     db.session.commit()
@@ -450,6 +506,12 @@ _ENDPOINT_LABELS = {
     "main.posts":              "Announcements & Events",
     "main.post_new":           "Composing a post",
     "main.post_edit":          "Editing a post",
+    "main.stories":            "Stories",
+    "main.story_new":          "Composing a story",
+    "main.story_edit":         "Editing a story",
+    "main.wp_import_start":    "WordPress importer",
+    "main.wp_import_map":      "WordPress importer · Map",
+    "main.wp_import_dry_run":  "WordPress importer · Preview",
     "main.media":              "File browser",
     "main.locations":          "Meeting locations",
     "main.access_requests":    "Access Requests",
@@ -636,6 +698,16 @@ def api_search():
              .filter(_match([MediaItem.original_filename]))
              .order_by(MediaItem.created_at.desc())
              .limit(PER_SECTION).all())
+    # Mirror the media_list filter — non-admin users don't see the
+    # featured images attached to pending-review submissions in the
+    # global search either.
+    if not current_user.is_admin():
+        pending_uploads = {p.featured_image_filename for p in
+                           Post.query.filter(Post.is_pending_review.is_(True),
+                                             Post.featured_image_filename.isnot(None)).all()
+                           if p.featured_image_filename}
+        if pending_uploads:
+            media = [m for m in media if m.stored_filename not in pending_uploads]
     if media:
         sections.append({
             "type": "media",
@@ -915,6 +987,39 @@ def _unique_post_slug(base_slug, *, exclude_id=None):
     return candidate
 
 
+def _unique_story_slug(base_slug, *, exclude_id=None):
+    """Same uniqueness sweep as ``_unique_post_slug``, scoped to Story
+    so the public ``/stories/<slug>`` route can rely on each row owning
+    its URL."""
+    base = _normalize_slug(base_slug)
+    if not base:
+        return None
+    q = Story.query
+    if exclude_id is not None:
+        q = q.filter(Story.id != exclude_id)
+    used = {st.public_slug for st in q.all()}
+    candidate = base
+    n = 2
+    while candidate in used:
+        candidate = f"{base}-{n}"
+        n += 1
+    return candidate
+
+
+def _parse_date_only(value):
+    """Parse a yyyy-mm-dd from the HTML5 date input. Returns None on
+    empty / invalid input."""
+    if not value:
+        return None
+    s = (value or "").strip()
+    if not s:
+        return None
+    try:
+        return datetime.strptime(s, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
 def _apply_meeting_form(m, form, schedules, files=None):
     # Capture the previous effective slug *before* mutating name/slug so
     # the history row can record the URL the public site used to serve.
@@ -1179,8 +1284,68 @@ def locations():
     if not _can_edit_locations():
         flash("You don't have permission to manage Meeting Locations.", "danger")
         return redirect(url_for("main.index"))
+    from .models import IntergroupOfficer
     items = Location.query.order_by(Location.name).all()
-    return render_template("locations.html", locations=items)
+    officers = (IntergroupOfficer.query
+                .order_by(IntergroupOfficer.sort_order, IntergroupOfficer.id)
+                .all())
+    return render_template("locations.html", locations=items, officers=officers)
+
+
+@bp.route("/officers/save", methods=["POST"])
+@login_required
+def officers_save():
+    """Save the repeatable Intergroup officers table from Settings →
+    Global. Mirrors the form-array pattern used by /intergroupemail/edit:
+    arrays of ids / roles / names / phones / emails, one slot per row.
+    Empty rows are dropped. Existing rows whose ids aren't in the
+    submission are deleted, so unchecking-by-removal works.
+    """
+    if not _can_edit_locations():
+        flash("You don't have permission to manage Intergroup officers.", "danger")
+        return redirect(url_for("main.index"))
+    from .models import IntergroupOfficer
+    ids = request.form.getlist("officer_id")
+    roles = request.form.getlist("officer_role")
+    names = request.form.getlist("officer_name")
+    phones = request.form.getlist("officer_phone")
+    emails = request.form.getlist("officer_email")
+    existing = {o.id: o for o in IntergroupOfficer.query.all()}
+    seen = set()
+    for pos, (oid, role, name, phone, email) in enumerate(
+        zip(ids, roles, names, phones, emails)
+    ):
+        role = (role or "").strip()
+        name = (name or "").strip()
+        phone = (phone or "").strip()
+        email = (email or "").strip()
+        # Drop rows where every cell is blank — they're empty placeholder
+        # rows the admin opened with "+ Add officer" but never filled in.
+        if not role and not name and not phone and not email:
+            continue
+        if oid and oid.isdigit() and int(oid) in existing:
+            o = existing[int(oid)]
+            o.role = role
+            o.name = name or None
+            o.phone = phone or None
+            o.email = email or None
+            o.sort_order = pos
+            seen.add(o.id)
+        else:
+            db.session.add(IntergroupOfficer(
+                role=role,
+                name=name or None,
+                phone=phone or None,
+                email=email or None,
+                sort_order=pos,
+            ))
+    for oid, o in existing.items():
+        if oid not in seen:
+            db.session.delete(o)
+    db.session.commit()
+    flash("Intergroup officers updated", "success")
+    return redirect(url_for("main.locations",
+                            **({"embed": "1"} if request.values.get("embed") == "1" else {})))
 
 
 @bp.route("/locations/new", methods=["POST"])
@@ -1542,13 +1707,6 @@ def _public_url_for(endpoint, **values):
     return url_for(endpoint, _external=True, **values)
 
 
-@bp.route("/intergroup")
-def intergroup_legacy_redirect():
-    """301 the old Email Accounts URL to its new home. Bookmarks +
-    external links survive the rename."""
-    return redirect(url_for("main.intergroup"), code=301)
-
-
 @bp.route("/intergroupemail")
 @login_required
 def intergroup():
@@ -1755,6 +1913,7 @@ def module_role_save():
         "intergroup_module": "intergroup_module_required_role",
         "zoom_tech":         "zoom_tech_required_role",
         "posts":             "posts_required_role",
+        "stories":           "stories_required_role",
         "frontend_module":   "frontend_module_required_role",
     }
     col = columns.get(module)
@@ -1786,6 +1945,29 @@ def _require_posts_enabled():
     if not s.posts_enabled:
         abort(404)
     if not user_meets_role(current_user, s.posts_required_role or "admin"):
+        abort(404)
+
+
+@bp.route("/settings/stories-toggle", methods=["POST"])
+@admin_required
+def stories_toggle():
+    s = _get_site_setting()
+    s.stories_enabled = request.form.get("stories_enabled") == "1"
+    db.session.commit()
+    flash("Stories " + ("enabled" if s.stories_enabled else "disabled"), "success")
+    return redirect(request.referrer or url_for("main.index"))
+
+
+def _require_stories_enabled():
+    """Bail out early when the Stories module is off or the user's role
+    doesn't satisfy the admin's required-role dropdown. Mirrors
+    ``_require_posts_enabled`` — admin-only by default; an admin can
+    loosen it via the Modules tab."""
+    from .permissions import user_meets_role
+    s = _get_site_setting()
+    if not s.stories_enabled:
+        abort(404)
+    if not user_meets_role(current_user, s.stories_required_role or "admin"):
         abort(404)
 
 
@@ -2234,141 +2416,6 @@ def data_snapshot_download(name):
                                mimetype="application/x-sqlite3")
 
 
-@bp.route("/settings/wp-import-posts", methods=["POST"])
-@admin_required
-def data_wp_import_posts():
-    """Import a WP All Export "Posts" CSV into a Library as Readings.
-
-    The export ships one row per post; we filter by category, take the
-    title, and download the post's primary attachment (when the export
-    populated ``Attachment URL``) into uploads. The resulting Reading
-    holds the post title and links to the freshly-stored file.
-
-    Use case: pulling the legacy "Intergroup Minutes" archive from
-    DCCMA's WP into the new portal without manually re-uploading each
-    monthly minutes document."""
-    import csv as _csv
-    import io
-    import requests
-
-    f = request.files.get("csv")
-    if not f or not f.filename:
-        flash("Please choose a CSV file to import.", "danger")
-        return redirect(request.referrer or url_for("main.index"))
-
-    library_name = (request.form.get("library_name") or "").strip()[:200]
-    category_filter = (request.form.get("category_filter") or "").strip()
-    if not library_name or not category_filter:
-        flash("Library name and category filter are both required.", "danger")
-        return redirect(request.referrer or url_for("main.index"))
-
-    # Decode CSV (handle BOM)
-    try:
-        raw = f.read().decode("utf-8-sig")
-    except UnicodeDecodeError:
-        try:
-            raw = f.read().decode("latin-1")
-        except UnicodeDecodeError:
-            flash("Could not decode the CSV — expected UTF-8.", "danger")
-            return redirect(request.referrer or url_for("main.index"))
-    reader = _csv.DictReader(io.StringIO(raw))
-
-    # Find or create the destination library.
-    lib = Library.query.filter_by(name=library_name).first()
-    if not lib:
-        lib = Library(name=library_name)
-        db.session.add(lib)
-        db.session.flush()
-
-    existing_titles = {r.title.strip() for r in lib.items}
-    next_position = (db.session.query(db.func.max(LibraryItem.position))
-                     .filter_by(library_id=lib.id).scalar() or 0) + 1
-
-    imported = 0
-    skipped_no_url = 0
-    skipped_dup = 0
-    download_failed = 0
-
-    for row in reader:
-        cats = (row.get("Categories") or "").strip()
-        if category_filter.lower() not in cats.lower():
-            continue
-        title = (row.get("Title") or "").strip()
-        if not title:
-            continue
-        if title in existing_titles:
-            skipped_dup += 1
-            continue
-        url = (row.get("Attachment URL") or "").strip()
-        original_name = (row.get("Attachment Filename") or "").strip()
-        stored = None
-        original = None
-        if url:
-            try:
-                resp = requests.get(url, timeout=30, stream=True,
-                                    headers={"User-Agent": "tspro-wp-importer/1.0"})
-                resp.raise_for_status()
-                data = resp.content
-            except Exception:
-                download_failed += 1
-                continue
-            # Pick a sensible original filename. Prefer the WP-supplied
-            # one; fall back to the URL's basename.
-            if not original_name:
-                from urllib.parse import urlparse, unquote
-                original_name = unquote(os.path.basename(urlparse(url).path)) or "minutes"
-            ext = os.path.splitext(original_name)[1].lower()
-            if ext in BLOCKED_UPLOAD_EXTENSIONS:
-                download_failed += 1
-                continue
-            # Dedup by content hash via the existing MediaItem table.
-            h = hashlib.sha256(data).hexdigest()
-            media = MediaItem.query.filter_by(content_hash=h).first()
-            if media:
-                stored = media.stored_filename
-                original = media.original_filename
-            else:
-                stored = f"{uuid.uuid4().hex}{ext}"
-                with open(os.path.join(current_app.config["UPLOAD_FOLDER"], stored), "wb") as out:
-                    out.write(data)
-                m = MediaItem(stored_filename=stored,
-                              original_filename=secure_filename(original_name),
-                              content_hash=h, size_bytes=len(data),
-                              mime_type=resp.headers.get("Content-Type"),
-                              uploaded_by=getattr(current_user, "id", None))
-                db.session.add(m)
-                db.session.flush()
-                original = m.original_filename
-        else:
-            skipped_no_url += 1
-            continue
-
-        r = LibraryItem(
-            library_id=lib.id,
-            title=title,
-            stored_filename=stored,
-            original_filename=original,
-            position=next_position,
-            created_by=current_user.id,
-        )
-        db.session.add(r)
-        existing_titles.add(title)
-        next_position += 1
-        imported += 1
-
-    db.session.commit()
-
-    parts = [f"Imported {imported} reading{'s' if imported != 1 else ''} into '{lib.name}'."]
-    if skipped_dup:
-        parts.append(f"{skipped_dup} skipped (title already in library).")
-    if skipped_no_url:
-        parts.append(f"{skipped_no_url} skipped (no Attachment URL in CSV).")
-    if download_failed:
-        parts.append(f"{download_failed} skipped (download failed or unsupported file type).")
-    flash(" ".join(parts), "success" if imported else "info")
-    return redirect(request.referrer or url_for("main.library_detail", slug=lib.public_slug))
-
-
 @bp.route("/settings/db-snapshot-now", methods=["POST"])
 @admin_required
 def data_snapshot_now():
@@ -2382,6 +2429,218 @@ def data_snapshot_now():
     else:
         flash("Today's snapshot already exists — nothing to do.", "info")
     return redirect(request.referrer or url_for("main.index"))
+
+
+# ---------------------------------------------------------------------------
+# WordPress importer wizard — multi-step flow that pulls posts from a WP
+# REST endpoint or a WP All Export CSV and lets the admin map each post
+# (or every post in a category) onto Stories / Announcements / Events,
+# with a dry-run preview before committing. Mounted in two ways:
+#   /tspro/settings/wp-import          — full-page wizard
+#   /tspro/settings/wp-import?embed=1  — chromeless wizard for the modal
+# Embed mode flows through every redirect via _embed() / _embed_kwargs()
+# so refreshing or following a flash redirect doesn't drop chrome.
+# ---------------------------------------------------------------------------
+def _wp_embed():
+    """True when the wizard request came in via the modal iframe.
+    Carried through forms as a hidden input + on every redirect URL."""
+    return (request.args.get("embed") == "1"
+            or request.form.get("embed") == "1")
+
+
+def _wp_embed_kwargs():
+    """Spread into ``url_for(...)`` calls inside wizard redirects so the
+    next step keeps embed mode on."""
+    return {"embed": 1} if _wp_embed() else {}
+
+
+@bp.route("/settings/wp-import")
+@admin_required
+def wp_import_start():
+    """Step 1 — source picker. Also opportunistically purges stash files
+    older than 24h so an abandoned wizard doesn't leave junk in the data
+    directory."""
+    from . import wp_importer
+    wp_importer.stash_purge_old()
+    return render_template("wp_import_start.html", embed=_wp_embed())
+
+
+@bp.route("/settings/wp-import/connect", methods=["POST"])
+@admin_required
+def wp_import_connect():
+    """Step 2a — fetch from WP REST. Persists the normalized payload to
+    a stash JSON, then redirects into the mapping page."""
+    from . import wp_importer
+    site = (request.form.get("site_url") or "").strip()
+    user = (request.form.get("wp_user") or "").strip() or None
+    pw = (request.form.get("wp_password") or "").strip() or None
+    posts, cats, err = wp_importer.fetch_wp(site, user, pw)
+    if err:
+        flash(err, "danger")
+        return redirect(url_for("main.wp_import_start", **_wp_embed_kwargs()))
+    if not posts:
+        flash("No posts found at that WordPress site. The REST API returned an empty list.", "warning")
+        return redirect(url_for("main.wp_import_start", **_wp_embed_kwargs()))
+    token = wp_importer.new_token()
+    wp_importer.stash_save(token, {
+        "source": "rest",
+        "site_url": site,
+        "wp_user": user,
+        "posts": posts,
+        "categories": cats,
+        "mapping": {},
+        "category_mapping": {},
+        "created_at": datetime.utcnow().isoformat() + "Z",
+    })
+    flash(f"Connected — fetched {len(posts)} post{'s' if len(posts) != 1 else ''}.", "success")
+    return redirect(url_for("main.wp_import_map", token=token, **_wp_embed_kwargs()))
+
+
+@bp.route("/settings/wp-import/upload-csv", methods=["POST"])
+@admin_required
+def wp_import_upload_csv():
+    """Step 2b — parse a CSV. Same shape as the REST connect endpoint:
+    persists the normalized payload to a stash JSON and redirects into
+    the mapping page."""
+    from . import wp_importer
+    f = request.files.get("csv")
+    if not f or not f.filename:
+        flash("Please choose a CSV file.", "danger")
+        return redirect(url_for("main.wp_import_start", **_wp_embed_kwargs()))
+    posts, cats, err = wp_importer.parse_csv(f)
+    if err:
+        flash(err, "danger")
+        return redirect(url_for("main.wp_import_start", **_wp_embed_kwargs()))
+    token = wp_importer.new_token()
+    wp_importer.stash_save(token, {
+        "source": "csv",
+        "filename": f.filename,
+        "posts": posts,
+        "categories": cats,
+        "mapping": {},
+        "category_mapping": {},
+        "created_at": datetime.utcnow().isoformat() + "Z",
+    })
+    flash(f"Parsed {len(posts)} row{'s' if len(posts) != 1 else ''} from {f.filename}.", "success")
+    return redirect(url_for("main.wp_import_map", token=token, **_wp_embed_kwargs()))
+
+
+@bp.route("/settings/wp-import/<token>/map", methods=["GET", "POST"])
+@admin_required
+def wp_import_map(token):
+    """Step 3 — review parsed posts and assign each one (or each
+    category) to a target. POST persists the mapping back to the stash
+    and redirects into the dry-run preview."""
+    from . import wp_importer
+    stash = wp_importer.stash_load(token)
+    if not stash:
+        flash("That import wizard session has expired. Start over.", "warning")
+        return redirect(url_for("main.wp_import_start", **_wp_embed_kwargs()))
+
+    if request.method == "POST":
+        # Per-category mapping — when an admin sets a category to a
+        # target, every post tagged with that category inherits the
+        # target unless they've also been mapped individually.
+        cat_map = {}
+        for cat in stash.get("categories") or []:
+            v = (request.form.get(f"cat:{cat}") or "skip").strip()
+            if v in wp_importer.TARGETS:
+                cat_map[cat] = v
+        # Per-post mapping wins when set to anything other than the
+        # special sentinel "category" (which means "use the category
+        # default below"). Default is "category".
+        post_map = {}
+        for p in stash.get("posts") or []:
+            v = (request.form.get(f"post:{p['key']}") or "category").strip()
+            if v in wp_importer.TARGETS:
+                post_map[p["key"]] = v
+            # else "category" — leave the resolved value to be derived
+            # from the post's first matching category at compile time.
+        # Resolve effective per-post mapping: explicit per-post value
+        # wins; otherwise the first category whose value isn't "skip"
+        # wins; falls back to "skip".
+        effective = {}
+        for p in stash.get("posts") or []:
+            if p["key"] in post_map:
+                effective[p["key"]] = post_map[p["key"]]
+            else:
+                chosen = "skip"
+                for c in p.get("categories") or []:
+                    if cat_map.get(c) and cat_map[c] != "skip":
+                        chosen = cat_map[c]
+                        break
+                effective[p["key"]] = chosen
+        stash["mapping"] = effective
+        stash["category_mapping"] = cat_map
+        stash["post_mapping"] = post_map
+        wp_importer.stash_save(token, stash)
+        return redirect(url_for("main.wp_import_dry_run", token=token, **_wp_embed_kwargs()))
+
+    # GET — render the mapping table. Precompute per-category post
+    # counts here (Jinja doesn't have list comprehensions, so doing
+    # this in the template requires a namespace dance).
+    cat_counts = {}
+    for cat in stash.get("categories") or []:
+        cat_counts[cat] = sum(1 for p in (stash.get("posts") or [])
+                              if cat in (p.get("categories") or []))
+    return render_template("wp_import_map.html", token=token, stash=stash,
+                           targets=wp_importer.TARGETS,
+                           target_labels=wp_importer.TARGET_LABELS,
+                           cat_counts=cat_counts,
+                           embed=_wp_embed())
+
+
+@bp.route("/settings/wp-import/<token>/dry-run", methods=["GET", "POST"])
+@admin_required
+def wp_import_dry_run(token):
+    """Step 4 — preview the plan. POST commits it; GET renders the
+    preview table."""
+    from . import wp_importer
+    stash = wp_importer.stash_load(token)
+    if not stash:
+        flash("That import wizard session has expired. Start over.", "warning")
+        return redirect(url_for("main.wp_import_start", **_wp_embed_kwargs()))
+
+    actions = wp_importer.compile_plan(stash.get("posts") or [],
+                                       stash.get("mapping") or {})
+
+    if request.method == "POST":
+        if request.form.get("confirm") != "IMPORT":
+            flash("Type IMPORT in the confirmation field to proceed.", "warning")
+            return redirect(url_for("main.wp_import_dry_run", token=token, **_wp_embed_kwargs()))
+
+        def _img_cb(url):
+            return wp_importer.download_image_to_uploads(
+                url, uploaded_by=getattr(current_user, "id", None))
+
+        result = wp_importer.apply_plan(actions, dry_run=False, image_cb=_img_cb,
+                                        created_by=getattr(current_user, "id", None))
+        from . import activity
+        activity.log("wp_import.commit", entity_type="wp_import",
+                     summary=(f"Imported {result['counts']['stories']} stor{'y' if result['counts']['stories']==1 else 'ies'}, "
+                              f"{result['counts']['announcements']} announcement(s), "
+                              f"{result['counts']['events']} event(s) from "
+                              f"{stash.get('source','?')}"))
+        wp_importer.stash_delete(token)
+        return render_template("wp_import_done.html", result=result,
+                               source=stash.get("source"),
+                               embed=_wp_embed())
+
+    preview = wp_importer.apply_plan(actions, dry_run=True)
+    return render_template("wp_import_dry_run.html",
+                           token=token, stash=stash,
+                           actions=actions, preview=preview,
+                           target_labels=wp_importer.TARGET_LABELS,
+                           embed=_wp_embed())
+
+
+@bp.route("/settings/wp-import/<token>/cancel", methods=["POST"])
+@admin_required
+def wp_import_cancel(token):
+    from . import wp_importer
+    wp_importer.stash_delete(token)
+    flash("Import cancelled — nothing was changed.", "info")
+    return redirect(url_for("main.wp_import_start", **_wp_embed_kwargs()))
 
 
 @bp.route("/settings/frontend-export")
@@ -2711,6 +2970,20 @@ def upload_raw_root(stored):
     return send_from_directory(current_app.config["UPLOAD_FOLDER"], stored)
 
 
+@public_bp.route("/pub/page-bg/<int:page_id>")
+def public_page_bg(page_id):
+    """Serve the configured background image for a Page. The bg is
+    stored as a UUID-prefixed filename in UPLOAD_FOLDER; this route
+    fronts it on a public path so the rendered <style> rule on /<slug>
+    can reference it."""
+    from .models import Page
+    page = Page.query.get(page_id)
+    if not page or not page.bg_image_filename or not page.is_published:
+        abort(404)
+    return send_from_directory(current_app.config["UPLOAD_FOLDER"],
+                               page.bg_image_filename)
+
+
 @public_bp.route("/pub/<path:filename>")
 def public_file(filename):
     if ".." in filename or filename.startswith("/"):
@@ -2788,7 +3061,7 @@ def site_footer_logo():
     return send_from_directory(current_app.config["UPLOAD_FOLDER"], s.footer_logo_filename)
 
 
-_HERO_BG_STYLES = {"frosty", "solid", "gradient", "image", "sinewave", "video"}
+_HERO_BG_STYLES = {"frosty", "solid", "gradient", "image", "sinewave", "video", "dynamic"}
 _HERO_VIDEO_SPEEDS = {50, 100, 150, 200, 300}
 _HERO_HEADING_FONTS = {"fraunces", "inter"}
 _HERO_IMAGE_MODES = {"cover", "tile"}
@@ -2984,6 +3257,15 @@ def frontend_hero_save():
     s.frontend_hero_bg_blur = _clamp_int(request.form.get("frontend_hero_bg_blur"), 0, 200, 80)
     s.frontend_hero_bg_opacity = _clamp_int(request.form.get("frontend_hero_bg_opacity"), 0, 100, 45)
     s.frontend_hero_bg_randomize = request.form.get("frontend_hero_bg_randomize") == "1"
+    # Dynamic-background catalog key (None when not on the dynamic
+    # style or when the admin cleared it). Coerced through the
+    # catalog so a tampered POST can only land on a known key.
+    if "frontend_hero_bg_dynamic_key" in request.form:
+        from . import dynbg as _dynbg
+        s.frontend_hero_bg_dynamic_key = _dynbg.normalize(
+            request.form.get("frontend_hero_bg_dynamic_key"))
+        s.frontend_hero_bg_dynbg_config_json = _dynbg_config_from_form(
+            request.form, "frontend_hero_bg_dynbg_config_json")
 
     # Hero background image
     mode = (request.form.get("frontend_hero_bg_image_mode") or "cover").strip().lower()
@@ -4122,6 +4404,50 @@ def frontend_form_submission():
     return render_template("frontend_form_submission.html", site=s)
 
 
+@bp.route("/frontend/forms/contact", methods=["GET", "POST"])
+@admin_required
+def frontend_form_contact():
+    """Settings page for the public Contact Form. GET renders the
+    settings form; POST persists every column on SiteSetting that
+    drives the page (toggle, recipient, copy, success message, field
+    behaviour, submit-button label). Submissions themselves live on
+    the dedicated Contact Form admin section so this page stays
+    purely about configuration."""
+    s = _get_site_setting()
+    if request.method == "POST":
+        s.contact_form_enabled = request.form.get("contact_form_enabled") == "1"
+        s.contact_form_to = (request.form.get("contact_form_to") or "").strip()[:500] or None
+        s.contact_form_success_message = (request.form.get("contact_form_success_message") or "").strip()[:500] or None
+        s.contact_form_submit_label = (request.form.get("contact_form_submit_label") or "").strip()[:100] or None
+        s.contact_form_subject_required = request.form.get("contact_form_subject_required") == "1"
+        s.contact_form_show_phone = request.form.get("contact_form_show_phone") == "1"
+        db.session.commit()
+        flash("Contact form settings saved", "success")
+        return redirect(url_for("main.frontend_form_contact"))
+    return render_template("frontend_form_contact.html", site=s)
+
+
+@bp.route("/frontend/contact-template/save", methods=["POST"])
+@admin_required
+def frontend_contact_template_save():
+    """Persist the page-level configuration for the public /contact
+    page: heading / subheading / Markdown intro plus the per-channel
+    PIC visibility toggles. The Forms admin handles form-mechanic
+    settings (recipient, fields, success message, bot protection);
+    this surface is purely about how the page looks and which PIC
+    channels appear in the side panel."""
+    s = _get_site_setting()
+    s.contact_form_heading = (request.form.get("contact_form_heading") or "").strip()[:200] or None
+    s.contact_form_subheading = (request.form.get("contact_form_subheading") or "").strip()[:500] or None
+    s.contact_form_intro = (request.form.get("contact_form_intro") or "").strip() or None
+    s.contact_form_show_pic_name = request.form.get("contact_form_show_pic_name") == "1"
+    s.contact_form_show_pic_email = request.form.get("contact_form_show_pic_email") == "1"
+    s.contact_form_show_pic_phone = request.form.get("contact_form_show_pic_phone") == "1"
+    db.session.commit()
+    flash("Contact page saved", "success")
+    return redirect(url_for("main.frontend_templates"))
+
+
 @bp.route("/frontend/404")
 @admin_required
 def frontend_404():
@@ -4606,7 +4932,8 @@ def frontend_templates():
     from .frontend import (MEETING_TEMPLATES, EVENT_TEMPLATES,
                            MEETINGS_LIST_TEMPLATES, EVENTS_LIST_TEMPLATES,
                            ANNOUNCEMENTS_LIST_TEMPLATES,
-                           LITERATURE_LIBRARY_TEMPLATES,
+                           STORIES_LIST_TEMPLATES, STORY_TEMPLATES,
+                           LITERATURE_LIBRARY_TEMPLATES, SITE_INDEX_TEMPLATES,
                            template_settings, meetings_list_protips_resolved)
     from .fonts import all_fonts
     s = _get_site_setting()
@@ -4615,25 +4942,67 @@ def frontend_templates():
     meetings_list_key = (s.frontend_meetings_list_template if s else None) or "sidebar"
     events_list_key = (s.frontend_events_list_template if s else None) or "cards"
     announcements_list_key = (s.frontend_announcements_list_template if s else None) or "omni"
+    stories_list_key = (s.frontend_stories_list_template if s else None) or "paper-stack"
+    story_key = (s.frontend_story_template if s else None) or "paper"
     literature_library_key = (s.frontend_literature_library_template if s else None) or "classic"
+    site_index_key = (s.frontend_site_index_template if s else None) or "grouped"
+    # Render the cards alphabetised by display name so admins always
+    # see them in a stable, predictable order regardless of how each
+    # `*_TEMPLATES` catalog list happens to be declared. Sort is
+    # case-insensitive on `name`; only the picker order on this page
+    # is affected — the catalogs themselves keep their declared order
+    # (which other call sites use as a fallback for "first available
+    # template", lookups by key, etc.).
+    def _by_name(catalog):
+        return sorted(catalog, key=lambda t: (t.get("name") or "").lower())
     return render_template("frontend_templates.html", site=s,
-                           meeting_templates=MEETING_TEMPLATES,
-                           event_templates=EVENT_TEMPLATES,
-                           meetings_list_templates=MEETINGS_LIST_TEMPLATES,
+                           meeting_templates=_by_name(MEETING_TEMPLATES),
+                           event_templates=_by_name(EVENT_TEMPLATES),
+                           meetings_list_templates=_by_name(MEETINGS_LIST_TEMPLATES),
                            meetings_list_active_key=meetings_list_key,
                            meetings_list_protips=meetings_list_protips_resolved(s),
-                           events_list_templates=EVENTS_LIST_TEMPLATES,
+                           events_list_templates=_by_name(EVENTS_LIST_TEMPLATES),
                            events_list_active_key=events_list_key,
-                           announcements_list_templates=ANNOUNCEMENTS_LIST_TEMPLATES,
+                           announcements_list_templates=_by_name(ANNOUNCEMENTS_LIST_TEMPLATES),
                            announcements_list_active_key=announcements_list_key,
-                           literature_library_templates=LITERATURE_LIBRARY_TEMPLATES,
+                           stories_list_templates=_by_name(STORIES_LIST_TEMPLATES),
+                           stories_list_active_key=stories_list_key,
+                           story_templates=_by_name(STORY_TEMPLATES),
+                           story_active_key=story_key,
+                           literature_library_templates=_by_name(LITERATURE_LIBRARY_TEMPLATES),
                            literature_library_active_key=literature_library_key,
                            meeting_active_settings=template_settings(s, "meeting", meeting_key),
                            event_active_settings=template_settings(s, "event", event_key),
+                           # All seven list / detail sections also need their per-template
+                           # settings dict for the customize panel. Each kind reuses the
+                           # same `frontend_template_settings_json` JSON column keyed by
+                           # (kind, key) — no schema changes needed.
+                           meetings_list_active_settings=template_settings(s, "meetings_list", meetings_list_key),
+                           events_list_active_settings=template_settings(s, "events_list", events_list_key),
+                           announcements_list_active_settings=template_settings(s, "announcements_list", announcements_list_key),
+                           stories_list_active_settings=template_settings(s, "stories_list", stories_list_key),
+                           story_active_settings=template_settings(s, "story", story_key),
+                           literature_library_active_settings=template_settings(s, "literature_library", literature_library_key),
+                           # Printlist has no template variants (single layout); use a
+                           # synthetic 'default' key so the customize panel keeps the same
+                           # shape as everywhere else.
+                           printlist_active_settings=template_settings(s, "printlist", "default"),
+                           contact_active_settings=template_settings(s, "contact", "split"),
+                           site_index_templates=_by_name(SITE_INDEX_TEMPLATES),
+                           site_index_active_key=site_index_key,
+                           site_index_active_settings=template_settings(s, "site_index", site_index_key),
                            font_options=all_fonts())
 
 
-_TEMPLATE_KINDS = ("meeting", "event")
+# Every kind that frontend_template_settings_save accepts. Each must
+# resolve a catalog (or a one-key sentinel like printlist_default) so
+# the form's `key` URL segment can be validated. Keeping this in one
+# place means adding a future section is a single edit.
+_TEMPLATE_KINDS = ("meeting", "event", "story",
+                   "meetings_list", "events_list",
+                   "announcements_list", "stories_list",
+                   "literature_library", "printlist", "contact",
+                   "site_index")
 
 
 @bp.route("/frontend/template-settings/<kind>/<key>", methods=["POST"])
@@ -4645,13 +5014,38 @@ def frontend_template_settings_save(kind, key):
     design tokens."""
     import json as _json
     import re as _re
-    from .frontend import MEETING_TEMPLATES, EVENT_TEMPLATES
+    from .frontend import (MEETING_TEMPLATES, EVENT_TEMPLATES, STORY_TEMPLATES,
+                            MEETINGS_LIST_TEMPLATES, EVENTS_LIST_TEMPLATES,
+                            ANNOUNCEMENTS_LIST_TEMPLATES, STORIES_LIST_TEMPLATES,
+                            LITERATURE_LIBRARY_TEMPLATES, SITE_INDEX_TEMPLATES)
     from .fonts import font_by_key
     if kind not in _TEMPLATE_KINDS:
         abort(404)
-    catalog = MEETING_TEMPLATES if kind == "meeting" else EVENT_TEMPLATES
-    if key not in {t["key"] for t in catalog}:
-        abort(404)
+    # One-place dispatch: every kind resolves to either a catalog
+    # of variants OR a one-key sentinel (printlist / contact have a
+    # single rendering, but still get a customize panel for UI
+    # uniformity, so they validate against a fixed 'default' or
+    # 'split' key).
+    catalog_map = {
+        "meeting": MEETING_TEMPLATES,
+        "event": EVENT_TEMPLATES,
+        "story": STORY_TEMPLATES,
+        "meetings_list": MEETINGS_LIST_TEMPLATES,
+        "events_list": EVENTS_LIST_TEMPLATES,
+        "announcements_list": ANNOUNCEMENTS_LIST_TEMPLATES,
+        "stories_list": STORIES_LIST_TEMPLATES,
+        "literature_library": LITERATURE_LIBRARY_TEMPLATES,
+        "site_index": SITE_INDEX_TEMPLATES,
+    }
+    if kind in catalog_map:
+        if key not in {t["key"] for t in catalog_map[kind]}:
+            abort(404)
+    elif kind == "printlist":
+        if key != "default":
+            abort(404)
+    elif kind == "contact":
+        if key != "split":
+            abort(404)
     s = _get_site_setting()
     raw = (s.frontend_template_settings_json or "").strip()
     try:
@@ -4665,6 +5059,44 @@ def frontend_template_settings_save(kind, key):
     bg = (request.form.get("bg") or "").strip()
     if _re.match(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$", bg) and request.form.get("bg_enabled") == "1":
         leaf["bg"] = bg
+    # Per-template dynamic-background. Stored alongside the colour
+    # override so a template can carry its own backdrop without
+    # touching the site-wide hero / page settings. Coerced through
+    # the catalog so a tampered POST can only land on a known key.
+    from . import dynbg as _dynbg
+    dyn_key = _dynbg.normalize(request.form.get("bg_dynamic_key"))
+    if dyn_key:
+        leaf["bg_dynamic_key"] = dyn_key
+    # Overlay + custom-colour config — round-trips through the same
+    # encode_config gate the per-surface columns use, so a tampered
+    # POST can only land on known overlay keys / valid hex colours /
+    # in-range noise knobs.
+    dynbg_cfg = _dynbg.encode_config(
+        overlay_key=request.form.get("bg_dynbg_config_json__overlay"),
+        colors=[request.form.get(f"bg_dynbg_config_json__c{i}") for i in (1, 2, 3)],
+        scope=request.form.get("bg_dynbg_config_json__scope"),
+        noise_size=request.form.get("bg_dynbg_config_json__noise_size"),
+        noise_intensity=request.form.get("bg_dynbg_config_json__noise_intensity"),
+        randomize_colors=request.form.get("bg_dynbg_config_json__randomize_colors") == "1",
+        randomize_positions=request.form.get("bg_dynbg_config_json__randomize_positions") == "1",
+        animate=False if request.form.get("bg_dynbg_config_json__animate_off") == "1" else True,
+    )
+    if dynbg_cfg.get("overlay"):
+        leaf["bg_dynbg_overlay"] = dynbg_cfg["overlay"]
+    if dynbg_cfg.get("colors"):
+        leaf["bg_dynbg_colors"] = dynbg_cfg["colors"]
+    if dynbg_cfg.get("overlay_scope"):
+        leaf["bg_dynbg_overlay_scope"] = dynbg_cfg["overlay_scope"]
+    if dynbg_cfg.get("overlay_size") is not None:
+        leaf["bg_dynbg_overlay_size"] = dynbg_cfg["overlay_size"]
+    if dynbg_cfg.get("overlay_intensity") is not None:
+        leaf["bg_dynbg_overlay_intensity"] = dynbg_cfg["overlay_intensity"]
+    if dynbg_cfg.get("randomize_colors"):
+        leaf["bg_dynbg_randomize_colors"] = True
+    if dynbg_cfg.get("randomize_positions"):
+        leaf["bg_dynbg_randomize_positions"] = True
+    if dynbg_cfg.get("animate") is False:
+        leaf["bg_dynbg_animate"] = False
     for fkey in ("heading_font", "body_font"):
         v = (request.form.get(fkey) or "").strip()
         if v and font_by_key(v):
@@ -4719,20 +5151,30 @@ def frontend_events_list_template_save():
     width = (request.form.get("frontend_events_list_width_mode") or "").strip()
     if width in ("boxed", "full"):
         s.frontend_events_list_width_mode = width
-    try:
-        max_w = int(request.form.get("frontend_events_list_max_width") or 1160)
-    except ValueError:
-        max_w = 1160
-    s.frontend_events_list_max_width = max(640, min(2400, max_w))
-    try:
-        pad = int(request.form.get("frontend_events_list_padding_pct") or 5)
-    except ValueError:
-        pad = 5
-    s.frontend_events_list_padding_pct = max(0, min(20, pad))
-    heading = (request.form.get("frontend_events_list_heading") or "").strip()
-    subheading = (request.form.get("frontend_events_list_subheading") or "").strip()
-    s.frontend_events_list_heading = heading[:200] or None
-    s.frontend_events_list_subheading = subheading[:500] or None
+    if "frontend_events_list_max_width" in request.form:
+        try:
+            max_w = int(request.form.get("frontend_events_list_max_width") or 1160)
+        except ValueError:
+            max_w = 1160
+        s.frontend_events_list_max_width = max(640, min(2400, max_w))
+    if "frontend_events_list_padding_pct" in request.form:
+        try:
+            pad = int(request.form.get("frontend_events_list_padding_pct") or 5)
+        except ValueError:
+            pad = 5
+        s.frontend_events_list_padding_pct = max(0, min(20, pad))
+    if "frontend_events_list_heading" in request.form:
+        heading = (request.form.get("frontend_events_list_heading") or "").strip()
+        s.frontend_events_list_heading = heading[:200] or None
+    if "frontend_events_list_subheading" in request.form:
+        subheading = (request.form.get("frontend_events_list_subheading") or "").strip()
+        s.frontend_events_list_subheading = subheading[:500] or None
+    if "frontend_events_list_bg_dynamic_key" in request.form:
+        from . import dynbg as _dynbg
+        s.frontend_events_list_bg_dynamic_key = _dynbg.normalize(
+            request.form.get("frontend_events_list_bg_dynamic_key"))
+        s.frontend_events_list_bg_dynbg_config_json = _dynbg_config_from_form(
+            request.form, "frontend_events_list_bg_dynbg_config_json")
     db.session.commit()
     flash("Events list settings saved", "success")
     return redirect(url_for("main.frontend_templates"))
@@ -4752,22 +5194,95 @@ def frontend_announcements_list_template_save():
     width = (request.form.get("frontend_announcements_list_width_mode") or "").strip()
     if width in ("boxed", "full"):
         s.frontend_announcements_list_width_mode = width
-    try:
-        max_w = int(request.form.get("frontend_announcements_list_max_width") or 1160)
-    except ValueError:
-        max_w = 1160
-    s.frontend_announcements_list_max_width = max(640, min(2400, max_w))
-    try:
-        pad = int(request.form.get("frontend_announcements_list_padding_pct") or 5)
-    except ValueError:
-        pad = 5
-    s.frontend_announcements_list_padding_pct = max(0, min(20, pad))
-    heading = (request.form.get("frontend_announcements_list_heading") or "").strip()
-    subheading = (request.form.get("frontend_announcements_list_subheading") or "").strip()
-    s.frontend_announcements_list_heading = heading[:200] or None
-    s.frontend_announcements_list_subheading = subheading[:500] or None
+    if "frontend_announcements_list_max_width" in request.form:
+        try:
+            max_w = int(request.form.get("frontend_announcements_list_max_width") or 1160)
+        except ValueError:
+            max_w = 1160
+        s.frontend_announcements_list_max_width = max(640, min(2400, max_w))
+    if "frontend_announcements_list_padding_pct" in request.form:
+        try:
+            pad = int(request.form.get("frontend_announcements_list_padding_pct") or 5)
+        except ValueError:
+            pad = 5
+        s.frontend_announcements_list_padding_pct = max(0, min(20, pad))
+    if "frontend_announcements_list_heading" in request.form:
+        heading = (request.form.get("frontend_announcements_list_heading") or "").strip()
+        s.frontend_announcements_list_heading = heading[:200] or None
+    if "frontend_announcements_list_subheading" in request.form:
+        subheading = (request.form.get("frontend_announcements_list_subheading") or "").strip()
+        s.frontend_announcements_list_subheading = subheading[:500] or None
+    if "frontend_announcements_list_bg_dynamic_key" in request.form:
+        from . import dynbg as _dynbg
+        s.frontend_announcements_list_bg_dynamic_key = _dynbg.normalize(
+            request.form.get("frontend_announcements_list_bg_dynamic_key"))
+        s.frontend_announcements_list_bg_dynbg_config_json = _dynbg_config_from_form(
+            request.form, "frontend_announcements_list_bg_dynbg_config_json")
     db.session.commit()
     flash("Announcements list settings saved", "success")
+    return redirect(url_for("main.frontend_templates"))
+
+
+@bp.route("/frontend/stories-list-template", methods=["POST"])
+@admin_required
+def frontend_stories_list_template_save():
+    """Persist the stories-list template + container-width + page heading
+    selections from the admin Templates page in one POST. Mirrors the
+    announcements-list save endpoint."""
+    from .frontend import STORIES_LIST_TEMPLATES
+    s = _get_site_setting()
+    key = (request.form.get("frontend_stories_list_template") or "").strip()
+    if key in {t["key"] for t in STORIES_LIST_TEMPLATES}:
+        s.frontend_stories_list_template = key
+    width = (request.form.get("frontend_stories_list_width_mode") or "").strip()
+    if width in ("boxed", "full"):
+        s.frontend_stories_list_width_mode = width
+    if "frontend_stories_list_max_width" in request.form:
+        try:
+            max_w = int(request.form.get("frontend_stories_list_max_width") or 1160)
+        except ValueError:
+            max_w = 1160
+        s.frontend_stories_list_max_width = max(640, min(2400, max_w))
+    if "frontend_stories_list_padding_pct" in request.form:
+        try:
+            pad = int(request.form.get("frontend_stories_list_padding_pct") or 5)
+        except ValueError:
+            pad = 5
+        s.frontend_stories_list_padding_pct = max(0, min(20, pad))
+    if "frontend_stories_list_heading" in request.form:
+        heading = (request.form.get("frontend_stories_list_heading") or "").strip()
+        s.frontend_stories_list_heading = heading[:200] or None
+    if "frontend_stories_list_subheading" in request.form:
+        subheading = (request.form.get("frontend_stories_list_subheading") or "").strip()
+        s.frontend_stories_list_subheading = subheading[:500] or None
+    if "frontend_stories_list_bg_dynamic_key" in request.form:
+        from . import dynbg as _dynbg
+        s.frontend_stories_list_bg_dynamic_key = _dynbg.normalize(
+            request.form.get("frontend_stories_list_bg_dynamic_key"))
+        s.frontend_stories_list_bg_dynbg_config_json = _dynbg_config_from_form(
+            request.form, "frontend_stories_list_bg_dynbg_config_json")
+    db.session.commit()
+    flash("Stories list settings saved", "success")
+    return redirect(url_for("main.frontend_templates"))
+
+
+@bp.route("/frontend/story-template", methods=["POST"])
+@admin_required
+def frontend_story_template_save():
+    """Persist the per-story detail template selection."""
+    from .frontend import STORY_TEMPLATES
+    s = _get_site_setting()
+    key = (request.form.get("frontend_story_template") or "").strip()
+    if key in {t["key"] for t in STORY_TEMPLATES}:
+        s.frontend_story_template = key
+    if "frontend_story_bg_dynamic_key" in request.form:
+        from . import dynbg as _dynbg
+        s.frontend_story_bg_dynamic_key = _dynbg.normalize(
+            request.form.get("frontend_story_bg_dynamic_key"))
+        s.frontend_story_bg_dynbg_config_json = _dynbg_config_from_form(
+            request.form, "frontend_story_bg_dynbg_config_json")
+    db.session.commit()
+    flash("Story template settings saved", "success")
     return redirect(url_for("main.frontend_templates"))
 
 
@@ -4782,20 +5297,24 @@ def frontend_meetings_list_template_save():
     width = (request.form.get("frontend_meetings_list_width_mode") or "").strip()
     if width in ("boxed", "full"):
         s.frontend_meetings_list_width_mode = width
-    try:
-        max_w = int(request.form.get("frontend_meetings_list_max_width") or 1160)
-    except ValueError:
-        max_w = 1160
-    s.frontend_meetings_list_max_width = max(640, min(2400, max_w))
-    try:
-        pad = int(request.form.get("frontend_meetings_list_padding_pct") or 5)
-    except ValueError:
-        pad = 5
-    s.frontend_meetings_list_padding_pct = max(0, min(20, pad))
-    heading = (request.form.get("frontend_meetings_list_heading") or "").strip()
-    subheading = (request.form.get("frontend_meetings_list_subheading") or "").strip()
-    s.frontend_meetings_list_heading = heading[:200] or None
-    s.frontend_meetings_list_subheading = subheading[:500] or None
+    if "frontend_meetings_list_max_width" in request.form:
+        try:
+            max_w = int(request.form.get("frontend_meetings_list_max_width") or 1160)
+        except ValueError:
+            max_w = 1160
+        s.frontend_meetings_list_max_width = max(640, min(2400, max_w))
+    if "frontend_meetings_list_padding_pct" in request.form:
+        try:
+            pad = int(request.form.get("frontend_meetings_list_padding_pct") or 5)
+        except ValueError:
+            pad = 5
+        s.frontend_meetings_list_padding_pct = max(0, min(20, pad))
+    if "frontend_meetings_list_heading" in request.form:
+        heading = (request.form.get("frontend_meetings_list_heading") or "").strip()
+        s.frontend_meetings_list_heading = heading[:200] or None
+    if "frontend_meetings_list_subheading" in request.form:
+        subheading = (request.form.get("frontend_meetings_list_subheading") or "").strip()
+        s.frontend_meetings_list_subheading = subheading[:500] or None
     # Pro Tips section — collect form fields into a JSON blob layered
     # over the defaults. Items default to the baked list when the admin
     # hasn't supplied a JSON override; we accept either a structured
@@ -4849,6 +5368,12 @@ def frontend_meetings_list_template_save():
     if request.form.getlist("protip_item_present"):
         pt_cfg["items"] = pt_items
     s.frontend_meetings_list_protips_json = _json_pt.dumps(pt_cfg)
+    if "frontend_meetings_list_bg_dynamic_key" in request.form:
+        from . import dynbg as _dynbg
+        s.frontend_meetings_list_bg_dynamic_key = _dynbg.normalize(
+            request.form.get("frontend_meetings_list_bg_dynamic_key"))
+        s.frontend_meetings_list_bg_dynbg_config_json = _dynbg_config_from_form(
+            request.form, "frontend_meetings_list_bg_dynbg_config_json")
     db.session.commit()
     flash("Meetings list settings saved", "success")
     return redirect(url_for("main.frontend_templates"))
@@ -4867,8 +5392,14 @@ def frontend_literature_library_template_save():
     key = (request.form.get("frontend_literature_library_template") or "").strip()
     if key in {t["key"] for t in LITERATURE_LIBRARY_TEMPLATES}:
         s.frontend_literature_library_template = key
-        db.session.commit()
-        flash("Literature Library template saved", "success")
+    if "frontend_literature_library_bg_dynamic_key" in request.form:
+        from . import dynbg as _dynbg
+        s.frontend_literature_library_bg_dynamic_key = _dynbg.normalize(
+            request.form.get("frontend_literature_library_bg_dynamic_key"))
+        s.frontend_literature_library_bg_dynbg_config_json = _dynbg_config_from_form(
+            request.form, "frontend_literature_library_bg_dynbg_config_json")
+    db.session.commit()
+    flash("Literature Library settings saved", "success")
     return redirect(url_for("main.frontend_templates"))
 
 
@@ -4886,8 +5417,61 @@ def frontend_printlist_template_save():
     size = (request.form.get("frontend_printlist_page_size") or "").strip().lower()
     if size in ("letter", "legal"):
         s.frontend_printlist_page_size = size
+    if "frontend_printlist_bg_dynamic_key" in request.form:
+        from . import dynbg as _dynbg
+        s.frontend_printlist_bg_dynamic_key = _dynbg.normalize(
+            request.form.get("frontend_printlist_bg_dynamic_key"))
+        s.frontend_printlist_bg_dynbg_config_json = _dynbg_config_from_form(
+            request.form, "frontend_printlist_bg_dynbg_config_json")
     db.session.commit()
     flash("Printlist settings saved", "success")
+    return redirect(url_for("main.frontend_templates"))
+
+
+@bp.route("/frontend/site-index-template", methods=["POST"])
+@admin_required
+def frontend_site_index_template_save():
+    """Persist Site Index settings — layout choice, page heading copy,
+    sort mode, per-section visibility toggles, and dynbg key. Each
+    block uses field-presence checks so the cards-only layout form
+    and the broader settings form can both POST to this URL without
+    clobbering each other's fields."""
+    from .frontend import SITE_INDEX_TEMPLATES
+    s = _get_site_setting()
+    if "frontend_site_index_template" in request.form:
+        key = (request.form.get("frontend_site_index_template") or "").strip()
+        if key in {t["key"] for t in SITE_INDEX_TEMPLATES}:
+            s.frontend_site_index_template = key
+    if "frontend_site_index_enabled_present" in request.form:
+        s.frontend_site_index_enabled = request.form.get("frontend_site_index_enabled") == "1"
+    if "frontend_site_index_heading" in request.form:
+        h = (request.form.get("frontend_site_index_heading") or "").strip()
+        s.frontend_site_index_heading = h[:200] or None
+    if "frontend_site_index_subheading" in request.form:
+        sub = (request.form.get("frontend_site_index_subheading") or "").strip()
+        s.frontend_site_index_subheading = sub[:500] or None
+    if "frontend_site_index_sort_mode" in request.form:
+        sort = (request.form.get("frontend_site_index_sort_mode") or "").strip()
+        if sort in ("grouped", "alpha"):
+            s.frontend_site_index_sort_mode = sort
+    # Per-section toggles. We only update when the form carries the
+    # `<field>_present` marker so the cards-only POST doesn't blank
+    # them all back to False (an unchecked checkbox just doesn't
+    # appear in the form data).
+    for col in ("show_pages", "show_meetings", "show_events",
+                "show_announcements", "show_stories", "show_library"):
+        marker = f"frontend_site_index_{col}_present"
+        if marker in request.form:
+            on = request.form.get(f"frontend_site_index_{col}") == "1"
+            setattr(s, f"frontend_site_index_{col}", on)
+    if "frontend_site_index_bg_dynamic_key" in request.form:
+        from . import dynbg as _dynbg
+        s.frontend_site_index_bg_dynamic_key = _dynbg.normalize(
+            request.form.get("frontend_site_index_bg_dynamic_key"))
+        s.frontend_site_index_bg_dynbg_config_json = _dynbg_config_from_form(
+            request.form, "frontend_site_index_bg_dynbg_config_json")
+    db.session.commit()
+    flash("Site Index settings saved", "success")
     return redirect(url_for("main.frontend_templates"))
 
 
@@ -4907,6 +5491,16 @@ def frontend_event_template_save():
 _CUSTOM_LAYOUT_BLOCK_TYPES = {
     "hero", "quick_links", "meetings", "events", "about", "contact",
     "features", "cta", "stats", "testimonials", "faq", "inclusion", "split",
+}
+
+# Block types valid inside a Page custom layout. Mirrors the keys of
+# `_PAGE_BLOCK_CATALOG` plus `split` (which the page route expands into
+# a real two-column container at preset-apply time). Distinct from the
+# homepage set since pages compose generic content blocks (paragraphs,
+# headings, images, …) rather than the homepage's site-section blocks.
+_PAGE_LAYOUT_BLOCK_TYPES = {
+    "split", "container", "heading", "paragraph", "image", "button",
+    "list", "callout", "video", "code", "separator", "toc_sidebar", "icon",
 }
 
 # Block types valid inside a footer custom layout. The footer dispatcher
@@ -4976,7 +5570,7 @@ _SPLIT_VALID_SPACING = {"none", "tight", "default", "loose"}
 _SPLIT_HEX_RE = _re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
 
 
-def _normalize_blocks(raw_list):
+def _normalize_blocks(raw_list, allowed_types=None):
     """Recursively walk a list of {type,...} dicts from the builder.
     Drops unknown block types. For 'split' blocks, recurses into
     `left` / `right` AND round-trips the split's spacing + appearance
@@ -4984,7 +5578,12 @@ def _normalize_blocks(raw_list):
     editing the layout structure in the builder doesn't blow them away.
     The legacy `margin` field — which used to control top + bottom gap
     together — is migrated into `gap_top` + `gap_bottom` on read so old
-    layouts upgrade transparently."""
+    layouts upgrade transparently.
+
+    `allowed_types` defaults to the homepage whitelist; pass
+    `_PAGE_LAYOUT_BLOCK_TYPES` for the page admin's builder."""
+    if allowed_types is None:
+        allowed_types = _CUSTOM_LAYOUT_BLOCK_TYPES
     out = []
     for b in (raw_list or []):
         t = ""
@@ -4995,13 +5594,13 @@ def _normalize_blocks(raw_list):
             right = b.get("right")
         else:
             t = str(b).strip()
-        if t not in _CUSTOM_LAYOUT_BLOCK_TYPES:
+        if t not in allowed_types:
             continue
         if t == "split":
             norm = {
                 "type": "split",
-                "left":  _normalize_blocks(left or []),
-                "right": _normalize_blocks(right or []),
+                "left":  _normalize_blocks(left or [], allowed_types),
+                "right": _normalize_blocks(right or [], allowed_types),
             }
             if isinstance(b, dict):
                 w = (b.get("width") or "").strip().lower()
@@ -5037,6 +5636,49 @@ def _normalize_blocks(raw_list):
                 if bg_r and _SPLIT_HEX_RE.match(bg_r): norm["bg_color_right"] = bg_r
                 if b.get("bg_dark_mode"): norm["bg_dark_mode"] = True
             out.append(norm)
+        elif t == "container":
+            # Container blocks recurse into a `blocks` array — same
+            # whitelist as the parent, so nested containers are allowed
+            # but disallowed types (e.g. split inside container, which
+            # the builder UI also blocks) get dropped.
+            inner = b.get("blocks") if isinstance(b, dict) else None
+            cont = {
+                "type": "container",
+                "blocks": _normalize_blocks(inner or [], allowed_types),
+            }
+            # Preserve container-level dynbg state on layout-template
+            # saves so a layout that ships a textured container makes
+            # it through the normalizer with its picks intact. Each
+            # value gates through the dynbg helpers so the layout
+            # JSON can never carry an unknown overlay key or invalid
+            # hex colour.
+            from . import dynbg as _dynbg
+            if isinstance(b, dict):
+                _bk = _dynbg.normalize(b.get("bg_dynamic_key"))
+                if _bk:
+                    cont["bg_dynamic_key"] = _bk
+                _bo = _dynbg.normalize_overlay(b.get("bg_dynbg_overlay"))
+                if _bo:
+                    cont["bg_dynbg_overlay"] = _bo
+                _bcols = [c for c in _dynbg.normalize_colors(b.get("bg_dynbg_colors") or []) if c]
+                if _bcols:
+                    cont["bg_dynbg_colors"] = _bcols
+                _bsc = _dynbg.normalize_scope(b.get("bg_dynbg_overlay_scope"))
+                if _bsc and _bsc != "all":
+                    cont["bg_dynbg_overlay_scope"] = _bsc
+                _bsz = _dynbg.normalize_float(b.get("bg_dynbg_overlay_size"),
+                                                _dynbg.NOISE_SIZE_MIN,
+                                                _dynbg.NOISE_SIZE_MAX, None)
+                if _bsz is not None and abs(_bsz - _dynbg.NOISE_SIZE_DEFAULT) > 1e-6:
+                    cont["bg_dynbg_overlay_size"] = round(_bsz, 3)
+                _bin = _dynbg.normalize_float(b.get("bg_dynbg_overlay_intensity"),
+                                                _dynbg.NOISE_INTENSITY_MIN,
+                                                _dynbg.NOISE_INTENSITY_MAX, None)
+                if _bin is not None and abs(_bin - _dynbg.NOISE_INTENSITY_DEFAULT) > 1e-6:
+                    cont["bg_dynbg_overlay_intensity"] = round(_bin, 4)
+                if b.get("bg_dynbg_randomize"):
+                    cont["bg_dynbg_randomize"] = True
+            out.append(cont)
         else:
             out.append({"type": t})
     return out
@@ -5058,6 +5700,9 @@ def frontend_custom_layout_save():
         blocks = _normalize_footer_blocks(payload.get("blocks") or [])
     elif kind == "homepage":
         blocks = _normalize_blocks(payload.get("blocks") or [])
+    elif kind == "page":
+        blocks = _normalize_blocks(payload.get("blocks") or [],
+                                    allowed_types=_PAGE_LAYOUT_BLOCK_TYPES)
     else:
         return jsonify(ok=False, error=f"Unknown layout kind: {kind}"), 400
     if not blocks:
@@ -5095,6 +5740,9 @@ def frontend_custom_layout_update(key):
     payload = request.get_json(silent=True) or {}
     if row.kind == "footer":
         blocks = _normalize_footer_blocks(payload.get("blocks") or [])
+    elif row.kind == "page":
+        blocks = _normalize_blocks(payload.get("blocks") or [],
+                                    allowed_types=_PAGE_LAYOUT_BLOCK_TYPES)
     else:
         blocks = _normalize_blocks(payload.get("blocks") or [])
     if not blocks:
@@ -5149,8 +5797,1278 @@ def frontend_theme_save():
 @bp.route("/frontend/pages")
 @admin_required
 def frontend_pages():
+    from .models import Page
     s = _get_site_setting()
-    return render_template("frontend_pages.html", site=s)
+    pages = Page.query.order_by(Page.title.asc()).all()
+    page_layouts = _page_layouts_for_picker()
+    return render_template("frontend_pages.html", site=s, pages=pages,
+                           page_layouts=page_layouts)
+
+
+# Block catalog for the page-layout drag-and-drop builder. Lists every
+# content block type the admin can drop into a custom page layout. Maps
+# 1:1 to the JS BlockEditor's BLOCK_TYPES, plus icon strings drawn from
+# the same Lucide set the rest of the admin uses.
+_PAGE_BLOCK_CATALOG = [
+    {"key": "split",     "name": "Two-panel row",
+     "icon": "columns",
+     "desc": "Side-by-side layout with two drop zones — the page applies it as a real two-column container."},
+    {"key": "split3",    "name": "Three-panel row",
+     "icon": "layout-grid",
+     "desc": "Three-column layout with three drop zones — equal-width grid container with three inner containers ready for content."},
+    {"key": "container", "name": "Container",
+     "icon": "layout-grid",
+     "desc": "Nested layout primitive — flex/grid, padding, gap, background, border, hover. Drop other blocks inside."},
+    {"key": "toc_sidebar", "name": "Wiki sidebar",
+     "icon": "panel-left",
+     "desc": "Sticky 'On this page' table of contents built from the page's heading blocks. Place inside a column to get a wiki-style sidebar."},
+    {"key": "heading",   "name": "Heading",
+     "icon": "heading",
+     "desc": "Section heading (H2-H5)."},
+    {"key": "paragraph", "name": "Text",
+     "icon": "type",
+     "desc": "Markdown paragraph or rich-text block."},
+    {"key": "image",     "name": "Image",
+     "icon": "image",
+     "desc": "Image with alt text + optional caption."},
+    {"key": "icon",      "name": "Icon",
+     "icon": "star",
+     "desc": "Single Lucide / custom icon with size, colour, dark-mode colour, alignment, and optional click-through link."},
+    {"key": "button",    "name": "Button",
+     "icon": "mouse-pointer-click",
+     "desc": "Primary, secondary, or fully-custom CTA button."},
+    {"key": "list",      "name": "List",
+     "icon": "list",
+     "desc": "Bulleted / numbered list — renders as numbered step cards in showcase layouts."},
+    {"key": "callout",   "name": "Callout",
+     "icon": "alert-triangle",
+     "desc": "Info / warn / danger / success callout box."},
+    {"key": "video",     "name": "Video",
+     "icon": "video",
+     "desc": "HTML5 video with optional poster."},
+    {"key": "lottie",    "name": "Lottie animation",
+     "icon": "play-circle",
+     "desc": "Embed a Bodymovin / Lottie JSON animation. Loops, autoplays, and scales to its column."},
+    {"key": "intergroup_member", "name": "Intergroup Member",
+     "icon": "users",
+     "desc": "Render a single officer's contact info (position, name, phone, email). Pulls live from Settings → Global → Intergroup Officers."},
+    {"key": "intergroup_member_roster", "name": "Officer Roster",
+     "icon": "users",
+     "desc": "Loop every Intergroup Officer into a 2- or 3-column card grid. Toggle which fields to show; editing a row in Settings → Global propagates everywhere."},
+    {"key": "library",   "name": "Library",
+     "icon": "book-open",
+     "desc": "Render any Library's items in your chosen style (bulleted list, plain list, or card grid). Pick the whole library or hand-select specific items."},
+    {"key": "code",      "name": "Code",
+     "icon": "code",
+     "desc": "Monospace code block with optional language hint."},
+    {"key": "separator", "name": "Divider",
+     "icon": "minus",
+     "desc": "Horizontal hairline separator."},
+]
+
+
+def _page_layouts_for_picker():
+    """Return all page layout rows ordered presets-first-then-custom,
+    matching the homepage / footer pickers' sort order."""
+    return (CustomLayout.query
+            .filter_by(kind="page")
+            .order_by(CustomLayout.is_prebuilt.desc(), CustomLayout.created_at)
+            .all())
+
+
+def _page_active_layout(page, layouts):
+    """Resolve the page's active layout row. Returns the matching
+    CustomLayout, or None when the page is on 'custom' or the saved
+    layout was deleted."""
+    if not page or not page.layout_key or page.layout_key == "custom":
+        return None
+    return next((l for l in layouts if l.key == page.layout_key), None)
+
+
+def _layout_block_shape(b):
+    """Return a structural signature for a single block, ignoring
+    user-content fields (text, md, src, items, alt, label, url, etc.)
+    Used to detect whether a page has been structurally edited away
+    from its prebuilt layout's stamped shape — content edits don't
+    count as customization, only structural ones (added / removed /
+    rearranged blocks, changed container display / grid columns)."""
+    if not isinstance(b, dict):
+        return None
+    t = b.get("type")
+    if not t:
+        return None
+    sig = {"type": t}
+    if t == "container":
+        d = b.get("data") or {}
+        sig["display"] = d.get("display", "flex")
+        sig["grid_columns"] = d.get("grid_columns", "")
+        sig["blocks"] = [_layout_block_shape(c) for c in (d.get("blocks") or [])]
+        sig["blocks"] = [s for s in sig["blocks"] if s is not None]
+    return sig
+
+
+def _layout_section_shape(sections):
+    """Walk a sections list and return a hashable signature for the
+    structural (non-titled, non-orphan) sections. Skips orphan bins
+    and titled sections — only the layout-stamped UNTITLED sections
+    contribute, since those are what the layout owns."""
+    out = []
+    for s in (sections or []):
+        if not isinstance(s, dict):
+            continue
+        if s.get("_orphans"):
+            continue
+        if (s.get("title") or "").strip():
+            continue
+        out.append([_layout_block_shape(b) for b in (s.get("blocks") or [])])
+    return out
+
+
+def _page_is_customized(page, active_layout):
+    """True when the page's structural shape deviates from what the
+    active layout would stamp fresh. Always False for `layout_key=custom`
+    (free-form pages don't have a template to deviate from), and for
+    pages with no active layout. Orphan-bin content also flags as
+    customized — those are blocks the admin lifted out of the layout
+    that haven't been re-placed yet."""
+    if not active_layout:
+        return False
+    if not page or not page.layout_key or page.layout_key == "custom":
+        return False
+    import json as _json
+    try:
+        page_sections = _json.loads(page.blocks_json or "[]") or []
+        preset_entries = _json.loads(active_layout.blocks_json or "[]") or []
+    except (ValueError, TypeError):
+        return False
+    # Anything in the orphan bin = structural drift = customized.
+    for s in page_sections:
+        if isinstance(s, dict) and s.get("_orphans") and (s.get("blocks") or []):
+            return True
+    # Compare structural shape: stamp the layout fresh and diff
+    # signatures. Identical shape (same number of untitled sections,
+    # each with the same block types nested the same way) = not
+    # customized.
+    expected_sections = []
+    for entry in preset_entries:
+        b = _instantiate_preset_entry(entry)
+        if b:
+            expected_sections.append({"title": "", "blocks": [b]})
+    return _layout_section_shape(page_sections) != _layout_section_shape(expected_sections)
+
+
+def _block_preview(b):
+    """Tiny preview payload for a block, surfaced as a hover popover
+    on each pill in the structure card / orphan bin. The admin sees
+    enough content to identify which block is which without having
+    to open the editor. Returns a dict {kind, text?, src?, …} that
+    the template stringifies onto `data-preview` for client-side
+    rendering."""
+    if not isinstance(b, dict):
+        return {"kind": "empty"}
+    t = b.get("type")
+    d = b.get("data") or {}
+    if t == "paragraph":
+        md = (d.get("md") or "").strip()
+        return {"kind": "text", "label": "Text",
+                "text": md[:200] if md else "(empty)"}
+    if t == "heading":
+        text = (d.get("text") or "").strip()
+        lvl = d.get("level") or 3
+        return {"kind": "text", "label": f"Heading H{lvl}",
+                "text": text or "(empty)"}
+    if t == "image":
+        src = (d.get("src") or "").strip()
+        alt = (d.get("alt") or "").strip()
+        cap = (d.get("caption") or "").strip()
+        return {"kind": "image", "label": "Image",
+                "src": src, "alt": alt, "text": cap}
+    if t == "button":
+        return {"kind": "text", "label": "Button",
+                "text": (d.get("label") or "").strip() or "(no label)",
+                "subtext": (d.get("url") or "").strip() or "(no link)"}
+    if t == "list":
+        items = [str(i).strip() for i in (d.get("items") or []) if str(i).strip()]
+        n = len(items)
+        return {"kind": "list",
+                "label": f"{'Numbered' if d.get('ordered') else 'Bulleted'} list",
+                "text": " · ".join(items[:5]) + ("…" if n > 5 else ""),
+                "subtext": f"{n} item{'' if n == 1 else 's'}"}
+    if t == "callout":
+        return {"kind": "text", "label": f"Callout · {d.get('variant') or 'info'}",
+                "text": (d.get("title") or d.get("md") or "").strip()[:200]}
+    if t == "video":
+        return {"kind": "text", "label": "Video",
+                "text": (d.get("src") or "").strip() or "(no source)"}
+    if t == "lottie":
+        sp = d.get("speed") or 1
+        flags = []
+        if d.get("playback") == "hover":
+            flags.append("hover-play")
+        elif d.get("autoplay"):
+            flags.append("autoplay")
+        if d.get("loop"):
+            flags.append("loop")
+        return {"kind": "text", "label": "Lottie",
+                "text": (d.get("src") or "").strip() or "(no source)",
+                "subtext": " · ".join(flags + [f"{sp}x"])}
+    if t == "intergroup_member":
+        oid = d.get("officer_id") or 0
+        from .models import IntergroupOfficer
+        try:
+            oid = int(oid)
+        except (TypeError, ValueError):
+            oid = 0
+        officer = db.session.get(IntergroupOfficer, oid) if oid else None
+        if officer is None:
+            return {"kind": "text", "label": "Intergroup Member",
+                    "text": "(no officer selected)",
+                    "subtext": "Pick a row from Settings → Global"}
+        fields = []
+        if d.get("show_role"): fields.append("role")
+        if d.get("show_name"): fields.append("name")
+        if d.get("show_phone"): fields.append("phone")
+        if d.get("show_email"): fields.append("email")
+        return {"kind": "text", "label": "Intergroup Member",
+                "text": (officer.role or "").strip() or "(unset)",
+                "subtext": (officer.name or "").strip() + (
+                    "  ·  " + " · ".join(fields) if fields else "")}
+    if t == "intergroup_member_roster":
+        from .models import IntergroupOfficer
+        n = IntergroupOfficer.query.count()
+        cols = d.get("columns") or 3
+        return {"kind": "text", "label": "Officer Roster",
+                "text": f"{n} officer card" + ("" if n == 1 else "s"),
+                "subtext": f"{cols}-column grid"}
+    if t == "library":
+        from .models import Library, LibraryItem
+        lib_id = d.get("library_id") or 0
+        try: lib_id = int(lib_id)
+        except (TypeError, ValueError): lib_id = 0
+        lib = db.session.get(Library, lib_id) if lib_id else None
+        if lib is None:
+            return {"kind": "text", "label": "Library",
+                    "text": "(no library selected)",
+                    "subtext": "Pick one in the editor"}
+        if (d.get("mode") or "all") == "granular":
+            ids = d.get("item_ids") or []
+            count = sum(1 for i in ids if i)
+            mode_label = f"{count} hand-picked"
+        else:
+            count = LibraryItem.query.filter_by(library_id=lib.id).count()
+            mode_label = f"all {count} items"
+        return {"kind": "text", "label": "Library",
+                "text": lib.name,
+                "subtext": f"{d.get('style') or 'cards'}  ·  {mode_label}"}
+    if t == "code":
+        code = (d.get("code") or "").strip()
+        return {"kind": "code", "label": f"Code{' · ' + d.get('lang') if d.get('lang') else ''}",
+                "text": code[:200] if code else "(empty)"}
+    if t == "container":
+        kids = d.get("blocks") or []
+        return {"kind": "text", "label": "Container",
+                "text": f"{len(kids)} child block{'' if len(kids) == 1 else 's'}",
+                "subtext": (d.get("display") or "flex")
+                            + (f" · {d.get('grid_columns')}" if d.get("display") == "grid" else "")}
+    if t == "toc_sidebar":
+        return {"kind": "text", "label": "Wiki sidebar",
+                "text": d.get("title") or "On this page",
+                "subtext": f"up to H{d.get('max_level') or 3}"}
+    if t == "separator":
+        return {"kind": "text", "label": "Divider", "text": "—"}
+    if t == "icon":
+        nm = (d.get("name") or "").strip()
+        sz = d.get("size") or 32
+        return {"kind": "text", "label": "Icon",
+                "text": nm or "(none)",
+                "subtext": f"{sz}px"}
+    return {"kind": "text", "label": t or "block"}
+
+
+def _walk_blocks_by_id(sections):
+    """Yield (block_id, block) for every block in `sections`, recursing
+    into containers. Used by the page-edit template to attach a
+    preview payload to each pill in the structure tree + orphan bin."""
+    def _walk(blocks):
+        for b in (blocks or []):
+            if not isinstance(b, dict):
+                continue
+            bid = b.get("id")
+            if bid:
+                yield bid, b
+            if b.get("type") == "container":
+                yield from _walk((b.get("data") or {}).get("blocks") or [])
+    for sec in (sections or []):
+        if isinstance(sec, dict):
+            yield from _walk(sec.get("blocks") or [])
+
+
+def _page_active_tree(page):
+    """Walk the page's blocks_json into the visualisation shape consumed
+    by `structure_page_tree`. Returns `{tree, orphans}` where `tree` is
+    a list of row entries:
+
+      {type:'block', block_id, t}              — single pill
+      {type:'columns', cols: [[…blocks…], …]}  — multi-column row whose
+                                                 cells are themselves
+                                                 lists of pills
+      {type:'section_label', label}            — section heading divider
+
+    `orphans` is a flat list of `{t, block_id}` pills representing the
+    orphan-bin section's contents (or empty if there is no bin). The
+    page editor renders orphans as a separate "Unplaced blocks" card
+    the admin drags from. Public render skips orphan sections.
+
+    Top-level container blocks whose `display=grid` parses to >1 column
+    (or `display=flex direction=row`) become a multi-column row whose
+    cells list the container's direct children. Other block types stay
+    as single pills carrying their unique `block_id` so the editor modal
+    can scroll-and-focus on click."""
+    import json as _json
+    import re as _re
+    if not page or not page.blocks_json:
+        return {"tree": [], "orphans": []}
+    try:
+        sections = _json.loads(page.blocks_json) or []
+    except (ValueError, TypeError):
+        return {"tree": [], "orphans": []}
+
+    def _grid_col_count(grid_cols):
+        # Count column tracks in a grid-template-columns spec.
+        # `repeat(N, …)` returns N. Otherwise, count whitespace-separated
+        # tokens (so "1fr 1fr" → 2). Returns 0 if unparseable.
+        #
+        # `auto-fit` / `auto-fill` grids have variable column counts at
+        # render time — there's no fixed N the structure tree can map
+        # cells to. Treat them as single-column so the editor stacks
+        # children flat (the public render still flows them as a grid).
+        if not grid_cols:
+            return 0
+        s = grid_cols.strip()
+        if "auto-fit" in s or "auto-fill" in s:
+            return 1
+        m = _re.match(r"\s*repeat\(\s*(\d+)\s*,", s)
+        if m:
+            try: return int(m.group(1))
+            except (ValueError, TypeError): return 0
+        return len([t for t in s.split() if t.strip()])
+
+    def _block_node(b):
+        """Recursively walk a block, producing a structure-tree node:
+
+          • {type:'block',   t, block_id}              — leaf pill
+          • {type:'columns', block_id, cols:[[node,…],…]} — container row
+
+        EVERY container becomes a 'columns' node — single-column or
+        multi-column — so the structure card always exposes a
+        container's contents as their own row(s) with their own drop
+        zones. Cells contain other nodes recursively, so a Container
+        nested inside a column renders AS a row inside that cell, with
+        its own droppable cells, ad infinitum. This lets the admin
+        compose arbitrarily deep nested layouts directly from the
+        structure card without diving into the focused modal."""
+        if not isinstance(b, dict):
+            return None
+        t = b.get("type")
+        if not t:
+            return None
+        if t != "container":
+            return {"type": "block", "t": t, "block_id": b.get("id") or ""}
+        d = b.get("data") or {}
+        kids = [c for c in (d.get("blocks") or []) if isinstance(c, dict)]
+        n_cols = 1
+        if d.get("display") == "grid":
+            n_cols = max(1, _grid_col_count(d.get("grid_columns") or "") or 1)
+        elif (d.get("display") == "flex"
+              and d.get("direction") in ("row", "row-reverse")):
+            n_cols = max(1, len(kids))
+        cells = [[] for _ in range(n_cols)]
+        # Round-robin distribution mirrors CSS grid's default
+        # `grid-auto-flow: row` (item i lands in column `i mod n_cols`),
+        # so 6 items in a 3-col grid stack as col0:[0,3], col1:[1,4],
+        # col2:[2,5] in the editor instead of dumping everything past
+        # the column count into the last cell.
+        for i, child in enumerate(kids):
+            node = _block_node(child)
+            if node is not None:
+                cells[i % n_cols].append(node)
+        return {
+            "type": "columns",
+            "block_id": b.get("id") or "",
+            "label": (d.get("label") or "").strip(),
+            "cols": cells,
+        }
+
+    out = []
+    orphans = []
+    for si, sec in enumerate(sections):
+        if not isinstance(sec, dict):
+            continue
+        if sec.get("_orphans"):
+            for b in (sec.get("blocks") or []):
+                if not isinstance(b, dict):
+                    continue
+                t = b.get("type")
+                if not t:
+                    continue
+                orphans.append({"t": t, "block_id": b.get("id") or ""})
+            continue
+        title = (sec.get("title") or "").strip()
+        if title:
+            out.append({"type": "section_label", "label": title})
+        for b in (sec.get("blocks") or []):
+            node = _block_node(b)
+            if node is not None:
+                out.append(node)
+    return {"tree": out, "orphans": orphans}
+
+
+@bp.route("/frontend/pages/new")
+@admin_required
+def frontend_page_new():
+    # Legacy URL — the New-page flow now lives in a modal on the
+    # pages list. Anyone reaching this URL directly (bookmark or
+    # stale link) is bounced back so they hit the modal.
+    return redirect(url_for("main.frontend_pages"))
+
+
+@bp.route("/frontend/pages/create", methods=["POST"])
+@admin_required
+def frontend_page_create():
+    """Create a new page from the New-page modal: just a title +
+    layout choice. Stamps the chosen layout's blocks (so the admin
+    drops into a ready-shaped editor) and routes straight into the
+    edit screen for the freshly-created row. The full block / page-
+    settings editor lives there — this endpoint deliberately accepts
+    only the minimum fields needed to mint the row."""
+    import json as _json
+    from .models import Page
+    title = (request.form.get("title") or "").strip()
+    if not title:
+        flash("Page title required", "danger")
+        return redirect(url_for("main.frontend_pages"))
+    raw_key = (request.form.get("layout_key") or "custom").strip() or "custom"
+    layouts = _page_layouts_for_picker()
+    valid_keys = {l.key for l in layouts} | {"custom"}
+    if raw_key not in valid_keys:
+        raw_key = "custom"
+
+    # Stamp the chosen preset's blocks into untitled shell sections.
+    # Mirrors `frontend_page_layout_save` (no preserved/orphan logic
+    # since this is a fresh page). 'custom' starts blank so the admin
+    # can drag freely in the editor.
+    blocks_payload = "[]"
+    if raw_key != "custom":
+        chosen = next((l for l in layouts if l.key == raw_key), None)
+        if chosen:
+            try:
+                preset = _json.loads(chosen.blocks_json or "[]") or []
+            except (ValueError, TypeError):
+                preset = []
+            shell_sections = []
+            for entry in preset:
+                b = _instantiate_preset_entry(entry)
+                if b:
+                    shell_sections.append({
+                        "id": _uuid_short(), "title": "", "blocks": [b],
+                    })
+            blocks_payload = _json.dumps(shell_sections or [])
+
+    # Slug uniqueness — same RESERVED set + suffix-bump loop the
+    # save route uses, so the modal can't create a row that would
+    # later conflict with a public frontend route.
+    slug = _slugify_page(title)
+    RESERVED = {"meetings", "meeting", "hyperlist", "submissionform",
+                "printlist", "library", "events", "archive", "announcements",
+                "announcement", "event", "api", "tspro", "static", "uploads",
+                "pub", "site-branding", "request-access", "contact", "siteindex"}
+    base_slug = slug
+    n = 2
+    while True:
+        existing = Page.query.filter(Page.slug == slug).first()
+        if not existing and slug not in RESERVED:
+            break
+        slug = f"{base_slug}-{n}"
+        n += 1
+
+    # Initial publish state: the modal posts a `status` of draft / published
+    # / private. Default to draft so the admin lands on the editor with the
+    # page hidden until they explicitly publish.
+    raw_status = (request.form.get("status") or "draft").strip().lower()
+    if raw_status not in ("draft", "published", "private"):
+        raw_status = "draft"
+    is_published = raw_status in ("published", "private")
+    is_private = raw_status == "private"
+    page = Page(title=title, slug=slug, layout_key=raw_key,
+                blocks_json=blocks_payload, template="standard",
+                is_published=is_published, is_private=is_private)
+    db.session.add(page)
+    db.session.commit()
+    return redirect(url_for("main.frontend_page_edit", page_id=page.id))
+
+
+@bp.route("/frontend/pages/<int:page_id>/edit")
+@admin_required
+def frontend_page_edit(page_id):
+    import json as _json
+    from .models import Page
+    s = _get_site_setting()
+    page = Page.query.get_or_404(page_id)
+    layouts = _page_layouts_for_picker()
+    active_layout = _page_active_layout(page, layouts)
+    tree_data = _page_active_tree(page)
+    # Per-block hover-preview payloads, keyed by block id. Built once
+    # server-side so each pill can stamp its preview JSON without the
+    # template having to reach into nested data structures.
+    try:
+        _sections_for_preview = _json.loads(page.blocks_json or "[]") or []
+    except (ValueError, TypeError):
+        _sections_for_preview = []
+    block_previews = {}
+    block_payloads = {}
+    for bid, b in _walk_blocks_by_id(_sections_for_preview):
+        block_previews[bid] = _block_preview(b)
+        block_payloads[bid] = b
+    return render_template("frontend_page_edit.html", site=s, page=page,
+                           blocks_json=page.blocks_json or "[]",
+                           page_layouts=layouts,
+                           active_layout=active_layout,
+                           active_layout_key=(page.layout_key or "custom"),
+                           active_layout_tree=tree_data["tree"],
+                           active_layout_orphans=tree_data["orphans"],
+                           active_layout_customized=_page_is_customized(page, active_layout),
+                           block_previews=block_previews,
+                           block_payloads=block_payloads,
+                           page_block_catalog=_PAGE_BLOCK_CATALOG)
+
+
+@bp.route("/frontend/pages/<int:page_id>/layout", methods=["POST"])
+@admin_required
+def frontend_page_layout_save(page_id):
+    """Apply a layout preset (or the 'custom' sentinel) to a page.
+    Selecting a preset overwrites the page's blocks_json with fresh
+    blank instances of the layout's block types, dropping the admin
+    into a pre-shaped editor; selecting 'custom' just records the key
+    without touching content."""
+    import json as _json
+    from .models import Page
+    page = Page.query.get_or_404(page_id)
+    raw_key = (request.form.get("layout_key") or "").strip()
+    if not raw_key:
+        flash("Layout key required", "danger")
+        return redirect(url_for("main.frontend_page_edit", page_id=page.id))
+    layouts = _page_layouts_for_picker()
+    valid_keys = {l.key for l in layouts} | {"custom"}
+    if raw_key not in valid_keys:
+        flash(f"Unknown page layout '{raw_key}'", "danger")
+        return redirect(url_for("main.frontend_page_edit", page_id=page.id))
+    page.layout_key = raw_key
+    if raw_key != "custom":
+        # Apply preset, idempotently AND non-destructively:
+        #   • Each top-level layout entry stamps as its OWN untitled
+        #     section in the page (so a layout `[split, container]`
+        #     produces two sections — a 2-column hero and a single-
+        #     column block area). `split` entries expand into a real
+        #     2-column container at stamp time.
+        #   • TITLED sections are always preserved verbatim (admin's
+        #     own content like "Chat Conduct Policy").
+        #   • UNTITLED sections (structural shells) get replaced —
+        #     but blocks they contained are NOT lost. Existing leaf
+        #     blocks (anything that isn't a container itself, plus
+        #     containers that already hold meaningful content) get
+        #     swept into an "orphan bin" section (`_orphans=true`,
+        #     unrendered on the public side) so the admin can drag
+        #     them back into the new layout from the editor's
+        #     Unplaced-blocks card. Re-applying the same layout is
+        #     still idempotent because untitled-shell stamping yields
+        #     the same shape, and orphan content is the admin's
+        #     prior edits — those stay in the bin until placed.
+        chosen = next((l for l in layouts if l.key == raw_key), None)
+        if chosen:
+            try:
+                preset = _json.loads(chosen.blocks_json or "[]") or []
+            except (ValueError, TypeError):
+                preset = []
+            shell_sections = []
+            for entry in preset:
+                b = _instantiate_preset_entry(entry)
+                if b:
+                    shell_sections.append({
+                        "id": _uuid_short(), "title": "", "blocks": [b],
+                    })
+            try:
+                existing_sections = _json.loads(page.blocks_json or "[]") or []
+            except (ValueError, TypeError):
+                existing_sections = []
+            existing_sections = [s for s in existing_sections if isinstance(s, dict)]
+            preserved_titled = [
+                s for s in existing_sections
+                if (s.get("title") or "").strip() and not s.get("_orphans")
+            ]
+            # Existing orphan bin survives across layout switches — its
+            # blocks get merged into the new bin alongside whatever the
+            # CURRENT untitled-shell sections held that's worth saving.
+            existing_orphans = []
+            for s in existing_sections:
+                if s.get("_orphans"):
+                    existing_orphans.extend(s.get("blocks") or [])
+            displaced = []
+            for s in existing_sections:
+                if s.get("_orphans"):
+                    continue
+                if (s.get("title") or "").strip():
+                    continue
+                # This was an untitled (structural) section — collect
+                # its leaf blocks for the orphan bin. Containers that
+                # are essentially-empty placeholders (no children, no
+                # text content) are dropped silently; everything else
+                # comes along.
+                for b in (s.get("blocks") or []):
+                    if _block_has_content(b):
+                        displaced.append(b)
+            orphan_blocks = existing_orphans + displaced
+            new_sections = list(shell_sections) + preserved_titled
+            if orphan_blocks:
+                new_sections.append({
+                    "id": _uuid_short(),
+                    "title": "Unplaced blocks",
+                    "_orphans": True,
+                    "blocks": orphan_blocks,
+                })
+            if not new_sections:
+                new_sections = [{"id": _uuid_short(), "title": "", "blocks": []}]
+            page.blocks_json = _json.dumps(new_sections)
+    db.session.commit()
+    flash(f"Layout “{raw_key}” applied", "success")
+    return redirect(url_for("main.frontend_page_edit", page_id=page.id))
+
+
+def _block_has_content(b):
+    """Return True if a block is worth preserving on a layout switch.
+    Empty placeholders (a container with no children, a heading with
+    no text, a paragraph with no markdown) get dropped silently so the
+    orphan bin doesn't collect noise. Anything else — including
+    half-edited blocks — gets preserved so the admin can drag them
+    back into the new layout."""
+    if not isinstance(b, dict):
+        return False
+    t = b.get("type")
+    d = b.get("data") or {}
+    if t == "container":
+        kids = d.get("blocks") or []
+        # A container is meaningful if it carries children OR explicit
+        # styling overrides (admin tweaked padding/bg/etc.).
+        if any(_block_has_content(c) for c in kids):
+            return True
+        return False
+    if t == "paragraph":
+        return bool((d.get("md") or "").strip())
+    if t == "heading":
+        return bool((d.get("text") or "").strip())
+    if t == "image":
+        return bool((d.get("src") or "").strip())
+    if t == "video":
+        return bool((d.get("src") or "").strip())
+    if t == "code":
+        return bool((d.get("code") or "").strip())
+    if t == "callout":
+        return bool((d.get("md") or "").strip()
+                    or (d.get("title") or "").strip())
+    if t == "list":
+        items = [i for i in (d.get("items") or []) if (i or "").strip()]
+        return bool(items)
+    if t == "button":
+        return bool((d.get("url") or "").strip()
+                    or (d.get("label") or "").strip() != "Click here")
+    if t == "toc_sidebar":
+        # Sidebar is structural — useful enough to preserve.
+        return True
+    if t == "separator":
+        # Dividers are throwaway; not worth orphan-binning.
+        return False
+    return True
+
+
+def _instantiate_preset_entry(entry):
+    """Convert a single layout-template entry into a real page block.
+
+    Layout-template entries can carry a `data` field — its keys are
+    merged on top of the type's blank defaults so prebuilt layouts can
+    ship real styling (background colour, shadow preset, padding,
+    border radius, etc.) that the page picks up on stamp. The user
+    then edits these via the block's settings panel exactly like any
+    other field, so the layout's visual choices become a starting
+    point rather than a hard-coded constant.
+
+    Splits expand into a 2-column container holding two inner
+    containers (one per panel). Containers honour their nested
+    `blocks` array (so a layout authored with a Container holding
+    e.g. a Heading + Paragraph stamps that exact tree onto the page).
+    Every other type maps to `_blank_page_block(t)` with the entry's
+    `data` overrides merged in."""
+    if not isinstance(entry, dict):
+        return None
+    t = entry.get("type")
+    if not t:
+        return None
+    overrides = entry.get("data") if isinstance(entry.get("data"), dict) else {}
+    # Pull blocks-list-shape overrides out of `overrides` so they
+    # don't fight the recursion logic below for container-style entries.
+    overrides = {k: v for k, v in overrides.items() if k != "blocks"}
+    if t == "split":
+        def _panel(items, panel_overrides=None):
+            inner = _blank_page_block("container")
+            inner["data"]["padding"] = "0"
+            inner["data"]["gap"] = "1.25rem"
+            inner["data"]["max_width"] = 0
+            inner["data"]["width_mode"] = "full"
+            if isinstance(panel_overrides, dict):
+                inner["data"].update({k: v for k, v in panel_overrides.items()
+                                       if k != "blocks"})
+            inner["data"]["blocks"] = [
+                ib for ib in (_instantiate_preset_entry(c) for c in (items or []))
+                if ib
+            ]
+            return inner
+        outer = _blank_page_block("container")
+        outer["data"]["display"] = "grid"
+        outer["data"]["grid_columns"] = "1fr 1fr"
+        outer["data"]["gap"] = "2.5rem"
+        outer["data"]["padding"] = "0"
+        outer["data"]["align"] = "center"
+        # Outer container's data overrides come from the split's
+        # `data`. Per-panel overrides come from `data_left` / `data_right`
+        # on the entry — that way a layout can style each panel
+        # independently (e.g. tinted left, white right) without
+        # having to expand the split into raw containers manually.
+        outer["data"].update(overrides)
+        outer["data"]["blocks"] = [
+            _panel(entry.get("left"), entry.get("data_left")),
+            _panel(entry.get("right"), entry.get("data_right")),
+        ]
+        return outer
+    if t == "container":
+        block = _blank_page_block("container")
+        block["data"].update(overrides)
+        children = entry.get("blocks") if isinstance(entry, dict) else None
+        block["data"]["blocks"] = [
+            ib for ib in (_instantiate_preset_entry(c) for c in (children or []))
+            if ib
+        ]
+        return block
+    # Leaf type — merge overrides on top of the blank defaults so
+    # things like a heading's font / size / colour land pre-styled.
+    block = _blank_page_block(t)
+    if isinstance(block.get("data"), dict):
+        block["data"].update(overrides)
+    return block
+
+
+def _uuid_short():
+    from uuid import uuid4
+    return uuid4().hex[:8]
+
+
+def _blank_page_block(t):
+    """Server-side mirror of BlockEditor.js `blankBlock(type)`. Used
+    when applying a layout preset — populates a fresh content block of
+    the requested type with the SAME minimal defaults the JS editor
+    would set on a `+ <type>` click.
+
+    Defaults are deliberately UNSTYLED. Containers ship transparent
+    (no bg / border / shadow / radius), with no padding, gap, or
+    max-width constraint — width_mode='full' so they fill their
+    parent without imposing any chrome. Images ship with no alignment
+    override and full natural width capped at the parent (max_width_pct=100).
+    Layout primitives (display/direction/justify/align) keep their
+    CSS-default values so a freshly-dropped container behaves like a
+    plain `<div>` until the admin styles it.
+
+    Unknown types fall through to an empty paragraph so a corrupted
+    preset doesn't 500 the route."""
+    # Typography colour fields carry a `_dark` (dark-mode hex) and
+    # `_dark_mode` ('same' | 'auto' | 'manual') alongside the light
+    # value, so a single picker UI can drive both modes. The renderer
+    # emits `_dark` as a CSS custom property when non-empty; a global
+    # rule under `html[data-theme="dark"]` swaps it in. Default mode
+    # is 'same' (no dark override) so existing pages render unchanged.
+    TYPO_DARK = {"color_dark": "", "color_dark_mode": "same"}
+    DEFAULTS = {
+        "paragraph": {"md": "", **TYPO_DARK},
+        "heading":   {"level": 3, "text": "", **TYPO_DARK},
+        "image":     {"src": "", "alt": "", "caption": "",
+                       "max_width_pct": 100, "align": "",
+                       "caption_color": "", "caption_size": ""},
+        # Icon block — `name` is an icon ref accepted by the `icon()`
+        # Jinja helper (Lucide name like "heart" or `custom:<id>` for
+        # admin-uploaded icons). Size is rendered as `font-size` on the
+        # wrapper since `.icon` is sized via `1em`. Colour rides the
+        # standard `*_dark` / `*_dark_mode` triplet so the same picker
+        # as headings/paragraphs drives both modes. Align controls the
+        # block's flex alignment within its parent. URL turns the icon
+        # into a click-through link.
+        "icon":      {"name": "", "size": 32,
+                       "color": "", "color_dark": "", "color_dark_mode": "same",
+                       "align": "center",
+                       "url": "", "new_tab": False},
+        "video":     {"src": "", "poster": ""},
+        "code":      {"lang": "", "code": ""},
+        "callout":   {"variant": "info", "title": "", "md": ""},
+        # List block — `display_style` switches presentation (plain
+        # ul/ol, numbered cards, checklist, arrows, inline pills).
+        # When the admin picks 'cards', the `card_*` fields below
+        # carry visual overrides that the renderer applies as inline
+        # styles + CSS custom properties on `.fe-pp-steps` / `.fe-pp-
+        # step` / `.fe-pp-step-num`. Empty strings = inherit the
+        # default look (matches `.fe-meeting-card` chrome).
+        "list":      {
+            "ordered": False, "items": [""], "bullet_style": "",
+            "display_style": "",  # '' | 'cards' | 'checklist' | 'arrows' | 'pills'
+            # Card-only overrides (only applied when display_style='cards')
+            "card_bg": "", "card_bg_dark": "", "card_bg_dark_mode": "same",
+            "card_border_color": "", "card_border_color_dark": "",
+            "card_border_color_dark_mode": "same",
+            "card_border_radius": "",     # CSS px / '' = default 16px
+            "card_padding": "",           # CSS shorthand / '' = default 18px 22px
+            "card_gap": "",               # CSS gap value / '' = default 14px
+            "card_shadow": "",            # '' | 'none' | 'sm' | 'md' | 'lg' | 'xl'
+            "card_hover_lift": True,      # bool toggle for translateY(-2px) + shadow on hover
+            "card_num_bg": "", "card_num_bg_dark": "",
+            "card_num_bg_dark_mode": "same",
+            "card_num_color": "", "card_num_color_dark": "",
+            "card_num_color_dark_mode": "same",
+            **TYPO_DARK,
+        },
+        "separator": {},
+        "button":    {
+            "label": "Click here", "url": "", "align": "left",
+            "style": "primary", "new_tab": False,
+            "bg": "", "hover_bg": "", "text_color": "", "hover_text": "",
+            "border": "", "hover_border": "", "shadow": "",
+        },
+        "container": {
+            # Admin-only label surfaced in the page-edit structure tree
+            # (next to "Container" / "N-column row") so admins can tell
+            # at a glance what a given container is for. Public render
+            # ignores it.
+            "label": "",
+            "display": "flex", "direction": "column",
+            "justify": "flex-start", "align": "stretch", "wrap": False,
+            "grid_columns": "repeat(2, 1fr)",
+            "gap": "0", "padding": "0",
+            "width_mode": "full", "max_width": 0,
+            "bg_color": "", "bg_color_dark": "", "bg_color_dark_mode": "same",
+            "border_width": 0, "border_style": "solid",
+            "border_color": "", "border_color_dark": "", "border_color_dark_mode": "same",
+            "border_radius": 0, "shadow": "none",
+            "hover_bg_color": "", "hover_border_color": "",
+            "hover_shadow": "", "hover_lift": False,
+            "blocks": [],
+        },
+        "toc_sidebar": {
+            "title": "On this page",
+            "max_level": 3,           # include h2..h<max_level>
+            "sticky": True,
+            "sticky_offset": 96,      # px from top when sticky
+        },
+        # Intergroup member block — references one officer row in the
+        # IntergroupOfficer table by id. Public renderer looks up the
+        # row at request time so changes to officer info propagate
+        # without re-saving every page that uses the block. Each
+        # `show_*` toggle gates one field; if all four are off, the
+        # block renders nothing visible (defensive — lets admins
+        # temporarily hide a block without removing it).
+        "intergroup_member": {
+            "officer_id": 0,
+            "show_role": True,
+            "show_name": True,
+            "show_phone": True,
+            "show_email": True,
+        },
+        # Intergroup officer roster — loops every IntergroupOfficer
+        # row into a configurable card grid. `columns` is 2 or 3.
+        # `gap` accepts any CSS length. Field toggles match the single-
+        # member block so the same fields-shown decision rides through
+        # to every card in the grid.
+        "intergroup_member_roster": {
+            "columns": 3,
+            "gap": "1rem",
+            "show_role": True,
+            "show_name": True,
+            "show_phone": True,
+            "show_email": True,
+        },
+        # Library block — renders a Library's items in a chosen style.
+        # `mode='all'` shows every item in the library; `mode='granular'`
+        # shows only those whose ids are in `item_ids` (admin hand-picks
+        # a subset). Style picks the visual treatment: 'bulleted' (UL
+        # with markers), 'list' (plain stacked list), 'cards' (grid
+        # with optional thumbnails). The block re-fetches items at
+        # request time so admin edits to the library propagate without
+        # re-saving every page that references it.
+        "library": {
+            "library_id": 0,
+            "mode": "all",          # 'all' | 'granular'
+            "item_ids": [],
+            "style": "cards",       # 'bulleted' | 'list' | 'cards'
+            "columns": 2,           # cards-only: 1 / 2 / 3
+            "gap": "1rem",
+            "show_description": True,
+            "show_thumbnails": True,
+            "show_categories": True,
+            "title": "",
+        },
+        # Lottie animation block — `src` points at a Bodymovin/Lottie
+        # JSON file (uploaded via the file picker -> /pub/<filename>, or
+        # an external URL). The public renderer emits a wrapper div with
+        # `data-lottie-*` attributes and pages that contain at least one
+        # lottie block load `vendor/lottie/lottie.min.js` plus a small
+        # init script that calls `lottie.loadAnimation` against each
+        # wrapper. Speed is clamped to [0.25, 3.0]; size mirrors the
+        # image block (max_width_pct + align). Background is optional —
+        # most Lottie animations are transparent.
+        "lottie": {
+            "src": "",
+            "loop": True,
+            "autoplay": True,
+            "speed": 1,
+            "max_width_pct": 100,
+            "align": "center",
+            "bg_color": "",
+            "renderer": "svg",  # svg | canvas — lottie-web's two main render modes
+            # Playback mode. 'auto' respects autoplay/loop directly.
+            # 'hover' parks the animation at frame 0, plays forward on
+            # mouseenter, and reverses back to frame 0 on mouseleave —
+            # the public-side init script wires up the listeners and the
+            # frame watcher that pauses on reaching frame 0.
+            "playback": "auto",
+        },
+    }
+    data = DEFAULTS.get(t, {"md": ""})
+    real_t = t if t in DEFAULTS else "paragraph"
+    return {"id": _uuid_short(), "type": real_t, "data": data}
+
+
+def _slugify_page(value):
+    import re as _re
+    value = (value or "").strip().lower()
+    value = _re.sub(r"[^a-z0-9]+", "-", value).strip("-")
+    return value or "page"
+
+
+PAGE_BG_EXTS = {"png", "jpg", "jpeg", "webp", "gif", "svg"}
+
+
+@bp.route("/frontend/pages/save", methods=["POST"])
+@admin_required
+def frontend_page_save():
+    import json as _json
+    import os as _os
+    from uuid import uuid4 as _uuid4
+    from .models import Page
+    page_id = (request.form.get("page_id") or "").strip()
+    title = (request.form.get("title") or "").strip()
+    if not title:
+        flash("Title is required", "danger")
+        return redirect(request.referrer or url_for("main.frontend_pages"))
+    slug = _slugify_page(request.form.get("slug") or title)
+    # Layout style toggle was removed — every page is "standard". Wiki
+    # behaviour is now achieved by selecting the wiki layout PRESET,
+    # which stamps a 2-column layout with a `toc_sidebar` block in the
+    # right column. The `template` column is kept for back-compat but
+    # always written as 'standard' from this route.
+    tmpl = "standard"
+    # Three-way visibility — `status` posts as draft / published / private.
+    # Falls back to the legacy single-checkbox `is_published` field when the
+    # form doesn't carry the new radio (older flows / API calls).
+    raw_status = (request.form.get("status") or "").strip().lower()
+    if raw_status in ("draft", "published", "private"):
+        is_published = raw_status in ("published", "private")
+        is_private = raw_status == "private"
+    else:
+        is_published = request.form.get("is_published") == "1"
+        is_private = request.form.get("is_private") == "1"
+    # Only update blocks_json when the form carries an actual value.
+    # An empty/missing value means the editor didn't serialise — usually
+    # a JS hiccup or a partial form submit (e.g. uploading a background
+    # without touching the editor). Defaulting to "[]" here would wipe
+    # the page's content; preserving the existing column is the safe
+    # default. Admins can still clear a page by deleting it outright.
+    raw_blocks = request.form.get("blocks_json")
+    blocks_json_to_save = None
+    if raw_blocks is not None and raw_blocks.strip() != "":
+        try:
+            _json.loads(raw_blocks)
+            blocks_json_to_save = raw_blocks
+        except (ValueError, TypeError):
+            flash("Invalid blocks JSON", "danger")
+            return redirect(request.referrer or url_for("main.frontend_pages"))
+
+    bg_mode = (request.form.get("bg_mode") or "cover").strip().lower()
+    if bg_mode not in ("cover", "tile"):
+        bg_mode = "cover"
+    try:
+        bg_tile_scale = int(request.form.get("bg_tile_scale") or 100)
+    except (TypeError, ValueError):
+        bg_tile_scale = 100
+    bg_tile_scale = max(25, min(bg_tile_scale, 400))
+
+    # Page-wide width formatting.
+    width_mode = (request.form.get("width_mode") or "boxed").strip().lower()
+    if width_mode not in ("boxed", "full"):
+        width_mode = "boxed"
+    try:
+        max_width = int(request.form.get("max_width") or 1160)
+    except (TypeError, ValueError):
+        max_width = 1160
+    max_width = max(640, min(max_width, 1600))
+    try:
+        full_padding_pct = int(request.form.get("full_padding_pct") or 4)
+    except (TypeError, ValueError):
+        full_padding_pct = 4
+    full_padding_pct = max(0, min(full_padding_pct, 20))
+
+    # Typography overrides — color hex (#rgb / #rrggbb), font key,
+    # alignment. Blank values clear the override and let the theme
+    # take over.
+    import re as _re_color
+    _hex_re = _re_color.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+    def _norm_color(v):
+        v = (v or "").strip()
+        if not v:
+            return None
+        # Accept token:<key> for any color token defined under
+        # Settings → Design → Colors. The render path translates these
+        # to var(--fe-color-<key>) via the css_color filter, so a
+        # token edit propagates everywhere the value is consumed.
+        if v.startswith("token:"):
+            from .design import DESIGN_FIELDS_BY_KEY as _DFK
+            key = v[6:]
+            f = _DFK.get(key)
+            return ("token:" + key) if (f and f.get("kind") == "color") else None
+        return v if _hex_re.match(v) else None
+
+    def _norm_font(v):
+        from .fonts import font_by_key
+        v = (v or "").strip()
+        return v if v and font_by_key(v) else None
+
+    # Typography controls were removed from the page edit UI; per-block
+    # styling now lives on the heading / paragraph / container blocks
+    # themselves. We only touch these page-level columns when the form
+    # explicitly posts the field, so legacy values on existing pages
+    # survive a save round-trip from the slimmed-down form.
+    has_heading_color    = "heading_color"    in request.form
+    has_subheading_color = "subheading_color" in request.form
+    has_heading_font     = "heading_font"     in request.form
+    has_subheading_font  = "subheading_font"  in request.form
+    has_heading_align    = "heading_align"    in request.form
+    heading_color    = _norm_color(request.form.get("heading_color"))    if has_heading_color    else None
+    subheading_color = _norm_color(request.form.get("subheading_color")) if has_subheading_color else None
+    heading_font     = _norm_font(request.form.get("heading_font"))      if has_heading_font     else None
+    subheading_font  = _norm_font(request.form.get("subheading_font"))   if has_subheading_font  else None
+    heading_align    = (request.form.get("heading_align") or "auto").strip().lower() if has_heading_align else None
+    if has_heading_align and heading_align not in ("auto", "left", "center", "right"):
+        heading_align = "auto"
+
+    if page_id:
+        page = Page.query.get_or_404(int(page_id))
+    else:
+        page = Page()
+
+    # Set the NOT NULL columns up front. Once the Page is added to
+    # the session below, ANY subsequent query that triggers
+    # SQLAlchemy's autoflush would try to insert the row with all the
+    # NULL columns the model has marked nullable=False (slug, title,
+    # template, blocks_json default, etc.) and crash with an
+    # IntegrityError. Setting them here means the autoflush a few
+    # lines down (the slug-uniqueness query) can write a valid row.
+    page.title = title
+    page.template = tmpl
+    page.is_published = is_published
+    page.is_private = bool(is_private)
+    if blocks_json_to_save is not None:
+        page.blocks_json = blocks_json_to_save
+    elif page.id is None:
+        # Brand-new page — initialise to an empty list so the column
+        # isn't NULL when the row is inserted.
+        page.blocks_json = "[]"
+
+    # Reserve slugs that collide with existing public frontend routes so
+    # the catch-all /<slug> page route never shadows them. We need a
+    # fully-resolved slug BEFORE adding the new row to the session
+    # because the uniqueness query below triggers an autoflush, and
+    # the row needs `slug` non-NULL by then.
+    RESERVED = {"meetings", "meeting", "hyperlist", "submissionform",
+                "printlist", "library", "events", "archive", "announcements",
+                "announcement", "event", "api", "tspro", "static", "uploads",
+                "pub", "site-branding", "request-access", "contact", "siteindex"}
+    base_slug = slug
+    n = 2
+    # Disable autoflush during the uniqueness probe — the new Page
+    # row hasn't been fully populated yet and a premature flush would
+    # crash on NOT NULL fields. Using `no_autoflush` is safer than
+    # relying on order alone since future fields could re-introduce
+    # the same race.
+    with db.session.no_autoflush:
+        while True:
+            existing = Page.query.filter(Page.slug == slug,
+                                         Page.id != (page.id or -1)).first()
+            if not existing and slug not in RESERVED:
+                break
+            slug = f"{base_slug}-{n}"
+            n += 1
+    page.slug = slug
+
+    if not page_id:
+        db.session.add(page)
+
+    # Background upload + remove handling. Removal wins over upload so an
+    # admin can clear the image and pick a new one in the same submit.
+    if request.form.get("clear_bg") == "1":
+        page.bg_image_filename = None
+    bg_upload = request.files.get("bg_image")
+    if bg_upload and bg_upload.filename:
+        ext = bg_upload.filename.rsplit(".", 1)[-1].lower() if "." in bg_upload.filename else ""
+        if ext not in PAGE_BG_EXTS:
+            flash(f"Unsupported background type .{ext}. Allowed: {', '.join(sorted(PAGE_BG_EXTS))}.",
+                  "danger")
+            return redirect(request.referrer or url_for("main.frontend_pages"))
+        safe = secure_filename(bg_upload.filename) or f"page-bg.{ext}"
+        stored = f"{_uuid4().hex}_{safe}"
+        bg_upload.save(_os.path.join(current_app.config["UPLOAD_FOLDER"], stored))
+        page.bg_image_filename = stored
+    page.bg_mode = bg_mode
+    page.bg_tile_scale = bg_tile_scale
+    # Dynamic-background catalog key (None = no dynbg). Coerced through
+    # the catalog so a tampered POST can only land on a known key.
+    from . import dynbg as _dynbg
+    page.bg_dynamic_key = _dynbg.normalize(request.form.get("bg_dynamic_key"))
+    page.bg_dynbg_config_json = _dynbg_config_from_form(request.form, "bg_dynbg_config_json")
+    # Background colour — accepts either a hex literal or a design-
+    # token reference of the form `token:<key>`. Tokens stay live: at
+    # render time the public template emits `var(--fe-color-<key>)`
+    # so a token edit in Settings → Design propagates immediately to
+    # every page using it. Validation:
+    #   • hex   → tight regex (#rgb / #rrggbb)
+    #   • token → only accepted if the key matches a DESIGN_FIELDS
+    #             entry whose kind == 'color' (rejects bogus keys)
+    # Hidden marker `bg_color_present` gates assignment so a partial
+    # POST can't wipe a previously-set value.
+    if request.form.get("bg_color_present") == "1":
+        import re as _bgc_re
+        from .design import DESIGN_FIELDS_BY_KEY as _DFK
+        _hex = _bgc_re.compile(r"^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$")
+        _tok = _bgc_re.compile(r"^token:([a-z0-9_]+)$", _bgc_re.IGNORECASE)
+        def _coerce_bg(v):
+            v = (v or "").strip()
+            if not v:
+                return None
+            m = _tok.match(v)
+            if m:
+                key = m.group(1)
+                f = _DFK.get(key)
+                if f and f.get("kind") == "color":
+                    return "token:" + key
+                return None
+            return v if _hex.match(v) else None
+        bg_mode = (request.form.get("bg_color_dark_mode") or "same").strip().lower()
+        if bg_mode not in ("same", "auto", "manual"):
+            bg_mode = "same"
+        page.bg_color = _coerce_bg(request.form.get("bg_color"))
+        page.bg_color_dark = _coerce_bg(request.form.get("bg_color_dark"))
+        page.bg_color_dark_mode = bg_mode
+    page.width_mode = width_mode
+    page.max_width = max_width
+    page.full_padding_pct = full_padding_pct
+    if has_heading_color:    page.heading_color    = heading_color
+    if has_subheading_color: page.subheading_color = subheading_color
+    if has_heading_font:     page.heading_font     = heading_font
+    if has_subheading_font:  page.subheading_font  = subheading_font
+    if has_heading_align:    page.heading_align    = heading_align
+
+    db.session.commit()
+    flash(f"Page “{title}” saved", "success")
+    return redirect(url_for("main.frontend_page_edit", page_id=page.id))
+
+
+@bp.route("/frontend/pages/<int:page_id>/delete", methods=["POST"])
+@admin_required
+def frontend_page_delete(page_id):
+    from .models import Page
+    page = Page.query.get_or_404(page_id)
+    title = page.title
+    db.session.delete(page)
+    db.session.commit()
+    flash(f"Page “{title}” deleted", "success")
+    return redirect(url_for("main.frontend_pages"))
+
+
+def _apply_page_status(page, status):
+    """Resolve a 'draft' / 'published' / 'private' status string onto a
+    Page row's ``is_published`` + ``is_private`` flags. Returns True when
+    the status was recognised and applied; False for unknown values."""
+    if status == "draft":
+        page.is_published = False
+        page.is_private = False
+    elif status == "published":
+        page.is_published = True
+        page.is_private = False
+    elif status == "private":
+        page.is_published = True
+        page.is_private = True
+    else:
+        return False
+    return True
+
+
+@bp.route("/frontend/pages/<int:page_id>/status", methods=["POST"])
+@admin_required
+def frontend_page_status(page_id):
+    """Quick-action endpoint that flips a single page's visibility from
+    the edit screen's status pills (Draft / Publish / Private) without
+    requiring a full form round-trip through ``frontend_page_save``."""
+    from .models import Page
+    page = Page.query.get_or_404(page_id)
+    status = (request.form.get("status") or "").strip().lower()
+    if not _apply_page_status(page, status):
+        flash("Unknown status", "danger")
+        return redirect(url_for("main.frontend_page_edit", page_id=page.id))
+    db.session.commit()
+    flash(f"Page “{page.title}” marked {status}", "success")
+    return redirect(request.referrer
+                    or url_for("main.frontend_page_edit", page_id=page.id))
+
+
+@bp.route("/frontend/pages/bulk", methods=["POST"])
+@admin_required
+def frontend_pages_bulk():
+    """Bulk-status action invoked from the Pages list checkboxes. Posts
+    a list of `page_ids` plus a `status`; applies the same draft /
+    published / private flip to every selected row in one commit."""
+    from .models import Page
+    status = (request.form.get("status") or "").strip().lower()
+    if status not in ("draft", "published", "private"):
+        flash("Unknown bulk status", "danger")
+        return redirect(url_for("main.frontend_pages"))
+    raw_ids = request.form.getlist("page_ids")
+    page_ids = []
+    for raw in raw_ids:
+        try:
+            page_ids.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+    if not page_ids:
+        flash("Select at least one page first", "warning")
+        return redirect(url_for("main.frontend_pages"))
+    rows = Page.query.filter(Page.id.in_(page_ids)).all()
+    for row in rows:
+        _apply_page_status(row, status)
+    db.session.commit()
+    flash(f"{len(rows)} page{'s' if len(rows) != 1 else ''} marked {status}",
+          "success")
+    return redirect(url_for("main.frontend_pages"))
 
 
 @bp.route("/frontend/footer-save", methods=["POST"])
@@ -5773,6 +7691,73 @@ def reading_new(slug):
     return render_template("reading_form.html", library=lib, reading=None)
 
 
+def _derive_title_from_filename(filename):
+    """Convert an uploaded filename into a readable default title.
+    Mirrors the JS-side derivation in the import wizard so a row whose
+    title input was left blank still ends up with the same value the
+    user previewed."""
+    import re
+    name = os.path.splitext(os.path.basename(filename or ""))[0]
+    name = re.sub(r"[_\-\.]+", " ", name)
+    name = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", name)
+    name = re.sub(r"\s+", " ", name).strip()
+    if not name:
+        return "Untitled"
+    return name.title()
+
+
+@bp.route("/libraries/<slug>/readings/import", methods=["POST"])
+@login_required
+def library_import(slug):
+    """Bulk-import endpoint backing the library-import wizard. Accepts
+    a parallel ``files``/``titles`` pair plus an optional set of
+    ``category_ids`` applied to every created item. Each file becomes
+    its own ``LibraryItem``; dedup is handled by ``_save_upload`` so
+    re-uploading an identical file simply reuses the existing
+    ``MediaItem`` row. The category-required gate is re-checked here
+    so a tampered POST can't bypass it."""
+    lib = _resolve_library_by_slug(slug) or abort(404)
+    deny = _require_can_edit_library(lib)
+    if deny is not None:
+        return deny
+    files = request.files.getlist("files")
+    titles = request.form.getlist("titles")
+    pairs = []
+    for i, f in enumerate(files):
+        if not f or not f.filename:
+            continue
+        title = (titles[i] if i < len(titles) else "").strip()
+        if not title:
+            title = _derive_title_from_filename(f.filename)
+        pairs.append((f, title))
+    if not pairs:
+        flash("Pick at least one file to import.", "danger")
+        return redirect(url_for("main.library_detail", slug=lib.public_slug))
+    cats = _resolve_reading_categories(lib, request.form)
+    if lib.is_intergroup and lib.categories_required and not cats:
+        if not lib.categories:
+            flash("Add at least one category to this Intergroup library before importing.", "danger")
+        else:
+            flash("Pick at least one category for this import.", "danger")
+        return redirect(url_for("main.library_detail", slug=lib.public_slug))
+    created = 0
+    for uploaded, title in pairs:
+        stored, original = _save_upload(uploaded)
+        r = LibraryItem(library_id=lib.id, title=title,
+                        stored_filename=stored, original_filename=original,
+                        created_by=current_user.id)
+        if cats:
+            r.categories = list(cats)
+        db.session.add(r)
+        created += 1
+    db.session.commit()
+    from . import activity
+    activity.log("library.import", entity_type="library", entity_id=lib.id,
+                 summary=f"Imported {created} file(s) into library “{lib.name}”")
+    flash(f"Imported {created} file(s) into the library.", "success")
+    return redirect(url_for("main.library_detail", slug=lib.public_slug))
+
+
 @bp.route("/readings/<int:rid>")
 @login_required
 def reading_view(rid):
@@ -6266,9 +8251,17 @@ def _cleanup_retired_asset(stored):
             + LibraryItem.query.filter_by(stored_filename=stored).count()
             + LibraryItem.query.filter_by(thumbnail_filename=stored).count()
             + Meeting.query.filter_by(logo_filename=stored).count()
-            + Post.query.filter_by(featured_image_filename=stored).count())
+            + Post.query.filter_by(featured_image_filename=stored).count()
+            + Story.query.filter_by(featured_image_filename=stored).count())
     if refs > 0:
         return
+    # Drop any cached thumbnails generated from this source so they
+    # don't linger as orphans in the uploads dir.
+    try:
+        from . import thumbnails
+        thumbnails.cleanup_for(stored)
+    except Exception:  # noqa: BLE001 — cleanup is best-effort
+        pass
     _delete_upload(stored)
     MediaItem.query.filter_by(stored_filename=stored).delete()
     db.session.flush()
@@ -6288,6 +8281,19 @@ def media_list():
     hidden = _interface_stored_filenames()
     if hidden:
         items = [m for m in items if m.stored_filename not in hidden]
+    # Public-submission uploads are hidden from non-admin users while
+    # the parent post is still in the holding tank — admins see them
+    # so they can review before approving, but editors / viewers
+    # shouldn't have a curated review surface polluted with raw
+    # visitor uploads. Once the admin approves the submission, the
+    # parent post leaves pending state and the file appears normally.
+    if not current_user.is_admin():
+        pending_uploads = {p.featured_image_filename for p in
+                           Post.query.filter(Post.is_pending_review.is_(True),
+                                             Post.featured_image_filename.isnot(None)).all()
+                           if p.featured_image_filename}
+        if pending_uploads:
+            items = [m for m in items if m.stored_filename not in pending_uploads]
     if sort == "name":
         items.sort(key=lambda m: (m.original_filename or "").lower())
     elif sort == "type":
@@ -6385,6 +8391,35 @@ def media_download(mid):
 def media_info(mid):
     m = db.session.get(MediaItem, mid) or abort(404)
     return jsonify(_media_json(m))
+
+
+@bp.route("/files/images.json")
+@login_required
+def media_images_json():
+    """List image-typed MediaItems for the block-editor's image picker.
+    Paged with `limit` (default 200) + optional `q` substring filter
+    against original filename. Filters by extension since not every
+    upload populates `mime_type` reliably."""
+    from sqlalchemy import or_
+    q = (request.args.get("q") or "").strip().lower()
+    try:
+        limit = max(1, min(int(request.args.get("limit") or 200), 500))
+    except (TypeError, ValueError):
+        limit = 200
+    EXT_PATTERNS = ("%.png", "%.jpg", "%.jpeg", "%.webp",
+                    "%.gif", "%.svg", "%.avif", "%.bmp")
+    query = MediaItem.query.filter(
+        or_(*[MediaItem.original_filename.ilike(p) for p in EXT_PATTERNS])
+    )
+    if q:
+        query = query.filter(MediaItem.original_filename.ilike(f"%{q}%"))
+    items = (query.order_by(MediaItem.created_at.desc())
+                  .limit(limit).all())
+    return jsonify({"items": [
+        {**_media_json(m), "url": url_for("public.public_file",
+                                          filename=m.original_filename)}
+        for m in items
+    ]})
 
 
 # --- Login appearance ---
@@ -7034,6 +9069,92 @@ def access_request_delete(rid):
                             view=request.form.get("view") or "active"))
 
 
+# --- Contact form ---
+#
+# Admin surface for the public /contact page. Lists submissions with
+# read / archive / delete actions, exposes an inline settings card for
+# the page configuration (enable, recipient, copy, turnstile is shared
+# with login). Mirrors the access_requests UX so the two admin
+# sections feel like siblings.
+
+
+@bp.route("/contact-form")
+@admin_required
+def contact_form():
+    s = _get_site_setting()
+    view = (request.args.get("view") or "active").strip().lower()
+    if view not in ("active", "archived"):
+        view = "active"
+    q = ContactSubmission.query
+    if view == "archived":
+        q = q.filter(ContactSubmission.is_archived.is_(True))
+        items = q.order_by(ContactSubmission.archived_at.desc().nullslast(),
+                           ContactSubmission.created_at.desc()).all()
+    else:
+        q = q.filter(ContactSubmission.is_archived.is_(False))
+        # Active list: unread first so new messages catch the eye, then
+        # most-recent-first within each group.
+        items = q.order_by(ContactSubmission.is_read.asc(),
+                           ContactSubmission.created_at.desc()).all()
+    archived_count = ContactSubmission.query.filter_by(is_archived=True).count()
+    active_count = ContactSubmission.query.filter_by(is_archived=False).count()
+    unread_count = ContactSubmission.query.filter_by(is_archived=False, is_read=False).count()
+    return render_template("contact_form.html", site=s, items=items, view=view,
+                           archived_count=archived_count, active_count=active_count,
+                           unread_count=unread_count)
+
+
+@bp.route("/contact-form/<int:cid>/read", methods=["POST"])
+@admin_required
+def contact_submission_toggle_read(cid):
+    sub = db.session.get(ContactSubmission, cid) or abort(404)
+    sub.is_read = not sub.is_read
+    db.session.commit()
+    return redirect(url_for("main.contact_form",
+                            view=request.form.get("view") or "active"))
+
+
+@bp.route("/contact-form/<int:cid>/archive", methods=["POST"])
+@admin_required
+def contact_submission_archive(cid):
+    sub = db.session.get(ContactSubmission, cid) or abort(404)
+    sub.is_archived = True
+    sub.archived_at = datetime.utcnow()
+    if not sub.is_read:
+        sub.is_read = True
+    db.session.commit()
+    flash("Message archived", "success")
+    return redirect(url_for("main.contact_form",
+                            view=request.form.get("view") or "active"))
+
+
+@bp.route("/contact-form/<int:cid>/unarchive", methods=["POST"])
+@admin_required
+def contact_submission_unarchive(cid):
+    sub = db.session.get(ContactSubmission, cid) or abort(404)
+    sub.is_archived = False
+    sub.archived_at = None
+    db.session.commit()
+    flash("Message restored", "success")
+    return redirect(url_for("main.contact_form",
+                            view=request.form.get("view") or "archived"))
+
+
+@bp.route("/contact-form/<int:cid>/delete", methods=["POST"])
+@admin_required
+def contact_submission_delete(cid):
+    sub = db.session.get(ContactSubmission, cid) or abort(404)
+    from . import activity
+    activity.log("contact_submission.delete",
+                 entity_type="contact_submission", entity_id=sub.id,
+                 summary=f"Deleted contact message from {sub.name} <{sub.email}>")
+    db.session.delete(sub)
+    db.session.commit()
+    flash("Message deleted", "success")
+    return redirect(url_for("main.contact_form",
+                            view=request.form.get("view") or "active"))
+
+
 # --- First-run setup wizard ---
 
 WIZARD_STEPS = [
@@ -7573,6 +9694,255 @@ def post_featured_image(pid):
     if not p or not p.featured_image_filename:
         abort(404)
     return send_from_directory(current_app.config["UPLOAD_FOLDER"], p.featured_image_filename)
+
+
+# ---------------------------------------------------------------------------
+# Stories — recovery story long-form posts.
+# ---------------------------------------------------------------------------
+@bp.route("/stories")
+@login_required
+def stories():
+    _require_stories_enabled()
+    show = (request.args.get("show") or "active").strip()
+    q = Story.query
+    if show == "archived":
+        q = q.filter(Story.is_archived.is_(True))
+    elif show == "drafts":
+        q = q.filter(Story.is_draft.is_(True), Story.is_archived.is_(False))
+    else:
+        show = "active"
+        q = q.filter(Story.is_archived.is_(False), Story.is_draft.is_(False))
+    items = q.order_by(Story.story_date.desc().nulls_last(),
+                       Story.updated_at.desc()).all()
+    return render_template("stories.html", stories=items, show=show)
+
+
+def _story_embed():
+    """True when the current request is rendering / submitting from
+    inside the new-story modal iframe. Carried via ``?embed=1`` on the
+    URL or ``embed=1`` in the form body."""
+    return (request.args.get("embed") == "1"
+            or request.form.get("embed") == "1")
+
+
+def _story_embed_kwargs():
+    """Spread into ``url_for(...)`` so post-save redirects keep the
+    iframe in chromeless mode."""
+    return {"embed": 1} if _story_embed() else {}
+
+
+@bp.route("/stories/new")
+@login_required
+def story_new():
+    _require_stories_enabled()
+    return render_template("story_edit.html", story=None, embed=_story_embed())
+
+
+@bp.route("/stories/<int:sid>")
+@login_required
+def story_edit(sid):
+    _require_stories_enabled()
+    story = db.session.get(Story, sid) or abort(404)
+    return render_template("story_edit.html", story=story, embed=_story_embed())
+
+
+@bp.route("/stories/save", methods=["POST"])
+@login_required
+def story_save():
+    """Create or update a story. Mirrors ``post_save`` shape — empty
+    ``story_id`` → create, set → update."""
+    _require_stories_enabled()
+    sid_raw = (request.form.get("story_id") or "").strip()
+    if sid_raw:
+        story = db.session.get(Story, int(sid_raw)) or abort(404)
+        creating = False
+    else:
+        story = Story(created_by=getattr(current_user, "id", None))
+        creating = True
+
+    _prev_public_slug = story.public_slug if not creating else None
+
+    title = (request.form.get("title") or "").strip()[:255]
+    if not title:
+        flash("Title is required", "danger")
+        return redirect(request.referrer or url_for("main.story_new", **_story_embed_kwargs()))
+    story.title = title
+
+    explicit_slug = None
+    if current_user.is_authenticated and current_user.can_edit_frontend():
+        explicit_slug = _normalize_slug(request.form.get("slug"))
+
+    title_slug = _normalize_slug(story.title)
+    base = explicit_slug or title_slug
+    unique = _unique_story_slug(base, exclude_id=story.id if not creating else None)
+    if explicit_slug:
+        story.slug = unique
+        if explicit_slug != unique:
+            flash(f"URL already taken — saved as “{unique}”.", "info")
+    else:
+        story.slug = None if unique == title_slug else unique
+
+    story.summary = (request.form.get("summary") or "").strip() or None
+    story.body = (request.form.get("body") or "").strip() or None
+    story.author_name = (request.form.get("author_name") or "").strip()[:120] or None
+    story.author_bio = (request.form.get("author_bio") or "").strip() or None
+    story.sobriety_date = _parse_date_only(request.form.get("sobriety_date"))
+    story.story_date = _parse_date_only(request.form.get("story_date"))
+    story.is_featured = request.form.get("is_featured") == "1"
+
+    if request.form.get("clear_featured_image") == "1":
+        old = story.featured_image_filename
+        story.featured_image_filename = None
+        _cleanup_retired_asset(old)
+    uploaded = request.files.get("featured_image")
+    if uploaded and uploaded.filename:
+        old = story.featured_image_filename
+        stored, _original = _save_upload(uploaded)
+        story.featured_image_filename = stored
+        if old and old != stored:
+            _cleanup_retired_asset(old)
+
+    action = (request.form.get("action") or "").strip()
+    if action == "draft":
+        story.is_draft = True
+    elif action == "publish":
+        story.is_draft = False
+    elif creating:
+        story.is_draft = False
+
+    if creating:
+        db.session.add(story)
+    else:
+        if _prev_public_slug and _prev_public_slug != story.public_slug:
+            _record_slug_change("story", story.id, _prev_public_slug, story.public_slug)
+    db.session.commit()
+    from . import activity
+    activity.log("story.create" if creating else "story.update",
+                 entity_type="story", entity_id=story.id,
+                 summary=(f"Created story “{story.title}”" if creating
+                          else f"Updated story “{story.title}”"))
+    if creating:
+        flash(("Draft saved: " + story.title) if story.is_draft else ("Published: " + story.title), "success")
+        # In embed mode (iframe-hosted New-story modal), redirect into
+        # the edit screen so the admin can keep iterating without
+        # losing the modal context. The "Cancel" button (which becomes
+        # a Close button in embed mode) postMessages the parent to
+        # close + reload the stories list.
+        if _story_embed():
+            return redirect(url_for("main.story_edit", sid=story.id, embed=1))
+        return redirect(url_for("main.stories", show=("drafts" if story.is_draft else "active")))
+    flash("Story saved", "success")
+    return redirect(url_for("main.story_edit", sid=story.id, **_story_embed_kwargs()))
+
+
+@bp.route("/stories/<int:sid>/publish", methods=["POST"])
+@login_required
+def story_publish(sid):
+    _require_stories_enabled()
+    story = db.session.get(Story, sid) or abort(404)
+    story.is_draft = False
+    db.session.commit()
+    flash("Published", "success")
+    if _story_embed():
+        return redirect(url_for("main.story_edit", sid=sid, embed=1))
+    return redirect(request.referrer or url_for("main.stories"))
+
+
+@bp.route("/stories/<int:sid>/unpublish", methods=["POST"])
+@login_required
+def story_unpublish(sid):
+    _require_stories_enabled()
+    story = db.session.get(Story, sid) or abort(404)
+    story.is_draft = True
+    db.session.commit()
+    flash("Moved to drafts", "success")
+    if _story_embed():
+        return redirect(url_for("main.story_edit", sid=sid, embed=1))
+    return redirect(request.referrer or url_for("main.stories", show="drafts"))
+
+
+@bp.route("/stories/<int:sid>/archive", methods=["POST"])
+@login_required
+def story_archive(sid):
+    _require_stories_enabled()
+    story = db.session.get(Story, sid) or abort(404)
+    story.is_archived = True
+    db.session.commit()
+    flash("Archived", "success")
+    if _story_embed():
+        return redirect(url_for("main.story_edit", sid=sid, embed=1))
+    return redirect(request.referrer or url_for("main.stories"))
+
+
+@bp.route("/stories/<int:sid>/unarchive", methods=["POST"])
+@login_required
+def story_unarchive(sid):
+    _require_stories_enabled()
+    story = db.session.get(Story, sid) or abort(404)
+    story.is_archived = False
+    db.session.commit()
+    flash("Restored", "success")
+    if _story_embed():
+        return redirect(url_for("main.story_edit", sid=sid, embed=1))
+    return redirect(request.referrer or url_for("main.stories"))
+
+
+@bp.route("/stories/<int:sid>/delete", methods=["POST"])
+@login_required
+def story_delete(sid):
+    _require_stories_enabled()
+    story = db.session.get(Story, sid) or abort(404)
+    from . import activity
+    activity.log("story.delete", entity_type="story", entity_id=story.id,
+                 summary=f"Deleted story “{story.title}”")
+    old_image = story.featured_image_filename
+    story.featured_image_filename = None
+    if old_image:
+        _cleanup_retired_asset(old_image)
+    db.session.delete(story)
+    db.session.commit()
+    flash("Story deleted", "success")
+    # When deleting from inside the new-story modal, render a tiny
+    # auto-close stub that postMessages the parent so the modal goes
+    # away and the underlying stories list refreshes (the deleted row
+    # disappears).
+    if _story_embed():
+        return render_template("story_modal_close.html", message="Story deleted")
+    return redirect(url_for("main.stories"))
+
+
+@public_bp.route("/story-image/<int:sid>")
+def story_featured_image(sid):
+    """Serve a story's featured image. Public so the public web frontend
+    can render the image on /stories and /stories/<slug> without auth.
+
+    Optional ``?thumb=<size>`` query param (sizes in
+    ``thumbnails.ALLOWED_SIZES``) returns a fitted-into-<size>x<size>
+    thumbnail instead, generated lazily on first request and cached
+    next to the source. Lets the admin list + public list templates
+    avoid loading multi-MB hero images for postage-stamp tiles."""
+    st = db.session.get(Story, sid)
+    if not st or not st.featured_image_filename:
+        abort(404)
+    upload_dir = current_app.config["UPLOAD_FOLDER"]
+    thumb_arg = (request.args.get("thumb") or "").strip()
+    if thumb_arg:
+        from . import thumbnails
+        try:
+            size = int(thumb_arg)
+        except ValueError:
+            size = None
+        if size and size in thumbnails.ALLOWED_SIZES:
+            thumb_name = thumbnails.ensure_thumb(st.featured_image_filename, size,
+                                                 upload_dir=upload_dir)
+            if thumb_name:
+                resp = send_from_directory(upload_dir, thumb_name)
+                # 1-day public cache — thumbs are content-addressed by
+                # the (uuid-prefixed) source filename so a content
+                # change rolls the URL anyway.
+                resp.headers["Cache-Control"] = "public, max-age=86400"
+                return resp
+    return send_from_directory(upload_dir, st.featured_image_filename)
 
 
 @public_bp.route("/meeting-logo/<int:mid>")

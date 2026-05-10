@@ -33,8 +33,30 @@
           <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button>
         </div>
         <div class="modal-body">
-          <p class="muted small">Pick a pre-built marketing layout, or build a new one with the drag-and-drop editor.</p>
+          <p class="muted small">Pick a pre-built marketing layout, or choose Custom and build the page yourself with the drag-and-drop editor on the page.</p>
           <div class="template-library-grid">
+            {# "Custom" is the no-template option — selecting it just
+               records `layout_key=custom` on the page and routes back
+               to the edit screen, where the structure card's drag-drop
+               + block palette let the admin build the layout in place.
+               Always offered first so it's the default discoverable
+               path for free-form pages. #}
+            <label class="template-card template-card-custom-radio{% if active_key == 'custom' %} active{% endif %}"
+                   data-layout-key="custom" data-layout-name="Custom">
+              <input type="radio" name="{{ radio_name }}" value="custom"
+                     {% if active_key == 'custom' %}checked{% endif %}>
+              <div class="template-card-preview template-card-preview-blocks template-card-preview-custom">
+                <span class="tcp-block tcp-block-custom" title="Custom"></span>
+                <span class="tcp-block tcp-block-custom" title="Custom"></span>
+                <span class="tcp-block tcp-block-custom" title="Custom"></span>
+              </div>
+              <div class="template-card-info">
+                <div class="template-card-name">Custom
+                  {% if active_key == 'custom' %}<span class="template-card-badge">Active</span>{% endif %}
+                </div>
+                <div class="template-card-desc muted small">No template — drag blocks onto the page yourself.</div>
+              </div>
+            </label>
             {% for l in layouts %}
             <label class="template-card{% if active_key == l.key %} active{% endif %}{% if not l.is_prebuilt %} template-card-custom{% endif %}"
                    data-layout-key="{{ l.key }}"
@@ -56,25 +78,22 @@
               </div>
               {% if not l.is_prebuilt %}
               <div class="template-card-actions">
-                <button type="button" class="template-card-action-btn" title="Edit layout"
+                <button type="button" class="template-card-action-btn" title="Edit layout template"
                         data-edit-layout="{{ l.key }}"
                         data-builder-modal="{{ builder_modal_id }}">{{ icon('edit') }}</button>
-                <button type="button" class="template-card-action-btn template-card-action-del" title="Delete layout"
+                <button type="button" class="template-card-action-btn template-card-action-del" title="Delete layout template"
                         data-delete-layout="{{ l.key }}">{{ icon('x') }}</button>
               </div>
               {% endif %}
             </label>
             {% endfor %}
-            <button type="button" class="template-card template-card-new" data-open-modal="{{ builder_modal_id }}"
+          </div>
+          <div class="fe-layout-picker-template-tools">
+            <button type="button" class="btn btn-sm" data-open-modal="{{ builder_modal_id }}"
                     data-builder-mode-create>
-              <div class="template-card-preview template-card-preview-new">
-                <span class="tcp-plus">+</span>
-              </div>
-              <div class="template-card-info">
-                <div class="template-card-name">Custom layout</div>
-                <div class="template-card-desc muted small">Build your own page layout by dragging blocks into the order you want.</div>
-              </div>
+              {{ icon('plus') }} <span>Build a reusable layout template…</span>
             </button>
+            <span class="muted smaller">Designs a saved layout that any page can pick from this list. For one-off page customization, just choose Custom above.</span>
           </div>
         </div>
         <div class="modal-foot">

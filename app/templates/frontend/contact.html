@@ -1,0 +1,156 @@
+{% extends "frontend/base.html" %}
+{%- set _heading = (site.contact_form_heading if site else None) or 'Get in touch' -%}
+{%- set _subheading = (site.contact_form_subheading if site else None)
+    or 'Send the public information committee a note. Replies come straight to your email.' -%}
+{%- set _intro = (site.contact_form_intro if site else None) -%}
+{%- set _submit_label = (site.contact_form_submit_label if site else None) or 'Send message' -%}
+{%- set _subj_required = (site.contact_form_subject_required if site else False) -%}
+{%- set _show_phone = (site.contact_form_show_phone if site is not none else True) -%}
+{% block title %}{{ _heading }} · {{ frontend_title }}{% endblock %}
+{% block content %}
+{# Contact us — two-column hero on desktop (intro on the left, form
+   card on the right), single column on mobile. Card recipe matches
+   the /submissionform card so dark-mode + design-token tweaks flow
+   through automatically; the surrounding panel is opt-in chrome
+   that's specific to the contact page (animated blob bg, accent
+   eyebrow, optional pic / contact details). Honors the
+   contact_form_enabled toggle via the route — the page returns 404
+   when the feature is off, so this template only renders when the
+   admin opted in. #}
+<section class="fe-section fe-contact-section fe-dynbg-host">
+  {% with dynbg_key='aurora-blobs' %}{% include "frontend/_dynbg.html" %}{% endwith %}
+  <div class="fe-container fe-contact-container">
+    <div class="fe-contact-grid">
+      <aside class="fe-contact-aside">
+        <span class="fe-contact-eyebrow">Contact</span>
+        <h1 class="fe-contact-title">{{ _heading }}</h1>
+        <p class="fe-contact-blurb">{{ _subheading }}</p>
+        {% if _intro %}
+        <div class="fe-contact-intro">{{ _intro|markdown }}</div>
+        {% endif %}
+        {# Quick-glance contact details pulled from the public info
+           chair fields on the dashboard so visitors who want to phone
+           / email directly without using the form have those routes
+           too. Each row renders when (a) the underlying SiteSetting
+           field is populated AND (b) the per-channel toggle on the
+           Templates admin is on. The two gates are independent so an
+           admin can keep the PIC phone in their dashboard records
+           while hiding it from this page. #}
+        {% set _show_name  = (site.contact_form_show_pic_name  if site else True) -%}
+        {% set _show_email = (site.contact_form_show_pic_email if site else True) -%}
+        {% set _show_phone_ch = (site.contact_form_show_pic_phone if site else True) -%}
+        {% set _pic_name  = (site.pic_name  if site and _show_name  else '') -%}
+        {% set _pic_email = (site.pic_email if site and _show_email else '') -%}
+        {% set _pic_phone = (site.pic_phone if site and _show_phone_ch else '') -%}
+        {% if _pic_name or _pic_email or _pic_phone %}
+        <ul class="fe-contact-channels" role="list">
+          {% if _pic_name %}
+          <li class="fe-contact-channel">
+            <span class="fe-contact-channel-icon" aria-hidden="true">{{ icon('user') }}</span>
+            <span class="fe-contact-channel-body">
+              <span class="fe-contact-channel-label">Public information chair</span>
+              <span class="fe-contact-channel-value">{{ _pic_name }}</span>
+            </span>
+          </li>
+          {% endif %}
+          {% if _pic_email %}
+          <li class="fe-contact-channel">
+            <span class="fe-contact-channel-icon" aria-hidden="true">{{ icon('mail') }}</span>
+            <span class="fe-contact-channel-body">
+              <span class="fe-contact-channel-label">Email</span>
+              <a class="fe-contact-channel-value fe-contact-channel-link"
+                 href="mailto:{{ _pic_email }}">{{ _pic_email }}</a>
+            </span>
+          </li>
+          {% endif %}
+          {% if _pic_phone %}
+          <li class="fe-contact-channel">
+            <span class="fe-contact-channel-icon" aria-hidden="true">{{ icon('phone') }}</span>
+            <span class="fe-contact-channel-body">
+              <span class="fe-contact-channel-label">Phone</span>
+              <a class="fe-contact-channel-value fe-contact-channel-link"
+                 href="tel:{{ _pic_phone }}">{{ _pic_phone }}</a>
+            </span>
+          </li>
+          {% endif %}
+        </ul>
+        {% endif %}
+      </aside>
+
+      <div class="fe-contact-form-wrap">
+        <div class="fe-contact-card">
+          {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="fe-submission-flashes fe-contact-flashes">
+              {% for cat, msg in messages %}<div class="flash flash-{{ cat }}">{{ msg }}</div>{% endfor %}
+            </div>
+            {% endif %}
+          {% endwith %}
+
+          <form method="post" action="{{ url_for('frontend.contact_submit') }}"
+                class="form fe-submission-form fe-contact-form" id="contact-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {# Honeypot — bots love filling every field they see. A
+               hidden text input that real users will leave empty
+               flags any non-empty submission as spam server-side.
+               `tabindex="-1"` keeps keyboard users from landing in
+               it and `autocomplete="off"` discourages browser
+               autofill from helpfully populating it. #}
+            <div class="fe-contact-honeypot" aria-hidden="true">
+              <label>Leave this field empty
+                <input type="text" name="website" tabindex="-1" autocomplete="off">
+              </label>
+            </div>
+
+            <div class="fe-submission-grid-2">
+              <label>
+                <span>Your name <span class="req">*</span></span>
+                <input name="name" type="text" maxlength="200" required autocomplete="name">
+              </label>
+              <label>
+                <span>Your email <span class="req">*</span></span>
+                <input name="email" type="email" maxlength="255" required autocomplete="email">
+              </label>
+            </div>
+
+            {% if _show_phone %}
+            <label>
+              <span>Phone <span class="muted smaller">(optional)</span></span>
+              <input name="phone" type="tel" maxlength="64" autocomplete="tel">
+            </label>
+            {% endif %}
+
+            <label>
+              <span>Subject{% if _subj_required %} <span class="req">*</span>{% else %} <span class="muted smaller">(optional)</span>{% endif %}</span>
+              <input name="subject" type="text" maxlength="255"{% if _subj_required %} required{% endif %}>
+            </label>
+
+            <label>
+              <span>Message <span class="req">*</span></span>
+              <textarea name="message" rows="6" maxlength="6000" required></textarea>
+            </label>
+
+            {% if site and site.turnstile_enabled and site.turnstile_site_key %}
+            <div class="cf-turnstile fe-submission-turnstile"
+                 data-sitekey="{{ site.turnstile_site_key }}"
+                 data-theme="auto"
+                 data-size="flexible"></div>
+            {% endif %}
+
+            <div class="fe-submission-actions fe-contact-actions">
+              <button class="btn btn-primary fe-submission-submit" type="submit">{{ _submit_label }}</button>
+            </div>
+            <p class="muted smaller fe-submission-fineprint fe-contact-fineprint">
+              We only use your email to reply to your message. Required fields are marked <span class="req">*</span>.
+            </p>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% if site and site.turnstile_enabled and site.turnstile_site_key %}
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+{% endif %}
+{% endblock %}

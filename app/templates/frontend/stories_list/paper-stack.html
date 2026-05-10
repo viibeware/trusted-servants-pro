@@ -1,0 +1,251 @@
+{# Paper-stack list — each story is rendered as a creased index-card on
+   a warm paper backdrop. Featured-image thumb on the left (when set),
+   serif title + byline + summary on the right. Soft drop shadow with
+   subtle edge-fray for an organic, archive-of-letters feel. #}
+<section class="fe-stories fe-stories-paper-stack fe-stories-list--w-{{ list_width_mode }}">
+  <div class="{% if list_width_mode == 'boxed' %}fe-container{% else %}fe-stories-fullwrap{% endif %}"
+       {% if list_width_mode == 'boxed' %}style="max-width: {{ list_max_width }}px;"
+       {%- elif list_padding_pct %}style="padding-left: {{ list_padding_pct }}vw; padding-right: {{ list_padding_pct }}vw;"{% endif %}>
+
+    <header class="fe-stories-paper-head">
+      <span class="fe-stories-paper-eyebrow">— Stories of recovery —</span>
+      <h1 class="fe-stories-paper-title">{{ list_heading or 'Stories' }}</h1>
+      <p class="fe-stories-paper-sub">{{ list_subheading or 'First-person accounts from members of the fellowship. Read at your own pace.' }}</p>
+    </header>
+
+    {% if not all_stories %}
+    <p class="fe-stories-paper-empty">No stories published yet — check back soon.</p>
+    {% else %}
+    <ul class="fe-stories-paper-list" role="list">
+      {% for story in all_stories %}
+      <li class="fe-stories-paper-card{% if story.is_featured %} is-featured{% endif %}">
+        <a class="fe-stories-paper-card-link" href="{{ url_for('frontend.story_detail', slug=story.public_slug) }}">
+          {% if story.featured_image_filename %}
+          <div class="fe-stories-paper-card-img">
+            <img src="{{ url_for('public.story_featured_image', sid=story.id, thumb=400) }}"
+                 alt="" loading="lazy">
+          </div>
+          {% else %}
+          <div class="fe-stories-paper-card-img fe-stories-paper-card-img--ornament" aria-hidden="true">
+            <span class="fe-stories-paper-ornament">❦</span>
+          </div>
+          {% endif %}
+          <div class="fe-stories-paper-card-body">
+            {% if story.is_featured %}
+            <span class="fe-stories-paper-pin">Featured</span>
+            {% endif %}
+            <h2 class="fe-stories-paper-card-title">{{ story.title }}</h2>
+            <div class="fe-stories-paper-card-meta">
+              {% if story.author_name %}<span class="fe-stories-paper-byline">by <i>{{ story.author_name }}</i></span>{% endif %}
+              {% if story.author_name and story.display_date %}<span class="fe-stories-paper-meta-sep">·</span>{% endif %}
+              {% if story.display_date %}<span class="fe-stories-paper-date">{{ story.display_date.strftime('%B %Y') }}</span>{% endif %}
+            </div>
+            {% if story.summary %}
+            <p class="fe-stories-paper-card-summary">{{ story.summary }}</p>
+            {% endif %}
+            <span class="fe-stories-paper-readmore">Read story →</span>
+          </div>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+</section>
+
+<style>
+  .fe-stories-paper-stack {
+    --paper-bg: #f3ecdb;
+    --paper-bg-2: #e9dfc8;
+    --paper-card: #fbf6e9;
+    --paper-ink: #2b231a;
+    --paper-ink-soft: #6a5a45;
+    --paper-rule: #c8b48a;
+    --paper-shadow: 0 1px 0 rgba(0,0,0,.04), 0 8px 18px rgba(70,50,20,.10), 0 24px 48px -18px rgba(70,50,20,.18);
+    background:
+      radial-gradient(1100px 500px at 12% -10%, rgba(255,250,235,.6), transparent 60%),
+      radial-gradient(800px 400px at 90% 110%, rgba(200,170,110,.18), transparent 60%),
+      linear-gradient(180deg, var(--paper-bg) 0%, var(--paper-bg-2) 100%);
+    color: var(--paper-ink);
+    padding: clamp(3rem, 6vw, 5.5rem) 0 clamp(4rem, 8vw, 7rem);
+    font-family: var(--tpl-body-font, 'Fraunces', 'Iowan Old Style', Georgia, serif);
+  }
+  [data-theme="dark"] .fe-stories-paper-stack {
+    --paper-bg: #1c1812;
+    --paper-bg-2: #14110d;
+    --paper-card: #25201a;
+    --paper-ink: #ece1c8;
+    --paper-ink-soft: #a89878;
+    --paper-rule: #5a4a30;
+    --paper-shadow: 0 1px 0 rgba(255,255,255,.02), 0 8px 18px rgba(0,0,0,.55), 0 32px 60px -22px rgba(0,0,0,.7);
+  }
+  .fe-stories-paper-head {
+    text-align: center;
+    margin-bottom: clamp(2.5rem, 5vw, 4rem);
+  }
+  .fe-stories-paper-eyebrow {
+    display: inline-block;
+    letter-spacing: .26em;
+    text-transform: uppercase;
+    font-size: .72rem;
+    color: var(--paper-ink-soft);
+    margin-bottom: 1rem;
+    font-family: var(--tpl-body-font, 'Inter', system-ui, sans-serif);
+  }
+  .fe-stories-paper-title {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-size: clamp(2.4rem, 5.6vw, 4rem);
+    line-height: 1.04;
+    margin: 0;
+    letter-spacing: -.01em;
+    font-style: italic;
+  }
+  .fe-stories-paper-sub {
+    margin: 1.1rem auto 0;
+    max-width: 36rem;
+    color: var(--paper-ink-soft);
+    font-size: 1.05rem;
+    line-height: 1.6;
+  }
+  .fe-stories-paper-empty {
+    text-align: center;
+    color: var(--paper-ink-soft);
+    font-style: italic;
+    padding: 2rem 0;
+  }
+  .fe-stories-paper-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: clamp(1.5rem, 3vw, 2.25rem);
+  }
+  .fe-stories-paper-card {
+    position: relative;
+    background: var(--paper-card);
+    box-shadow: var(--paper-shadow);
+    border-radius: 2px;
+    transform: rotate(-.18deg);
+    transition: transform .25s ease, box-shadow .25s ease;
+  }
+  .fe-stories-paper-card:nth-child(2n) { transform: rotate(.22deg); }
+  .fe-stories-paper-card:nth-child(3n) { transform: rotate(-.14deg) translateY(2px); }
+  .fe-stories-paper-card::before, .fe-stories-paper-card::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+  }
+  .fe-stories-paper-card::before {
+    inset: 0;
+    background:
+      repeating-linear-gradient(0deg, rgba(120,90,40,.03) 0 1px, transparent 1px 4px),
+      radial-gradient(circle at 0% 0%, rgba(140,100,40,.07), transparent 30%);
+    border-radius: inherit;
+    mix-blend-mode: multiply;
+  }
+  .fe-stories-paper-card::after {
+    inset: -1px;
+    border: 1px solid rgba(120,90,40,.12);
+    border-radius: inherit;
+  }
+  .fe-stories-paper-card:hover {
+    transform: rotate(0) translateY(-3px);
+    box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 12px 24px rgba(70,50,20,.18), 0 36px 72px -22px rgba(70,50,20,.32);
+  }
+  .fe-stories-paper-card.is-featured {
+    background: linear-gradient(180deg, #fff8e2 0%, var(--paper-card) 100%);
+  }
+  [data-theme="dark"] .fe-stories-paper-card.is-featured {
+    background: linear-gradient(180deg, #2c2418 0%, var(--paper-card) 100%);
+  }
+  .fe-stories-paper-card-link {
+    display: grid;
+    grid-template-columns: minmax(0, 220px) 1fr;
+    gap: clamp(1.25rem, 3vw, 2rem);
+    padding: clamp(1.25rem, 2.5vw, 1.75rem);
+    color: inherit;
+    text-decoration: none;
+    align-items: center;
+  }
+  @media (max-width: 640px) {
+    .fe-stories-paper-card-link {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+  }
+  .fe-stories-paper-card-img {
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    border-radius: 1px;
+    background: #d9cba6;
+    box-shadow: inset 0 0 0 1px rgba(120,90,40,.18), 0 6px 14px -8px rgba(70,50,20,.4);
+    position: relative;
+  }
+  .fe-stories-paper-card-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: sepia(.08) saturate(.95);
+  }
+  .fe-stories-paper-card-img--ornament {
+    display: grid;
+    place-items: center;
+    background:
+      repeating-linear-gradient(45deg, rgba(120,90,40,.05) 0 6px, transparent 6px 14px),
+      var(--paper-card);
+  }
+  .fe-stories-paper-ornament {
+    font-size: 4rem;
+    color: var(--paper-rule);
+    font-family: 'Fraunces', Georgia, serif;
+    line-height: 1;
+    transform: translateY(-2px);
+  }
+  .fe-stories-paper-card-body { min-width: 0; }
+  .fe-stories-paper-pin {
+    display: inline-block;
+    background: #b1431a;
+    color: #fff;
+    font-family: var(--tpl-body-font, 'Inter', system-ui, sans-serif);
+    font-size: .68rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 999px;
+    margin-bottom: .65rem;
+  }
+  .fe-stories-paper-card-title {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-size: clamp(1.45rem, 2.6vw, 2rem);
+    line-height: 1.15;
+    margin: 0 0 .5rem;
+    letter-spacing: -.005em;
+  }
+  .fe-stories-paper-card-meta {
+    color: var(--paper-ink-soft);
+    font-size: .92rem;
+    margin-bottom: .7rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    align-items: baseline;
+  }
+  .fe-stories-paper-byline i { font-style: italic; color: var(--paper-ink); }
+  .fe-stories-paper-meta-sep { opacity: .55; }
+  .fe-stories-paper-card-summary {
+    margin: 0 0 .9rem;
+    line-height: 1.65;
+    color: var(--paper-ink);
+    font-size: 1.02rem;
+  }
+  .fe-stories-paper-readmore {
+    color: var(--paper-ink);
+    font-style: italic;
+    font-size: .95rem;
+    border-bottom: 1px solid currentColor;
+    padding-bottom: 1px;
+  }
+  .fe-stories-paper-card:hover .fe-stories-paper-readmore { color: #8a3713; border-color: #8a3713; }
+</style>

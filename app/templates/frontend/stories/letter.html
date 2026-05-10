@@ -1,0 +1,223 @@
+{% extends "frontend/base.html" %}
+{% block title %}{{ story.title }} · {{ frontend_title }}{% endblock %}
+{% block content %}
+{# Letter detail layout — reads like a hand-typed letter on textured
+   stock. Typewriter / serif title, an italic 'Dear reader,' opener
+   line, the story body, and the author's signature byline at the
+   bottom. No featured image; the focus is the writing. #}
+<section class="fe-story-letter{% if tpl_dynbg_key or tpl_dynbg_overlay %} fe-dynbg-host{% endif %}" style="{{ tpl_style }}{% if tpl_dynbg_config %}; {% set _resolved = dynbg_resolve_colors(tpl_dynbg_config) %}{% for _c in _resolved %}--fe-dynbg-c{{ loop.index }}: {{ _c }};{% endfor %} {{ dynbg_resolve_positions(tpl_dynbg_config, tpl_dynbg_key) }}{% endif %}">
+  {% if tpl_dynbg_key or tpl_dynbg_overlay %}{% with dynbg_key=tpl_dynbg_key, dynbg_config=tpl_dynbg_config %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}
+  <div class="fe-story-letter-room">
+    <article class="fe-story-letter-sheet">
+      <a class="fe-story-letter-back" href="{{ url_for('frontend.stories_list') }}">
+        <span aria-hidden="true">←</span> All stories
+      </a>
+
+      <header class="fe-story-letter-head">
+        {% if story.display_date %}
+        <span class="fe-story-letter-date">{{ story.display_date.strftime('%B %-d, %Y') }}</span>
+        {% endif %}
+        <h1 class="fe-story-letter-title">{{ story.title }}</h1>
+      </header>
+
+      <p class="fe-story-letter-greeting">Dear reader,</p>
+
+      {% if story.body %}
+      <div class="fe-story-letter-body markdown-body">
+        {{ story.body|markdown }}
+      </div>
+      {% endif %}
+
+      {% if story.author_name or story.sobriety_date %}
+      <footer class="fe-story-letter-sign">
+        <p class="fe-story-letter-yours">Yours in fellowship,</p>
+        {% if story.author_name %}<p class="fe-story-letter-signature">{{ story.author_name }}</p>{% endif %}
+        {% if story.sobriety_date %}
+        <p class="fe-story-letter-stamp">Clean since {{ story.sobriety_date.strftime('%B %-d, %Y') }}</p>
+        {% endif %}
+      </footer>
+      {% endif %}
+
+      {% if story.author_bio %}
+      <div class="fe-story-letter-bio">
+        <p>{{ story.author_bio }}</p>
+      </div>
+      {% endif %}
+    </article>
+  </div>
+</section>
+
+<style>
+  .fe-story-letter {
+    --lt-bg: #2a241b;
+    --lt-paper: #f8f1dd;
+    --lt-paper-2: #efe5c4;
+    --lt-ink: #20180e;
+    --lt-ink-soft: #5e4b30;
+    --lt-rule: #c1aa75;
+    --lt-accent: #761e10;
+    background:
+      radial-gradient(900px 500px at 50% -10%, #36291c 0%, transparent 60%),
+      linear-gradient(180deg, #2a241b 0%, #1c1610 100%);
+    color: var(--lt-ink);
+    padding: clamp(2.5rem, 5vw, 4rem) 1rem clamp(4rem, 8vw, 6rem);
+    font-family: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  }
+  [data-theme="dark"] .fe-story-letter {
+    --lt-paper: #221c12;
+    --lt-paper-2: #15110a;
+    --lt-ink: #ece1c8;
+    --lt-ink-soft: #b39e76;
+    --lt-rule: #6a553a;
+  }
+  .fe-story-letter-room { max-width: 720px; margin: 0 auto; }
+  .fe-story-letter-sheet {
+    position: relative;
+    background:
+      repeating-linear-gradient(transparent 0 32px, rgba(70,50,15,.07) 32px 33px),
+      var(--lt-paper);
+    box-shadow:
+      0 1px 0 rgba(0,0,0,.05) inset,
+      0 14px 28px rgba(0,0,0,.4),
+      0 36px 72px -20px rgba(0,0,0,.55);
+    padding: clamp(2rem, 5vw, 3.6rem) clamp(1.75rem, 5vw, 4rem);
+    transform: rotate(-.18deg);
+    border-radius: 1px;
+  }
+  .fe-story-letter-sheet::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 6px;
+    background:
+      repeating-linear-gradient(45deg, var(--lt-paper-2) 0 8px, var(--lt-paper) 8px 16px);
+  }
+  .fe-story-letter-sheet::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 100% 0%, rgba(70,40,10,.10), transparent 40%);
+    pointer-events: none;
+  }
+  .fe-story-letter-back {
+    display: inline-block;
+    color: var(--lt-ink-soft);
+    text-decoration: none;
+    font-style: italic;
+    font-size: .9rem;
+    margin-bottom: 1.6rem;
+    border-bottom: 1px solid transparent;
+  }
+  .fe-story-letter-back:hover { color: var(--lt-accent); border-bottom-color: currentColor; }
+
+  .fe-story-letter-head { margin-bottom: 1.8rem; }
+  .fe-story-letter-date {
+    display: block;
+    text-align: right;
+    color: var(--lt-ink-soft);
+    font-style: italic;
+    font-size: .95rem;
+    margin-bottom: 1rem;
+  }
+  .fe-story-letter-title {
+    font-family: 'Special Elite', 'Courier Prime', 'Courier New', 'Fraunces', monospace;
+    font-weight: 400;
+    font-size: clamp(2rem, 4.6vw, 2.8rem);
+    line-height: 1.15;
+    margin: 0 0 .8rem;
+    letter-spacing: -.005em;
+    text-align: center;
+  }
+  .fe-story-letter-deck {
+    text-align: center;
+    color: var(--lt-ink-soft);
+    font-style: italic;
+    font-size: 1.05rem;
+    line-height: 1.6;
+    margin: 0 auto;
+    max-width: 32rem;
+  }
+  .fe-story-letter-greeting {
+    font-style: italic;
+    font-size: 1.15rem;
+    margin: 1.8rem 0 1rem;
+    color: var(--lt-ink);
+  }
+  .fe-story-letter-body {
+    font-size: 1.08rem;
+    line-height: 2;
+    color: var(--lt-ink);
+  }
+  .fe-story-letter-body p {
+    margin: 0 0 1.25rem;
+    text-indent: 1.4em;
+  }
+  .fe-story-letter-body p:first-child { text-indent: 0; }
+  .fe-story-letter-body h2 {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-size: 1.35rem;
+    margin: 1.7rem 0 .8rem;
+    font-style: italic;
+  }
+  .fe-story-letter-body h3 {
+    font-family: var(--tpl-heading-font, 'Fraunces', Georgia, serif);
+    font-weight: 500;
+    font-size: 1.15rem;
+    margin: 1.4rem 0 .6rem;
+  }
+  .fe-story-letter-body blockquote {
+    border-left: 2px solid var(--lt-rule);
+    padding: 0 0 0 1.25rem;
+    margin: 1.4rem 0;
+    font-style: italic;
+    color: var(--lt-ink-soft);
+  }
+  .fe-story-letter-body a {
+    color: var(--lt-accent);
+    border-bottom: 1px solid currentColor;
+    text-decoration: none;
+  }
+
+  .fe-story-letter-sign { margin-top: 2.5rem; }
+  .fe-story-letter-yours {
+    font-style: italic;
+    margin: 0 0 1.2rem;
+    color: var(--lt-ink);
+  }
+  .fe-story-letter-signature {
+    font-family: 'Caveat', 'Brush Script MT', 'Fraunces', cursive;
+    font-style: italic;
+    font-size: 2.2rem;
+    color: var(--lt-accent);
+    margin: 0 0 .8rem;
+    line-height: 1;
+    transform: rotate(-2deg);
+    transform-origin: left center;
+    display: inline-block;
+  }
+  .fe-story-letter-stamp {
+    display: inline-block;
+    border: 2px dashed var(--lt-accent);
+    color: var(--lt-accent);
+    padding: .35rem .75rem;
+    font-size: .82rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    font-family: 'Inter', system-ui, sans-serif;
+    transform: rotate(-3deg);
+    margin: .8rem 0 0;
+  }
+
+  .fe-story-letter-bio {
+    border-top: 1px dashed var(--lt-rule);
+    margin-top: 2.2rem;
+    padding-top: 1.4rem;
+    color: var(--lt-ink-soft);
+    font-style: italic;
+    font-size: .95rem;
+    line-height: 1.6;
+  }
+  .fe-story-letter-bio p { margin: 0; }
+</style>
+{% endblock %}

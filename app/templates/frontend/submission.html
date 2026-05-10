@@ -38,17 +38,28 @@
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 {% endif %}
 <script>
-// Reveal the event-only fieldset when the visitor checks "Event" — kept
-// hidden by default so a quick announcement submission isn't buried
-// under fields the submitter doesn't need to touch.
+// Reveal the event-only fieldset when the visitor checks "Event" —
+// kept hidden by default so a quick announcement submission isn't
+// buried under fields the submitter doesn't need to touch. Within
+// the event fieldset, the Zoom block is gated on the "Online event"
+// checkbox: only shows when the submitter says it's online, since
+// in-person events rarely have Zoom credentials.
 (function () {
   document.querySelectorAll('[data-submission-form]').forEach(function (form) {
     var eventBox = form.querySelector('input[name="is_event"]');
     var fields = form.querySelector('[data-submission-event-fields]');
-    if (!eventBox || !fields) return;
-    function sync() { fields.hidden = !eventBox.checked; }
-    eventBox.addEventListener('change', sync);
-    sync();
+    if (eventBox && fields) {
+      var sync = function () { fields.hidden = !eventBox.checked; };
+      eventBox.addEventListener('change', sync);
+      sync();
+    }
+    var onlineBox = form.querySelector('[data-submission-online]');
+    var zoomBlock = form.querySelector('[data-submission-zoom-block]');
+    if (onlineBox && zoomBlock) {
+      var syncZoom = function () { zoomBlock.hidden = !onlineBox.checked; };
+      onlineBox.addEventListener('change', syncZoom);
+      syncZoom();
+    }
   });
 })();
 </script>

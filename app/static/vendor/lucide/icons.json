@@ -186,6 +186,188 @@
         {"name": "youtube", "paths": "<path d=\"M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z\"/><polygon points=\"9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02\"/>", "keywords": "yt video social"},
         {"name": "github", "paths": "<path d=\"M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22\"/>", "keywords": "code git repo"}
       ]
+    },
+    {
+      "name": "Content blocks",
+      "icons": [
+        {"name": "heading", "paths": "<path d=\"M6 12h12\"/><path d=\"M6 20V4\"/><path d=\"M18 20V4\"/>", "keywords": "h1 h2 title section"},
+        {"name": "type", "paths": "<polyline points=\"4 7 4 4 20 4 20 7\"/><line x1=\"9\" y1=\"20\" x2=\"15\" y2=\"20\"/><line x1=\"12\" y1=\"4\" x2=\"12\" y2=\"20\"/>", "keywords": "text paragraph font letter"},
+        {"name": "list", "paths": "<line x1=\"8\" y1=\"6\" x2=\"21\" y2=\"6\"/><line x1=\"8\" y1=\"12\" x2=\"21\" y2=\"12\"/><line x1=\"8\" y1=\"18\" x2=\"21\" y2=\"18\"/><line x1=\"3\" y1=\"6\" x2=\"3.01\" y2=\"6\"/><line x1=\"3\" y1=\"12\" x2=\"3.01\" y2=\"12\"/><line x1=\"3\" y1=\"18\" x2=\"3.01\" y2=\"18\"/>", "keywords": "bulleted ordered ul ol items"},
+        {"name": "code", "paths": "<polyline points=\"16 18 22 12 16 6\"/><polyline points=\"8 6 2 12 8 18\"/>", "keywords": "monospace pre snippet brackets"},
+        {"name": "mouse-pointer-click", "paths": "<path d=\"m9 9 5 12 1.774-5.226L21 14 9 9z\"/><path d=\"m16.071 16.071 4.243 4.243\"/><path d=\"m7.188 2.239.777 2.897\"/><path d=\"m5.136 7.965-2.898-.777\"/><path d=\"m13.95 4.05-2.122 2.122\"/><path d=\"m6.171 11.829-2.122 2.122\"/>", "keywords": "button click cta cursor"},
+        {"name": "panel-left", "paths": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"/><path d=\"M9 3v18\"/>", "keywords": "sidebar wiki toc table contents"}
+      ]
+    },
+    {
+      "name": "Technology",
+      "icons": [
+        {"name": "laptop", "paths": "<rect width=\"18\" height=\"12\" x=\"3\" y=\"4\" rx=\"2\" ry=\"2\"/><line x1=\"2\" y1=\"20\" x2=\"22\" y2=\"20\"/>", "keywords": "computer notebook macbook"},
+        {"name": "smartphone", "paths": "<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"/><path d=\"M12 18h.01\"/>", "keywords": "phone mobile cell iphone"},
+        {"name": "tablet", "paths": "<rect width=\"16\" height=\"20\" x=\"4\" y=\"2\" rx=\"2\" ry=\"2\"/><line x1=\"12\" y1=\"18\" x2=\"12.01\" y2=\"18\"/>", "keywords": "ipad device touch"},
+        {"name": "monitor", "paths": "<rect width=\"20\" height=\"14\" x=\"2\" y=\"3\" rx=\"2\" ry=\"2\"/><line x1=\"8\" y1=\"21\" x2=\"16\" y2=\"21\"/><line x1=\"12\" y1=\"17\" x2=\"12\" y2=\"21\"/>", "keywords": "screen display desktop"},
+        {"name": "server", "paths": "<rect width=\"20\" height=\"8\" x=\"2\" y=\"2\" rx=\"2\" ry=\"2\"/><rect width=\"20\" height=\"8\" x=\"2\" y=\"14\" rx=\"2\" ry=\"2\"/><line x1=\"6\" y1=\"6\" x2=\"6.01\" y2=\"6\"/><line x1=\"6\" y1=\"18\" x2=\"6.01\" y2=\"18\"/>", "keywords": "rack hosting backend infrastructure"},
+        {"name": "cloud", "paths": "<path d=\"M17.5 19a4.5 4.5 0 1 0-1.4-8.78 7 7 0 1 0-13.31 4.39A4 4 0 0 0 6 19h11.5z\"/>", "keywords": "weather upload storage saas"},
+        {"name": "cloud-upload", "paths": "<path d=\"M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242\"/><path d=\"M12 12v9\"/><path d=\"m16 16-4-4-4 4\"/>", "keywords": "upload backup save"},
+        {"name": "cloud-download", "paths": "<path d=\"M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242\"/><path d=\"M12 12v9\"/><path d=\"m8 17 4 4 4-4\"/>", "keywords": "download fetch get"},
+        {"name": "database", "paths": "<ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"/><path d=\"M3 5v14a9 3 0 0 0 18 0V5\"/><path d=\"M3 12a9 3 0 0 0 18 0\"/>", "keywords": "db sql storage records"},
+        {"name": "cpu", "paths": "<rect width=\"16\" height=\"16\" x=\"4\" y=\"4\" rx=\"2\"/><rect width=\"6\" height=\"6\" x=\"9\" y=\"9\"/><path d=\"M9 2v2\"/><path d=\"M15 2v2\"/><path d=\"M9 20v2\"/><path d=\"M15 20v2\"/><path d=\"M20 9h2\"/><path d=\"M20 15h2\"/><path d=\"M2 9h2\"/><path d=\"M2 15h2\"/>", "keywords": "chip processor microprocessor"},
+        {"name": "hard-drive", "paths": "<line x1=\"22\" y1=\"12\" x2=\"2\" y2=\"12\"/><path d=\"M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"/><line x1=\"6\" y1=\"16\" x2=\"6.01\" y2=\"16\"/><line x1=\"10\" y1=\"16\" x2=\"10.01\" y2=\"16\"/>", "keywords": "disk ssd storage"},
+        {"name": "wifi", "paths": "<path d=\"M5 12.55a11 11 0 0 1 14.08 0\"/><path d=\"M1.42 9a16 16 0 0 1 21.16 0\"/><path d=\"M8.53 16.11a6 6 0 0 1 6.95 0\"/><line x1=\"12\" y1=\"20\" x2=\"12.01\" y2=\"20\"/>", "keywords": "wireless internet network signal"},
+        {"name": "wifi-off", "paths": "<path d=\"M2 8.82a15 15 0 0 1 4.17-2.65\"/><path d=\"M10.66 5c4.01-.36 8.14.9 11.34 3.76\"/><path d=\"M16.85 11.25a10 10 0 0 1 2.22 1.68\"/><path d=\"M5 13a10 10 0 0 1 5.24-2.76\"/><path d=\"M8.53 16.11a6 6 0 0 1 6.95 0\"/><line x1=\"12\" y1=\"20\" x2=\"12.01\" y2=\"20\"/><line x1=\"2\" y1=\"2\" x2=\"22\" y2=\"22\"/>", "keywords": "no wireless offline disconnect"},
+        {"name": "bluetooth", "paths": "<path d=\"m7 7 10 10-5 5V2l5 5L7 17\"/>", "keywords": "wireless pair connect"},
+        {"name": "battery", "paths": "<rect width=\"18\" height=\"10\" x=\"2\" y=\"7\" rx=\"2\" ry=\"2\"/><line x1=\"22\" y1=\"11\" x2=\"22\" y2=\"13\"/>", "keywords": "power energy charge"},
+        {"name": "battery-charging", "paths": "<path d=\"M14.83 16H17a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-2\"/><path d=\"M9.17 8H7a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2\"/><line x1=\"22\" y1=\"11\" x2=\"22\" y2=\"13\"/><polyline points=\"11 6 7 12 13 12 9 18\"/>", "keywords": "charging power plug"},
+        {"name": "power", "paths": "<path d=\"M18.36 6.64a9 9 0 1 1-12.73 0\"/><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"12\"/>", "keywords": "on off shutdown standby"},
+        {"name": "plug", "paths": "<path d=\"M12 22v-5\"/><path d=\"M9 8V2\"/><path d=\"M15 8V2\"/><path d=\"M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z\"/>", "keywords": "outlet charger socket"},
+        {"name": "terminal", "paths": "<polyline points=\"4 17 10 11 4 5\"/><line x1=\"12\" y1=\"19\" x2=\"20\" y2=\"19\"/>", "keywords": "shell cli console command prompt"},
+        {"name": "package", "paths": "<path d=\"M16.5 9.4L7.55 4.24\"/><path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"/><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"/>", "keywords": "box delivery shipping module"},
+        {"name": "box", "paths": "<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"/><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"/>", "keywords": "cube package storage"},
+        {"name": "mouse", "paths": "<rect x=\"6\" y=\"3\" width=\"12\" height=\"18\" rx=\"6\"/><path d=\"M12 7v4\"/>", "keywords": "pointer cursor input"},
+        {"name": "keyboard", "paths": "<rect width=\"20\" height=\"16\" x=\"2\" y=\"4\" rx=\"2\" ry=\"2\"/><path d=\"M6 8h.01\"/><path d=\"M10 8h.01\"/><path d=\"M14 8h.01\"/><path d=\"M18 8h.01\"/><path d=\"M8 12h.01\"/><path d=\"M12 12h.01\"/><path d=\"M16 12h.01\"/><path d=\"M7 16h10\"/>", "keywords": "type keys input"},
+        {"name": "printer", "paths": "<polyline points=\"6 9 6 2 18 2 18 9\"/><path d=\"M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2\"/><rect width=\"12\" height=\"8\" x=\"6\" y=\"14\"/>", "keywords": "print paper office"},
+        {"name": "scan", "paths": "<path d=\"M3 7V5a2 2 0 0 1 2-2h2\"/><path d=\"M17 3h2a2 2 0 0 1 2 2v2\"/><path d=\"M21 17v2a2 2 0 0 1-2 2h-2\"/><path d=\"M7 21H5a2 2 0 0 1-2-2v-2\"/>", "keywords": "qr barcode capture frame"},
+        {"name": "qr-code", "paths": "<rect width=\"5\" height=\"5\" x=\"3\" y=\"3\" rx=\"1\"/><rect width=\"5\" height=\"5\" x=\"16\" y=\"3\" rx=\"1\"/><rect width=\"5\" height=\"5\" x=\"3\" y=\"16\" rx=\"1\"/><path d=\"M21 16h-3a2 2 0 0 0-2 2v3\"/><path d=\"M21 21v.01\"/><path d=\"M12 7v3a2 2 0 0 1-2 2H7\"/><path d=\"M3 12h.01\"/><path d=\"M12 3h.01\"/><path d=\"M12 16v.01\"/><path d=\"M16 12h1\"/><path d=\"M21 12v.01\"/><path d=\"M12 21v-1\"/>", "keywords": "qr code barcode scan"}
+      ]
+    },
+    {
+      "name": "Weather & Nature",
+      "icons": [
+        {"name": "cloud-rain", "paths": "<line x1=\"16\" y1=\"13\" x2=\"16\" y2=\"21\"/><line x1=\"8\" y1=\"13\" x2=\"8\" y2=\"21\"/><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"23\"/><path d=\"M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25\"/>", "keywords": "weather precipitation storm"},
+        {"name": "cloud-snow", "paths": "<path d=\"M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25\"/><path d=\"M8 16h.01\"/><path d=\"M8 20h.01\"/><path d=\"M12 18h.01\"/><path d=\"M12 22h.01\"/><path d=\"M16 16h.01\"/><path d=\"M16 20h.01\"/>", "keywords": "weather winter snowflake"},
+        {"name": "cloud-lightning", "paths": "<path d=\"M6 16.326A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.973\"/><path d=\"m13 12-3 5h4l-3 5\"/>", "keywords": "weather storm thunder bolt"},
+        {"name": "cloud-sun", "paths": "<path d=\"M12 2v2\"/><path d=\"m4.93 4.93 1.41 1.41\"/><path d=\"M20 12h2\"/><path d=\"m19.07 4.93-1.41 1.41\"/><path d=\"M15.947 12.65a4 4 0 0 0-5.925-4.128\"/><path d=\"M3 20a5 5 0 1 1 8.9-4H13a3 3 0 0 1 2 5.24\"/>", "keywords": "weather partly daytime"},
+        {"name": "snowflake", "paths": "<line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"/><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"22\"/><path d=\"m20 16-4-4 4-4\"/><path d=\"m4 8 4 4-4 4\"/><path d=\"m16 4-4 4-4-4\"/><path d=\"m8 20 4-4 4 4\"/>", "keywords": "snow winter cold ice"},
+        {"name": "umbrella", "paths": "<path d=\"M22 12a10.06 10.06 1 0 0-20 0Z\"/><path d=\"M12 12v8a2 2 0 0 0 4 0\"/><path d=\"M12 2v1\"/>", "keywords": "rain weather cover protection"},
+        {"name": "droplet", "paths": "<path d=\"M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z\"/>", "keywords": "water rain liquid drop"},
+        {"name": "droplets", "paths": "<path d=\"M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z\"/><path d=\"M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97\"/>", "keywords": "water humidity moisture"},
+        {"name": "wind", "paths": "<path d=\"M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2\"/><path d=\"M9.6 4.6A2 2 0 1 1 11 8H2\"/><path d=\"M12.6 19.4A2 2 0 1 0 14 16H2\"/>", "keywords": "weather breeze air"},
+        {"name": "thermometer", "paths": "<path d=\"M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z\"/>", "keywords": "temperature heat cold weather"},
+        {"name": "sunrise", "paths": "<path d=\"M12 2v8\"/><path d=\"m4.93 10.93 1.41 1.41\"/><path d=\"M2 18h2\"/><path d=\"M20 18h2\"/><path d=\"m19.07 10.93-1.41 1.41\"/><path d=\"M22 22H2\"/><path d=\"m8 6 4-4 4 4\"/><path d=\"M16 18a4 4 0 0 0-8 0\"/>", "keywords": "morning dawn sun rise"},
+        {"name": "sunset", "paths": "<path d=\"M12 10V2\"/><path d=\"m4.93 10.93 1.41 1.41\"/><path d=\"M2 18h2\"/><path d=\"M20 18h2\"/><path d=\"m19.07 10.93-1.41 1.41\"/><path d=\"M22 22H2\"/><path d=\"m16 6-4 4-4-4\"/><path d=\"M16 18a4 4 0 0 0-8 0\"/>", "keywords": "evening dusk sun set"},
+        {"name": "leaf", "paths": "<path d=\"M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19.2 2.96a1 1 0 0 1 1.8.4 12 12 0 0 1-.51 5.27\"/><path d=\"M2 21c0-3 1.85-5.36 5.08-6\"/><path d=\"M19 11.27a4 4 0 0 1-3.7 4.65 4 4 0 0 1-4.6-3.83\"/>", "keywords": "plant nature eco green"},
+        {"name": "flame", "paths": "<path d=\"M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z\"/>", "keywords": "fire hot burn flame"},
+        {"name": "sparkles", "paths": "<path d=\"M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z\"/><path d=\"M20 3v4\"/><path d=\"M22 5h-4\"/><path d=\"M4 17v2\"/><path d=\"M5 18H3\"/>", "keywords": "stars magic shine glitter ai"},
+        {"name": "tree-pine", "paths": "<path d=\"m17 14 3 3.3a1 1 0 0 1-.7 1.7H4.7a1 1 0 0 1-.7-1.7L7 14h-1a1 1 0 0 1-.8-1.7L8 9h-1a1 1 0 0 1-.8-1.7L12 2l5.8 5.3a1 1 0 0 1-.8 1.7h-1l2.8 3.3a1 1 0 0 1-.8 1.7z\"/><path d=\"M12 22v-3\"/>", "keywords": "tree christmas pine forest"},
+        {"name": "mountain", "paths": "<path d=\"m8 3 4 8 5-5 5 15H2L8 3z\"/>", "keywords": "alps peak hill range nature"}
+      ]
+    },
+    {
+      "name": "Travel & Transport",
+      "icons": [
+        {"name": "plane", "paths": "<path d=\"M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z\"/>", "keywords": "flight travel aircraft airplane"},
+        {"name": "plane-takeoff", "paths": "<path d=\"M2 22h20\"/><path d=\"M6.36 17.4 4 17l-2-4 1.1-.55a2 2 0 0 1 1.8 0l.17.1a2 2 0 0 0 1.8 0L8 12 5 6l.9-.45a2 2 0 0 1 2.09.2l4.02 3a2 2 0 0 0 2.1.2l4.19-2.06a2.41 2.41 0 0 1 1.73-.17L21 7a1.4 1.4 0 0 1 .87 1.99l-.38.76c-.23.46-.6.84-1.07 1.08L7.58 17.2a2 2 0 0 1-1.22.18Z\"/>", "keywords": "departure takeoff flight"},
+        {"name": "plane-landing", "paths": "<path d=\"M2 22h20\"/><path d=\"M3.77 10.77 2 9l2-4.5 1.1.55a2 2 0 0 1 1.1 1.79V8h.5l4.13-3.13a2 2 0 0 1 2 0L13 5l4.13 1.65a2 2 0 0 1 .87 1.79V8h.5l4.13 3.13a2 2 0 0 0 2 0L21 11l-1.13.85a2 2 0 0 1-2.62 0L9.39 8.27 4 6l-2.13 4.55a1.85 1.85 0 0 1-1.1.22Z\"/>", "keywords": "arrival landing flight"},
+        {"name": "train-front", "paths": "<path d=\"M8 3.1V7a4 4 0 0 0 8 0V3.1\"/><path d=\"m9 15-1-1\"/><path d=\"m15 15 1-1\"/><path d=\"M9 19c-2.8 0-5-2.2-5-5v-4a8 8 0 0 1 16 0v4c0 2.8-2.2 5-5 5Z\"/><path d=\"m8 19-2 3\"/><path d=\"m16 19 2 3\"/>", "keywords": "rail subway metro transport"},
+        {"name": "car", "paths": "<path d=\"M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2\"/><circle cx=\"7\" cy=\"17\" r=\"2\"/><path d=\"M9 17h6\"/><circle cx=\"17\" cy=\"17\" r=\"2\"/>", "keywords": "vehicle auto drive transport"},
+        {"name": "bike", "paths": "<circle cx=\"18.5\" cy=\"17.5\" r=\"3.5\"/><circle cx=\"5.5\" cy=\"17.5\" r=\"3.5\"/><circle cx=\"15\" cy=\"5\" r=\"1\"/><path d=\"M12 17.5V14l-3-3 4-3 2 3h2\"/>", "keywords": "bicycle cycle ride sport"},
+        {"name": "bus", "paths": "<path d=\"M8 6v6\"/><path d=\"M16 6v6\"/><path d=\"M2 12h19.6\"/><path d=\"M18 18h2c.5 0 1.4-.5 1.4-1l-2-9c-.2-.7-.4-1-1.4-1H4c-1 0-1.2.3-1.4 1l-2 9c-.1.5.4 1 1.4 1h2\"/><circle cx=\"7\" cy=\"18\" r=\"2\"/><path d=\"M9 18h5\"/><circle cx=\"16\" cy=\"18\" r=\"2\"/>", "keywords": "transit transport public commute"},
+        {"name": "ship", "paths": "<path d=\"M2 21c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1 .6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1\"/><path d=\"M19.38 20A11.6 11.6 0 0 0 21 14l-9-4-9 4c0 2.9.94 5.34 2.81 7.76\"/><path d=\"M19 13V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6\"/><path d=\"M12 10v4\"/><path d=\"M12 2v3\"/>", "keywords": "boat sea ocean nautical transport"},
+        {"name": "rocket", "paths": "<path d=\"M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z\"/><path d=\"m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z\"/><path d=\"M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0\"/><path d=\"M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5\"/>", "keywords": "launch startup space ship fast"},
+        {"name": "anchor", "paths": "<circle cx=\"12\" cy=\"5\" r=\"3\"/><line x1=\"12\" y1=\"22\" x2=\"12\" y2=\"8\"/><path d=\"M5 12H2a10 10 0 0 0 20 0h-3\"/>", "keywords": "boat ship nautical port harbor"},
+        {"name": "fuel", "paths": "<line x1=\"3\" y1=\"22\" x2=\"15\" y2=\"22\"/><line x1=\"4\" y1=\"9\" x2=\"14\" y2=\"9\"/><path d=\"M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18\"/><path d=\"M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5\"/>", "keywords": "gas petrol station car"},
+        {"name": "navigation", "paths": "<polygon points=\"3 11 22 2 13 21 11 13 3 11\"/>", "keywords": "compass direction location gps"},
+        {"name": "route", "paths": "<circle cx=\"6\" cy=\"19\" r=\"3\"/><path d=\"M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15\"/><circle cx=\"18\" cy=\"5\" r=\"3\"/>", "keywords": "navigation path road trip directions"},
+        {"name": "tent", "paths": "<path d=\"M3.5 21 14 3\"/><path d=\"M20.5 21 10 3\"/><path d=\"M15.5 21 12 15l-3.5 6\"/><path d=\"M2 21h20\"/>", "keywords": "camping outdoor camp shelter"}
+      ]
+    },
+    {
+      "name": "Food & Drink",
+      "icons": [
+        {"name": "coffee-cup", "paths": "<path d=\"M17 8h1a4 4 0 1 1 0 8h-1\"/><path d=\"M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z\"/><line x1=\"6\" y1=\"2\" x2=\"6\" y2=\"4\"/><line x1=\"10\" y1=\"2\" x2=\"10\" y2=\"4\"/><line x1=\"14\" y1=\"2\" x2=\"14\" y2=\"4\"/>", "keywords": "drink hot tea espresso"},
+        {"name": "utensils", "paths": "<path d=\"M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2\"/><path d=\"M7 2v20\"/><path d=\"M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7\"/>", "keywords": "fork spoon knife eat dinner restaurant"},
+        {"name": "pizza", "paths": "<path d=\"M15 11h.01\"/><path d=\"M11 15h.01\"/><path d=\"M16 16h.01\"/><path d=\"m2 16 20 6-6-20A20 20 0 0 0 2 16\"/><path d=\"M5.71 17.11a17.04 17.04 0 0 1 11.4-11.4\"/>", "keywords": "food slice italian dinner"},
+        {"name": "wine", "paths": "<path d=\"M8 22h8\"/><path d=\"M7 10h10\"/><path d=\"M12 15v7\"/><path d=\"M12 15a5 5 0 0 0 5-5c0-2-.5-4-2-8H9c-1.5 4-2 6-2 8a5 5 0 0 0 5 5Z\"/>", "keywords": "drink alcohol glass bar"},
+        {"name": "beer", "paths": "<path d=\"M17 11h1a3 3 0 0 1 0 6h-1\"/><path d=\"M9 12v6\"/><path d=\"M13 12v6\"/><path d=\"M14 7.5c-1 0-1.44.5-3 .5s-2-.5-3-.5-1.72.5-2.5.5a2.5 2.5 0 0 1 0-5c.78 0 1.57.5 2.5.5C9.44 3.5 10 3 12 3s2.56.5 4 .5c.78 0 1.5-.5 2-.5\"/><path d=\"M5 8v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8\"/>", "keywords": "drink alcohol pint pub bar"},
+        {"name": "ice-cream", "paths": "<path d=\"M12 17c5 0 8-2.69 8-6H4c0 3.31 3 6 8 6Zm-4 4h8m-4-3v3\"/><path d=\"M5.14 11a3.5 3.5 0 1 1 6.71 0\"/><path d=\"M12.14 11a3.5 3.5 0 1 1 6.71 0\"/><path d=\"M15.5 6.5a3.5 3.5 0 1 0-7 0\"/>", "keywords": "dessert sweet summer cone"},
+        {"name": "apple", "paths": "<path d=\"M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z\"/><path d=\"M10 2c1 .5 2 2 2 5\"/>", "keywords": "fruit food healthy"},
+        {"name": "cake", "paths": "<path d=\"M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8\"/><path d=\"M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1\"/><path d=\"M2 21h20\"/><path d=\"M7 8v3\"/><path d=\"M12 8v3\"/><path d=\"M17 8v3\"/><path d=\"M7 4h.01\"/><path d=\"M12 4h.01\"/><path d=\"M17 4h.01\"/>", "keywords": "birthday celebration sweet dessert"},
+        {"name": "cookie", "paths": "<path d=\"M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5\"/><path d=\"M8.5 8.5v.01\"/><path d=\"M16 15.5v.01\"/><path d=\"M12 12v.01\"/><path d=\"M11 17v.01\"/><path d=\"M7 14v.01\"/>", "keywords": "biscuit dessert sweet cookies privacy"},
+        {"name": "salad", "paths": "<path d=\"M7 21h10\"/><path d=\"M12 21a9 9 0 0 0 9-9H3a9 9 0 0 0 9 9z\"/><path d=\"M11.38 12a2.4 2.4 0 0 1-.4-4.77 2.4 2.4 0 0 1 3.2-2.77 2.4 2.4 0 0 1 3.47-.63 2.4 2.4 0 0 1 3.37 3.37 2.4 2.4 0 0 1-1.1 3.7 2.51 2.51 0 0 1 .03 1.1\"/><path d=\"m13 12 4-4\"/><path d=\"M10.9 7.25A3.99 3.99 0 0 0 4 10c0 .73.2 1.41.54 2\"/>", "keywords": "vegetable healthy bowl fresh"}
+      ]
+    },
+    {
+      "name": "Editing & Format",
+      "icons": [
+        {"name": "bold", "paths": "<path d=\"M14 12a4 4 0 0 0 0-8H6v8\"/><path d=\"M15 20a4 4 0 0 0 0-8H6v8Z\"/>", "keywords": "text format weight strong"},
+        {"name": "italic", "paths": "<line x1=\"19\" y1=\"4\" x2=\"10\" y2=\"4\"/><line x1=\"14\" y1=\"20\" x2=\"5\" y2=\"20\"/><line x1=\"15\" y1=\"4\" x2=\"9\" y2=\"20\"/>", "keywords": "text format slant emphasis"},
+        {"name": "underline", "paths": "<path d=\"M6 4v6a6 6 0 0 0 12 0V4\"/><line x1=\"4\" y1=\"20\" x2=\"20\" y2=\"20\"/>", "keywords": "text format line"},
+        {"name": "strikethrough", "paths": "<path d=\"M16 4H9a3 3 0 0 0-2.83 4\"/><path d=\"M14 12a4 4 0 0 1 0 8H6\"/><line x1=\"4\" y1=\"12\" x2=\"20\" y2=\"12\"/>", "keywords": "strike text crossed line"},
+        {"name": "align-left", "paths": "<line x1=\"21\" y1=\"6\" x2=\"3\" y2=\"6\"/><line x1=\"15\" y1=\"12\" x2=\"3\" y2=\"12\"/><line x1=\"17\" y1=\"18\" x2=\"3\" y2=\"18\"/>", "keywords": "text alignment left"},
+        {"name": "align-center", "paths": "<line x1=\"21\" y1=\"6\" x2=\"3\" y2=\"6\"/><line x1=\"17\" y1=\"12\" x2=\"7\" y2=\"12\"/><line x1=\"19\" y1=\"18\" x2=\"5\" y2=\"18\"/>", "keywords": "text alignment center"},
+        {"name": "align-right", "paths": "<line x1=\"21\" y1=\"6\" x2=\"3\" y2=\"6\"/><line x1=\"21\" y1=\"12\" x2=\"9\" y2=\"12\"/><line x1=\"21\" y1=\"18\" x2=\"7\" y2=\"18\"/>", "keywords": "text alignment right"},
+        {"name": "align-justify", "paths": "<line x1=\"21\" y1=\"6\" x2=\"3\" y2=\"6\"/><line x1=\"21\" y1=\"12\" x2=\"3\" y2=\"12\"/><line x1=\"21\" y1=\"18\" x2=\"3\" y2=\"18\"/>", "keywords": "text alignment justify full"},
+        {"name": "list-ordered", "paths": "<line x1=\"10\" y1=\"6\" x2=\"21\" y2=\"6\"/><line x1=\"10\" y1=\"12\" x2=\"21\" y2=\"12\"/><line x1=\"10\" y1=\"18\" x2=\"21\" y2=\"18\"/><path d=\"M4 6h1v4\"/><path d=\"M4 10h2\"/><path d=\"M6 18H4c0-1 2-2 2-3s-1-1.5-2-1\"/>", "keywords": "numbered ol list 123"},
+        {"name": "indent", "paths": "<polyline points=\"3 8 7 12 3 16\"/><line x1=\"21\" y1=\"12\" x2=\"11\" y2=\"12\"/><line x1=\"21\" y1=\"6\" x2=\"11\" y2=\"6\"/><line x1=\"21\" y1=\"18\" x2=\"11\" y2=\"18\"/>", "keywords": "tab list shift right"},
+        {"name": "outdent", "paths": "<polyline points=\"7 8 3 12 7 16\"/><line x1=\"21\" y1=\"12\" x2=\"11\" y2=\"12\"/><line x1=\"21\" y1=\"6\" x2=\"11\" y2=\"6\"/><line x1=\"21\" y1=\"18\" x2=\"11\" y2=\"18\"/>", "keywords": "untab list shift left"},
+        {"name": "quote", "paths": "<path d=\"M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z\"/><path d=\"M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z\"/>", "keywords": "blockquote cite quotation"},
+        {"name": "scissors", "paths": "<circle cx=\"6\" cy=\"6\" r=\"3\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/><line x1=\"20\" y1=\"4\" x2=\"8.12\" y2=\"15.88\"/><line x1=\"14.47\" y1=\"14.48\" x2=\"20\" y2=\"20\"/><line x1=\"8.12\" y1=\"8.12\" x2=\"12\" y2=\"12\"/>", "keywords": "cut clip slice"},
+        {"name": "rotate-cw", "paths": "<path d=\"M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8\"/><path d=\"M21 3v5h-5\"/>", "keywords": "redo refresh clockwise spin"},
+        {"name": "rotate-ccw", "paths": "<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\"/><path d=\"M3 3v5h5\"/>", "keywords": "undo refresh counterclockwise spin"},
+        {"name": "undo", "paths": "<path d=\"M3 7v6h6\"/><path d=\"M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13\"/>", "keywords": "back revert reverse"},
+        {"name": "redo", "paths": "<path d=\"M21 7v6h-6\"/><path d=\"M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7\"/>", "keywords": "forward repeat redo"}
+      ]
+    },
+    {
+      "name": "Shapes & Symbols",
+      "icons": [
+        {"name": "triangle", "paths": "<path d=\"M13.73 4a2 2 0 0 0-3.46 0L1.82 18a2 2 0 0 0 1.73 3h16.9a2 2 0 0 0 1.73-3z\"/>", "keywords": "shape geometric triangle"},
+        {"name": "hexagon", "paths": "<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/>", "keywords": "shape hex polygon six"},
+        {"name": "octagon", "paths": "<polygon points=\"7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2\"/>", "keywords": "shape stop polygon eight"},
+        {"name": "diamond", "paths": "<path d=\"M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41L13.7 2.71a2.41 2.41 0 0 0-3.41 0z\"/>", "keywords": "shape rhombus jewel facets"},
+        {"name": "pentagon", "paths": "<path d=\"M3.5 8.7c-.7.5-1 1.4-.7 2.2l2.8 8.7c.3.8 1 1.4 1.9 1.4h9c.9 0 1.6-.6 1.9-1.4l2.8-8.7c.3-.8 0-1.7-.7-2.2l-7.4-5.4a2 2 0 0 0-2.4 0z\"/>", "keywords": "shape five sided"},
+        {"name": "asterisk", "paths": "<path d=\"M12 6v12\"/><path d=\"M17.196 9 6.804 15\"/><path d=\"m6.804 9 10.392 6\"/>", "keywords": "star symbol footnote required"},
+        {"name": "slash", "paths": "<line x1=\"22\" y1=\"2\" x2=\"2\" y2=\"22\"/>", "keywords": "divider line separator"},
+        {"name": "percent", "paths": "<line x1=\"19\" y1=\"5\" x2=\"5\" y2=\"19\"/><circle cx=\"6.5\" cy=\"6.5\" r=\"2.5\"/><circle cx=\"17.5\" cy=\"17.5\" r=\"2.5\"/>", "keywords": "percentage discount sale ratio"},
+        {"name": "equal", "paths": "<line x1=\"5\" y1=\"9\" x2=\"19\" y2=\"9\"/><line x1=\"5\" y1=\"15\" x2=\"19\" y2=\"15\"/>", "keywords": "math equals symbol"},
+        {"name": "divide", "paths": "<circle cx=\"12\" cy=\"6\" r=\"1\"/><line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"/><circle cx=\"12\" cy=\"18\" r=\"1\"/>", "keywords": "math division symbol"},
+        {"name": "plus-circle", "paths": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"16\"/><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"/>", "keywords": "add new create"},
+        {"name": "minus-circle", "paths": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"/>", "keywords": "remove subtract delete"},
+        {"name": "x-circle", "paths": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"15\" y1=\"9\" x2=\"9\" y2=\"15\"/><line x1=\"9\" y1=\"9\" x2=\"15\" y2=\"15\"/>", "keywords": "close cancel error remove"},
+        {"name": "hash", "paths": "<line x1=\"4\" y1=\"9\" x2=\"20\" y2=\"9\"/><line x1=\"4\" y1=\"15\" x2=\"20\" y2=\"15\"/><line x1=\"10\" y1=\"3\" x2=\"8\" y2=\"21\"/><line x1=\"16\" y1=\"3\" x2=\"14\" y2=\"21\"/>", "keywords": "hashtag pound number"},
+        {"name": "infinity", "paths": "<path d=\"M12 12c-2-2.667-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.333 6-4Zm0 0c2 2.667 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.333-6 4Z\"/>", "keywords": "endless loop unlimited"}
+      ]
+    },
+    {
+      "name": "Health & Activity",
+      "icons": [
+        {"name": "heart-pulse", "paths": "<path d=\"M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z\"/><path d=\"M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27\"/>", "keywords": "love beat ekg medical vital"},
+        {"name": "pill", "paths": "<path d=\"m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z\"/><path d=\"m8.5 8.5 7 7\"/>", "keywords": "medicine drug capsule tablet"},
+        {"name": "syringe", "paths": "<path d=\"m18 2 4 4\"/><path d=\"m17 7 3-3\"/><path d=\"M19 9 8.7 19.3c-1 1-2.5 1-3.4 0l-.6-.6c-1-1-1-2.5 0-3.4L15 5\"/><path d=\"m9 11 4 4\"/><path d=\"m5 19-3 3\"/><path d=\"m14 4 6 6\"/>", "keywords": "injection vaccine needle medical"},
+        {"name": "stethoscope", "paths": "<path d=\"M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3\"/><path d=\"M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4\"/><circle cx=\"20\" cy=\"10\" r=\"2\"/>", "keywords": "doctor medical check exam"},
+        {"name": "dna", "paths": "<path d=\"m10 16 1.5 1.5\"/><path d=\"m14 8-1.5-1.5\"/><path d=\"M15 2c-1.798 1.998-2.518 3.995-2.807 5.993\"/><path d=\"m16.5 10.5 1 1\"/><path d=\"m17 6-2.891-2.891\"/><path d=\"M2 15c6.667-6 13.333 0 20-6\"/><path d=\"m20 9 .891.891\"/><path d=\"M3.109 14.109 4 15\"/><path d=\"m6.5 12.5 1 1\"/><path d=\"m7 18 2.891 2.891\"/><path d=\"M9 22c1.798-1.998 2.518-3.995 2.807-5.993\"/>", "keywords": "genetic biology helix science"},
+        {"name": "activity", "paths": "<polyline points=\"22 12 18 12 15 21 9 3 6 12 2 12\"/>", "keywords": "pulse heartbeat fitness vital"},
+        {"name": "dumbbell", "paths": "<path d=\"M14.4 14.4 9.6 9.6\"/><path d=\"M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z\"/><path d=\"m21.5 21.5-1.4-1.4\"/><path d=\"M3.9 3.9 2.5 2.5\"/><path d=\"M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z\"/>", "keywords": "gym fitness workout weight exercise"},
+        {"name": "trophy", "paths": "<path d=\"M6 9H4.5a2.5 2.5 0 0 1 0-5H6\"/><path d=\"M18 9h1.5a2.5 2.5 0 0 0 0-5H18\"/><path d=\"M4 22h16\"/><path d=\"M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22\"/><path d=\"M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22\"/><path d=\"M18 2H6v7a6 6 0 0 0 12 0z\"/>", "keywords": "award winner champion victory"},
+        {"name": "medal", "paths": "<path d=\"M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15\"/><path d=\"M11 12 5.12 2.2\"/><path d=\"m13 12 5.88-9.8\"/><path d=\"M8 7h8\"/><circle cx=\"12\" cy=\"17\" r=\"5\"/><path d=\"M12 18v-2h-.5\"/>", "keywords": "award recognition prize sports"},
+        {"name": "footprints", "paths": "<path d=\"M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z\"/><path d=\"M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z\"/><path d=\"M16 17h4\"/><path d=\"M4 13h4\"/>", "keywords": "walk steps trail movement"},
+        {"name": "running", "paths": "<circle cx=\"17\" cy=\"4\" r=\"2\"/><path d=\"M15.18 11.42 12 14l-3-1L8 18l-2.5 4\"/><path d=\"M14 14.5 13 11l3 4 4-1 1 4\"/><path d=\"m9.5 11-3 4-3-1\"/>", "keywords": "exercise jog cardio fitness"}
+      ]
+    },
+    {
+      "name": "More UI",
+      "icons": [
+        {"name": "expand", "paths": "<path d=\"M21 21H3V3\"/><path d=\"m21 3-9 9\"/><path d=\"M15 3h6v6\"/>", "keywords": "fullscreen enlarge grow"},
+        {"name": "shrink", "paths": "<path d=\"m15 15 6 6m-6-6v4.8m0-4.8h4.8\"/><path d=\"M9 19.8V15m0 0H4.2M9 15l-6 6\"/><path d=\"M15 4.2V9m0 0h4.8M15 9l6-6\"/><path d=\"M9 4.2V9m0 0H4.2M9 9 3 3\"/>", "keywords": "minimize collapse"},
+        {"name": "maximize-2", "paths": "<polyline points=\"15 3 21 3 21 9\"/><polyline points=\"9 21 3 21 3 15\"/><line x1=\"21\" y1=\"3\" x2=\"14\" y2=\"10\"/><line x1=\"3\" y1=\"21\" x2=\"10\" y2=\"14\"/>", "keywords": "expand fullscreen"},
+        {"name": "minimize-2", "paths": "<polyline points=\"4 14 10 14 10 20\"/><polyline points=\"20 10 14 10 14 4\"/><line x1=\"14\" y1=\"10\" x2=\"21\" y2=\"3\"/><line x1=\"3\" y1=\"21\" x2=\"10\" y2=\"14\"/>", "keywords": "collapse shrink"},
+        {"name": "trash-2", "paths": "<path d=\"M3 6h18\"/><path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6\"/><path d=\"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\"/><line x1=\"10\" y1=\"11\" x2=\"10\" y2=\"17\"/><line x1=\"14\" y1=\"11\" x2=\"14\" y2=\"17\"/>", "keywords": "delete remove garbage bin"},
+        {"name": "history", "paths": "<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\"/><path d=\"M3 3v5h5\"/><path d=\"M12 7v5l4 2\"/>", "keywords": "log timeline past activity"},
+        {"name": "bookmark-plus", "paths": "<path d=\"m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z\"/><line x1=\"12\" y1=\"7\" x2=\"12\" y2=\"13\"/><line x1=\"15\" y1=\"10\" x2=\"9\" y2=\"10\"/>", "keywords": "save add favorite collection"},
+        {"name": "bookmark-check", "paths": "<path d=\"m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z\"/><polyline points=\"15 7 11 12.25 9 10\"/>", "keywords": "saved favorite"},
+        {"name": "lightbulb", "paths": "<path d=\"M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5\"/><path d=\"M9 18h6\"/><path d=\"M10 22h4\"/>", "keywords": "idea tip hint discover"},
+        {"name": "sticker", "paths": "<path d=\"M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z\"/><path d=\"M15 3v6h6\"/><path d=\"M10 16s.8 1 2 1c1.3 0 2-1 2-1\"/><path d=\"M8 13h0\"/><path d=\"M16 13h0\"/>", "keywords": "decal label badge tag"},
+        {"name": "ticket", "paths": "<path d=\"M2 9a3 3 0 1 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 1 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z\"/><path d=\"M13 5v2\"/><path d=\"M13 17v2\"/><path d=\"M13 11v2\"/>", "keywords": "pass coupon admission concert"},
+        {"name": "puzzle", "paths": "<path d=\"M19.439 7.85c-.049.322.059.648.289.878l1.568 1.568c.47.47.706 1.087.706 1.704s-.235 1.233-.706 1.704l-1.611 1.611a.98.98 0 0 1-.837.276c-.47-.07-.802-.48-.968-.925a2.501 2.501 0 1 0-3.214 3.214c.446.166.855.497.925.968a.979.979 0 0 1-.276.837l-1.61 1.61a2.404 2.404 0 0 1-1.705.707 2.402 2.402 0 0 1-1.704-.706l-1.568-1.568a1.026 1.026 0 0 0-.877-.29c-.493.074-.84.504-1.02.968a2.5 2.5 0 1 1-3.237-3.237c.464-.18.894-.527.967-1.02a1.026 1.026 0 0 0-.289-.877l-1.568-1.568A2.402 2.402 0 0 1 1.998 12c0-.617.236-1.234.706-1.704L4.23 8.77c.24-.24.581-.353.917-.303.515.077.877.528 1.073 1.01a2.5 2.5 0 1 0 3.259-3.259c-.482-.196-.933-.558-1.01-1.073-.05-.336.062-.676.303-.917l1.525-1.525A2.402 2.402 0 0 1 12 1.998c.617 0 1.234.236 1.704.706l1.568 1.568c.23.23.556.338.877.29.493-.074.84-.504 1.02-.968a2.5 2.5 0 1 1 3.237 3.237c-.464.18-.894.527-.967 1.02Z\"/>", "keywords": "puzzle plugin extension piece"},
+        {"name": "coins", "paths": "<circle cx=\"8\" cy=\"8\" r=\"6\"/><path d=\"M18.09 10.37A6 6 0 1 1 10.34 18\"/><path d=\"M7 6h1v4\"/><path d=\"m16.71 13.88.7.71-2.82 2.82\"/>", "keywords": "money currency cash coin payment"},
+        {"name": "wallet", "paths": "<path d=\"M21 12V7H5a2 2 0 0 1 0-4h14v4\"/><path d=\"M3 5v14a2 2 0 0 0 2 2h16v-5\"/><path d=\"M18 12a2 2 0 0 0 0 4h4v-4Z\"/>", "keywords": "money pay account billing"},
+        {"name": "hand-coins", "paths": "<path d=\"M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17\"/><path d=\"m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9\"/><path d=\"m2 16 6 6\"/><circle cx=\"16\" cy=\"9\" r=\"2.9\"/><circle cx=\"6\" cy=\"5\" r=\"3\"/>", "keywords": "tip pay donate receive"},
+        {"name": "calculator", "paths": "<rect width=\"16\" height=\"20\" x=\"4\" y=\"2\" rx=\"2\"/><line x1=\"8\" y1=\"6\" x2=\"16\" y2=\"6\"/><line x1=\"16\" y1=\"14\" x2=\"16\" y2=\"18\"/><path d=\"M16 10h.01\"/><path d=\"M12 10h.01\"/><path d=\"M8 10h.01\"/><path d=\"M12 14h.01\"/><path d=\"M8 14h.01\"/><path d=\"M12 18h.01\"/><path d=\"M8 18h.01\"/>", "keywords": "math compute number numeric"},
+        {"name": "calendar-clock", "paths": "<path d=\"M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5\"/><path d=\"M16 2v4\"/><path d=\"M8 2v4\"/><path d=\"M3 10h5\"/><path d=\"M17.5 17.5 16 16.25V14\"/><circle cx=\"16\" cy=\"16\" r=\"6\"/>", "keywords": "schedule time appointment date"},
+        {"name": "calendar-check", "paths": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"4\" rx=\"2\" ry=\"2\"/><line x1=\"16\" y1=\"2\" x2=\"16\" y2=\"6\"/><line x1=\"8\" y1=\"2\" x2=\"8\" y2=\"6\"/><line x1=\"3\" y1=\"10\" x2=\"21\" y2=\"10\"/><path d=\"m9 16 2 2 4-4\"/>", "keywords": "schedule done confirmed appointment"},
+        {"name": "graduation-cap", "paths": "<path d=\"M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z\"/><path d=\"M22 10v6\"/><path d=\"M6 12.5V16a6 3 0 0 0 12 0v-3.5\"/>", "keywords": "education school academic university"},
+        {"name": "school", "paths": "<path d=\"M14 22v-4a2 2 0 1 0-4 0v4\"/><path d=\"m18 10 3.447 1.724a1 1 0 0 1 .553.894V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7.382a1 1 0 0 1 .553-.894L6 10\"/><path d=\"M18 5v17\"/><path d=\"m4 6 7.106-3.553a2 2 0 0 1 1.788 0L20 6\"/><path d=\"M6 5v17\"/><circle cx=\"12\" cy=\"9\" r=\"2\"/>", "keywords": "education academic university student building"},
+        {"name": "newspaper", "paths": "<path d=\"M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2\"/><path d=\"M18 14h-8\"/><path d=\"M15 18h-5\"/><path d=\"M10 6h8v4h-8V6Z\"/>", "keywords": "press article news media"}
+      ]
     }
   ]
 }

@@ -1926,11 +1926,16 @@ html[data-theme="dark"] .fe-megamenu-search-input::placeholder { color: #64748b;
 .fe-megamenu-label { flex: 0 1 auto; min-width: 0;
   white-space: normal; overflow-wrap: anywhere; }
 .fe-megamenu-chevron { display: inline-flex; align-items: center; flex: 0 0 auto;
-  margin-left: auto;  /* keep the hover chevron pinned to the right edge */
-  opacity: 0; transform: translateX(-6px);
-  transition: opacity 140ms ease, transform 140ms ease; }
-.fe-megamenu-chevron .icon { width: 16px; height: 16px; }
-.fe-megamenu-link:hover .fe-megamenu-chevron { opacity: 1; transform: translateX(0); }
+  margin-left: auto;       /* pin to the right edge */
+  /* Inherit text colour via currentColor on the SVG stroke and run
+     at full opacity so the chevron renders the same shade as the
+     surrounding link label. */
+  color: inherit;
+  opacity: 1;
+  transform: translateX(0);
+  transition: transform 140ms ease; }
+.fe-megamenu-chevron .icon { width: 20px; height: 20px; }
+.fe-megamenu-link:hover .fe-megamenu-chevron { transform: translateX(3px); }
 
 /* ---------- DCCMA mega menu blocks (title / button / section) ---------- */
 .fe-megamenu-blocks { display: flex; flex-direction: column; gap: 2px; }
@@ -2076,10 +2081,21 @@ html[data-theme="dark"] .fe-megamenu-classic-search-icon { color: #94a3b8; }
 html[data-theme="dark"] .fe-megamenu-classic-search-input::placeholder { color: #64748b; }
 .fe-megamenu-classic-label { flex: 1 1 auto; min-width: 0;
   white-space: normal; overflow-wrap: anywhere; }
-.fe-megamenu-classic-arrow { flex: 0 0 auto; opacity: 0; font-size: 0.9rem;
-  transform: translateX(-4px); transition: opacity 140ms, transform 140ms; }
+.fe-megamenu-classic-arrow {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  margin-left: auto;       /* pin to the right edge */
+  /* Match the link label's colour exactly: inherit via currentColor
+     and stay fully opaque. The hover slide is the only motion. */
+  color: inherit;
+  opacity: 1;
+  transform: translateX(0);
+  transition: transform 140ms ease;
+}
+.fe-megamenu-classic-arrow .icon { width: 20px; height: 20px; }
 .fe-megamenu-classic-link:hover .fe-megamenu-classic-arrow {
-  opacity: 0.85; transform: translateX(0); }
+  transform: translateX(3px);
+}
 
 /* ---------- Classic mega menu blocks (title / button / section) ---------- */
 .fe-megamenu-classic-blocks { display: flex; flex-direction: column; gap: 2px; }
@@ -2270,16 +2286,17 @@ html[data-theme="dark"] .fe-hero-heading { background: linear-gradient(180deg, #
 html[data-theme="dark"] .fe-hero-sub { color: #94a3b8; }
 html[data-theme="dark"] .fe-hero-blob { opacity: 0.25; }
 html[data-theme="dark"] .fe-hero-eyebrow { background: rgba(81,100,255,0.18); color: #7aa3ff; }
-html[data-theme="dark"] .fe-btn-primary { background: #e2e8f0; color: #0b1026;
+html[data-theme="dark"] .fe-btn-primary { background: #052566; color: #e2e8f0;
   box-shadow: var(--fe-btn-shadow, 0 8px 24px rgba(0,0,0,0.4)); }
-/* Explicit ``color`` on the dark hover — the lower-specificity
-   ``.frontend-body .fe-btn-primary:hover`` rule resolves
-   ``color: var(--fe-color-btn-primary-text, #fff)`` to white via the
-   design tokens, which would land white text on the white hover
-   background and hide the label. Pinning the dark text colour here
-   wins the cascade because the dark rule outranks
-   ``.frontend-body`` on specificity. */
-html[data-theme="dark"] .fe-btn-primary:hover { background: #fff; color: #0b1026; }
+/* Hover: lighten the deep navy bg slightly so the press affordance
+   reads on dark themes; keep the same #e2e8f0 label so contrast
+   doesn't flip mid-hover. The explicit `color` here wins over the
+   lower-specificity `.frontend-body .fe-btn-primary:hover` rule
+   that would otherwise resolve to `#fff` via the design tokens. */
+html[data-theme="dark"] .fe-btn-primary:hover {
+  background: color-mix(in srgb, #052566 80%, #fff 20%);
+  color: #e2e8f0;
+}
 html[data-theme="dark"] .fe-btn-ghost { background: transparent; color: #e2e8f0; border-color: #334155; }
 /* Same fix on the ghost variant: the inherited hover color
    resolves to ``#0f172a`` (dark slate) via the secondary-text token,
@@ -2373,6 +2390,38 @@ html[data-theme="dark"] .fe-section-head p { color: #94a3b8; }
 /* Meetings */
 html[data-theme="dark"] .fe-meeting-card { background: #131a33; border-color: #1f2a44; }
 html[data-theme="dark"] .fe-meeting-card:hover { box-shadow: 0 10px 28px rgba(0,0,0,0.45); }
+/* Meetings-list cards (`.fe-mlist-card`) — distinct from the
+   homepage `.fe-meeting-card`. Without a dark-mode override these
+   would inherit the default white bg and read as a stark light
+   tile against the dark page. Match the events-list `#131a33`
+   dark-mode card colour for visual continuity, but at 85% alpha
+   so any page-level dynbg behind the directory paints subtly
+   through the cards instead of the cards reading as opaque
+   blocks against the backdrop. */
+html[data-theme="dark"] .fe-mlist-card,
+body.fe-frontend-force-dark .fe-mlist-card {
+  /* Darker than the page bg (`#0b1220`-ish under the default
+     theme) so each card reads as a sunken tile against the surface
+     rather than a lighter raised one. The `#05080f` base sits a
+     few stops below the page; 85% alpha lets any dynamic backdrop
+     paint subtly through. */
+  background: rgba(5, 8, 15, 0.85);
+  border-color: #1f2a44;
+}
+html[data-theme="dark"] .fe-mlist-card:hover,
+body.fe-frontend-force-dark .fe-mlist-card:hover {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+/* Description inherits the `muted` utility class from the template,
+   which renders dim grey on dark — making the desc copy fade out
+   while the title stays bright. Force the desc back to the card's
+   text colour so it reads at the same weight as the title. */
+html[data-theme="dark"] .fe-mlist-card .fe-mlist-card-desc,
+html[data-theme="dark"] .fe-mlist-card .fe-mlist-card-desc.muted,
+body.fe-frontend-force-dark .fe-mlist-card .fe-mlist-card-desc,
+body.fe-frontend-force-dark .fe-mlist-card .fe-mlist-card-desc.muted {
+  color: inherit;
+}
 
 /* Unified dark-mode hover border for every card-shaped block on the
    public homepage (and detail pages reusing these classes). The
@@ -2902,6 +2951,36 @@ html[data-theme="dark"] .fe-event-date-year { color: #94a3b8; }
 .fe-meeting-detail-day { font-weight: 700; color: var(--fe-ink); }
 .fe-meeting-detail-time { color: var(--fe-ink); font-variant-numeric: tabular-nums; }
 .fe-meeting-detail-location { font-size: 1rem; line-height: 1.55; margin: 0 0 16px; }
+
+/* Add-to-Calendar button — sits below the schedule list on the
+   meeting detail card. Inherits the .fe-btn-ghost neutral styling
+   and adds top spacing so it reads as a follow-on action rather
+   than visually merging with the last schedule row. */
+.fe-meeting-detail-ics {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 14px;
+}
+.fe-meeting-detail-ics .icon { width: 16px; height: 16px; }
+.fe-meeting-detail-ics-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 8px;
+}
+.fe-meeting-detail-ics-link .icon { width: 14px; height: 14px; }
+
+/* Add-to-Calendar pill on the meeting card — adopts the same
+   ghost-button chrome as Get Directions. The icon stays sized to
+   align with the existing pill icons (Join Zoom, Get Directions). */
+.fe-mlist-card-ics .icon { width: 14px; height: 14px; }
+
+/* Add-to-Calendar inline link inside the timeline meta-item. Sits on
+   a new line under the start/end time so it reads as an action on
+   the When row rather than a literal time fragment. */
+.fe-event-time-link-ics {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 4px;
+}
+.fe-event-time-link-ics .icon { width: 14px; height: 14px; }
+.fe-event-min-ics { margin-top: -4px; }
 
 /* Zoom credentials list — definition list with copy buttons. */
 .fe-meeting-detail-zoom .fe-btn { margin-bottom: 18px; }
@@ -7042,6 +7121,47 @@ body.fe-frontend-force-dark .fe-archive-types-legend {
   border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
 }
 
+/* Public-display warning that sits above the event-contact fieldset.
+   Soft amber band so submitters can't miss that whatever they type
+   below will be visible to the public on the published post. */
+.fe-submission-public-warning {
+  margin: -2px 0 4px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: color-mix(in srgb, #f59e0b 14%, transparent);
+  color: #92400e;
+  border: 1px solid color-mix(in srgb, #f59e0b 35%, transparent);
+  line-height: 1.45;
+}
+.fe-submission-public-warning strong { color: #78350f; }
+html[data-theme="dark"] .fe-submission-public-warning,
+body.fe-frontend-force-dark .fe-submission-public-warning {
+  background: color-mix(in srgb, #f59e0b 22%, transparent);
+  color: #fde68a;
+  border-color: color-mix(in srgb, #f59e0b 50%, transparent);
+}
+html[data-theme="dark"] .fe-submission-public-warning strong,
+body.fe-frontend-force-dark .fe-submission-public-warning strong {
+  color: #fffbeb;
+}
+
+/* Dark-mode flash colours — light reds / greens against the
+   near-black card surface so the message is readable when the page
+   is in dark mode. The light-mode rule's #047857 / #b91c1c text
+   colour is too dark to read on the dark card otherwise. */
+html[data-theme="dark"] .fe-submission-flashes .flash-success,
+body.fe-frontend-force-dark .fe-submission-flashes .flash-success {
+  background: color-mix(in srgb, #10b981 22%, transparent);
+  color: #6ee7b7;
+  border-color: color-mix(in srgb, #10b981 45%, transparent);
+}
+html[data-theme="dark"] .fe-submission-flashes .flash-danger,
+body.fe-frontend-force-dark .fe-submission-flashes .flash-danger {
+  background: color-mix(in srgb, #ef4444 22%, transparent);
+  color: #fca5a5;
+  border-color: color-mix(in srgb, #ef4444 45%, transparent);
+}
+
 /* Form layout — matches the request-access form's vertical stack. */
 .fe-submission-form {
   display: flex;
@@ -7353,4 +7473,1549 @@ body.fe-frontend-force-dark .fe-submission-modal-body {
   /* Disable the light-mode scroll-edge shadow stack — its baked
      white stops would smear across the dark body. */
   background: var(--fe-dm-surface);
+}
+
+/* ===== Content pages (Pages admin → /<slug>) ─ Showcase layout =====
+   Elegant single-column rendering for admin-authored content pages.
+   Lives under .fe-pp ("page page") so the existing block-render CSS
+   for Zoom Tech and other rich-content surfaces stays untouched. */
+.fe-pp { padding: 80px 0 96px; }
+/* Shell width is now driven by inline style on the element (boxed
+   uses page.max_width, full uses no max-width with viewport-%
+   padding) so each page can pick its own page-wide width formatting
+   from the admin. The auto margins keep boxed mode centered when
+   the inline max-width applies. */
+.fe-pp-shell { margin-left: auto; margin-right: auto; padding-left: 16px; padding-right: 16px; }
+.fe-pp-w-full .fe-pp-shell { padding-left: 0; padding-right: 0; }
+
+/* Hero: title + lead + image + CTA, all centered, generous whitespace. */
+.fe-pp-hero { text-align: center; }
+.fe-pp-title {
+  font-family: var(--fe-font-display);
+  font-size: clamp(2.25rem, 4.6vw, 3.75rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  margin: 0 0 22px;
+  color: var(--fe-color-text, var(--fe-ink));
+}
+.fe-pp-lead {
+  font-size: clamp(1.0625rem, 1.4vw, 1.25rem);
+  line-height: 1.55;
+  color: var(--fe-ink-muted);
+  max-width: 60ch;
+  margin: 0 auto 28px;
+}
+.fe-pp-lead p { margin: 0; }
+.fe-pp-lead p + p { margin-top: 14px; }
+
+/* Image figure — minimal CSS. No baked-in border-radius, shadow,
+   text-align, or margin so a freshly-dropped image renders exactly
+   like its block data says: unstyled. The renderer applies inline
+   styles ONLY when the admin chose alignment, width, or caption
+   colour/size in the block settings. The figcaption keeps its
+   font-size + colour because those are reading defaults, not
+   visual chrome — admins can override via the caption fields. */
+.fe-pp-figure { margin: 0; }
+.fe-pp-figure img {
+  max-width: 100%;
+  height: auto;
+  /* Image-block corner roundness rides through the `--img-radius`
+     custom property the renderer sets (see `frontend/page.html` +
+     `_blocks.html`). Falls back to 0 (sharp corners) when the admin
+     hasn't set a radius. The mobile media query below halves the
+     value so a hero image with 32px corners on desktop softens to
+     16px on phones — the proportional scale keeps the radius
+     visually balanced as the image itself shrinks. */
+  border-radius: var(--img-radius, 0);
+}
+@media (max-width: 560px) {
+  .fe-pp-figure img,
+  .block-image img {
+    border-radius: calc(var(--img-radius, 0) / 2);
+  }
+}
+.fe-pp-figure figcaption {
+  /* Caption gets minimal reading-comfort defaults — small spacing
+     above so it doesn't kiss the image, font-size + colour come
+     from the block's caption_color / caption_size settings via
+     inline style. No baked-in muted colour; the figcaption inherits
+     the surrounding text colour unless the admin explicitly
+     overrides via the Caption colour field in the image settings. */
+  margin-top: 8px;
+}
+
+/* Single-link paragraph → centered CTA row. */
+.fe-pp-cta-row {
+  margin: 32px 0;
+  text-align: center;
+}
+.fe-pp-cta-row .fe-btn { display: inline-flex; }
+
+/* Icon block — wrapper handles alignment via flex; the icon's font-size
+   sits on the wrapper's inline style so the `.icon` em-sized SVG scales
+   from there. Each alignment variant maps to flex justify-content. */
+.block-icon {
+  display: flex;
+  width: 100%;
+}
+.block-icon--left   { justify-content: flex-start; }
+.block-icon--center { justify-content: center; }
+.block-icon--right  { justify-content: flex-end; }
+.block-icon a { color: inherit; line-height: 0; }
+
+/* Slightly larger CTA pill for hero affordances. */
+.fe-page .fe-btn-lg,
+.frontend-body .fe-btn-lg {
+  padding: 16px 36px;
+  font-size: 1.0625rem;
+  letter-spacing: 0.01em;
+}
+
+/* Subsequent sections — minimal margin-only separation. The
+   previous chrome (top-border + padding-top) imposed visual styling
+   the admin couldn't see or override from any edit modal; now
+   sections just stack with consistent vertical breathing room.
+   Container blocks inside a section can opt INTO chrome (border,
+   shadow, padding) via their settings panel. */
+.fe-pp-section { margin-top: 32px; }
+.fe-pp-section:first-of-type { margin-top: 0; }
+.fe-pp-section-title {
+  /* Section titles only render when the admin set `sec.title`, and
+     they keep theme-derived font + colour (typography, not chrome).
+     `text-align: center` was forced visual styling and has been
+     removed — the title now follows its parent's text alignment so
+     the admin's choice (left-aligned page, centered page, etc.)
+     wins. */
+  font-family: var(--fe-font-display);
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  font-weight: 700;
+  margin: 0 0 20px;
+  color: var(--fe-color-text, var(--fe-ink));
+}
+
+/* Body prose inside sections. Centered for the hero, left-aligned
+   for content sections — picked up via CSS specificity. */
+.fe-pp-prose {
+  font-size: 1.03125rem;
+  line-height: 1.65;
+  color: var(--fe-color-text, var(--fe-ink));
+}
+.fe-pp-prose p { margin: 0 0 16px; }
+.fe-pp-prose p:last-child { margin-bottom: 0; }
+/* Paragraphs in sections used to auto-center + clamp to 640px and
+   text-align: center, which silently styled every body paragraph.
+   Removed — paragraph blocks now render with their natural width
+   and text alignment, so the typography panel's Alignment toggle
+   is the only thing that decides text-align. */
+/* (Was: `.fe-pp-section .fe-pp-prose:has(+ .fe-pp-steps) { margin-bottom: 28px }`
+   — auto-applied 28px gap before a steps list. Removed; container
+   `gap` is the only source of inter-block spacing now.) */
+
+/* Numbered step list — each item is a soft card with a circular
+   numeral on the left. Used for conduct policies, FAQs, anything
+   list-shaped that benefits from visual rhythm. */
+.fe-pp-steps {
+  list-style: none;
+  /* No top/bottom margin so the cards sit flush against neighbour
+     blocks; spacing inside the parent container is owned by the
+     container's `gap` setting (the admin's source of truth). */
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+  counter-reset: fe-pp-step;
+}
+.fe-pp-step {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 18px;
+  align-items: start;
+  padding: 18px 22px;
+  background: var(--fe-panel-soft);
+  /* Border style mirrors `.fe-meeting-card` so list cards visually
+     pair with meeting cards across the site — accent-coloured 1 px
+     stroke + 16 px radius + the same hover lift / shadow recipe. */
+  border: 1px solid var(--fe-accent);
+  border-radius: 16px;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+.fe-pp-step:hover {
+  /* Hover behaviour gates on per-card CSS variables so the admin
+     can disable the lift via the "Hover lift" toggle in the card
+     style panel. Default (no override): lift -2px + soft shadow.
+     `--fe-pp-step-hover-lift: 0` sets the translation to 0;
+     `--fe-pp-step-hover-shadow: none` swaps the shadow to none. */
+  transform: translateY(calc(var(--fe-pp-step-hover-lift, 1) * -2px));
+  box-shadow: var(--fe-pp-step-hover-shadow, 0 8px 28px rgba(15, 23, 42, 0.10));
+}
+.fe-pp-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--fe-color-btn-primary-bg, var(--fe-ink));
+  color: var(--fe-color-btn-primary-text, #fff);
+  font-weight: 700;
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+.fe-pp-step-body {
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--fe-color-text, var(--fe-ink));
+}
+.fe-pp-step-body p { margin: 0; }
+.fe-pp-step-body p + p { margin-top: 8px; }
+
+/* No baked-in spacing between a steps block and the next prose
+   block — the parent container's `gap` setting owns inter-block
+   spacing. Same for tonal/sizing chrome that used to apply by
+   adjacency: kept the visual neutral so the admin's typography +
+   container settings are the only source of layout truth. */
+
+/* ── List block — alternative display styles ────────────────────
+   Each style is opt-in via the block's `display_style` field
+   (the "Display style" dropdown in the list editor). The default
+   plain ul/ol with marker style stays unchanged when no style is
+   selected. */
+
+/* Checklist + arrows: a marker glyph in a brand-tinted circle, plus
+   the item text. Items stack vertically with consistent rhythm. */
+.fe-pp-list-checklist,
+.fe-pp-list-arrows {
+  list-style: none; padding: 0; margin: 16px 0;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.fe-pp-list-checklist > li,
+.fe-pp-list-arrows > li {
+  display: grid; grid-template-columns: 28px 1fr;
+  gap: 12px; align-items: start;
+}
+.fe-pp-list-checklist .fe-pp-list-mark,
+.fe-pp-list-arrows .fe-pp-list-mark {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+  border-radius: 999px;
+  font-size: 0.875rem; font-weight: 700; line-height: 1;
+  margin-top: 2px;
+}
+.fe-pp-list-checklist .fe-pp-list-mark {
+  background: color-mix(in srgb, var(--fe-accent, #5164ff) 18%, transparent);
+  color: var(--fe-accent, #5164ff);
+}
+.fe-pp-list-arrows .fe-pp-list-mark {
+  background: var(--fe-panel-soft, transparent);
+  color: var(--fe-color-text, var(--fe-ink));
+}
+.fe-pp-list-checklist .fe-pp-list-text,
+.fe-pp-list-arrows .fe-pp-list-text {
+  display: inline-block;
+  font-size: 1rem; line-height: 1.55;
+}
+.fe-pp-list-checklist .fe-pp-list-text > p,
+.fe-pp-list-arrows .fe-pp-list-text > p { margin: 0; }
+.fe-pp-list-checklist .fe-pp-list-text > p + p,
+.fe-pp-list-arrows .fe-pp-list-text > p + p { margin-top: 6px; }
+
+/* Inline pills — each item becomes a rounded chip; the list flows
+   horizontally and wraps. Useful for tag clouds, feature highlights,
+   "what we offer" rows. */
+.fe-pp-list-pills {
+  list-style: none; padding: 0; margin: 16px 0;
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.fe-pp-list-pills > li {
+  padding: 6px 14px; border-radius: 999px;
+  background: var(--fe-panel-soft, color-mix(in srgb, currentColor 6%, transparent));
+  border: 1px solid var(--fe-border, color-mix(in srgb, currentColor 12%, transparent));
+  font-size: 0.9375rem; line-height: 1.4;
+  color: var(--fe-color-text, var(--fe-ink));
+}
+.fe-pp-list-pills > li > p { margin: 0; display: inline; }
+
+/* Dark-mode parity for the alternate styles. */
+html[data-theme="dark"] .fe-pp-list-arrows .fe-pp-list-mark {
+  background: color-mix(in srgb, var(--fe-color-surface, #131a2c) 70%, #1a2236);
+  color: var(--fe-dm-text, #cbd5e1);
+}
+html[data-theme="dark"] .fe-pp-list-pills > li {
+  background: color-mix(in srgb, var(--fe-color-surface, #131a2c) 70%, #1a2236);
+  border-color: var(--fe-dm-border, #1f2a40);
+  color: var(--fe-dm-text, #cbd5e1);
+}
+
+/* Dark mode parity — surface, border, and shadow tokens already shift
+   via the design system; tune the step-card contrast so it reads
+   cleanly against the dark page surface. */
+html[data-theme="dark"] .fe-pp-step {
+  /* Dark-mode parity with `.fe-meeting-card` — same surface + border
+     tokens so list cards and meeting cards read as the same family
+     under either theme. */
+  background: #131a33;
+  border-color: #1f2a44;
+}
+html[data-theme="dark"] .fe-pp-step:hover {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+@media (max-width: 640px) {
+  .fe-pp { padding: 56px 0 72px; }
+  .fe-pp-section { margin-top: 24px; }
+  .fe-pp-step { grid-template-columns: 36px 1fr; gap: 14px; padding: 14px 16px; }
+  .fe-pp-step-num { width: 30px; height: 30px; font-size: 0.875rem; }
+}
+
+/* ===== Pages: two-column hero (split) ===== */
+.fe-pp-split .fe-pp-shell { max-width: 1100px; }
+.fe-pp-hero-split {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 1rem;
+  align-items: center;
+  text-align: left;
+  margin-bottom: 12px;
+}
+.fe-pp-hero-media { display: flex; flex-direction: column; gap: 24px; }
+.fe-pp-hero-split .fe-pp-title {
+  text-align: left;
+  margin: 0;
+}
+.fe-pp-hero-split .fe-pp-figure { margin: 0; }
+.fe-pp-hero-split .fe-pp-figure img {
+  border-radius: 22px;
+}
+
+/* Copy column — soft card with breathing-room padding. Children stack
+   with a uniform 1rem gap (paragraph → CTA → supporting copy, etc.)
+   so spacing reads consistently regardless of which blocks the admin
+   added. Per-element margins are zeroed because the flex `gap`
+   handles the rhythm — using both would double-count the spacing. */
+.fe-pp-hero-card {
+  background: var(--fe-color-surface, var(--fe-panel));
+  border: 1px solid var(--fe-border);
+  border-radius: 22px;
+  padding: 40px 44px;
+  box-shadow: var(--fe-shadow, 0 12px 40px rgba(15, 23, 42, 0.10));
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.fe-pp-hero-card > * { margin: 0; }
+.fe-pp-hero-card .fe-pp-lead {
+  text-align: left;
+  max-width: none;
+  color: var(--fe-color-text, var(--fe-ink));
+}
+.fe-pp-hero-card .fe-pp-prose { text-align: left; }
+.fe-pp-hero-card .fe-pp-prose p { margin: 0; }
+.fe-pp-hero-card .fe-pp-prose p + p { margin-top: 0.75rem; }
+.fe-pp-hero-card .fe-pp-cta-row {
+  text-align: left;
+  margin: 0;
+}
+
+/* Section after a split hero gets its own breathing room — the hero
+   card already provides closure so we don't need a heavy divider. */
+.fe-pp-split .fe-pp-section:first-of-type {
+  margin-top: 80px;
+}
+
+@media (max-width: 880px) {
+  .fe-pp-hero-split {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .fe-pp-hero-card { padding: 28px 24px; border-radius: 18px; }
+  .fe-pp-hero-split .fe-pp-figure img { border-radius: 16px; }
+}
+
+/* ===== Pages: background image surface =====
+   The article carries an inline background-image when an admin uploads
+   one; these rules tune the legibility scaffolding (slight overlay in
+   tile mode so dense patterns don't fight the prose, none for cover so
+   photographs stay vivid). */
+.fe-pp-has-bg { position: relative; isolation: isolate; }
+.fe-pp-bg-tile {
+  /* Faint white veil over busy patterns so body copy stays readable
+     when no hero card is present. The two-column variant places its
+     prose inside .fe-pp-hero-card which already opaque-fills the
+     reading surface, so the veil there is barely necessary — it just
+     softens the edges. */
+  background-color: color-mix(in srgb, var(--fe-color-surface, #fff) 12%, transparent);
+}
+html[data-theme="dark"] .fe-pp-bg-tile {
+  background-color: color-mix(in srgb, var(--fe-color-surface, #0e111b) 25%, transparent);
+}
+
+/* Pages with a background image used to auto-wrap every section in
+   white-card chrome (background + border + radius + padding) so the
+   content sat on a "readable surface". That imposed visual styling
+   the admin couldn't see or override from any block edit modal —
+   removed entirely. If the admin wants a card around their content
+   on a busy bg, they wrap it in a Container block and set the
+   background / border / radius via the container's settings panel. */
+
+/* (admin page-bg + page-typo styles live in app.css) */
+
+/* ===== Pages: per-page typography overrides + alignment ===== */
+.fe-pp-title {
+  font-family: var(--fe-pp-heading-font, var(--fe-font-display));
+  color: var(--fe-pp-heading-color, var(--fe-color-text, var(--fe-ink)));
+}
+.fe-pp-section-title {
+  font-family: var(--fe-pp-subheading-font, var(--fe-font-display));
+  color: var(--fe-pp-subheading-color, var(--fe-color-text, var(--fe-ink)));
+}
+.fe-pp-hero-card .fe-pp-lead { color: var(--fe-color-text, var(--fe-ink)); }
+
+/* Alignment — `.fe-pp-halign-auto` is the default (centered single-col,
+   left-aligned in split). The explicit modes win regardless of layout. */
+.fe-pp-halign-left  .fe-pp-title,
+.fe-pp-halign-left  .fe-pp-section-title { text-align: left; }
+.fe-pp-halign-center .fe-pp-title,
+.fe-pp-halign-center .fe-pp-section-title { text-align: center; }
+.fe-pp-halign-right .fe-pp-title,
+.fe-pp-halign-right .fe-pp-section-title { text-align: right; }
+/* Explicit alignment overrides the split default of left-aligned. */
+.fe-pp-split.fe-pp-halign-center .fe-pp-title,
+.fe-pp-split.fe-pp-halign-right  .fe-pp-title { text-align: inherit; }
+.fe-pp-split.fe-pp-halign-center .fe-pp-hero-media { text-align: center; }
+.fe-pp-split.fe-pp-halign-right  .fe-pp-hero-media { text-align: right; }
+
+/* ===== Pages: dark-mode bg dim + full dark-mode audit ===== */
+
+/* Dim overlay sits between the bg image and the page content. The
+   variable defaults to transparent; dark mode raises it to a soft
+   black wash so admin-uploaded photos / patterns don't blow out the
+   dark theme's contrast. The `> *` rule promotes the .fe-container
+   into the same stacking context as the overlay so content paints
+   above it (without this, ::after's z-index 0 sits above non-
+   positioned children's auto z-index in painting order). */
+.fe-pp-has-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--fe-pp-bg-dim, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+.fe-pp-has-bg > * { position: relative; z-index: 1; }
+
+html[data-theme="dark"] .fe-pp-has-bg.fe-pp-bg-cover { --fe-pp-bg-dim: rgba(0, 0, 0, 0.55); }
+html[data-theme="dark"] .fe-pp-has-bg.fe-pp-bg-tile  { --fe-pp-bg-dim: rgba(0, 0, 0, 0.45); }
+
+/* Page chrome dark-mode — surfaces, borders, text. The base tokens
+   already shift via the design system; these rules tighten the
+   specific contrast for the showcase elements. */
+html[data-theme="dark"] .fe-pp-title { color: var(--fe-pp-heading-color, var(--fe-dm-text-strong, #f1f5f9)); }
+html[data-theme="dark"] .fe-pp-section-title { color: var(--fe-pp-subheading-color, var(--fe-dm-text-strong, #f1f5f9)); }
+html[data-theme="dark"] .fe-pp-prose { color: var(--fe-dm-text, #cbd5e1); }
+html[data-theme="dark"] .fe-pp-prose a { color: var(--fe-dm-link, var(--fe-color-link)); }
+html[data-theme="dark"] .fe-pp-lead { color: var(--fe-dm-text-soft, #94a3b8); }
+
+html[data-theme="dark"] .fe-pp-hero-card {
+  background: var(--fe-dm-surface, #131a2c);
+  border-color: var(--fe-dm-border, #1f2a40);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+html[data-theme="dark"] .fe-pp-hero-card .fe-pp-lead,
+html[data-theme="dark"] .fe-pp-hero-card .fe-pp-prose {
+  color: var(--fe-dm-text, #cbd5e1);
+}
+
+html[data-theme="dark"] .fe-pp-step {
+  /* Mirrors `.fe-meeting-card` dark-mode for the same family look. */
+  background: #131a33;
+  border-color: #1f2a44;
+}
+html[data-theme="dark"] .fe-pp-step:hover {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+html[data-theme="dark"] .fe-pp-step-body { color: var(--fe-dm-text, #cbd5e1); }
+html[data-theme="dark"] .fe-pp-step-body a { color: var(--fe-dm-link, var(--fe-color-link)); }
+html[data-theme="dark"] .fe-pp-step-num {
+  background: color-mix(in srgb, var(--fe-accent, #5164ff) 70%, #fff 30%);
+  color: var(--fe-dm-bg, #0e111b);
+}
+
+/* Sections no longer carry a top hairline divider, so the previous
+   dark-mode border-color override is unnecessary. */
+
+/* Dark-mode tokens — define defaults so the rules above resolve even
+   when the surrounding theme hasn't set them. Existing themes that
+   already define `--fe-dm-*` continue to win via cascade. */
+html[data-theme="dark"] .fe-pp {
+  --fe-dm-bg:           #0e111b;
+  --fe-dm-surface:      #131a2c;
+  --fe-dm-border:       #1f2a40;
+  --fe-dm-text:         #cbd5e1;
+  --fe-dm-text-strong:  #f1f5f9;
+  --fe-dm-text-soft:    #94a3b8;
+  --fe-dm-link:         #93c5fd;
+}
+
+/* ===== Admin: typography editor ===== */
+/* (page-typo admin styles moved to app.css) */
+
+/* ===== Button block (admin-authored CTAs) ===== */
+.block-button { margin: 22px 0; }
+.block-button-align-left   { text-align: left; }
+.block-button-align-center { text-align: center; }
+.block-button-align-right  { text-align: right; }
+.block-button .fe-btn { display: inline-flex; }
+
+/* Inside the showcase hero card the button alignment still wins — and
+   spacing tightens slightly so a button doesn't read as an after-
+   thought when it's the last node before supporting copy. */
+.fe-pp-hero-card .block-button { margin: 18px 0 0; }
+
+/* ===== Custom-styled button =====
+   Each `.fe-btn-custom` consumes CSS custom properties set inline by
+   the renderer. Every variable has a sane fallback so a partly-
+   configured button still reads — the admin can just set the bits
+   that matter and inherit the rest. The hover recipe layers two
+   transitions: colour state via the var fallback, lift via the
+   tokenised `--fe-btn-hover-transform`. The shadow sits at the
+   primary-button intensity when `--btn-shadow-color` is set,
+   otherwise nothing. */
+.fe-btn-custom,
+.fe-page .fe-btn-custom,
+.frontend-body .fe-btn-custom {
+  background: var(--btn-bg, var(--fe-color-btn-primary-bg, var(--fe-ink)));
+  color: var(--btn-text, var(--fe-color-btn-primary-text, #fff));
+  border: 1px solid var(--btn-border, transparent);
+  box-shadow: 0 8px 20px var(--btn-shadow-color, transparent);
+  transition: transform 150ms ease, box-shadow 150ms ease,
+              background 150ms ease, color 150ms ease,
+              border-color 150ms ease;
+}
+.fe-btn-custom:hover,
+.fe-page .fe-btn-custom:hover,
+.frontend-body .fe-btn-custom:hover {
+  background: var(--btn-hover-bg, var(--btn-bg, var(--fe-color-btn-primary-bg, var(--fe-ink))));
+  color: var(--btn-hover-text, var(--btn-text, var(--fe-color-btn-primary-text, #fff)));
+  border-color: var(--btn-hover-border, var(--btn-border, transparent));
+  transform: var(--fe-btn-hover-transform, translateY(-1px));
+  box-shadow: 0 12px 28px var(--btn-shadow-color, transparent);
+}
+
+/* (admin button-block editor styles live in app.css alongside .be-*) */
+
+/* ===== Container block (admin-authored nested layout primitive) =====
+   Inline styles handle layout / spacing / colours / borders / radius
+   per instance. Hover behaviour is driven by CSS custom properties so
+   each container can carry its own hover recipe inline:
+     --block-cont-hover-bg / -border / -shadow / -transform
+   Each var defaults to its non-hover counterpart so an unset hover
+   variable simply means "no change on hover". */
+.block-container {
+  /* Smooth transitions across every property the hover recipe might
+     touch — kept short so hover feels responsive even on touch. */
+  transition: background-color 180ms ease,
+              border-color 180ms ease,
+              box-shadow 180ms ease,
+              transform 180ms ease;
+  /* Box-sizing parity so padding doesn't blow out the container's
+     intended max-width. */
+  box-sizing: border-box;
+}
+/* Hover behaviour is opt-in per property — each `--hover-*` class is
+   only added by the renderer when the admin actually configured that
+   property, so an unset hover doesn't clobber the resting style. */
+.block-container--hover-bg:hover     { background-color: var(--block-cont-hover-bg); }
+.block-container--hover-border:hover { border-color: var(--block-cont-hover-border); }
+.block-container--hover-shadow:hover { box-shadow: var(--block-cont-hover-shadow, var(--block-cont-shadow, none)); }
+.block-container--hover-lift:hover   { transform: translateY(-2px); }
+/* Direct children of a container honour its gap, but stand-alone
+   blocks (paragraphs, headings, lists, etc.) usually carry their
+   own top/bottom margins. Zero those when nested inside a container
+   so the gap drives the rhythm. */
+.block-container > .block { margin: 0; }
+.block-container > .block-paragraph p:first-child { margin-top: 0; }
+.block-container > .block-paragraph p:last-child  { margin-bottom: 0; }
+
+/* Showcase wrapper — make sure containers inside the showcase layout
+   inherit reasonable defaults (text colour, prose colour) without
+   fighting per-section tinting. */
+.fe-pp-container { color: inherit; }
+
+/* ── Per-block dark-mode color overrides ────────────────────────
+   Each block-level color picker (typography colour, container bg,
+   container border) supports a "Same / Auto / Manual" dark-mode
+   mode toggle. When the admin chooses Auto or Manual, the renderer
+   stamps a CSS custom property on the element's inline style:
+     • --tsp-color-dm   → text colour for typography fields
+     • --tsp-bg-dm      → background-color for containers
+     • --tsp-border-dm  → border-color for containers
+   These rules apply those properties under the dark theme. The
+   `[style*="--tsp-…"]` attribute selector keeps the rule narrow —
+   it only matches elements that actually carry the variable. The
+   `!important` is needed because inline styles otherwise win over
+   any cascade rule on the same property. */
+html[data-theme="dark"] [style*="--tsp-color-dm"] {
+  color: var(--tsp-color-dm) !important;
+}
+html[data-theme="dark"] [style*="--tsp-bg-dm"] {
+  background-color: var(--tsp-bg-dm) !important;
+}
+html[data-theme="dark"] [style*="--tsp-border-dm"] {
+  border-color: var(--tsp-border-dm) !important;
+}
+
+/* ── Wiki sidebar block (toc_sidebar) ────────────────────────────
+   On-page TOC built from heading blocks. Sits in any column of any
+   container layout; sticks to the viewport top when `is-sticky` is
+   set (top offset comes from inline style). Hides on narrow
+   viewports because the sticky behaviour fights mobile scroll. */
+.fe-pp-toc {
+  background: var(--fe-panel, #fff);
+  border: 1px solid var(--fe-border, rgba(15, 23, 42, 0.1));
+  border-radius: 12px;
+  padding: 18px 20px;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--fe-color-text, var(--fe-ink));
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+}
+.fe-pp-toc.is-sticky {
+  position: sticky;
+  align-self: start;
+}
+.fe-pp-toc-title {
+  font-weight: 700; font-size: 0.75rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--fe-ink-muted);
+  margin-bottom: 10px;
+}
+.fe-pp-toc-list { list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 4px; }
+.fe-pp-toc-item a {
+  display: block; padding: 4px 0;
+  color: var(--fe-color-text, var(--fe-ink));
+  text-decoration: none; border-left: 2px solid transparent;
+  padding-left: 10px; margin-left: -12px;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.fe-pp-toc-item a:hover {
+  color: var(--fe-brand, var(--access));
+  border-left-color: var(--fe-brand, var(--access));
+}
+.fe-pp-toc-l3 { padding-left: 12px; }
+.fe-pp-toc-l4 { padding-left: 24px; }
+.fe-pp-toc-l5, .fe-pp-toc-l6 { padding-left: 36px; }
+.fe-pp-toc-l3 a, .fe-pp-toc-l4 a, .fe-pp-toc-l5 a, .fe-pp-toc-l6 a {
+  font-size: 0.875rem; color: var(--fe-ink-muted);
+}
+.fe-pp-toc-empty { margin: 0; }
+@media (max-width: 880px) {
+  .fe-pp-toc.is-sticky { position: static; }
+}
+
+/* ── Contact us page ────────────────────────────────────────────
+   Two-column layout: an aside on the left (eyebrow + heading +
+   blurb + admin-tunable markdown intro + auto-populated PIC
+   contact channels) and a glassy form card on the right. The
+   surrounding section paints three soft animated blobs behind
+   everything so the page reads as "contact" without a stock hero
+   image. Form chrome reuses .fe-submission-form so the inputs
+   stay visually consistent with /submissionform; the wrapper
+   styling is unique to contact. */
+.fe-contact-section {
+  /* `fe-dynbg-host` on the section element provides position +
+     isolation so the dynbg paints below content. The aurora-blobs
+     dynbg owns the animated backdrop now; this rule only handles
+     the section-level chrome (clipping + vertical padding). */
+  overflow: hidden;
+  padding: clamp(3.5rem, 6vw, 6rem) 0;
+}
+.fe-contact-container { position: relative; z-index: 1; }
+.fe-contact-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: clamp(2rem, 4vw, 3.5rem);
+  align-items: start;
+}
+@media (max-width: 880px) {
+  .fe-contact-grid { grid-template-columns: 1fr; gap: 2rem; }
+}
+
+.fe-contact-aside { padding-top: 0.5rem; }
+.fe-contact-eyebrow {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fe-accent, #0b5cff);
+  background: color-mix(in srgb, var(--fe-accent, #0b5cff) 12%, transparent);
+  padding: 6px 12px;
+  border-radius: 999px;
+  margin: 0 0 1.25rem;
+}
+.fe-contact-title {
+  margin: 0 0 0.75rem;
+  font-size: clamp(2rem, 1.4rem + 2.4vw, 3.25rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--fe-color-text, #0a0a0a);
+}
+.fe-contact-blurb {
+  margin: 0 0 1.5rem;
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  color: var(--fe-color-text-muted, #475569);
+  max-width: 36ch;
+}
+.fe-contact-intro {
+  margin: 0 0 1.5rem;
+  color: var(--fe-color-text, #0a0a0a);
+  line-height: 1.6;
+}
+.fe-contact-intro p { margin: 0 0 0.75rem; }
+.fe-contact-intro p:last-child { margin-bottom: 0; }
+
+.fe-contact-channels {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+.fe-contact-channel {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+.fe-contact-channel-icon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--fe-accent, #0b5cff) 12%, transparent);
+  color: var(--fe-accent, #0b5cff);
+}
+.fe-contact-channel-icon .icon { width: 18px; height: 18px; }
+.fe-contact-channel-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.fe-contact-channel-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fe-color-text-muted, #64748b);
+}
+.fe-contact-channel-value {
+  font-size: 1rem;
+  color: var(--fe-color-text, #0a0a0a);
+  font-weight: 500;
+  word-break: break-word;
+}
+.fe-contact-channel-link {
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+.fe-contact-channel-link:hover {
+  color: var(--fe-accent, #0b5cff);
+}
+
+.fe-contact-form-wrap {
+  position: relative;
+}
+/* Form card — same hover lift + brand-accent border the submission
+   card uses, but with a generous padding spec and a slight tilt
+   into the foreground so the two-column hero feels balanced. */
+.fe-contact-card {
+  background: var(--fe-color-surface, #fff);
+  border: 1px solid var(--fe-color-border, rgba(0, 0, 0, 0.08));
+  border-radius: 20px;
+  padding: clamp(1.75rem, 3vw, 2.5rem);
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08),
+              0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+.fe-contact-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12),
+              0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+/* The form itself — slightly tighter gap than /submissionform since
+   the contact form has fewer rows and benefits from the breath. */
+.fe-contact-form { gap: 1rem; }
+.fe-contact-form fieldset {
+  border: 1px solid var(--fe-color-border, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+}
+.fe-contact-form textarea { min-height: 8rem; }
+
+.fe-contact-honeypot {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.fe-contact-flashes { margin: 0 0 1.25rem; }
+.fe-contact-actions { justify-content: stretch; }
+.fe-contact-actions .fe-submission-submit {
+  width: 100%;
+  padding: 14px 20px;
+  font-size: 1rem;
+}
+.fe-contact-fineprint { text-align: center; }
+
+/* Dark-mode swap — section bg falls to the page-bg token, card swaps
+   to the dark surface token, blurred blobs lift in opacity so they
+   still register against the darker backdrop. Mirrors the
+   submission-section dark-mode treatment. */
+html[data-theme="dark"] .fe-contact-card,
+body.fe-frontend-force-dark .fe-contact-card {
+  background: var(--fe-color-surface, #111827);
+  border-color: var(--fe-color-border, rgba(255, 255, 255, 0.08));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+html[data-theme="dark"] .fe-contact-card:hover,
+body.fe-frontend-force-dark .fe-contact-card:hover {
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55);
+}
+html[data-theme="dark"] .fe-contact-blurb,
+body.fe-frontend-force-dark .fe-contact-blurb {
+  color: var(--fe-color-text-muted, #94a3b8);
+}
+html[data-theme="dark"] .fe-contact-channel-icon,
+body.fe-frontend-force-dark .fe-contact-channel-icon {
+  background: color-mix(in srgb, var(--fe-accent, #60a5fa) 22%, transparent);
+}
+html[data-theme="dark"] .fe-contact-eyebrow,
+body.fe-frontend-force-dark .fe-contact-eyebrow {
+  background: color-mix(in srgb, var(--fe-accent, #60a5fa) 24%, transparent);
+}
+
+/* ── Dynamic backgrounds library ────────────────────────────────
+   Eight CSS-only backdrops that any frontend surface (page, hero,
+   section, container block, etc.) can opt into via the .fe-dynbg
+   wrapper rendered by frontend/_dynbg.html.
+
+   Common contract:
+     • .fe-dynbg sits absolutely-positioned inside a positioned host
+       and stretches to its bounds. Hosts that want a dynbg must set
+       `position: relative; overflow: hidden;` and place .fe-dynbg as
+       the first child so it paints under everything else.
+     • Every preset draws using brand tokens (--fe-accent, --fe-color-
+       bg, --fe-color-surface) so the same key produces a brand-
+       coloured backdrop on every install.
+     • Animations honour prefers-reduced-motion globally below.
+     • Dark-mode rules stack at the bottom of each preset's section.
+*/
+.fe-dynbg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.fe-dynbg > * {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+/* When a dynbg lives inside a host that also lays out content, the
+   host's children need a positive z-index OR a stacking context so
+   they paint above the dynbg. The :has() selector promotes the host
+   so consumers don't have to remember; falls back gracefully on
+   browsers without :has() (the host class can opt in manually). */
+:where(.fe-dynbg-host) { position: relative; isolation: isolate; }
+:where(.fe-dynbg-host) > :not(.fe-dynbg) { position: relative; z-index: 1; }
+
+/* Page-level dynbg wrapper: when an admin sets a dynamic background
+   on a list/index page (meetings list, events list, etc.), the inner
+   page-section's flat soft-panel background would paint on top of the
+   dynbg and hide it. Force the immediate child sections of the page
+   wrapper to render transparent so the chosen backdrop shows through.
+   Cards inside those sections keep their own backgrounds (they're
+   nested deeper, so the rule doesn't reach them). */
+.fe-page-dynbg-host.fe-dynbg-host > .fe-section,
+.fe-page-dynbg-host.fe-dynbg-host > .fe-mlist,
+.fe-page-dynbg-host.fe-dynbg-host > section {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fe-dynbg * { animation: none !important; }
+}
+
+/* Admin opt-out: when a `.fe-dynbg-no-anim-marker` element is
+   present inside the host (emitted by `_dynbg_apply.html` when the
+   admin checked "Freeze movement"), freeze every animated child in
+   the base dynbg and the overlay layer.
+
+   Uses `:has()` so each surface's host doesn't need a separate
+   server-side class stamp — the marker span travels with the
+   apply-partial include and the CSS finds it from any host. The
+   explicit `.fe-dynbg-no-anim` class below is kept as a fallback
+   so future server-side stamping (or :has()-less browsers) can
+   still opt out by adding it directly. Same `!important` recipe
+   as the reduced-motion gate. */
+.fe-dynbg-host:has(> .fe-dynbg-no-anim-marker) .fe-dynbg > *,
+.fe-dynbg-host:has(> .fe-dynbg-no-anim-marker) .fe-dynbg-overlay > *,
+.fe-dynbg-no-anim .fe-dynbg > *,
+.fe-dynbg-no-anim .fe-dynbg-overlay > * {
+  animation: none !important;
+}
+
+/* ── aurora-blobs ─── 3 brand-tinted blurred circles drifting.
+   Each blob's colour resolves through `--fe-dynbg-c1/c2/c3` first
+   (set by the per-surface custom-colour stamp on the dynbg-host)
+   and falls through to the brand accent when no override is set. */
+.fe-dynbg-aurora-blobs {
+  --_db-c1: var(--fe-dynbg-c1, color-mix(in srgb, var(--fe-accent, #0b5cff) 60%, #16c2ba));
+  --_db-c2: var(--fe-dynbg-c2, color-mix(in srgb, var(--fe-accent, #0b5cff) 50%, #8b5cf6));
+  --_db-c3: var(--fe-dynbg-c3, color-mix(in srgb, var(--fe-accent, #0b5cff) 35%, #fb923c));
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft, #f8fafc));
+  filter: none;
+}
+/* Each blob's position + size reads from `--fe-dynbg-blob-<slot>-*`
+   custom properties. When `randomize_positions` is on, the host
+   stamps fresh values per render; otherwise the var() fallbacks
+   reproduce the original hand-tuned layout. */
+.fe-dynbg-aurora-blobs .fe-dynbg-blob {
+  width: var(--_db-blob-size, 380px);
+  height: var(--_db-blob-size, 380px);
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.55;
+  animation: feDynbgBlobDrift 18s ease-in-out infinite;
+  inset: auto;
+}
+.fe-dynbg-aurora-blobs .fe-dynbg-blob-a {
+  --_db-blob-size: var(--fe-dynbg-blob-a-size, 380px);
+  top: var(--fe-dynbg-blob-a-top, -120px);
+  left: var(--fe-dynbg-blob-a-left, -80px);
+  bottom: var(--fe-dynbg-blob-a-bottom, auto);
+  right: var(--fe-dynbg-blob-a-right, auto);
+  background: var(--_db-c1);
+}
+.fe-dynbg-aurora-blobs .fe-dynbg-blob-b {
+  --_db-blob-size: var(--fe-dynbg-blob-b-size, 380px);
+  top: var(--fe-dynbg-blob-b-top, auto);
+  left: var(--fe-dynbg-blob-b-left, auto);
+  bottom: var(--fe-dynbg-blob-b-bottom, -160px);
+  right: var(--fe-dynbg-blob-b-right, -100px);
+  background: var(--_db-c2);
+  animation-delay: -6s; animation-duration: 22s;
+}
+.fe-dynbg-aurora-blobs .fe-dynbg-blob-c {
+  --_db-blob-size: var(--fe-dynbg-blob-c-size, 240px);
+  top: var(--fe-dynbg-blob-c-top, 30%);
+  left: var(--fe-dynbg-blob-c-left, auto);
+  bottom: var(--fe-dynbg-blob-c-bottom, auto);
+  right: var(--fe-dynbg-blob-c-right, 35%);
+  background: var(--_db-c3);
+  opacity: 0.45;
+  animation-delay: -12s; animation-duration: 26s;
+}
+@keyframes feDynbgBlobDrift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(40px, -25px) scale(1.05); }
+  66%      { transform: translate(-30px, 30px) scale(0.95); }
+}
+html[data-theme="dark"] .fe-dynbg-aurora-blobs,
+body.fe-frontend-force-dark .fe-dynbg-aurora-blobs {
+  background: var(--fe-color-bg, #0b1220);
+}
+html[data-theme="dark"] .fe-dynbg-aurora-blobs .fe-dynbg-blob,
+body.fe-frontend-force-dark .fe-dynbg-aurora-blobs .fe-dynbg-blob {
+  opacity: 0.65;
+}
+
+/* ── mesh-gradient ─── three overlapping conic gradients, no motion */
+.fe-dynbg-mesh-gradient {
+  --_db-c1: var(--fe-dynbg-c1, var(--fe-accent, #0b5cff));
+  --_db-c2: var(--fe-dynbg-c2, color-mix(in srgb, var(--fe-accent, #0b5cff) 60%, #8b5cf6));
+  --_db-c3: var(--fe-dynbg-c3, color-mix(in srgb, var(--fe-accent, #0b5cff) 40%, #fb923c));
+  background: var(--fe-color-bg, #f8fafc);
+}
+.fe-dynbg-mesh-gradient .fe-dynbg-mesh {
+  inset: -10%;
+  filter: blur(80px);
+  opacity: 0.5;
+}
+.fe-dynbg-mesh-gradient .fe-dynbg-mesh-a {
+  background: conic-gradient(
+    from var(--fe-dynbg-mesh-a-angle, 0deg)
+      at var(--fe-dynbg-mesh-a-x, 25%) var(--fe-dynbg-mesh-a-y, 30%),
+    var(--_db-c1) 0deg,
+    transparent 90deg,
+    transparent 270deg,
+    var(--_db-c2) 360deg);
+}
+.fe-dynbg-mesh-gradient .fe-dynbg-mesh-b {
+  background: conic-gradient(
+    from var(--fe-dynbg-mesh-b-angle, 180deg)
+      at var(--fe-dynbg-mesh-b-x, 75%) var(--fe-dynbg-mesh-b-y, 60%),
+    var(--_db-c2) 0deg,
+    transparent 120deg,
+    transparent 240deg,
+    var(--_db-c3) 360deg);
+  opacity: 0.4;
+}
+.fe-dynbg-mesh-gradient .fe-dynbg-mesh-c {
+  background: radial-gradient(ellipse 60% 40%
+    at var(--fe-dynbg-mesh-c-x, 50%) var(--fe-dynbg-mesh-c-y, 50%),
+    color-mix(in srgb, var(--_db-c1) 25%, transparent),
+    transparent 70%);
+  opacity: 0.7;
+}
+html[data-theme="dark"] .fe-dynbg-mesh-gradient,
+body.fe-frontend-force-dark .fe-dynbg-mesh-gradient {
+  background: var(--fe-color-bg, #0b1220);
+}
+html[data-theme="dark"] .fe-dynbg-mesh-gradient .fe-dynbg-mesh,
+body.fe-frontend-force-dark .fe-dynbg-mesh-gradient .fe-dynbg-mesh {
+  opacity: 0.4;
+}
+
+/* ── aurora-bands ─── wide angled bands sweeping vertically */
+.fe-dynbg-aurora-bands {
+  --_db-c1: var(--fe-dynbg-c1, color-mix(in srgb, var(--fe-accent, #0b5cff) 70%, #16c2ba));
+  --_db-c2: var(--fe-dynbg-c2, color-mix(in srgb, var(--fe-accent, #0b5cff) 55%, #8b5cf6));
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft, #f8fafc));
+}
+.fe-dynbg-aurora-bands .fe-dynbg-band {
+  inset: -20%;
+  filter: blur(70px);
+  opacity: 0.55;
+  animation: feDynbgBandDrift 24s ease-in-out infinite alternate;
+}
+.fe-dynbg-aurora-bands .fe-dynbg-band-a {
+  background: linear-gradient(var(--fe-dynbg-band-a-angle, 115deg),
+    transparent 30%,
+    var(--_db-c1) 50%,
+    transparent 70%);
+}
+.fe-dynbg-aurora-bands .fe-dynbg-band-b {
+  background: linear-gradient(var(--fe-dynbg-band-b-angle, 75deg),
+    transparent 25%,
+    var(--_db-c2) 55%,
+    transparent 80%);
+  animation-delay: -8s; animation-duration: 30s;
+  opacity: 0.45;
+}
+@keyframes feDynbgBandDrift {
+  0%   { transform: translate(-5%, -3%); }
+  100% { transform: translate(5%, 3%); }
+}
+html[data-theme="dark"] .fe-dynbg-aurora-bands,
+body.fe-frontend-force-dark .fe-dynbg-aurora-bands {
+  background: var(--fe-color-bg, #0b1220);
+}
+html[data-theme="dark"] .fe-dynbg-aurora-bands .fe-dynbg-band,
+body.fe-frontend-force-dark .fe-dynbg-aurora-bands .fe-dynbg-band {
+  opacity: 0.7;
+}
+
+/* ── starfield ─── three layered dot fields with twinkle */
+.fe-dynbg-starfield {
+  --_db-c1: var(--fe-dynbg-c1, var(--fe-accent, #0b5cff));
+  background:
+    radial-gradient(ellipse 120% 80% at 50% 0%,
+      color-mix(in srgb, var(--_db-c1) 18%, transparent),
+      transparent 70%),
+    var(--fe-color-bg, #07101e);
+}
+.fe-dynbg-starfield .fe-dynbg-stars {
+  inset: 0;
+  background-repeat: repeat;
+  animation: feDynbgStarsTwinkle 6s ease-in-out infinite;
+}
+.fe-dynbg-starfield .fe-dynbg-stars-a {
+  background-image:
+    radial-gradient(1.5px 1.5px at 12% 18%, rgba(255,255,255,0.85), transparent 50%),
+    radial-gradient(1px   1px   at 27% 62%, rgba(255,255,255,0.7),  transparent 50%),
+    radial-gradient(1.2px 1.2px at 56% 24%, rgba(255,255,255,0.8),  transparent 50%),
+    radial-gradient(1px   1px   at 73% 78%, rgba(255,255,255,0.6),  transparent 50%),
+    radial-gradient(1.5px 1.5px at 88% 41%, rgba(255,255,255,0.75), transparent 50%);
+  background-size: 400px 400px;
+}
+.fe-dynbg-starfield .fe-dynbg-stars-b {
+  background-image:
+    radial-gradient(2px 2px at 8% 70%, color-mix(in srgb, var(--_db-c1) 70%, #fff), transparent 50%),
+    radial-gradient(1px 1px at 45% 35%, rgba(255,255,255,0.5),       transparent 50%),
+    radial-gradient(1px 1px at 65% 90%, rgba(255,255,255,0.55),      transparent 50%);
+  background-size: 600px 600px;
+  animation-delay: -2s;
+}
+.fe-dynbg-starfield .fe-dynbg-stars-c {
+  background-image:
+    radial-gradient(0.8px 0.8px at 22% 38%, rgba(255,255,255,0.4), transparent 50%),
+    radial-gradient(0.8px 0.8px at 52% 80%, rgba(255,255,255,0.4), transparent 50%),
+    radial-gradient(0.8px 0.8px at 84% 14%, rgba(255,255,255,0.5), transparent 50%);
+  background-size: 240px 240px;
+  animation-delay: -4s;
+  animation-duration: 8s;
+}
+@keyframes feDynbgStarsTwinkle {
+  0%, 100% { opacity: 0.85; }
+  50%      { opacity: 0.4;  }
+}
+/* Light-mode swap: dim the dots and tint the bg toward the brand
+   so the same recipe reads as "soft sky" rather than "deep space". */
+html[data-theme="light"] .fe-dynbg-starfield,
+body:not(.fe-frontend-force-dark) html:not([data-theme="dark"]) .fe-dynbg-starfield {
+  background:
+    radial-gradient(ellipse 120% 80% at 50% 0%,
+      color-mix(in srgb, var(--_db-c1) 12%, transparent),
+      transparent 70%),
+    var(--fe-color-surface-alt, #eef2f7);
+}
+html[data-theme="light"] .fe-dynbg-starfield .fe-dynbg-stars,
+body:not(.fe-frontend-force-dark) html:not([data-theme="dark"]) .fe-dynbg-starfield .fe-dynbg-stars {
+  filter: invert(1) hue-rotate(180deg);
+  opacity: 0.35;
+}
+
+/* ── dotted-grid ─── subtle dot lattice */
+.fe-dynbg-dotted-grid {
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft, #f8fafc));
+}
+.fe-dynbg-dotted-grid .fe-dynbg-dots {
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    color-mix(in srgb, var(--fe-color-text, #0a0a0a) 22%, transparent) 1px,
+    transparent 0);
+  background-size: 18px 18px;
+  background-position: 0 0;
+  opacity: 0.5;
+}
+html[data-theme="dark"] .fe-dynbg-dotted-grid,
+body.fe-frontend-force-dark .fe-dynbg-dotted-grid {
+  background: var(--fe-color-bg, #0b1220);
+}
+html[data-theme="dark"] .fe-dynbg-dotted-grid .fe-dynbg-dots,
+body.fe-frontend-force-dark .fe-dynbg-dotted-grid .fe-dynbg-dots {
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    color-mix(in srgb, #ffffff 28%, transparent) 1px,
+    transparent 0);
+  opacity: 0.3;
+}
+
+/* ── diagonal-lines ─── soft diagonal stripes */
+.fe-dynbg-diagonal-lines {
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft, #f8fafc));
+}
+.fe-dynbg-diagonal-lines .fe-dynbg-lines {
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--fe-color-text, #0a0a0a) 7%, transparent) 0 1px,
+    transparent 1px 14px);
+}
+html[data-theme="dark"] .fe-dynbg-diagonal-lines,
+body.fe-frontend-force-dark .fe-dynbg-diagonal-lines {
+  background: var(--fe-color-bg, #0b1220);
+}
+html[data-theme="dark"] .fe-dynbg-diagonal-lines .fe-dynbg-lines,
+body.fe-frontend-force-dark .fe-dynbg-diagonal-lines .fe-dynbg-lines {
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, #ffffff 9%, transparent) 0 1px,
+    transparent 1px 14px);
+}
+
+/* ── noise-paper ─── fractal-noise grain */
+.fe-dynbg-noise-paper {
+  background: var(--fe-color-surface, #fdfbf7);
+}
+.fe-dynbg-noise-paper .fe-dynbg-noise {
+  width: 100%; height: 100%;
+  opacity: 0.55;
+  mix-blend-mode: multiply;
+}
+html[data-theme="dark"] .fe-dynbg-noise-paper,
+body.fe-frontend-force-dark .fe-dynbg-noise-paper {
+  background: var(--fe-color-bg, #14181f);
+}
+html[data-theme="dark"] .fe-dynbg-noise-paper .fe-dynbg-noise,
+body.fe-frontend-force-dark .fe-dynbg-noise-paper .fe-dynbg-noise {
+  opacity: 0.4;
+  mix-blend-mode: screen;
+}
+
+/* ── spotlight ─── two corner-anchored radial glows */
+.fe-dynbg-spotlight {
+  --_db-c1: var(--fe-dynbg-c1, var(--fe-accent, #0b5cff));
+  --_db-c2: var(--fe-dynbg-c2, color-mix(in srgb, var(--fe-accent, #0b5cff) 55%, #8b5cf6));
+  background: var(--fe-color-bg, #f8fafc);
+}
+.fe-dynbg-spotlight .fe-dynbg-spot {
+  filter: blur(90px);
+  opacity: 0.55;
+}
+.fe-dynbg-spotlight .fe-dynbg-spot-a {
+  top:    var(--fe-dynbg-spot-a-top, -25%);
+  bottom: var(--fe-dynbg-spot-a-bottom, auto);
+  left:   var(--fe-dynbg-spot-a-left, -15%);
+  right:  var(--fe-dynbg-spot-a-right, auto);
+  width:  var(--fe-dynbg-spot-a-w, 70%);
+  height: var(--fe-dynbg-spot-a-h, 90%);
+  background: radial-gradient(circle at 50% 50%,
+    color-mix(in srgb, var(--_db-c1) 70%, transparent),
+    transparent 70%);
+  inset: auto;
+}
+.fe-dynbg-spotlight .fe-dynbg-spot-b {
+  top:    var(--fe-dynbg-spot-b-top, auto);
+  bottom: var(--fe-dynbg-spot-b-bottom, -25%);
+  left:   var(--fe-dynbg-spot-b-left, auto);
+  right:  var(--fe-dynbg-spot-b-right, -15%);
+  width:  var(--fe-dynbg-spot-b-w, 70%);
+  height: var(--fe-dynbg-spot-b-h, 90%);
+  background: radial-gradient(circle at 50% 50%,
+    var(--_db-c2),
+    transparent 70%);
+  opacity: 0.4;
+  inset: auto;
+}
+html[data-theme="dark"] .fe-dynbg-spotlight,
+body.fe-frontend-force-dark .fe-dynbg-spotlight {
+  background: var(--fe-color-bg, #0b1220);
+}
+html[data-theme="dark"] .fe-dynbg-spotlight .fe-dynbg-spot,
+body.fe-frontend-force-dark .fe-dynbg-spotlight .fe-dynbg-spot {
+  opacity: 0.7;
+}
+
+/* ── Dynamic-background overlays ────────────────────────────────
+   Independent layer that paints above the base dynbg AND above
+   page content (with `pointer-events: none` so clicks pass through).
+   Each overlay textures the surface without intercepting input;
+   they compose with any base dynbg or stand on their own. */
+.fe-dynbg-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Above content (host promotes content to z-index: 1) but well
+     below modals (z-index: 100+). The texture rides on top of the
+     hero / cards / typography to give the whole surface a tactile
+     finish, the way the viibeware project's body::before does
+     site-wide. The `--bg-only` modifier below opts out of this
+     placement and tucks the overlay between the base dynbg and
+     content, so cards / typography paint without the texture. */
+  z-index: 10;
+}
+.fe-dynbg-overlay--bg-only {
+  /* z-index: 0 keeps the overlay above the base .fe-dynbg (also at
+     z-index: auto / 0) while content (forced to z-index: 1 by the
+     host's :where rule) paints on top — content stays clean while
+     the bg gets textured. DOM order matters here: this overlay must
+     render AFTER the base dynbg and BEFORE content for the stacking
+     to work; _dynbg_apply.html follows that order. */
+  z-index: 0;
+}
+/* ── noise-grain ─── viibeware's recipe: SVG fractal-noise tiled.
+   Data-URL (vs inline <svg>) because inline SVGs without an explicit
+   viewBox sometimes render blank when sized 100%/100% inside a
+   positioned parent — particularly under <body> on Safari. The
+   data-URL has its own viewBox so the SVG paints reliably and tiles
+   via the default `background-repeat: repeat`. The 0.03 alpha on the
+   rect inside the SVG matches the viibeware recipe exactly; CSS-side
+   opacity stays at 1 so the texture reads at the same intensity it
+   does on viibeware. */
+.fe-dynbg-overlay-noise-grain {
+  background-image: url("data:image/svg+xml;utf8,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+}
+html[data-theme="dark"] .fe-dynbg-overlay-noise-grain,
+body.fe-frontend-force-dark .fe-dynbg-overlay-noise-grain {
+  /* Same grain reads quieter against dark backgrounds, so flip to a
+     blend mode that lifts the texture against deep tones rather than
+     bumping the alpha (which would look noisy on light theme). */
+  mix-blend-mode: screen;
+  opacity: 0.6;
+}
+
+/* ── scanlines ─── 2px horizontal stripes at 1.5% alpha */
+.fe-dynbg-overlay-scanlines {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.015) 2px,
+    rgba(0, 0, 0, 0.015) 4px
+  );
+}
+html[data-theme="dark"] .fe-dynbg-overlay-scanlines,
+body.fe-frontend-force-dark .fe-dynbg-overlay-scanlines {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(255, 255, 255, 0.025) 2px,
+    rgba(255, 255, 255, 0.025) 4px
+  );
+}
+
+/* ── linen ─── two-direction stripe weave */
+.fe-dynbg-overlay-linen {
+  background:
+    repeating-linear-gradient(0deg,
+      transparent 0 1px,
+      rgba(0, 0, 0, 0.025) 1px 2px),
+    repeating-linear-gradient(90deg,
+      transparent 0 1px,
+      rgba(0, 0, 0, 0.025) 1px 2px);
+}
+html[data-theme="dark"] .fe-dynbg-overlay-linen,
+body.fe-frontend-force-dark .fe-dynbg-overlay-linen {
+  background:
+    repeating-linear-gradient(0deg,
+      transparent 0 1px,
+      rgba(255, 255, 255, 0.04) 1px 2px),
+    repeating-linear-gradient(90deg,
+      transparent 0 1px,
+      rgba(255, 255, 255, 0.04) 1px 2px);
+}
+
+/* ── vignette ─── radial darken from corners */
+.fe-dynbg-overlay-vignette {
+  background: radial-gradient(ellipse at center,
+    transparent 40%,
+    rgba(0, 0, 0, 0.18) 100%);
+}
+html[data-theme="dark"] .fe-dynbg-overlay-vignette,
+body.fe-frontend-force-dark .fe-dynbg-overlay-vignette {
+  background: radial-gradient(ellipse at center,
+    transparent 40%,
+    rgba(0, 0, 0, 0.45) 100%);
+}
+
+/* ── crosshatch ─── two diagonal stripe sets */
+.fe-dynbg-overlay-crosshatch {
+  background:
+    repeating-linear-gradient(45deg,
+      transparent 0 4px,
+      rgba(0, 0, 0, 0.04) 4px 5px),
+    repeating-linear-gradient(-45deg,
+      transparent 0 4px,
+      rgba(0, 0, 0, 0.04) 4px 5px);
+}
+html[data-theme="dark"] .fe-dynbg-overlay-crosshatch,
+body.fe-frontend-force-dark .fe-dynbg-overlay-crosshatch {
+  background:
+    repeating-linear-gradient(45deg,
+      transparent 0 4px,
+      rgba(255, 255, 255, 0.05) 4px 5px),
+    repeating-linear-gradient(-45deg,
+      transparent 0 4px,
+      rgba(255, 255, 255, 0.05) 4px 5px);
+}
+
+/* ── dot-weave ─── tiny dot lattice for halftone newsprint feel */
+.fe-dynbg-overlay-dot-weave {
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(0, 0, 0, 0.18) 1px,
+    transparent 0);
+  background-size: 6px 6px;
+  opacity: 0.4;
+}
+html[data-theme="dark"] .fe-dynbg-overlay-dot-weave,
+body.fe-frontend-force-dark .fe-dynbg-overlay-dot-weave {
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(255, 255, 255, 0.22) 1px,
+    transparent 0);
+  opacity: 0.3;
+}
+
+/* All overlays respect reduced-motion just like the base dynbg
+   layer (none of them animate today, but keep the gate uniform so
+   future animated overlays inherit the rule for free). */
+@media (prefers-reduced-motion: reduce) {
+  .fe-dynbg-overlay { animation: none !important; }
+  .fe-dynbg-overlay * { animation: none !important; }
+}
+
+/* ── Site Index ─────────────────────────────────────────────────
+   Auto-populated /siteindex page. Two layouts share the same
+   chrome — a centered page heading + blurb on top, then either
+   sectioned groups (`grouped.html`) or a single A-Z list
+   (`alphabet.html`). The kind-chip in the alphabet layout uses
+   the same brand-tinted pill recipe as the schedule pills on
+   meeting cards so it reads as part of the same family. */
+.fe-site-index {
+  padding: clamp(2.5rem, 5vw, 4rem) 0;
+}
+.fe-site-index-shell {
+  max-width: 920px;
+  margin: 0 auto;
+}
+.fe-site-index-head {
+  text-align: center;
+  margin: 0 0 clamp(1.5rem, 3vw, 2.5rem);
+}
+.fe-site-index-title {
+  margin: 0 0 0.5rem;
+  font-family: var(--fe-font-heading, inherit);
+  font-size: clamp(1.8rem, 1.4rem + 1.6vw, 2.6rem);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--fe-color-text, inherit);
+}
+.fe-site-index-blurb {
+  margin: 0 auto;
+  max-width: 56ch;
+  color: var(--fe-color-text-muted, var(--fe-ink-muted, #475569));
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+.fe-site-index-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+}
+
+/* ── Grouped layout ─────────────────────────────────────────── */
+.fe-site-index-group {
+  margin: 0 0 clamp(1.75rem, 3vw, 2.5rem);
+}
+.fe-site-index-group-head {
+  display: flex; align-items: baseline;
+  gap: 10px;
+  margin: 0 0 0.75rem;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--fe-color-border, rgba(0, 0, 0, 0.08));
+}
+.fe-site-index-eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fe-accent, #0b5cff);
+}
+.fe-site-index-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--fe-color-text-muted, var(--fe-ink-muted, #64748b));
+  background: color-mix(in srgb, var(--fe-accent, #0b5cff) 8%, transparent);
+  padding: 1px 8px;
+  border-radius: 999px;
+  min-width: 1.25rem;
+  text-align: center;
+}
+
+/* ── Row chrome (shared by both layouts) ────────────────────── */
+.fe-site-index-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fe-site-index-list-flat {
+  /* Alphabet layout: a touch more breathing room since it's a
+     single column with no group headings to pace the scroll. */
+  gap: 6px;
+}
+.fe-site-index-row {
+  margin: 0;
+}
+.fe-site-index-row-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--fe-color-text, inherit);
+  border: 1px solid transparent;
+  transition: background-color 120ms ease, border-color 120ms ease,
+              transform 120ms ease;
+}
+.fe-site-index-row-link:hover {
+  background: color-mix(in srgb, var(--fe-accent, #0b5cff) 6%, transparent);
+  border-color: color-mix(in srgb, var(--fe-accent, #0b5cff) 20%, transparent);
+  transform: translateX(2px);
+}
+.fe-site-index-row-link:focus-visible {
+  outline: 2px solid var(--fe-accent, #0b5cff);
+  outline-offset: 2px;
+}
+.fe-site-index-row-chip {
+  /* Same recipe as `.fe-mlist-card-sched` — soft brand tint pill,
+     compact font, 12px text. */
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fe-accent, #0b5cff);
+  background: color-mix(in srgb, var(--fe-accent, #0b5cff) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--fe-accent, #0b5cff) 22%, transparent);
+  white-space: nowrap;
+}
+.fe-site-index-row-text {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.fe-site-index-row-title {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--fe-color-text, inherit);
+  word-break: break-word;
+}
+.fe-site-index-row-sub {
+  margin-top: 1px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+.fe-site-index-row-arrow {
+  flex: 0 0 auto;
+  color: var(--fe-color-text-muted, #94a3b8);
+  font-size: 1.1rem;
+  transition: transform 120ms ease, color 120ms ease;
+}
+.fe-site-index-row-link:hover .fe-site-index-row-arrow {
+  color: var(--fe-accent, #0b5cff);
+  transform: translateX(2px);
+}
+
+@media (max-width: 540px) {
+  .fe-site-index-row-link { padding: 10px 12px; }
+  .fe-site-index-row-chip { font-size: 0.7rem; padding: 2px 8px; }
+}
+
+/* Dark-mode tweaks — mirror the meetings-list card recipe so the
+   index reads as one piece with the rest of the dark-themed site. */
+html[data-theme="dark"] .fe-site-index-blurb,
+body.fe-frontend-force-dark .fe-site-index-blurb {
+  color: #94a3b8;
+}
+html[data-theme="dark"] .fe-site-index-group-head,
+body.fe-frontend-force-dark .fe-site-index-group-head {
+  border-bottom-color: #1f2a44;
+}
+html[data-theme="dark"] .fe-site-index-row-link:hover,
+body.fe-frontend-force-dark .fe-site-index-row-link:hover {
+  background: color-mix(in srgb, var(--fe-accent, #60a5fa) 14%, transparent);
+  border-color: color-mix(in srgb, var(--fe-accent, #60a5fa) 35%, transparent);
 }

@@ -12,6 +12,7 @@
 {% endif %}
 {% block top_actions %}
   {% if current_user.can_edit_library(library) %}
+  <button type="button" class="btn" data-open-modal="library-import-modal">Import Multiple</button>
   <button type="button" class="btn btn-primary" data-open-modal="add-library-file-modal">+ Add File</button>
   {% endif %}
   {% if current_user.can_manage_libraries() and current_user.can_edit_library(library) %}
@@ -300,6 +301,7 @@
   {% if can_edit %}
   <div class="card-foot">
     <button type="button" class="btn btn-sm" data-open-modal="add-library-file-modal">+ Add File</button>
+    <button type="button" class="btn btn-sm" data-open-modal="library-import-modal">Import Multiple</button>
   </div>
   {% endif %}
 </section>
@@ -377,6 +379,72 @@
       <div class="modal-foot">
         <button type="button" class="btn" data-close>Cancel</button>
         <button type="submit" class="btn btn-primary">Upload</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if can_edit %}
+{# Import Multiple wizard — drop a batch of files at once, auto-derive
+   titles from each filename, optionally tweak each title in place, and
+   submit them all in one POST. Uses a JS-managed staging list rather
+   than a raw <input type=file multiple> so the user can remove individual
+   files after picking. The form is built and submitted via FormData so
+   the per-row title inputs stay aligned with the files. #}
+<div class="modal" id="library-import-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel lib-import-panel" role="dialog" aria-modal="true">
+    <form id="library-import-form" class="form"
+          action="{{ url_for('main.library_import', slug=library.public_slug) }}"
+          method="post" enctype="multipart/form-data"
+          data-library-import>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-head">
+        <h2>Import Files</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted small lib-import-hint">Drop or pick multiple files at once. We'll suggest a title for each based on its filename — edit any of them inline before importing.</p>
+        <div class="lib-import-drop" data-import-drop tabindex="0" role="button"
+             aria-label="Add files to import">
+          <div class="lib-import-drop-inner">
+            <span class="lib-import-drop-icon" aria-hidden="true">{{ icon('upload') }}</span>
+            <strong>Drop files here</strong>
+            <span class="muted small">or</span>
+            <label class="btn btn-sm lib-import-pick-btn">
+              <span>Pick files</span>
+              <input type="file" name="files" multiple data-import-picker
+                     accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.mp4,.mov,application/pdf,image/*,video/*">
+            </label>
+            <span class="muted smaller">PDF, DOC, JPG, PNG, MP4, MOV</span>
+          </div>
+        </div>
+        <div class="lib-import-list" data-import-list aria-live="polite"></div>
+        <p class="lib-import-empty muted small" data-import-empty>No files queued yet.</p>
+        {% if library.categories or is_ig %}
+        <fieldset class="fieldset">
+          <legend>Categories <span class="muted small">{% if is_ig and library.categories_required %}(at least one required, applied to every imported file){% else %}(optional, applied to every imported file){% endif %}</span></legend>
+          <input type="hidden" name="category_picker" value="1">
+          {% if library.categories %}
+          <div class="ig-cat-picker">
+            {% for c in library.categories %}
+            <label class="check ig-cat-check">
+              <input type="checkbox" name="category_ids" value="{{ c.id }}">
+              <span>{{ c.name }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="muted small">No categories defined yet — add some via the Edit modal before importing.</p>
+          {% endif %}
+        </fieldset>
+        {% endif %}
+      </div>
+      <div class="modal-foot">
+        <span class="muted smaller lib-import-count" data-import-count></span>
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary" data-import-submit disabled>Import</button>
       </div>
     </form>
   </div>
@@ -555,6 +623,207 @@
   <span class="fe-save-bar-msg">Unsaved changes</span>
   <button type="button" class="btn fe-save-bar-btn" id="library-reorder-save-btn">Save</button>
 </div>
+{% endif %}
+
+{% if can_edit %}
+<script>
+// Library import wizard. Stages a batch of files in JS, derives a
+// readable default title from each filename, lets the user edit
+// titles inline, and submits everything in one POST. The visible
+// per-row title inputs are nameless — on submit we sync the staged
+// list into hidden `titles` inputs so the server gets a clean parallel
+// `files`/`titles` pair (Flask's getlist preserves submission order).
+(function () {
+  const form = document.getElementById('library-import-form');
+  if (!form) return;
+  const drop = form.querySelector('[data-import-drop]');
+  const picker = form.querySelector('[data-import-picker]');
+  const list = form.querySelector('[data-import-list]');
+  const empty = form.querySelector('[data-import-empty]');
+  const submitBtn = form.querySelector('[data-import-submit]');
+  const countEl = form.querySelector('[data-import-count]');
+  const modal = document.getElementById('library-import-modal');
+
+  let staged = [];
+  let nextId = 1;
+
+  function deriveTitle(filename) {
+    let n = String(filename || '').replace(/^.*[\\\/]/, '');
+    const dot = n.lastIndexOf('.');
+    if (dot > 0) n = n.slice(0, dot);
+    n = n.replace(/[_\-.]+/g, ' ');
+    n = n.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+    n = n.replace(/\s+/g, ' ').trim();
+    if (!n) return 'Untitled';
+    return n.replace(/\w\S*/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase());
+  }
+
+  function fileType(name) {
+    const ext = (String(name).split('.').pop() || '').toLowerCase();
+    if (ext === 'pdf') return 'pdf';
+    if (['doc','docx','rtf','odt','txt','md'].includes(ext)) return 'doc';
+    if (['xls','xlsx','csv','ods'].includes(ext)) return 'xls';
+    if (['ppt','pptx','odp'].includes(ext)) return 'ppt';
+    if (['jpg','jpeg','png','gif','webp','svg','bmp'].includes(ext)) return 'img';
+    if (['mp4','mov','avi','mkv','webm'].includes(ext)) return 'vid';
+    if (['mp3','wav','m4a','ogg','flac'].includes(ext)) return 'aud';
+    return 'file';
+  }
+
+  function formatSize(bytes) {
+    if (!bytes && bytes !== 0) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function syncFileInput() {
+    // Mirror the staged list onto the live file input so a native form
+    // submit picks them up in the right order. DataTransfer.items.add
+    // preserves insertion order; assigning input.files is supported in
+    // every browser this app targets.
+    try {
+      const dt = new DataTransfer();
+      staged.forEach((e) => dt.items.add(e.file));
+      picker.files = dt.files;
+    } catch (_) {
+      // Older browsers without DataTransfer support fall back to letting
+      // the input keep whatever it had — submit will still go through
+      // with the original file selection (no per-row removal).
+    }
+  }
+
+  function render() {
+    list.innerHTML = '';
+    staged.forEach((entry) => {
+      const ext = fileType(entry.file.name);
+      const row = document.createElement('div');
+      row.className = 'lib-import-row';
+
+      const ftype = document.createElement('span');
+      ftype.className = 'ftype ftype-sm ftype-' + ext;
+      ftype.textContent = ext.toUpperCase();
+
+      const main = document.createElement('div');
+      main.className = 'lib-import-row-main';
+
+      const title = document.createElement('input');
+      title.type = 'text';
+      title.placeholder = 'Title';
+      title.setAttribute('aria-label', 'Title for ' + entry.file.name);
+      title.value = entry.title;
+      title.addEventListener('input', () => { entry.title = title.value; });
+
+      const meta = document.createElement('div');
+      meta.className = 'lib-import-row-meta';
+      const nameEl = document.createElement('span');
+      nameEl.className = 'lib-import-row-name';
+      nameEl.textContent = entry.file.name;
+      const sizeEl = document.createElement('span');
+      sizeEl.className = 'lib-import-row-size';
+      sizeEl.textContent = formatSize(entry.file.size);
+      meta.appendChild(nameEl);
+      if (sizeEl.textContent) meta.appendChild(sizeEl);
+
+      main.appendChild(title);
+      main.appendChild(meta);
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'lib-import-row-remove';
+      remove.setAttribute('aria-label', 'Remove ' + entry.file.name);
+      remove.textContent = '×';
+      remove.addEventListener('click', () => {
+        staged = staged.filter((e) => e.id !== entry.id);
+        update();
+      });
+
+      row.appendChild(ftype);
+      row.appendChild(main);
+      row.appendChild(remove);
+      list.appendChild(row);
+    });
+
+    const has = staged.length > 0;
+    if (empty) empty.hidden = has;
+    submitBtn.disabled = !has;
+    if (countEl) countEl.textContent = has ?
+      (staged.length + ' file' + (staged.length === 1 ? '' : 's') + ' ready to import') : '';
+  }
+
+  function update() { syncFileInput(); render(); }
+
+  function addFiles(fileList) {
+    if (!fileList || !fileList.length) return;
+    Array.from(fileList).forEach((f) => {
+      if (!f) return;
+      // Soft de-dup within this wizard session — same name + size means
+      // the user almost certainly picked the file twice. Server-side
+      // _save_upload de-dupes the actual bytes via sha256 too, so this
+      // is purely for UX.
+      const dup = staged.some((e) =>
+        e.file.name === f.name && e.file.size === f.size);
+      if (dup) return;
+      staged.push({ id: nextId++, file: f, title: deriveTitle(f.name) });
+    });
+    update();
+  }
+
+  picker.addEventListener('change', () => {
+    if (picker.files && picker.files.length) addFiles(picker.files);
+  });
+
+  ['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    drop.classList.add('is-dragging');
+  }));
+  ['dragleave', 'dragend'].forEach((ev) => drop.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    drop.classList.remove('is-dragging');
+  }));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    drop.classList.remove('is-dragging');
+    if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+  });
+  // Keyboard activation on the drop zone opens the OS file picker.
+  drop.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      picker.click();
+    }
+  });
+
+  form.addEventListener('submit', () => {
+    // Strip any hidden title carriers from a previous attempt before
+    // appending fresh ones — guarantees the parallel arrays line up.
+    form.querySelectorAll('input[data-import-title-hidden]').forEach((n) => n.remove());
+    staged.forEach((entry) => {
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = 'titles';
+      hidden.value = entry.title;
+      hidden.setAttribute('data-import-title-hidden', '1');
+      form.appendChild(hidden);
+    });
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Importing…';
+  });
+
+  // Clear the wizard state when the modal closes — without this the
+  // next open would replay whatever was last queued (potentially with
+  // stale File handles whose underlying disk content has changed).
+  if (modal) {
+    modal.querySelectorAll('[data-close]').forEach((el) => {
+      el.addEventListener('click', () => {
+        staged = [];
+        update();
+        submitBtn.textContent = 'Import';
+      });
+    });
+  }
+})();
+</script>
 {% endif %}
 
 {% if library.public_visible %}

@@ -49,6 +49,92 @@
   {% endif %}
 </section>
 
+{# ── Intergroup Officers ─────────────────────────────────────────
+   Repeatable contact-row table. Powers the `intergroup_member` page
+   block (which renders a single officer's contact card by referencing
+   one of these rows by id at render time). Add/remove rows via JS,
+   then save persists the whole table. Drop a row's content blank +
+   save to delete it.
+#}
+<section class="card officers-card">
+  <div class="card-head">
+    <h2>Intergroup Officers</h2>
+    <span class="muted smaller">Contact roster surfaced through the Intergroup Member page block. Edit or remove rows here and save — every page block referencing an officer renders the latest values.</span>
+  </div>
+  <form method="post" action="{{ url_for('main.officers_save') }}" class="form officers-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+    <table class="tbl officers-tbl">
+      <thead>
+        <tr>
+          <th class="officer-col-pos">Position</th>
+          <th class="officer-col-name">Name</th>
+          <th class="officer-col-phone">Phone</th>
+          <th class="officer-col-email">Email</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody data-officers-rows>
+        {% for o in officers %}
+        <tr class="officer-row">
+          <td><input type="hidden" name="officer_id" value="{{ o.id }}">
+              <input type="text" name="officer_role" value="{{ o.role }}" placeholder="e.g. Chair" required></td>
+          <td><input type="text" name="officer_name" value="{{ o.name or '' }}" placeholder="e.g. Chris C."></td>
+          <td><input type="tel" name="officer_phone" value="{{ o.phone or '' }}" placeholder="e.g. 202-555-0118"></td>
+          <td><input type="email" name="officer_email" value="{{ o.email or '' }}" placeholder="e.g. chair@dccma.com"></td>
+          <td><button type="button" class="btn btn-sm btn-danger" data-officer-remove aria-label="Remove this officer">{{ icon('x') }}</button></td>
+        </tr>
+        {% endfor %}
+        {# Hidden template row — cloned by the +Add button. The server
+           strips fully-blank rows on save, so a stray empty row is a
+           no-op rather than a corrupt record. #}
+        <tr class="officer-row officer-row-template" hidden data-officers-template>
+          <td><input type="hidden" name="officer_id" value="">
+              <input type="text" name="officer_role" placeholder="e.g. Chair"></td>
+          <td><input type="text" name="officer_name" placeholder="e.g. Chris C."></td>
+          <td><input type="tel" name="officer_phone" placeholder="e.g. 202-555-0118"></td>
+          <td><input type="email" name="officer_email" placeholder="e.g. chair@dccma.com"></td>
+          <td><button type="button" class="btn btn-sm btn-danger" data-officer-remove aria-label="Remove this officer">{{ icon('x') }}</button></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="officers-actions">
+      <button type="button" class="btn btn-sm" data-officers-add>+ Add officer</button>
+      <button type="submit" class="btn btn-primary">Save officers</button>
+    </div>
+  </form>
+</section>
+
+<script>
+(function () {
+  const rows = document.querySelector('[data-officers-rows]');
+  if (!rows) return;
+  const template = rows.querySelector('[data-officers-template]');
+  // Cloning the hidden template row inserts a fresh blank row above
+  // it so the user's most recent add lands at the bottom of the
+  // visible roster. The cloned row's `hidden` attr is dropped + its
+  // template flag stripped so it submits normally. The template row
+  // itself stays hidden + carries the template marker, so it won't
+  // be persisted (the server skips fully-blank rows).
+  const addBtn = document.querySelector('[data-officers-add]');
+  if (addBtn) addBtn.addEventListener('click', () => {
+    const clone = template.cloneNode(true);
+    clone.hidden = false;
+    clone.removeAttribute('data-officers-template');
+    clone.classList.remove('officer-row-template');
+    rows.insertBefore(clone, template);
+    const first = clone.querySelector('input[name="officer_role"]');
+    if (first) first.focus();
+  });
+  rows.addEventListener('click', e => {
+    const btn = e.target.closest('[data-officer-remove]');
+    if (!btn) return;
+    const row = btn.closest('tr.officer-row');
+    if (row && !row.hasAttribute('data-officers-template')) row.remove();
+  });
+})();
+</script>
+
 {# New location modal #}
 <div class="modal" id="location-new-modal" aria-hidden="true">
   <div class="modal-backdrop" data-close></div>
