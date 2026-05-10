@@ -2144,17 +2144,28 @@ def _frontend_setting_keys():
     export — no manual list maintenance, no quiet drift between what
     the model declares and what the export captures. Selection is by
     prefix: any column starting with ``frontend_``, ``footer_``,
-    ``utility_bar_``, ``header_alert_``, ``hero_``, or ``mega_`` is
-    in scope. Admin-only / sensitive columns live under unrelated
-    prefixes (``smtp_``, ``zoom_``, ``intergroup_``, ``dash_``,
-    ``turnstile_``, ``ig_``, ``pic_``, ``og_``) so this prefix-based
-    selector never accidentally exfiltrates them.
+    ``utility_bar_``, ``header_alert_``, ``hero_``, ``mega_``,
+    ``submission_form_``, or ``contact_form_`` is in scope. Admin-only
+    / sensitive columns live under unrelated prefixes (``smtp_``,
+    ``zoom_``, ``intergroup_``, ``dash_``, ``turnstile_``, ``ig_``,
+    ``pic_``, ``og_``) so this prefix-based selector never accidentally
+    exfiltrates them.
+
+    Recipient columns inside the included prefixes (anything ending in
+    ``_to`` — e.g. ``contact_form_to``) are dropped: those are
+    deployment routing config, not look-and-feel, and shipping them
+    in a frontend bundle would silently re-route mail to the source
+    install's recipients. Excluded explicitly here, recreated locally
+    on the destination's own settings page.
     """
     from .models import SiteSetting
     prefixes = ("frontend_", "footer_", "utility_bar_",
-                "header_alert_", "hero_", "mega_")
-    return tuple(sorted(c.name for c in SiteSetting.__table__.columns
-                        if any(c.name.startswith(p) for p in prefixes)))
+                "header_alert_", "hero_", "mega_",
+                "submission_form_", "contact_form_")
+    return tuple(sorted(
+        c.name for c in SiteSetting.__table__.columns
+        if any(c.name.startswith(p) for p in prefixes)
+        and not c.name.endswith("_to")))
 
 
 def _frontend_asset_keys():
@@ -2190,9 +2201,11 @@ def _frontend_export_payload():
     The payload covers everything that shapes the public site:
 
       * **settings** — every ``frontend_*`` / ``footer_*`` /
-        ``utility_bar_*`` / ``header_alert_*`` / ``hero_*`` / ``mega_*``
-        column on ``SiteSetting`` (derived dynamically so new columns
-        join the export automatically).
+        ``utility_bar_*`` / ``header_alert_*`` / ``hero_*`` / ``mega_*`` /
+        ``submission_form_*`` / ``contact_form_*`` column on
+        ``SiteSetting`` (derived dynamically so new columns join the
+        export automatically; ``*_to`` recipient columns are excluded
+        as deployment routing).
       * **nav_items** — every top-level nav row + its columns + links.
       * **hero_buttons** — admin-defined CTAs under the hero subheading.
       * **custom_layouts** — drag-drop creations for homepage / footer /
@@ -2202,6 +2215,22 @@ def _frontend_export_payload():
         every woff2 in the right spot).
       * **custom_icons** — uploaded SVG / PNG icons used by the nav and
         feature blocks.
+      * **pages** — admin-authored content pages (``Page`` rows). Their
+        ``blocks_json`` plus background colour / image / dynbg config
+        plus typography overrides ride along; layout_key is preserved
+        so the picker shows the right preset on the destination.
+      * **intergroup_officers** — roster surfaced by the ``intergroup_member``
+        and ``officer_roster`` page blocks. Pages reference these by
+        id, so they ship together to keep the references intact.
+      * **stories** — recovery stories on /stories, with author byline,
+        sobriety / story dates, body, summary, featured image.
+      * **posts** — admin-authored events + announcements on /events
+        and /announcements (drafts and pending submissions skipped —
+        the holding tank stays empty on the destination so admins
+        don't inherit the source's pending review queue).
+      * **slug_history** — append-only log of slug renames (currently
+        ``post`` entity_type) so the redirect path on the source survives
+        the import.
       * **media_items** — catalog of every uploaded file referenced from
         frontend content. The import side re-creates the rows so the
         backfill scan doesn't have to re-derive sha256 / size for each
@@ -2211,19 +2240,20 @@ def _frontend_export_payload():
         bundle's ``assets/`` folder.
 
     Asset collection has two sources:
-      1. ``_filename`` columns on SiteSetting (logos, favicon, OG image,
-         404 image, hero bg image, hero bg video, etc.).
+      1. ``_filename`` columns on SiteSetting + ``Page.bg_image_filename``
+         + ``Story.featured_image_filename`` + ``Post.featured_image_filename``.
       2. ``_collect_asset_refs`` regex-scan of every JSON content blob —
          catches images embedded in homepage feature blocks, icons in
          utility bar items, references inside custom layouts'
-         ``blocks_json``, etc.
+         ``blocks_json``, page ``blocks_json``, story bodies, etc.
 
     Anything matched in (2) is cross-checked against the MediaItem
     catalog before being included so a false-positive 32-hex match in
     a non-asset string can't try to ship a phantom file.
     """
     from .models import (SiteSetting, CustomLayout, CustomFont, CustomIcon,
-                         FrontendHeroButton, MediaItem)
+                         FrontendHeroButton, MediaItem, Page, Story, Post,
+                         IntergroupOfficer, EntitySlugHistory)
     s = _get_site_setting()
     setting_keys = _frontend_setting_keys()
     asset_keys = _frontend_asset_keys()
@@ -2306,6 +2336,117 @@ def _frontend_export_payload():
         for ci in CustomIcon.query.all()
     ]
 
+    # ---- pages -------------------------------------------------------
+    # Admin-authored content pages (/<slug>). Carries everything that
+    # shapes how the page renders: blocks_json, layout key, page
+    # background (colour + image + dynbg), width formatting, hero
+    # typography overrides, visibility flags. Created/updated_at fields
+    # are preserved so import-side ordering reflects the source.
+    pages = []
+    for p in Page.query.order_by(Page.id).all():
+        pages.append({
+            "slug": p.slug, "title": p.title,
+            "blocks_json": p.blocks_json,
+            "template": p.template,
+            "is_published": bool(p.is_published),
+            "is_private": bool(p.is_private),
+            "layout_key": p.layout_key,
+            "bg_image_filename": p.bg_image_filename,
+            "bg_mode": p.bg_mode,
+            "bg_tile_scale": p.bg_tile_scale,
+            "bg_color": p.bg_color,
+            "bg_color_dark": p.bg_color_dark,
+            "bg_color_dark_mode": p.bg_color_dark_mode,
+            "bg_dynamic_key": p.bg_dynamic_key,
+            "bg_dynbg_config_json": p.bg_dynbg_config_json,
+            "width_mode": p.width_mode,
+            "max_width": p.max_width,
+            "full_padding_pct": p.full_padding_pct,
+            "heading_color": p.heading_color,
+            "heading_align": p.heading_align,
+            "heading_font": p.heading_font,
+            "subheading_color": p.subheading_color,
+            "subheading_font": p.subheading_font,
+        })
+
+    # ---- intergroup_officers ----------------------------------------
+    # Public-facing roster pulled by intergroup_member / officer_roster
+    # blocks. Pages reference rows by id, so the import side preserves
+    # the ids when possible (clears the table first, then re-inserts
+    # with the source's ids) so block references survive the round-trip.
+    intergroup_officers = [
+        {"id": o.id, "role": o.role, "name": o.name,
+         "phone": o.phone, "email": o.email,
+         "sort_order": o.sort_order}
+        for o in IntergroupOfficer.query.order_by(
+            IntergroupOfficer.sort_order, IntergroupOfficer.id).all()
+    ]
+
+    # ---- stories -----------------------------------------------------
+    # /stories content. Drafts + archives ride along (admins cloning
+    # a frontend usually want the full editorial state) but body /
+    # summary blobs feed asset_refs so embedded images come along.
+    stories = []
+    for st in Story.query.order_by(Story.id).all():
+        stories.append({
+            "slug": st.slug, "title": st.title,
+            "summary": st.summary, "body": st.body,
+            "featured_image_filename": st.featured_image_filename,
+            "author_name": st.author_name, "author_bio": st.author_bio,
+            "sobriety_date": st.sobriety_date.isoformat() if st.sobriety_date else None,
+            "story_date": st.story_date.isoformat() if st.story_date else None,
+            "is_featured": bool(st.is_featured),
+            "is_draft": bool(st.is_draft),
+            "is_archived": bool(st.is_archived),
+        })
+
+    # ---- posts (events + announcements) -----------------------------
+    # Pending-review submissions are deliberately dropped — the holding
+    # tank is per-deployment workflow state, not content. Drafts and
+    # archives DO ship since admins cloning a frontend often want the
+    # full editorial state.
+    posts = []
+    for po in Post.query.filter(
+            Post.is_pending_review.is_(False)).order_by(Post.id).all():
+        posts.append({
+            "id": po.id, "slug": po.slug, "title": po.title,
+            "summary": po.summary, "body": po.body,
+            "featured_image_filename": po.featured_image_filename,
+            "is_announcement": bool(po.is_announcement),
+            "is_event": bool(po.is_event),
+            "event_starts_at": po.event_starts_at.isoformat() if po.event_starts_at else None,
+            "event_ends_at": po.event_ends_at.isoformat() if po.event_ends_at else None,
+            "is_online": bool(po.is_online),
+            "location_name": po.location_name,
+            "location_address": po.location_address,
+            "google_maps_url": po.google_maps_url,
+            "website_url": po.website_url,
+            "website_label": po.website_label,
+            "zoom_meeting_id": po.zoom_meeting_id,
+            "zoom_passcode": po.zoom_passcode,
+            "zoom_url": po.zoom_url,
+            "contact_name": po.contact_name,
+            "contact_phone": po.contact_phone,
+            "contact_email": po.contact_email,
+            "is_draft": bool(po.is_draft),
+            "is_archived": bool(po.is_archived),
+        })
+
+    # ---- slug_history ------------------------------------------------
+    # Append-only log of slug renames driving 301 redirects on the
+    # public site. Only entity types whose rows we ship are included
+    # (currently 'post'); meeting slug history stays out of the
+    # frontend bundle since meetings live in the broader content scope
+    # the bundle deliberately avoids.
+    slug_history = [
+        {"entity_type": h.entity_type, "entity_id": h.entity_id,
+         "old_slug": h.old_slug, "new_slug": h.new_slug,
+         "changed_at": h.changed_at.isoformat() if h.changed_at else None}
+        for h in EntitySlugHistory.query
+        .filter(EntitySlugHistory.entity_type.in_(("post",)))
+        .order_by(EntitySlugHistory.id).all()
+    ]
+
     # ---- asset collection --------------------------------------------
     # Layer 1: explicit filename columns.
     asset_refs = set()
@@ -2345,6 +2486,25 @@ def _frontend_export_payload():
         if ci.get("stored_filename"):
             asset_refs.add(ci["stored_filename"])
 
+    # Layer 3: assets referenced by the new content entities. Each row
+    # may carry an explicit ``*_filename`` plus markdown / JSON bodies
+    # whose embedded images need to ride along with the bundle.
+    for p in pages:
+        if p.get("bg_image_filename"):
+            asset_refs.add(p["bg_image_filename"])
+        asset_refs |= _collect_asset_refs(p.get("blocks_json"))
+        asset_refs |= _collect_asset_refs(p.get("bg_dynbg_config_json"))
+    for st in stories:
+        if st.get("featured_image_filename"):
+            asset_refs.add(st["featured_image_filename"])
+        asset_refs |= _collect_asset_refs(st.get("body"))
+        asset_refs |= _collect_asset_refs(st.get("summary"))
+    for po in posts:
+        if po.get("featured_image_filename"):
+            asset_refs.add(po["featured_image_filename"])
+        asset_refs |= _collect_asset_refs(po.get("body"))
+        asset_refs |= _collect_asset_refs(po.get("summary"))
+
     # Cross-check matched filenames against the MediaItem catalog (for
     # the regex-discovered ones — explicit columns and table-stored
     # filenames are trusted as-is). Anything that doesn't match a real
@@ -2380,13 +2540,18 @@ def _frontend_export_payload():
         })
 
     return {
-        "kind": "frontend", "format_version": 2,
+        "kind": "frontend", "format_version": 3,
         "settings": settings,
         "nav_items": nav_items,
         "hero_buttons": hero_buttons,
         "custom_layouts": custom_layouts,
         "custom_fonts": custom_fonts,
         "custom_icons": custom_icons,
+        "pages": pages,
+        "intergroup_officers": intergroup_officers,
+        "stories": stories,
+        "posts": posts,
+        "slug_history": slug_history,
         "media_items": media_items,
         "assets": sorted(final_assets),
     }
@@ -2655,17 +2820,24 @@ def data_frontend_export():
     manifest = {
         "app": "trusted-servants-pro",
         "kind": "frontend",
-        "format_version": 2,
+        "format_version": 3,
         "exported_at": datetime.utcnow().isoformat() + "Z",
         "content_filename": "frontend.json",
         "assets_dir": "assets/",
-        "note": ("Scoped frontend bundle (v2). Includes every frontend "
-                 "SiteSetting column, nav, hero buttons, custom layouts "
-                 "(homepage / footer / page), custom fonts, custom icons, "
-                 "MediaItem catalog, plus every uploaded file referenced "
-                 "from any of the above. Import via the Data tab on "
-                 "another install to overlay the public site without "
-                 "touching users, meetings, or libraries."),
+        "note": ("Scoped frontend bundle (v3). Includes every "
+                 "look-and-feel SiteSetting column (frontend_, footer_, "
+                 "utility_bar_, header_alert_, hero_, mega_, "
+                 "submission_form_, contact_form_; recipient *_to "
+                 "columns excluded as deployment routing), nav, hero "
+                 "buttons, custom layouts (homepage / footer / page), "
+                 "custom fonts, custom icons, content pages, "
+                 "intergroup officers, stories, posts (drafts and "
+                 "archives included; pending submissions skipped), "
+                 "post slug history, MediaItem catalog, plus every "
+                 "uploaded file referenced from any of the above. "
+                 "Import via the Data tab on another install to "
+                 "overlay the public site without touching users, "
+                 "meetings, or libraries."),
     }
 
     tmp_zip = tempfile.NamedTemporaryFile(prefix="tsp-fe-export-", suffix=".zip", delete=False)
@@ -2935,6 +3107,183 @@ def data_frontend_import():
                     content_hash=m.get("content_hash"),
                     size_bytes=int(m.get("size_bytes") or 0),
                     mime_type=m.get("mime_type"),
+                ))
+
+        # 9. Pages (admin-authored content pages). Replace by slug —
+        # the source's slug becomes the destination's. Existing rows
+        # with the same slug are dropped first so the import is a
+        # clean overlay rather than a partial merge.
+        from .models import (Page, IntergroupOfficer, Story, Post,
+                             EntitySlugHistory)
+        page_payload = payload.get("pages") or []
+        if page_payload:
+            slugs_to_replace = {p.get("slug") for p in page_payload if p.get("slug")}
+            if slugs_to_replace:
+                Page.query.filter(Page.slug.in_(slugs_to_replace)).delete(
+                    synchronize_session=False)
+                db.session.flush()
+            for p in page_payload:
+                slug = (p.get("slug") or "").strip()
+                if not slug:
+                    continue
+                db.session.add(Page(
+                    slug=slug[:120],
+                    title=(p.get("title") or slug)[:200],
+                    blocks_json=p.get("blocks_json"),
+                    template=(p.get("template") or "standard")[:16],
+                    is_published=bool(p.get("is_published", True)),
+                    is_private=bool(p.get("is_private", False)),
+                    layout_key=(p.get("layout_key") or "custom")[:64],
+                    bg_image_filename=p.get("bg_image_filename"),
+                    bg_mode=(p.get("bg_mode") or "cover")[:16],
+                    bg_tile_scale=int(p.get("bg_tile_scale") or 100),
+                    bg_color=p.get("bg_color"),
+                    bg_color_dark=p.get("bg_color_dark"),
+                    bg_color_dark_mode=(p.get("bg_color_dark_mode") or "same")[:16],
+                    bg_dynamic_key=(p.get("bg_dynamic_key") or None),
+                    bg_dynbg_config_json=p.get("bg_dynbg_config_json"),
+                    width_mode=(p.get("width_mode") or "boxed")[:16],
+                    max_width=int(p.get("max_width") or 1160),
+                    full_padding_pct=int(p.get("full_padding_pct") or 4),
+                    heading_color=p.get("heading_color"),
+                    heading_align=(p.get("heading_align") or "auto")[:16],
+                    heading_font=p.get("heading_font"),
+                    subheading_color=p.get("subheading_color"),
+                    subheading_font=p.get("subheading_font"),
+                ))
+
+        # 10. IntergroupOfficer roster — replace wholesale with the
+        # source's ids preserved so block references survive (the
+        # `intergroup_member` block stores officer_id verbatim, so
+        # renumbering would silently break every reference).
+        if "intergroup_officers" in payload:
+            for o in IntergroupOfficer.query.all():
+                db.session.delete(o)
+            db.session.flush()
+            for o in (payload.get("intergroup_officers") or []):
+                role = (o.get("role") or "").strip()
+                if not role:
+                    continue
+                row = IntergroupOfficer(
+                    role=role[:200],
+                    name=(o.get("name") or None),
+                    phone=(o.get("phone") or None),
+                    email=(o.get("email") or None),
+                    sort_order=int(o.get("sort_order") or 0),
+                )
+                src_id = o.get("id")
+                if src_id is not None:
+                    try: row.id = int(src_id)
+                    except (TypeError, ValueError): pass
+                db.session.add(row)
+
+        # 11. Stories — replace by slug (preserving the source's
+        # creator pointers is impossible cross-install, so created_by
+        # is left null).
+        from datetime import date as _date
+        def _parse_date(v):
+            if not v: return None
+            try: return _date.fromisoformat(v)
+            except (TypeError, ValueError): return None
+        story_payload = payload.get("stories") or []
+        if story_payload:
+            slugs_to_replace = {st.get("slug") for st in story_payload if st.get("slug")}
+            if slugs_to_replace:
+                Story.query.filter(Story.slug.in_(slugs_to_replace)).delete(
+                    synchronize_session=False)
+                db.session.flush()
+            for st in story_payload:
+                title = (st.get("title") or "").strip()
+                if not title:
+                    continue
+                db.session.add(Story(
+                    slug=(st.get("slug") or None),
+                    title=title[:255],
+                    summary=st.get("summary"),
+                    body=st.get("body"),
+                    featured_image_filename=st.get("featured_image_filename"),
+                    author_name=(st.get("author_name") or None),
+                    author_bio=st.get("author_bio"),
+                    sobriety_date=_parse_date(st.get("sobriety_date")),
+                    story_date=_parse_date(st.get("story_date")),
+                    is_featured=bool(st.get("is_featured")),
+                    is_draft=bool(st.get("is_draft")),
+                    is_archived=bool(st.get("is_archived")),
+                ))
+
+        # 12. Posts — preserve source ids so the slug_history entries
+        # ride along with the right entity_id. Pending submissions
+        # were already filtered out on the export side.
+        from datetime import datetime as _dt
+        def _parse_dt(v):
+            if not v: return None
+            try: return _dt.fromisoformat(v)
+            except (TypeError, ValueError): return None
+        post_payload = payload.get("posts") or []
+        if post_payload:
+            for po in Post.query.filter(Post.is_pending_review.is_(False)).all():
+                db.session.delete(po)
+            db.session.flush()
+            for po in post_payload:
+                title = (po.get("title") or "").strip()
+                if not title:
+                    continue
+                row = Post(
+                    slug=(po.get("slug") or None),
+                    title=title[:255],
+                    summary=po.get("summary"),
+                    body=po.get("body"),
+                    featured_image_filename=po.get("featured_image_filename"),
+                    is_announcement=bool(po.get("is_announcement")),
+                    is_event=bool(po.get("is_event")),
+                    event_starts_at=_parse_dt(po.get("event_starts_at")),
+                    event_ends_at=_parse_dt(po.get("event_ends_at")),
+                    is_online=bool(po.get("is_online")),
+                    location_name=po.get("location_name"),
+                    location_address=po.get("location_address"),
+                    google_maps_url=po.get("google_maps_url"),
+                    website_url=po.get("website_url"),
+                    website_label=po.get("website_label"),
+                    zoom_meeting_id=po.get("zoom_meeting_id"),
+                    zoom_passcode=po.get("zoom_passcode"),
+                    zoom_url=po.get("zoom_url"),
+                    contact_name=po.get("contact_name"),
+                    contact_phone=po.get("contact_phone"),
+                    contact_email=po.get("contact_email"),
+                    is_draft=bool(po.get("is_draft")),
+                    is_archived=bool(po.get("is_archived")),
+                )
+                src_id = po.get("id")
+                if src_id is not None:
+                    try: row.id = int(src_id)
+                    except (TypeError, ValueError): pass
+                db.session.add(row)
+
+        # 13. Slug history — append-only redirect log. Filter to
+        # entity types we ship so we don't drop in dangling references
+        # to entities the bundle didn't carry.
+        kept_types = {"post"}
+        if payload.get("slug_history"):
+            EntitySlugHistory.query.filter(
+                EntitySlugHistory.entity_type.in_(kept_types)
+            ).delete(synchronize_session=False)
+            db.session.flush()
+            for h in payload["slug_history"]:
+                etype = (h.get("entity_type") or "").strip()
+                if etype not in kept_types:
+                    continue
+                old_slug = (h.get("old_slug") or "").strip()
+                new_slug = (h.get("new_slug") or "").strip()
+                if not old_slug or not new_slug:
+                    continue
+                try: ent_id = int(h.get("entity_id"))
+                except (TypeError, ValueError): continue
+                db.session.add(EntitySlugHistory(
+                    entity_type=etype[:16],
+                    entity_id=ent_id,
+                    old_slug=old_slug[:255],
+                    new_slug=new_slug[:255],
+                    changed_at=_parse_dt(h.get("changed_at")) or _dt.utcnow(),
                 ))
 
         db.session.commit()
