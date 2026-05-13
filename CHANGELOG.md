@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.9.1] — 2026-05-13
+
+### Fixed — Frontend export/import now produces a verbatim 1-to-1 copy (bundle v3 → v4)
+
+Two gaps in the frontend bundle were silently dropping per-page customisation on every restore. Both fixed; bundle format version bumped 3 → 4 (v3 bundles still import — the new fields fall back to defaults).
+
+- **Per-page spacing columns** — `pad_top`, `pad_bottom`, `pad_x`, `section_gap`, `block_margin_y` (added during the page-builder cycle, ~80/96/16/32/12 defaults). Previously NOT exported and NOT imported — every restored page reverted to the model's defaults. Both sides now carry them. The import side falls back to the same defaults via a local `_opt_int` helper when a v3 bundle predates the change, so older bundles continue to import without surprises.
+- **Homepage designation** — `SiteSetting.homepage_page_id` is a Page FK, and page IDs aren't portable across installs. Export now resolves the FK → page slug as `settings.homepage_page_slug` in the payload. Import side runs after pages are restored, looks up the page by slug, and writes the new id back to `SiteSetting.homepage_page_id`. When the slug is missing (v3 bundle) or doesn't match any imported page, the destination keeps whatever its own `_seed_homepage_page` wrote — `/` stays 200 either way.
+
+Manifest scope note rewritten to call out the v4 additions and the v3 backwards-compat path. Format version bumped in both `manifest.json` (the zip header) and the inner `frontend.json` payload's `format_version` constant.
+
+**No code changes needed for** the rest of the v1.9.0 surface area that lives inside `blocks_json` — Container per-side borders, hover border-width, mobile direction / padding, height / min-height, dark-mode colours; Hero dark-mode gradient + sub colour; Features / FAQ heading + subheading + items list; Meetings / Events filter + display toggles. These all ride along byte-for-byte inside the TEXT `blocks_json` column. The whole-site bundle (verbatim SQLite copy) likewise needs no changes — the new `homepage_page_id` column rides along with the raw `.db` file.
+
+Verified by round-trip test on the live install: tweaked a page's spacing to `42/137/7`, exported, cleared the destination state, re-imported with `confirm=REPLACE`, confirmed the page's spacing was restored verbatim and `SiteSetting.homepage_page_id` was correctly re-pointed at the new page row (id changed from 11 → 23 due to the wholesale delete/replace; the FK followed via slug).
+
 ## [1.9.0] — 2026-05-13
 
 ### Changed — Homepage is now a Page (the legacy homepage admin + public renderer are retired)

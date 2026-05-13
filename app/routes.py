@@ -2402,6 +2402,18 @@ def _frontend_export_payload():
     setting_keys = _frontend_setting_keys()
     asset_keys = _frontend_asset_keys()
     settings = {k: getattr(s, k, None) for k in setting_keys}
+    # Homepage designation — `SiteSetting.homepage_page_id` is a Page FK
+    # but page IDs aren't stable across installs. Resolve to the page's
+    # slug at export time; the import side looks the page up by slug
+    # after pages are restored and re-points the column. The key is
+    # absent when no homepage is designated (rare — the auto-seed
+    # writes one on every install).
+    _hp_slug = None
+    if s and s.homepage_page_id:
+        _hp = Page.query.get(s.homepage_page_id)
+        if _hp is not None:
+            _hp_slug = _hp.slug
+    settings["homepage_page_slug"] = _hp_slug
 
     # ---- nav_items (existing shape) -----------------------------------
     nav_items = []
@@ -2511,6 +2523,14 @@ def _frontend_export_payload():
             "heading_font": p.heading_font,
             "subheading_color": p.subheading_color,
             "subheading_font": p.subheading_font,
+            # Per-page spacing controls (added during the page-builder
+            # cycle). Each defaults to a sensible value at the model
+            # level, so older v3 bundles round-trip without these keys.
+            "pad_top": p.pad_top,
+            "pad_bottom": p.pad_bottom,
+            "pad_x": p.pad_x,
+            "section_gap": p.section_gap,
+            "block_margin_y": p.block_margin_y,
         })
 
     # ---- intergroup_officers ----------------------------------------
@@ -2684,7 +2704,7 @@ def _frontend_export_payload():
         })
 
     return {
-        "kind": "frontend", "format_version": 3,
+        "kind": "frontend", "format_version": 4,
         "settings": settings,
         "nav_items": nav_items,
         "hero_buttons": hero_buttons,
@@ -3049,24 +3069,31 @@ def data_frontend_export():
     manifest = {
         "app": "trusted-servants-pro",
         "kind": "frontend",
-        "format_version": 3,
+        "format_version": 4,
         "exported_at": datetime.utcnow().isoformat() + "Z",
         "content_filename": "frontend.json",
         "assets_dir": "assets/",
-        "note": ("Scoped frontend bundle (v3). Includes every "
+        "note": ("Scoped frontend bundle (v4). Includes every "
                  "look-and-feel SiteSetting column (frontend_, footer_, "
                  "utility_bar_, header_alert_, hero_, mega_, "
                  "submission_form_, contact_form_; recipient *_to "
-                 "columns excluded as deployment routing), nav, hero "
-                 "buttons, custom layouts (homepage / footer / page), "
-                 "custom fonts, custom icons, content pages, "
-                 "intergroup officers, stories, posts (drafts and "
-                 "archives included; pending submissions skipped), "
-                 "post slug history, MediaItem catalog, plus every "
-                 "uploaded file referenced from any of the above. "
-                 "Import via the Data tab on another install to "
-                 "overlay the public site without touching users, "
-                 "meetings, or libraries."),
+                 "columns excluded as deployment routing), the homepage "
+                 "designation (resolved through page slug for "
+                 "portability), nav, hero buttons, custom layouts "
+                 "(homepage / footer / page), custom fonts, custom "
+                 "icons, content pages (full schema including the "
+                 "per-page spacing controls pad_top / pad_bottom / "
+                 "pad_x / section_gap / block_margin_y), intergroup "
+                 "officers, stories, posts (drafts and archives "
+                 "included; pending submissions skipped), post slug "
+                 "history, MediaItem catalog, plus every uploaded "
+                 "file referenced from any of the above. Import via "
+                 "the Data tab on another install to overlay the "
+                 "public site without touching users, meetings, or "
+                 "libraries. v3 bundles still import — the new "
+                 "spacing columns fall back to Page defaults and the "
+                 "homepage stays whatever the destination's auto-seed "
+                 "wrote."),
     }
 
     tmp_zip = tempfile.NamedTemporaryFile(prefix="tsp-fe-export-", suffix=".zip", delete=False)
@@ -3355,6 +3382,17 @@ def data_frontend_import():
                 slug = (p.get("slug") or "").strip()
                 if not slug:
                     continue
+                # Spacing fields: if the bundle predates them (v3), fall
+                # back to the Page model's defaults so legacy bundles
+                # still produce sensibly-spaced pages.
+                def _opt_int(key, default):
+                    v = p.get(key)
+                    if v is None:
+                        return default
+                    try:
+                        return int(v)
+                    except (TypeError, ValueError):
+                        return default
                 db.session.add(Page(
                     slug=slug[:120],
                     title=(p.get("title") or slug)[:200],
@@ -3379,7 +3417,28 @@ def data_frontend_import():
                     heading_font=p.get("heading_font"),
                     subheading_color=p.get("subheading_color"),
                     subheading_font=p.get("subheading_font"),
+                    pad_top=_opt_int("pad_top", 80),
+                    pad_bottom=_opt_int("pad_bottom", 96),
+                    pad_x=_opt_int("pad_x", 16),
+                    section_gap=_opt_int("section_gap", 32),
+                    block_margin_y=_opt_int("block_margin_y", 12),
                 ))
+            # Flush so the freshly-inserted pages have ids before we
+            # look them up by slug for the homepage assignment below.
+            db.session.flush()
+
+        # 9b. Homepage designation — the export stores the homepage's
+        # SLUG (not its ID, which isn't portable across installs). Now
+        # that pages are restored, resolve the slug → new id and pin
+        # SiteSetting.homepage_page_id. When the slug is missing or
+        # doesn't match any imported page, leave the column whatever
+        # the auto-seed wrote on the destination — the public `/`
+        # stays 200 either way.
+        _hp_slug = (payload.get("settings") or {}).get("homepage_page_slug")
+        if _hp_slug:
+            _hp_page = Page.query.filter_by(slug=_hp_slug).first()
+            if _hp_page is not None:
+                s.homepage_page_id = _hp_page.id
 
         # 10. IntergroupOfficer roster — replace wholesale with the
         # source's ids preserved so block references survive (the

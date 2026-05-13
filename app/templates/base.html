@@ -626,7 +626,7 @@
         <hr class="settings-sep">
         <div class="u-name">Need a different role?</div>
         <p class="muted small">
-          Role assignments are managed by an admin. If your access needs to change, contact a portal admin via the
+          Role assignments are managed by an admin. If your access needs to change, contact an admin via the
           <a href="#" data-open-modal="pic-help-modal">Need Help?</a> popup.
         </p>
       </div>
@@ -1219,6 +1219,13 @@
 
           <h3 class="about-sub">Changelog</h3>
           <ul class="changelog">
+            <li>
+              <div class="u-name">1.9.1</div>
+              <div class="muted smaller">May 2026</div>
+              <ul>
+                <li><b>Frontend export/import now produces a verbatim 1-to-1 copy (bundle v3 → v4)</b> — two gaps in the frontend bundle were silently dropping per-page customisation on every restore. (1) <b>Per-page spacing columns</b> (<code>pad_top</code>, <code>pad_bottom</code>, <code>pad_x</code>, <code>section_gap</code>, <code>block_margin_y</code>, defaults <code>80/96/16/32/12</code>) were previously not exported and not imported — every restored page reverted to the model's defaults. Both sides now carry them; the import side falls back to the same defaults via a local <code>_opt_int</code> helper when a v3 bundle predates the change, so older bundles continue to import without surprises. (2) <b>Homepage designation</b> — <code>SiteSetting.homepage_page_id</code> is a Page FK, and page IDs aren't portable across installs. Export now resolves the FK → page slug as <code>settings.homepage_page_slug</code> in the payload; import side runs after pages are restored, looks up the page by slug, and writes the new id back to the column. When the slug is missing (v3 bundle) or doesn't match any imported page, the destination keeps whatever its own auto-seed wrote — <code>/</code> stays 200 either way. Manifest scope note rewritten to call out the v4 additions and the v3 backwards-compat path; format version bumped in both <code>manifest.json</code> and the inner <code>frontend.json</code> payload's <code>format_version</code> constant. <b>No code changes needed for</b> the rest of the v1.9.0 surface area that lives inside <code>blocks_json</code> — Container per-side borders, hover border-width, mobile direction/padding, height/min-height, dark-mode colours; Hero dark-mode gradient + sub colour; Features / FAQ heading + subheading + items list; Meetings / Events filter + display toggles. These all ride along byte-for-byte. The whole-site bundle (verbatim SQLite copy) likewise needs no changes — <code>homepage_page_id</code> rides along with the raw <code>.db</code> file.</li>
+              </ul>
+            </li>
             <li>
               <div class="u-name">1.9.0</div>
               <div class="muted smaller">May 2026</div>
