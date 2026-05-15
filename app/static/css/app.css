@@ -194,6 +194,13 @@ p { margin: .25rem 0; }
    sidebar's middle still scrolls via mouse wheel / trackpad / keyboard;
    we just suppress the gutter so the nav reads as a clean column. */
 .sidebar > nav { flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  /* Lock horizontal axis. Without an explicit `overflow-x`, the CSS
+     spec promotes it to `auto` once the Y axis is non-visible —
+     letting any inner element that exceeds the sidebar's width turn
+     the nav into a horizontally swipable strip on mobile. Pair with
+     `touch-action: pan-y` so iOS Safari can't initiate a horizontal
+     pan even if some descendant manages to overflow. */
+  overflow-x: hidden; touch-action: pan-y;
   scrollbar-width: none; -ms-overflow-style: none; }
 .sidebar > nav::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .brand { display: flex; gap: 12px; align-items: flex-start; padding: 4px 6px 18px; }
