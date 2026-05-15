@@ -301,6 +301,78 @@ def create_app():
     app.register_blueprint(public_bp)
     app.register_blueprint(frontend_bp)
 
+    # Common attacker probe paths (env files, git internals, server config
+    # files, off-the-shelf admin panels). We don't serve any of these — Flask
+    # would 404 them anyway — but matching here lets us:
+    #   1. Skip the heavy 404 template render (cheaper under probe storms).
+    #   2. Return an empty body so nothing about the app's stack or
+    #      branding is reflected back to the scanner.
+    #   3. Emit a single INFO log line so production has visibility into
+    #      attack patterns without filling logs with full request dumps.
+    #
+    # Patterns are matched against the lowercased path. Suffix tuples are
+    # for filenames (`.env`, `.env.backup`, `.aws/credentials`, etc.);
+    # prefix tuples gate whole directories.
+    _PROBE_PATH_SUFFIXES = (
+        ".env", ".env.bak", ".env.backup", ".env.local", ".env.prod",
+        ".env.production", ".env.dev", ".env.development", ".env.save",
+        ".env.swp", ".env.old", ".env.example", ".env~",
+        "/.DS_Store", "/Thumbs.db",
+        "/composer.json", "/composer.lock",
+        "/package.json.bak", "/yarn.lock.bak",
+        "/web.config", "/.htaccess", "/.htpasswd",
+        "/id_rsa", "/id_dsa", "/.ssh/authorized_keys",
+        "/credentials", "/credentials.json", "/secrets.yml", "/secrets.json",
+        "/dump.sql", "/backup.sql", "/backup.zip", "/backup.tar.gz",
+    )
+    _PROBE_PATH_PREFIXES = (
+        "/.git/", "/.svn/", "/.hg/", "/.bzr/",
+        "/.aws/", "/.azure/", "/.gcp/", "/.kube/",
+        "/.vscode/", "/.idea/",
+        "/wp-admin/", "/wp-login.php", "/wp-content/", "/wp-includes/",
+        "/xmlrpc.php",
+        "/phpmyadmin/", "/pma/", "/phpmyadmin",
+        "/server-status", "/server-info",
+        "/.well-known/security.txt.bak",
+        "/vendor/phpunit/",
+        "/cgi-bin/",
+        "/admin.php", "/adminer.php",
+    )
+
+    @app.before_request
+    def _block_known_probes():
+        """Return a tight 404 for known attacker probe paths before the
+        request flows into Flask's route matching + 404 template render.
+
+        Why: scanners hammer for `/.env`, `/.git/config`, `/wp-admin/`,
+        etc. Each one would otherwise hit our HTML 404 template — a
+        ~25 KB render — and reflect site branding back at the scanner.
+        Short-circuiting here keeps per-probe cost near zero and avoids
+        any chance the 404 template leaks anything useful to recon.
+        """
+        p = (request.path or "").lower()
+        # Cheap structural filter before the more expensive tuple scan —
+        # legit traffic never hits these and we want the fast path tight.
+        if not (p.endswith((".env",)) or "/." in p or "/wp-" in p
+                or "phpmyadmin" in p or "xmlrpc.php" in p
+                or "server-status" in p or "server-info" in p
+                or "/cgi-bin/" in p or "admin.php" in p
+                or "/vendor/" in p or "/credentials" in p
+                or "/dump.sql" in p or "/backup." in p
+                or p.endswith(("/web.config", "/.htaccess", "/.htpasswd",
+                               "/id_rsa", "/id_dsa",
+                               "/composer.json", "/composer.lock",
+                               "/secrets.yml", "/secrets.json",
+                               "/.ds_store", "/thumbs.db"))):
+            return None
+        if p.endswith(_PROBE_PATH_SUFFIXES) or any(p.startswith(pre) for pre in _PROBE_PATH_PREFIXES):
+            app.logger.info("probe-block %s from %s",
+                            request.path, request.remote_addr or "?")
+            # Empty body + no-store. The default 404 template's branding
+            # / nav would otherwise be reflected back to scanners.
+            return ("", 404, {"Cache-Control": "no-store"})
+        return None
+
     @app.before_request
     def _url_redirect_handler():
         """Look up the incoming path in the `UrlRedirect` table and 301
@@ -339,6 +411,16 @@ def create_app():
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response.headers.setdefault("Permissions-Policy",
                                     "geolocation=(), microphone=(), camera=(), payment=()")
+        # Cross-origin isolation. COOP=same-origin keeps any window we
+        # open (or that opens us) in a separate browsing-context group so
+        # window.opener attacks can't reach across; CORP=same-origin
+        # blocks other origins from embedding our responses as resources
+        # (image hot-linking, <link rel=stylesheet href=us> from external
+        # sites, etc.). Both are scoped to our own origin — Caddy /
+        # Cloudflare / our own /pub/ assets stay on the same host so
+        # nothing legitimate breaks.
+        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
         # HSTS only makes sense when served over TLS; Caddy also adds it in prod.
         if request.is_secure:
             response.headers.setdefault("Strict-Transport-Security",
@@ -1527,8 +1609,32 @@ def _seed_admin(app):
     from werkzeug.security import generate_password_hash
     if User.query.count() == 0:
         username = os.environ.get("TSP_ADMIN_USERNAME", "admin")
-        password = os.environ.get("TSP_ADMIN_PASSWORD", "admin")
+        password = os.environ.get("TSP_ADMIN_PASSWORD", "").strip()
         email = os.environ.get("TSP_ADMIN_EMAIL", "admin@example.com")
+        # Production: refuse to seed admin/admin. The installer always
+        # generates a random TSP_ADMIN_PASSWORD into the .env file, but
+        # someone bringing the image up manually (docker run / a
+        # hand-written compose) can easily miss it, and a public
+        # /tspro/auth/login with `admin` / `admin` is a takeover in one
+        # request. Fail loudly so the operator notices and supplies a
+        # real password rather than silently shipping a known default.
+        is_debug = os.environ.get("TSP_DEBUG", "").lower() in ("1", "true", "yes")
+        if not password:
+            if is_debug:
+                password = "admin"
+                app.logger.warning(
+                    "TSP_ADMIN_PASSWORD not set — seeding %s/admin "
+                    "because TSP_DEBUG=1. Do NOT run with this in "
+                    "production.", username,
+                )
+            else:
+                raise RuntimeError(
+                    "TSP_ADMIN_PASSWORD is required on first boot. "
+                    "Set a strong password via environment variable "
+                    "(the bundled installer generates one automatically; "
+                    "manual docker-run setups need to provide it). "
+                    "TSP_DEBUG=1 falls back to admin/admin for local dev."
+                )
         u = User(username=username, email=email,
                  password_hash=generate_password_hash(password), role="admin")
         db.session.add(u)

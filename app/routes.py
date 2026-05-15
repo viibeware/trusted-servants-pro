@@ -134,6 +134,39 @@ CATEGORY_LABELS = {
 }
 
 
+def _safe_referrer():
+    """Return ``request.referrer`` only when it points at our own host.
+
+    Defense-in-depth against an open-redirect class issue: many handlers
+    fall back to ``request.referrer`` to bounce the user back where they
+    came from after a flash. The Referer header is set by the browser
+    and can be steered by an attacker hosting a page that links into a
+    protected route — without this validation, a permission-denied flash
+    would redirect the victim off to ``https://attacker.example/`` and
+    expose them to phishing in the redirected window.
+
+    Same-origin check uses the request's ``host_url`` netloc so a
+    visitor coming from ``https://our-site/`` or ``http://our-site:8090/``
+    both pass, but ``https://attacker.example/`` fails the netloc
+    comparison and we return ``None`` (callers fall through to whatever
+    ``url_for(...)`` they intended).
+    """
+    ref = request.referrer
+    if not ref:
+        return None
+    try:
+        from urllib.parse import urlparse
+        ref_parsed = urlparse(ref)
+        host_parsed = urlparse(request.host_url)
+    except Exception:
+        return None
+    if ref_parsed.scheme not in ("http", "https"):
+        return None
+    if ref_parsed.netloc != host_parsed.netloc:
+        return None
+    return ref
+
+
 def editor_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -141,7 +174,7 @@ def editor_required(f):
             return redirect(url_for("auth.login"))
         if not current_user.can_edit():
             flash("You don't have permission to do that", "danger")
-            return redirect(request.referrer or url_for("main.index"))
+            return redirect(_safe_referrer() or url_for("main.index"))
         return f(*args, **kwargs)
     return wrapper
 
@@ -153,7 +186,7 @@ def admin_required(f):
             return redirect(url_for("auth.login"))
         if not current_user.is_admin():
             flash("Admins only", "danger")
-            return redirect(request.referrer or url_for("main.index"))
+            return redirect(_safe_referrer() or url_for("main.index"))
         return f(*args, **kwargs)
     return wrapper
 
@@ -169,7 +202,7 @@ def meeting_admin_required(f):
             return redirect(url_for("auth.login"))
         if not current_user.can_create_meetings():
             flash("You don't have permission to do that", "danger")
-            return redirect(request.referrer or url_for("main.index"))
+            return redirect(_safe_referrer() or url_for("main.index"))
         return f(*args, **kwargs)
     return wrapper
 
@@ -187,7 +220,7 @@ def library_admin_required(f):
             return redirect(url_for("auth.login"))
         if not current_user.can_manage_libraries():
             flash("You don't have permission to do that", "danger")
-            return redirect(request.referrer or url_for("main.index"))
+            return redirect(_safe_referrer() or url_for("main.index"))
         return f(*args, **kwargs)
     return wrapper
 
@@ -204,7 +237,7 @@ def _require_can_edit_library(library):
         return redirect(url_for("auth.login"))
     if not current_user.can_edit_library(library):
         flash("You don't have permission to edit this library", "danger")
-        return redirect(request.referrer or url_for("main.index"))
+        return redirect(_safe_referrer() or url_for("main.index"))
     return None
 
 
@@ -1232,7 +1265,7 @@ def meeting_edit(slug):
     schedules, err = _parse_schedule_form(request.form, meeting_id=m.id)
     if err:
         flash(err, "danger")
-        return redirect(request.referrer or url_for("main.meeting_detail", slug=m.public_slug))
+        return redirect(_safe_referrer() or url_for("main.meeting_detail", slug=m.public_slug))
     _apply_meeting_form(m, request.form, schedules, request.files)
     if "library_ids" in request.form:
         _apply_library_selections(m, request.form)
@@ -1571,7 +1604,7 @@ def _navlinks_redirect():
     if request.referrer isn't set."""
     if request.values.get("embed") == "1":
         return redirect(url_for("main.nav_links", embed="1"))
-    return redirect(request.referrer or url_for("main.nav_links"))
+    return redirect(_safe_referrer() or url_for("main.nav_links"))
 
 
 @bp.route("/nav-links")
@@ -1802,7 +1835,7 @@ def site_branding_save():
             footer_logo_width=s.footer_logo_width or 32,
         )
     flash("Branding updated", "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 @bp.route("/site-url", methods=["POST"])
@@ -1825,7 +1858,7 @@ def site_url_save():
     if request.headers.get("X-Requested-With") == "fetch":
         return jsonify(ok=True, site_url=s.site_url or "")
     flash("Site URL saved", "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 def _public_url_for(endpoint, **values):
@@ -1952,7 +1985,7 @@ def zoom_tech_toggle():
     s.zoom_tech_enabled = request.form.get("zoom_tech_enabled") == "1"
     db.session.commit()
     flash("Zoom Tech page " + ("enabled" if s.zoom_tech_enabled else "disabled"), "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 @bp.route("/settings/sidebar-save", methods=["POST"])
@@ -2005,7 +2038,7 @@ def sidebar_save():
         s.sidebar_order_json = _json.dumps(clean) if clean else None
     db.session.commit()
     flash("Sidebar order saved", "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 @bp.route("/_sidebar/nav")
@@ -2060,7 +2093,7 @@ def module_role_save():
         setattr(s, col, role)
         db.session.commit()
         flash("Module access saved", "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 @bp.route("/settings/posts-toggle", methods=["POST"])
@@ -2070,7 +2103,7 @@ def posts_toggle():
     s.posts_enabled = request.form.get("posts_enabled") == "1"
     db.session.commit()
     flash("Announcements & Events " + ("enabled" if s.posts_enabled else "disabled"), "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 def _require_posts_enabled():
@@ -2094,7 +2127,7 @@ def stories_toggle():
     s.stories_enabled = request.form.get("stories_enabled") == "1"
     db.session.commit()
     flash("Stories " + ("enabled" if s.stories_enabled else "disabled"), "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 def _require_stories_enabled():
@@ -2117,7 +2150,7 @@ def blog_toggle():
     s.blog_enabled = request.form.get("blog_enabled") == "1"
     db.session.commit()
     flash("Blog " + ("enabled" if s.blog_enabled else "disabled"), "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 def _require_blog_enabled():
@@ -2205,10 +2238,10 @@ def data_import():
     f = request.files.get("archive")
     if not f or not f.filename:
         flash("Choose an export archive (.zip) to import", "danger")
-        return redirect(request.referrer or url_for("main.index"))
+        return redirect(_safe_referrer() or url_for("main.index"))
     if request.form.get("confirm") != "REPLACE":
         flash('Type REPLACE in the confirmation box to proceed — import overwrites all data', "danger")
-        return redirect(request.referrer or url_for("main.index"))
+        return redirect(_safe_referrer() or url_for("main.index"))
 
     upload_dir = current_app.config["UPLOAD_FOLDER"]
     data_dir = os.path.dirname(upload_dir.rstrip("/"))
@@ -2223,25 +2256,25 @@ def data_import():
                 names = z.namelist()
                 if "tsp.db" not in names or "manifest.json" not in names:
                     flash("Archive is missing tsp.db or manifest.json — not a valid export", "danger")
-                    return redirect(request.referrer or url_for("main.index"))
+                    return redirect(_safe_referrer() or url_for("main.index"))
                 for n in names:
                     if n.startswith("/") or ".." in n.split("/"):
                         flash(f"Archive contains unsafe path: {n}", "danger")
-                        return redirect(request.referrer or url_for("main.index"))
+                        return redirect(_safe_referrer() or url_for("main.index"))
                 try:
                     manifest = json.loads(z.read("manifest.json").decode("utf-8"))
                     if manifest.get("app") not in ("trusted-servants-pro", "trusted-servants-portal"):
                         flash("Archive manifest does not identify a Trusted Servants Pro export", "danger")
-                        return redirect(request.referrer or url_for("main.index"))
+                        return redirect(_safe_referrer() or url_for("main.index"))
                 except (ValueError, UnicodeDecodeError):
                     flash("Archive manifest.json is invalid", "danger")
-                    return redirect(request.referrer or url_for("main.index"))
+                    return redirect(_safe_referrer() or url_for("main.index"))
                 extract_dir = os.path.join(staging, "extracted")
                 os.makedirs(extract_dir, exist_ok=True)
                 z.extractall(extract_dir)
         except zipfile.BadZipFile:
             flash("File is not a valid zip archive", "danger")
-            return redirect(request.referrer or url_for("main.index"))
+            return redirect(_safe_referrer() or url_for("main.index"))
 
         new_db = os.path.join(extract_dir, "tsp.db")
         new_uploads = os.path.join(extract_dir, "uploads")
@@ -2737,7 +2770,7 @@ def data_snapshot_now():
         flash(f"Snapshot saved: {target.name}", "success")
     else:
         flash("Today's snapshot already exists — nothing to do.", "info")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 # ---------------------------------------------------------------------------
@@ -3104,10 +3137,10 @@ def data_frontend_import():
     f = request.files.get("archive")
     if not f or not f.filename:
         flash("Choose a frontend bundle (.zip) to import", "danger")
-        return redirect(request.referrer or url_for("main.index"))
+        return redirect(_safe_referrer() or url_for("main.index"))
     if request.form.get("confirm") != "REPLACE":
         flash('Type REPLACE in the confirmation box to overwrite frontend content', "danger")
-        return redirect(request.referrer or url_for("main.index"))
+        return redirect(_safe_referrer() or url_for("main.index"))
 
     upload_dir = current_app.config["UPLOAD_FOLDER"]
     data_dir = os.path.dirname(upload_dir.rstrip("/"))
@@ -3121,32 +3154,32 @@ def data_frontend_import():
                 for n in names:
                     if n.startswith("/") or ".." in n.split("/"):
                         flash(f"Archive contains unsafe path: {n}", "danger")
-                        return redirect(request.referrer or url_for("main.index"))
+                        return redirect(_safe_referrer() or url_for("main.index"))
                 if "frontend.json" not in names or "manifest.json" not in names:
                     flash("Archive is missing frontend.json or manifest.json — not a valid frontend bundle", "danger")
-                    return redirect(request.referrer or url_for("main.index"))
+                    return redirect(_safe_referrer() or url_for("main.index"))
                 try:
                     manifest = json.loads(z.read("manifest.json").decode("utf-8"))
                 except (ValueError, UnicodeDecodeError):
                     flash("Archive manifest.json is invalid", "danger")
-                    return redirect(request.referrer or url_for("main.index"))
+                    return redirect(_safe_referrer() or url_for("main.index"))
                 if manifest.get("app") not in ("trusted-servants-pro", "trusted-servants-portal"):
                     flash("Archive manifest does not identify a Trusted Servants Pro export", "danger")
-                    return redirect(request.referrer or url_for("main.index"))
+                    return redirect(_safe_referrer() or url_for("main.index"))
                 if manifest.get("kind") != "frontend":
                     flash("This looks like a full archive, not a frontend bundle. Use the Import &amp; Replace form instead.", "danger")
-                    return redirect(request.referrer or url_for("main.index"))
+                    return redirect(_safe_referrer() or url_for("main.index"))
                 try:
                     payload = json.loads(z.read("frontend.json").decode("utf-8"))
                 except (ValueError, UnicodeDecodeError):
                     flash("Archive frontend.json is invalid", "danger")
-                    return redirect(request.referrer or url_for("main.index"))
+                    return redirect(_safe_referrer() or url_for("main.index"))
                 extract_dir = os.path.join(staging, "extracted")
                 os.makedirs(extract_dir, exist_ok=True)
                 z.extractall(extract_dir)
         except zipfile.BadZipFile:
             flash("File is not a valid zip archive", "danger")
-            return redirect(request.referrer or url_for("main.index"))
+            return redirect(_safe_referrer() or url_for("main.index"))
 
         # 1. Copy assets into uploads/ (preserve filenames — they're already
         #    UUID-prefixed on the source install and won't collide in practice).
@@ -3569,7 +3602,7 @@ def data_frontend_import():
         _backfill_media(current_app)
 
         flash("Frontend bundle imported — content, navigation, layouts, fonts, icons, and assets are in place.", "success")
-        return redirect(request.referrer or url_for("main.frontend_dashboard"))
+        return redirect(_safe_referrer() or url_for("main.frontend_dashboard"))
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
@@ -3649,7 +3682,7 @@ def pic_save():
     s.pic_phone = request.form.get("pic_phone", "").strip() or None
     db.session.commit()
     flash("Public Information Chair updated", "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 @bp.route("/settings/intergroup-toggle", methods=["POST"])
@@ -3659,7 +3692,7 @@ def intergroup_toggle():
     s.intergroup_enabled = request.form.get("intergroup_enabled") == "1"
     db.session.commit()
     flash("Intergroup page " + ("enabled" if s.intergroup_enabled else "disabled"), "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 @bp.route("/settings/intergroup-module-toggle", methods=["POST"])
@@ -3691,7 +3724,7 @@ def intergroup_module_toggle():
                 existing.is_intergroup = True
     db.session.commit()
     flash("Intergroup module " + ("enabled" if s.intergroup_module_enabled else "disabled"), "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 @public_bp.route("/site-branding/footer-logo")
@@ -3750,7 +3783,7 @@ def frontend_module_toggle():
     # when enabling, jump into the dashboard so the admin can keep going.
     if s.frontend_module_enabled:
         return redirect(url_for("main.frontend_dashboard"))
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 ALERT_ICONS = {
@@ -3999,7 +4032,7 @@ def frontend_nav_item_edit(nid):
     _apply_nav_item_form(item, request.form)
     db.session.commit()
     flash("Nav item updated", "success")
-    return redirect(request.referrer or url_for("main.frontend_header"))
+    return redirect(_safe_referrer() or url_for("main.frontend_header"))
 
 
 @bp.route("/frontend/nav-item/<int:nid>/delete", methods=["POST"])
@@ -6443,7 +6476,7 @@ def frontend_theme_save():
         s.frontend_megamenu_template = key
         db.session.commit()
         flash(f"Theme set to {key}", "success")
-    return redirect(request.referrer or url_for("main.frontend_dashboard"))
+    return redirect(_safe_referrer() or url_for("main.frontend_dashboard"))
 
 
 @bp.route("/frontend/pages")
@@ -7622,7 +7655,7 @@ def frontend_page_save():
     title = (request.form.get("title") or "").strip()
     if not title:
         flash("Title is required", "danger")
-        return redirect(request.referrer or url_for("main.frontend_pages"))
+        return redirect(_safe_referrer() or url_for("main.frontend_pages"))
     slug = _slugify_page(request.form.get("slug") or title)
     # Layout style toggle was removed — every page is "standard". Wiki
     # behaviour is now achieved by selecting the wiki layout PRESET,
@@ -7654,7 +7687,7 @@ def frontend_page_save():
             blocks_json_to_save = raw_blocks
         except (ValueError, TypeError):
             flash("Invalid blocks JSON", "danger")
-            return redirect(request.referrer or url_for("main.frontend_pages"))
+            return redirect(_safe_referrer() or url_for("main.frontend_pages"))
 
     bg_mode = (request.form.get("bg_mode") or "cover").strip().lower()
     if bg_mode not in ("cover", "tile"):
@@ -7803,7 +7836,7 @@ def frontend_page_save():
         if ext not in PAGE_BG_EXTS:
             flash(f"Unsupported background type .{ext}. Allowed: {', '.join(sorted(PAGE_BG_EXTS))}.",
                   "danger")
-            return redirect(request.referrer or url_for("main.frontend_pages"))
+            return redirect(_safe_referrer() or url_for("main.frontend_pages"))
         safe = secure_filename(bg_upload.filename) or f"page-bg.{ext}"
         stored = f"{_uuid4().hex}_{safe}"
         bg_upload.save(_os.path.join(current_app.config["UPLOAD_FOLDER"], stored))
@@ -7931,7 +7964,7 @@ def frontend_page_status(page_id):
         return redirect(url_for("main.frontend_page_edit", page_id=page.id))
     db.session.commit()
     flash(f"Page “{page.title}” marked {status}", "success")
-    return redirect(request.referrer
+    return redirect(_safe_referrer()
                     or url_for("main.frontend_page_edit", page_id=page.id))
 
 
@@ -7956,7 +7989,7 @@ def frontend_page_set_homepage(page_id):
     s.homepage_page_id = page.id
     db.session.commit()
     flash(f"“{page.title}” is now the homepage", "success")
-    return redirect(request.referrer
+    return redirect(_safe_referrer()
                     or url_for("main.frontend_page_edit", page_id=page.id))
 
 
@@ -8160,7 +8193,7 @@ def apple_touch_icon_save():
             _cleanup_retired_asset(old)
     db.session.commit()
     flash("Home Screen icon updated", "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 @bp.route("/settings/og-save", methods=["POST"])
@@ -8183,7 +8216,7 @@ def og_save():
             _cleanup_retired_asset(old)
     db.session.commit()
     flash("Open Graph settings updated", "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 # --- Files ---
@@ -9076,7 +9109,7 @@ def reading_delete(rid):
     r = db.session.get(LibraryItem, rid) or abort(404)
     if not current_user.can_delete_library_item(r):
         flash("You don't have permission to delete this file", "danger")
-        return redirect(request.referrer
+        return redirect(_safe_referrer()
                         or url_for("main.library_detail", slug=r.library.public_slug))
     parent_slug = r.library.public_slug
     title = r.title
@@ -9121,6 +9154,15 @@ def _save_upload(uploaded):
             abort(400, description=f"File type '{ext}' is only allowed for admins.")
     data = uploaded.read()
     if ext == ".svg":
+        # Strip <script>, on*= handlers, and javascript: hrefs BEFORE the
+        # dimension normaliser touches the file. SVG uploads are
+        # admin-only (see ADMIN_ONLY_UPLOAD_EXTENSIONS) but an admin
+        # uploading a vector logo from a designer's hand-off shouldn't
+        # be a vector for XSS against other admins / visitors who later
+        # navigate to the file directly — browsers execute inline
+        # <script> in standalone SVGs. Same _sanitize_svg() that the
+        # Custom Icons upload path uses.
+        data = _sanitize_svg(data)
         data = _normalize_svg_dimensions(data)
     h = hashlib.sha256(data).hexdigest()
     existing = MediaItem.query.filter_by(content_hash=h).first()
@@ -9568,7 +9610,7 @@ def login_appearance_save():
     s.login_transition_enabled = request.form.get("login_transition_enabled") == "1"
     db.session.commit()
     flash("Login appearance updated", "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 # --- Turnstile (login bot protection) ---
@@ -9588,11 +9630,11 @@ def turnstile_save():
         s.turnstile_enabled = False
         db.session.commit()
         flash("Turnstile not enabled: site key and secret key are both required", "danger")
-        return redirect(request.referrer or url_for("main.index"))
+        return redirect(_safe_referrer() or url_for("main.index"))
     s.turnstile_enabled = wants_enabled
     db.session.commit()
     flash("Login bot protection saved", "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 # --- Email / SMTP settings ---
@@ -9607,7 +9649,7 @@ def email_save():
         s.smtp_port = int(raw_port) if raw_port else None
     except ValueError:
         flash("SMTP port must be a number", "danger")
-        return redirect(request.referrer or url_for("main.index"))
+        return redirect(_safe_referrer() or url_for("main.index"))
     s.smtp_username = (request.form.get("smtp_username") or "").strip() or None
     new_pw = request.form.get("smtp_password") or ""
     if request.form.get("smtp_password_clear") == "1":
@@ -9621,7 +9663,7 @@ def email_save():
     s.access_request_to = (request.form.get("access_request_to") or "").strip() or None
     db.session.commit()
     flash("Email settings saved", "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 @bp.route("/settings/timezone-save", methods=["POST"])
@@ -9631,16 +9673,16 @@ def timezone_save():
         from zoneinfo import available_timezones
     except ImportError:
         flash("Timezone support requires Python 3.9+", "danger")
-        return redirect(request.referrer or url_for("main.index"))
+        return redirect(_safe_referrer() or url_for("main.index"))
     raw = (request.form.get("timezone") or "").strip()
     if not raw or raw not in available_timezones():
         flash("Pick a valid timezone", "danger")
-        return redirect(request.referrer or url_for("main.index"))
+        return redirect(_safe_referrer() or url_for("main.index"))
     s = _get_site_setting()
     s.timezone = raw
     db.session.commit()
     flash("Timezone saved", "success")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 @bp.route("/settings/email-test", methods=["POST"])
@@ -9665,14 +9707,14 @@ def email_test():
         if wants_json:
             return jsonify(ok=False, message="Provide a test recipient"), 200
         flash("Provide a test recipient", "danger")
-        return redirect(request.referrer or url_for("main.index"))
+        return redirect(_safe_referrer() or url_for("main.index"))
     if not (s.smtp_host and s.smtp_from_email):
         msg = ("SMTP isn't configured yet. Enter SMTP host, port, security, "
                "and From-email above, click Save, then run the test.")
         if wants_json:
             return jsonify(ok=False, message=msg), 200
         flash(msg, "danger")
-        return redirect(request.referrer or url_for("main.index"))
+        return redirect(_safe_referrer() or url_for("main.index"))
     ok, err = send_mail(s, recipients,
                         "Trusted Servants Pro test email",
                         "This is a test message from Trusted Servants Pro. SMTP is configured correctly.")
@@ -9686,7 +9728,7 @@ def email_test():
         if wants_json:
             return jsonify(ok=False, message=msg), 200
         flash(msg, "danger")
-    return redirect(request.referrer or url_for("main.index"))
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 # --- Access requests ---
@@ -10603,7 +10645,7 @@ def post_save():
     title = (request.form.get("title") or "").strip()[:255]
     if not title:
         flash("Title is required", "danger")
-        return redirect(request.referrer or url_for("main.post_new"))
+        return redirect(_safe_referrer() or url_for("main.post_new"))
     post.title = title
 
     # Slug edits are gated to admins + frontend editors; all other users'
@@ -10765,7 +10807,7 @@ def post_approve_pending(pid):
         post.is_draft = True
         flash("Submission moved to drafts for further editing", "success")
     db.session.commit()
-    return redirect(request.referrer or url_for("main.post_edit", pid=post.id))
+    return redirect(_safe_referrer() or url_for("main.post_edit", pid=post.id))
 
 
 @bp.route("/announcementsevents/<int:pid>/publish", methods=["POST"])
@@ -10785,7 +10827,7 @@ def post_publish(pid):
     post.is_draft = False
     db.session.commit()
     flash("Published", "success")
-    return redirect(request.referrer or url_for("main.posts"))
+    return redirect(_safe_referrer() or url_for("main.posts"))
 
 
 @bp.route("/announcementsevents/<int:pid>/unpublish", methods=["POST"])
@@ -10797,7 +10839,7 @@ def post_unpublish(pid):
     post.is_draft = True
     db.session.commit()
     flash("Moved to drafts", "success")
-    return redirect(request.referrer or url_for("main.posts", show="drafts"))
+    return redirect(_safe_referrer() or url_for("main.posts", show="drafts"))
 
 
 @bp.route("/announcementsevents/<int:pid>/archive", methods=["POST"])
@@ -10808,7 +10850,7 @@ def post_archive(pid):
     post.is_archived = True
     db.session.commit()
     flash("Archived", "success")
-    return redirect(request.referrer or url_for("main.posts"))
+    return redirect(_safe_referrer() or url_for("main.posts"))
 
 
 @bp.route("/announcementsevents/<int:pid>/unarchive", methods=["POST"])
@@ -10819,7 +10861,7 @@ def post_unarchive(pid):
     post.is_archived = False
     db.session.commit()
     flash("Restored", "success")
-    return redirect(request.referrer or url_for("main.posts"))
+    return redirect(_safe_referrer() or url_for("main.posts"))
 
 
 @bp.route("/announcementsevents/<int:pid>/delete", methods=["POST"])
@@ -10868,7 +10910,7 @@ def post_bulk():
     action = (request.form.get("action") or "").strip().lower()
     if action not in ("archive", "unarchive", "draft", "publish", "delete"):
         flash("Unknown bulk action", "danger")
-        return redirect(request.referrer or url_for("main.posts"))
+        return redirect(_safe_referrer() or url_for("main.posts"))
 
     raw_ids = request.form.getlist("ids")
     pids = []
@@ -10879,12 +10921,12 @@ def post_bulk():
             continue
     if not pids:
         flash("No posts selected", "warning")
-        return redirect(request.referrer or url_for("main.posts"))
+        return redirect(_safe_referrer() or url_for("main.posts"))
 
     rows = Post.query.filter(Post.id.in_(pids)).all()
     if not rows:
         flash("No posts matched the selection", "warning")
-        return redirect(request.referrer or url_for("main.posts"))
+        return redirect(_safe_referrer() or url_for("main.posts"))
 
     from . import activity
     n = len(rows)
@@ -10933,7 +10975,7 @@ def post_bulk():
     activity.log(f"post.bulk_{action}", entity_type="post",
                  summary=f"Bulk {label} {n} post{'s' if n != 1 else ''}")
     flash(f"{n} post{'s' if n != 1 else ''} {label}", "success")
-    return redirect(request.referrer or url_for("main.posts"))
+    return redirect(_safe_referrer() or url_for("main.posts"))
 
 
 @bp.route("/announcementsevents/<int:pid>/duplicate", methods=["POST"])
@@ -11086,7 +11128,7 @@ def story_save():
     title = (request.form.get("title") or "").strip()[:255]
     if not title:
         flash("Title is required", "danger")
-        return redirect(request.referrer or url_for("main.story_new", **_story_embed_kwargs()))
+        return redirect(_safe_referrer() or url_for("main.story_new", **_story_embed_kwargs()))
     story.title = title
 
     explicit_slug = None
@@ -11175,7 +11217,7 @@ def story_publish(sid):
     flash("Published", "success")
     if _story_embed():
         return redirect(url_for("main.story_edit", sid=sid, embed=1))
-    return redirect(request.referrer or url_for("main.stories"))
+    return redirect(_safe_referrer() or url_for("main.stories"))
 
 
 @bp.route("/stories/<int:sid>/unpublish", methods=["POST"])
@@ -11188,7 +11230,7 @@ def story_unpublish(sid):
     flash("Moved to drafts", "success")
     if _story_embed():
         return redirect(url_for("main.story_edit", sid=sid, embed=1))
-    return redirect(request.referrer or url_for("main.stories", show="drafts"))
+    return redirect(_safe_referrer() or url_for("main.stories", show="drafts"))
 
 
 @bp.route("/stories/<int:sid>/archive", methods=["POST"])
@@ -11201,7 +11243,7 @@ def story_archive(sid):
     flash("Archived", "success")
     if _story_embed():
         return redirect(url_for("main.story_edit", sid=sid, embed=1))
-    return redirect(request.referrer or url_for("main.stories"))
+    return redirect(_safe_referrer() or url_for("main.stories"))
 
 
 @bp.route("/stories/<int:sid>/unarchive", methods=["POST"])
@@ -11214,7 +11256,7 @@ def story_unarchive(sid):
     flash("Restored", "success")
     if _story_embed():
         return redirect(url_for("main.story_edit", sid=sid, embed=1))
-    return redirect(request.referrer or url_for("main.stories"))
+    return redirect(_safe_referrer() or url_for("main.stories"))
 
 
 @bp.route("/stories/<int:sid>/delete", methods=["POST"])
@@ -11260,7 +11302,7 @@ def story_bulk():
     action = (request.form.get("action") or "").strip().lower()
     if action not in ("archive", "unarchive", "draft", "publish", "delete"):
         flash("Unknown bulk action", "danger")
-        return redirect(request.referrer or url_for("main.stories"))
+        return redirect(_safe_referrer() or url_for("main.stories"))
 
     raw_ids = request.form.getlist("ids")
     sids = []
@@ -11271,12 +11313,12 @@ def story_bulk():
             continue
     if not sids:
         flash("No stories selected", "warning")
-        return redirect(request.referrer or url_for("main.stories"))
+        return redirect(_safe_referrer() or url_for("main.stories"))
 
     rows = Story.query.filter(Story.id.in_(sids)).all()
     if not rows:
         flash("No stories matched the selection", "warning")
-        return redirect(request.referrer or url_for("main.stories"))
+        return redirect(_safe_referrer() or url_for("main.stories"))
 
     from . import activity
     n = len(rows)
@@ -11320,7 +11362,7 @@ def story_bulk():
     activity.log(f"story.bulk_{action}", entity_type="story",
                  summary=f"Bulk {label} {n} stor{'ies' if n != 1 else 'y'}")
     flash(f"{n} stor{'ies' if n != 1 else 'y'} {label}", "success")
-    return redirect(request.referrer or url_for("main.stories"))
+    return redirect(_safe_referrer() or url_for("main.stories"))
 
 
 @public_bp.route("/story-image/<int:sid>")
@@ -11550,7 +11592,7 @@ def blog_save():
     title = (request.form.get("title") or "").strip()[:255]
     if not title:
         flash("Title is required", "danger")
-        return redirect(request.referrer or url_for("main.blog_new"))
+        return redirect(_safe_referrer() or url_for("main.blog_new"))
     post.title = title
 
     explicit_slug = None
@@ -11641,7 +11683,7 @@ def blog_publish(bid):
         post.published_at = datetime.utcnow()
     db.session.commit()
     flash("Published", "success")
-    return redirect(request.referrer or url_for("main.blog_index"))
+    return redirect(_safe_referrer() or url_for("main.blog_index"))
 
 
 @bp.route("/blog/<int:bid>/unpublish", methods=["POST"])
@@ -11652,7 +11694,7 @@ def blog_unpublish(bid):
     post.is_draft = True
     db.session.commit()
     flash("Moved to drafts", "success")
-    return redirect(request.referrer or url_for("main.blog_index", show="drafts"))
+    return redirect(_safe_referrer() or url_for("main.blog_index", show="drafts"))
 
 
 @bp.route("/blog/<int:bid>/archive", methods=["POST"])
@@ -11663,7 +11705,7 @@ def blog_archive(bid):
     post.is_archived = True
     db.session.commit()
     flash("Archived", "success")
-    return redirect(request.referrer or url_for("main.blog_index"))
+    return redirect(_safe_referrer() or url_for("main.blog_index"))
 
 
 @bp.route("/blog/<int:bid>/unarchive", methods=["POST"])
@@ -11674,7 +11716,7 @@ def blog_unarchive(bid):
     post.is_archived = False
     db.session.commit()
     flash("Restored", "success")
-    return redirect(request.referrer or url_for("main.blog_index"))
+    return redirect(_safe_referrer() or url_for("main.blog_index"))
 
 
 @bp.route("/blog/<int:bid>/duplicate", methods=["POST"])
@@ -11755,7 +11797,7 @@ def blog_bulk():
              "add_tag", "remove_tag"}
     if action not in valid:
         flash("Unknown bulk action", "danger")
-        return redirect(request.referrer or url_for("main.blog_index"))
+        return redirect(_safe_referrer() or url_for("main.blog_index"))
 
     raw_ids = request.form.getlist("ids")
     pids = []
@@ -11766,12 +11808,12 @@ def blog_bulk():
             continue
     if not pids:
         flash("No posts selected", "warning")
-        return redirect(request.referrer or url_for("main.blog_index"))
+        return redirect(_safe_referrer() or url_for("main.blog_index"))
 
     rows = BlogPost.query.filter(BlogPost.id.in_(pids)).all()
     if not rows:
         flash("No posts matched the selection", "warning")
-        return redirect(request.referrer or url_for("main.blog_index"))
+        return redirect(_safe_referrer() or url_for("main.blog_index"))
 
     n = len(rows)
     label = ""
@@ -11800,7 +11842,7 @@ def blog_bulk():
         cat = db.session.get(BlogCategory, cid) if cid else None
         if cat is None:
             flash("Pick a category to apply.", "warning")
-            return redirect(request.referrer or url_for("main.blog_index"))
+            return redirect(_safe_referrer() or url_for("main.blog_index"))
         for p in rows:
             if action == "add_category":
                 if cat not in p.categories:
@@ -11824,7 +11866,7 @@ def blog_bulk():
         tag = db.session.get(BlogTag, tid) if tid else None
         if tag is None:
             flash("Pick a tag to apply.", "warning")
-            return redirect(request.referrer or url_for("main.blog_index"))
+            return redirect(_safe_referrer() or url_for("main.blog_index"))
         for p in rows:
             if action == "add_tag":
                 if tag not in p.tags:
@@ -11866,7 +11908,7 @@ def blog_bulk():
     activity.log(f"blog.bulk_{action}", entity_type="blog",
                  summary=f"Bulk {action}: {n} post{'s' if n != 1 else ''} {label}")
     flash(f"{n} post{'s' if n != 1 else ''} {label}", "success")
-    return redirect(request.referrer or url_for("main.blog_index"))
+    return redirect(_safe_referrer() or url_for("main.blog_index"))
 
 
 # ─── Categories ──────────────────────────────────────────────────────

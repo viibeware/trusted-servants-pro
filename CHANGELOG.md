@@ -6,6 +6,36 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [1.10.3] — 2026-05-15
+
+### Added — Defensive 404 short-circuit for known attacker probe paths
+
+Production was seeing the usual scanner traffic (`.env`, `.env.backup`, `.git/config`, `wp-admin/`, `phpmyadmin/`, `xmlrpc.php`, `.aws/credentials`, `credentials.json`, `backup.zip`, etc.) hitting the heavy 404 template — a ~25 KB render that reflects site branding back at the scanner. New `_block_known_probes` `before_request` handler in `app/__init__.py` matches paths against a suffix tuple (filenames) and prefix tuple (directories) of well-known recon targets, returns `("", 404, {"Cache-Control": "no-store"})` — zero body, no template render — and emits a single `app.logger.info("probe-block %s from %s", path, ip)` line so operators see attack patterns without filling logs with full request dumps. Fast structural pre-filter (`/.` / `/wp-` / `phpmyadmin` / etc. substring check) keeps the per-request cost of the more expensive tuple scan off the legitimate-traffic hot path. Confirmed: `/.env`, `/.env.backup`, `/.git/config`, `/wp-admin/setup-config.php`, `/phpmyadmin/`, `/xmlrpc.php`, `/server-status`, `/.aws/credentials`, `/.ssh/authorized_keys`, `/credentials.json`, `/backup.zip` all return `HTTP 404 size=0` after the patch.
+
+### Changed — `request.referrer` fallbacks now route through a same-origin validator
+
+Every flash-and-bounce handler in `app/routes.py` used to fall back to `request.referrer` when no explicit target was set (`redirect(request.referrer or url_for("main.index"))` — 85 occurrences across the file). `Referer` is browser-set and steerable by an attacker hosting a page that links into a protected route: a victim clicking that link would get permission-denied and then redirected off to `https://attacker.example/`, opening a phishing pivot. Added a small helper `_safe_referrer()` near the top of `app/routes.py` that returns `request.referrer` only when its parsed netloc matches `request.host_url`'s netloc (so cross-origin Referer values fall through to `None`, and callers land on whatever explicit `url_for(...)` they intended). Bulk replaced all 85 call sites — three multi-line ones patched individually. No other Python files use `request.referrer`, so the audit is complete.
+
+### Added — SVG `<script>` / `on*=` / `javascript:` sanitization on every upload, not just custom icons
+
+`_save_upload()` in `app/routes.py` already ran SVG dimension normalisation but never the existing `_sanitize_svg()` regex stripper — that was wired only into the Custom Icons admin path. SVG uploads are admin-only (`ADMIN_ONLY_UPLOAD_EXTENSIONS = {".svg"}`) so the practical risk is low, but defence-in-depth is cheap: an admin uploading a vector logo handed off by a designer shouldn't become a vector for stored XSS against other admins / visitors who later navigate to the file directly (browsers execute inline `<script>` in standalone SVGs). `_save_upload` now calls `_sanitize_svg(data)` before `_normalize_svg_dimensions(data)` for `.svg` uploads. Test confirms `<script>...</script>` and `onclick=...` are stripped from the persisted bytes.
+
+### Changed — Fernet decrypt failures now log a warning instead of silently returning `""`
+
+`app/crypto.py::decrypt()` used to swallow all exceptions and return an empty string. The intent was graceful degradation — a stored encrypted column that fails to decrypt (key rotation, corrupted bytes) wouldn't crash the request — but the failure mode is hostile to operators: rotating `TSP_SECRET_KEY` or replacing `zoom.key` makes every Zoom / OTP password disappear from the UI with no clue in the logs. Replaced the bare `except Exception: return ""` with a logged warning ("Fernet decrypt failed — encrypted column unreadable. Most likely cause: TSP_SECRET_KEY or zoom.key was rotated after this value was stored. Re-enter the affected credential to re-encrypt under the current key.") behind a nested try so a missing app context can't bubble out of `decrypt()`. Still returns `""` to callers (preserves the no-crash contract); the difference is the operator now sees one warning per affected column in container logs.
+
+### Changed — Refuse to seed `admin/admin` in production
+
+`_seed_admin()` in `app/__init__.py` defaulted `TSP_ADMIN_PASSWORD` to literal `"admin"` when the env var was unset. The bundled installer always supplied a value, but anyone bringing the image up manually (hand-written compose, ad-hoc `docker run`) silently got `admin/admin` on a public-internet `/tspro/auth/login` — a takeover in one request. Now: if `TSP_ADMIN_PASSWORD` is empty AND `TSP_DEBUG` is unset, `_seed_admin` raises `RuntimeError("TSP_ADMIN_PASSWORD is required on first boot. …")` and the container fails to start. `TSP_DEBUG=1` falls through to a warning + the legacy `admin/admin` for local dev. Same pattern `_seed_admin` already used for `TSP_SECRET_KEY`. `docker-compose.deploy.yml` and the installer's embedded compose template both flip `${TSP_ADMIN_PASSWORD:-admin}` → `${TSP_ADMIN_PASSWORD:?TSP_ADMIN_PASSWORD must be set in .env (used only on first boot to seed the admin account)}` so the compose layer also short-circuits.
+
+### Changed — Installer generates a random admin password instead of defaulting to `admin`
+
+`install.sh` previously defaulted `ADMIN_PASSWORD="${TSP_ADMIN_PASSWORD:-admin}"`. Same logic as the new `TSP_SECRET_KEY` generation: when the operator doesn't supply a value, `openssl rand -base64 24 | tr -d '\n/+=' | cut -c1-24` produces a strong random password, persists it to `${INSTALL_DIR}/.env` (`chmod 600`), and the end-of-install banner prints it once. Reruns read the existing password back from `.env` so the banner still surfaces the correct credential after a re-install. Combined with the previous change, this closes the path where a fresh install ships with publicly-guessable credentials.
+
+### Added — Cross-Origin-Opener-Policy + Cross-Origin-Resource-Policy headers
+
+`@app.after_request` `_security_headers` now sets `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Resource-Policy: same-origin` on every response. COOP keeps any window we open (or that opens us) in a separate browsing-context group so `window.opener` attacks can't reach across origins; CORP blocks other origins from embedding our responses as resources (image hot-linking, external `<link rel="stylesheet">`, etc.). Both scoped to our own origin — Caddy, Cloudflare, and our `/pub/` asset URLs all live on the same host so nothing legitimate breaks. Pairs with the existing CSP `frame-ancestors 'self'`.
+
 ## [1.10.2] — 2026-05-14
 
 ### Added — Per-page Open Graph on every public detail page + a Page-level OG section

@@ -38,4 +38,24 @@ def decrypt(token: bytes) -> str:
     try:
         return current_app.config["FERNET"].decrypt(token).decode()
     except Exception:
+        # Fernet decrypt fails when (a) the token was signed with a
+        # different key (TSP_SECRET_KEY rotation or zoom.key replaced),
+        # or (b) the token is corrupted. Returning "" silently means
+        # the admin sees a previously-set Zoom / OTP password just
+        # vanish from the UI with no clue why. Log a warning so the
+        # mismatch surfaces in container logs and admins can diagnose.
+        # We deliberately do not log the token bytes (could include
+        # short-prefix hints about which row failed) — just enough to
+        # know the failure happened. Never raise: callers expect a
+        # string and a partial DB read would otherwise crash the
+        # request.
+        try:
+            current_app.logger.warning(
+                "Fernet decrypt failed — encrypted column unreadable. "
+                "Most likely cause: TSP_SECRET_KEY or zoom.key was rotated "
+                "after this value was stored. Re-enter the affected "
+                "credential to re-encrypt under the current key."
+            )
+        except Exception:
+            pass
         return ""
