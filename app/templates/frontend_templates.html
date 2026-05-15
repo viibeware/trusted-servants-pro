@@ -274,6 +274,27 @@
         <p class="muted small">Manage fonts on the <a href="{{ url_for('main.frontend_fonts_icons') }}">Fonts &amp; Icons</a> page.</p>
       </fieldset>
 
+      {# Classic-blog-only widget toggles. The classic blog detail
+         template ships with a right-side rail carrying the related
+         posts + categories widgets; when both are off the rail
+         disappears and the post takes the full container width. #}
+      {% if kind == 'blog_post' and active_key == 'classic' %}
+      <fieldset class="fieldset">
+        <legend>Sidebar widgets</legend>
+        <label class="check">
+          <input type="checkbox" name="show_related_widget" value="1"
+                 {% if settings.get('show_related_widget', True) %}checked{% endif %}>
+          <span>Show <b>Related</b> widget</span>
+        </label>
+        <label class="check">
+          <input type="checkbox" name="show_categories_widget" value="1"
+                 {% if settings.get('show_categories_widget', True) %}checked{% endif %}>
+          <span>Show <b>Categories</b> widget</span>
+        </label>
+        <p class="muted small">Off → the right-side rail collapses and the post expands to the container width.</p>
+      </fieldset>
+      {% endif %}
+
       <fieldset class="fieldset">
         <legend>Sizes</legend>
         {% set _h_default = 2.0 %}

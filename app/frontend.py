@@ -854,7 +854,10 @@ def template_settings(site, kind, key):
     for k in ("bg_dynamic_key", "bg_dynbg_overlay", "bg_dynbg_colors",
               "bg_dynbg_overlay_scope", "bg_dynbg_overlay_size",
               "bg_dynbg_overlay_intensity", "bg_dynbg_randomize_colors",
-              "bg_dynbg_randomize_positions", "bg_dynbg_animate"):
+              "bg_dynbg_randomize_positions", "bg_dynbg_animate",
+              # Classic blog detail rail toggles — present only when
+              # explicitly disabled, so a missing key means "show".
+              "show_related_widget", "show_categories_widget"):
         if k in leaf:
             out[k] = leaf[k]
     return out
@@ -2965,6 +2968,11 @@ def blog_post_detail(slug):
                   description=post.summary or post.body,
                   image_url=(url_for("public.blog_post_featured_image", bid=post.id, _external=True)
                              if post.featured_image_filename else None))
+    # Classic-blog rail toggles — both default to True. Defined at
+    # the dispatcher so every template gets the same context shape
+    # even if only `classic` actually consumes them today.
+    show_related_widget = bool(_tpl_settings.get("show_related_widget", True))
+    show_categories_widget = bool(_tpl_settings.get("show_categories_widget", True))
     return render_template(tpl["partial"], post=post,
                            tpl_style=tpl_style,
                            tpl_dynbg_key=tpl_dynbg_key,
@@ -2973,6 +2981,8 @@ def blog_post_detail(slug):
                            tpl_dynbg_config=tpl_dynbg_config,
                            related=related,
                            all_categories=all_categories,
+                           show_related_widget=show_related_widget,
+                           show_categories_widget=show_categories_widget,
                            **og,
                            **ctx)
 

@@ -37,7 +37,12 @@
   <div class="fe-blog-cv-shell fe-container">
     <div class="fe-blog-cv-grid">
       <div class="fe-blog-cv-body" data-lightbox-scope>
-        {{ (post.body or '')|markdown }}
+        {% if post.body_blocks %}
+          {% from "_blog_blocks.html" import render_blog_blocks %}
+          {{ render_blog_blocks(post.body_blocks) }}
+        {% else %}
+          {{ (post.body or '')|markdown }}
+        {% endif %}
 
         {% if post.tags %}
         <div class="fe-blog-cv-tags">

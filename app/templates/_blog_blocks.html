@@ -1,0 +1,128 @@
+{# Render the blog-body block list produced by the visual drag-and-drop
+   editor in admin (`templates/blog_edit.html` + `static/js/post_body_editor.js`).
+   The schema is intentionally narrower than the page-builder `_blocks.html`
+   primitives — a blog post body just needs the handful of widgets a
+   long-form writer actually reaches for. Keep in sync with
+   `_BLOG_BLOCK_TYPES` in routes.py and the JS palette. #}
+
+{% macro _video_embed_url(url) -%}
+  {# Map common YouTube / Vimeo share URLs onto the no-cookie embed
+     domains so the iframe avoids cross-site tracking. Falls back to
+     the raw URL when we don't recognise the host — the editor accepts
+     any URL, so a self-hosted MP4 link still works (rendered as <video>
+     instead of an iframe by the branch below). #}
+  {%- set _u = (url or '') | trim -%}
+  {%- if 'youtube.com/watch' in _u -%}
+    {%- set _id = _u.split('v=')[-1].split('&')[0] -%}
+    https://www.youtube-nocookie.com/embed/{{ _id }}
+  {%- elif 'youtu.be/' in _u -%}
+    {%- set _id = _u.split('youtu.be/')[-1].split('?')[0] -%}
+    https://www.youtube-nocookie.com/embed/{{ _id }}
+  {%- elif 'vimeo.com/' in _u -%}
+    {%- set _id = _u.split('vimeo.com/')[-1].split('?')[0].split('/')[0] -%}
+    https://player.vimeo.com/video/{{ _id }}
+  {%- else -%}
+    {{ _u }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro _is_iframe_video(url) -%}
+  {%- set _u = (url or '') | lower -%}
+  {%- if 'youtube.com' in _u or 'youtu.be' in _u or 'vimeo.com' in _u -%}1{%- endif -%}
+{%- endmacro %}
+
+{% macro render_blog_block(b) %}
+  {%- set t = b.type -%}
+  {%- set d = b.data or {} -%}
+
+  {% if t == 'paragraph' %}
+    <div class="bb-paragraph">{{ (d.md or '')|markdown_block }}</div>
+
+  {% elif t == 'heading' %}
+    {% set lvl = (d.level or 2) | int %}
+    {% if lvl not in [2, 3, 4] %}{% set lvl = 2 %}{% endif %}
+    <h{{ lvl }} class="bb-heading bb-heading-h{{ lvl }}">{{ d.text or '' }}</h{{ lvl }}>
+
+  {% elif t == 'image' %}
+    {% set _w = (d.width_pct or 100) | int %}
+    {% set _align = d.align or 'center' %}
+    <figure class="bb-image bb-image--{{ _align }}"
+            style="--bb-img-width: {{ _w }}%;">
+      {% if d.src %}
+      <img src="{{ d.src }}" alt="{{ d.alt or '' }}" loading="lazy"
+           data-lightbox-src="{{ d.src }}">
+      {% endif %}
+      {% if d.caption %}<figcaption class="bb-image-caption">{{ d.caption }}</figcaption>{% endif %}
+    </figure>
+
+  {% elif t == 'button' %}
+    {% set _style = d.style or 'primary' %}
+    {% set _align = d.align or 'left' %}
+    <p class="bb-button bb-button--{{ _align }}">
+      <a class="bb-btn bb-btn--{{ _style }}"
+         href="{{ d.url or '#' }}"
+         {% if d.new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>
+        {{ d.label or 'Click here' }}
+      </a>
+    </p>
+
+  {% elif t == 'list' %}
+    {% if d.ordered %}
+    <ol class="bb-list bb-list--ordered">
+      {% for item in (d.get('items') or []) %}<li>{{ item|markdown_inline }}</li>{% endfor %}
+    </ol>
+    {% else %}
+    <ul class="bb-list bb-list--unordered">
+      {% for item in (d.get('items') or []) %}<li>{{ item|markdown_inline }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+
+  {% elif t == 'quote' %}
+    <blockquote class="bb-quote">
+      <p>{{ d.text or '' }}</p>
+      {% if d.author %}<cite class="bb-quote-cite">— {{ d.author }}</cite>{% endif %}
+    </blockquote>
+
+  {% elif t == 'callout' %}
+    {% set _variant = d.variant or 'info' %}
+    <aside class="bb-callout bb-callout--{{ _variant }}" role="note">
+      <span class="bb-callout-icon" aria-hidden="true">
+        {% if _variant == 'warn' %}⚠{% elif _variant == 'danger' %}⛔{% elif _variant == 'success' %}✓{% else %}ℹ{% endif %}
+      </span>
+      <div class="bb-callout-body">
+        {% if d.title %}<div class="bb-callout-title">{{ d.title }}</div>{% endif %}
+        {{ (d.md or '')|markdown_block }}
+      </div>
+    </aside>
+
+  {% elif t == 'separator' %}
+    <hr class="bb-separator">
+
+  {% elif t == 'video' %}
+    {% set _u = d.url or '' %}
+    {% if _u %}
+    <figure class="bb-video">
+      <div class="bb-video-frame">
+        {% if _is_iframe_video(_u) %}
+        <iframe src="{{ _video_embed_url(_u)|trim }}"
+                title="{{ d.caption or 'Embedded video' }}"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen loading="lazy"></iframe>
+        {% else %}
+        <video controls preload="metadata">
+          <source src="{{ _u }}">
+        </video>
+        {% endif %}
+      </div>
+      {% if d.caption %}<figcaption class="bb-video-caption">{{ d.caption }}</figcaption>{% endif %}
+    </figure>
+    {% endif %}
+
+  {% elif t == 'code' %}
+    <pre class="bb-code"><code{% if d.lang %} class="language-{{ d.lang }}"{% endif %}>{{ d.code or '' }}</code></pre>
+  {% endif %}
+{% endmacro %}
+
+{% macro render_blog_blocks(blocks) %}
+  {% for b in blocks %}{{ render_blog_block(b) }}{% endfor %}
+{% endmacro %}

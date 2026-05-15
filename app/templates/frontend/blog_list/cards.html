@@ -27,7 +27,7 @@
     {% else %}
     <ul class="fe-blog-cards-grid" role="list">
       {% for p in all_posts %}
-      <li class="fe-blog-cards-card{% if p.is_featured %} is-featured{% endif %}">
+      <li class="fe-blog-cards-card fe-card-primary{% if p.is_featured %} is-featured{% endif %}">
         <a class="fe-blog-cards-link" href="{{ url_for('frontend.blog_post_detail', slug=p.public_slug) }}">
           <div class="fe-blog-cards-art">
             {% if p.featured_image_filename %}
@@ -121,17 +121,11 @@
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
     gap: 1.75rem;
   }
+  /* Surface chrome (bg / border / radius / shadow / hover lift +
+     hover border) comes from `.fe-card-primary` in frontend.css.
+     Only the structural bits live here. */
   .fe-blog-cards-card {
-    background: var(--blog-card);
-    border: 1px solid var(--blog-rule);
-    border-radius: 12px;
     overflow: hidden;
-    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
-  }
-  .fe-blog-cards-card:hover {
-    transform: translateY(-2px);
-    border-color: color-mix(in srgb, var(--blog-accent) 30%, var(--blog-rule));
-    box-shadow: 0 10px 30px -12px rgba(15,23,42,.15);
   }
   .fe-blog-cards-card.is-featured {
     box-shadow: inset 3px 0 0 var(--blog-accent);

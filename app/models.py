@@ -1707,6 +1707,11 @@ class BlogPost(db.Model):
     slug = db.Column(db.String(255))
     summary = db.Column(db.Text)
     body = db.Column(db.Text)
+    # Drag-and-drop block editor payload. JSON list of {type, data} dicts
+    # (see `app/templates/_blog_blocks.html` for the schema). NULL or
+    # empty list means "use the legacy markdown `body` column" so older
+    # posts keep rendering identically until they're re-edited.
+    body_blocks_json = db.Column(db.Text)
     featured_image_filename = db.Column(db.String(500))
     author_name = db.Column(db.String(120))
     author_bio = db.Column(db.Text)
@@ -1717,10 +1722,13 @@ class BlogPost(db.Model):
     is_pinned = db.Column(db.Boolean, nullable=False, default=False)
     is_draft = db.Column(db.Boolean, nullable=False, default=False)
     is_archived = db.Column(db.Boolean, nullable=False, default=False)
-    # Whether the post permits comments — UI surfaces a "Comments off"
-    # chip when False; the actual comment submission flow is left to a
-    # future iteration. Stored now so the public templates can render
-    # the right affordance and admins can opt out per-post today.
+    # Vestigial — the comments feature was removed from the editor and
+    # frontend, but the underlying SQLite column was created with a
+    # NOT NULL constraint on existing installs. SQLite can't drop a
+    # column in-place, so we keep the attribute on the model purely to
+    # satisfy the constraint on INSERT (default=True). No code reads
+    # this value anywhere else. If a future migration rebuilds the
+    # table, this attribute can be deleted in the same change.
     allow_comments = db.Column(db.Boolean, nullable=False, default=True)
     reading_minutes = db.Column(db.Integer)  # estimated; computed at save-time when blank
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -1752,6 +1760,21 @@ class BlogPost(db.Model):
     @property
     def display_posted(self):
         return self.published_at or self.created_at
+
+    @property
+    def body_blocks(self):
+        """Decoded list-of-dicts version of ``body_blocks_json``. Returns
+        an empty list when the column is NULL, blank, or doesn't decode
+        to a JSON list — keeps the public render path branch-free."""
+        raw = (self.body_blocks_json or "").strip()
+        if not raw:
+            return []
+        try:
+            import json
+            data = json.loads(raw)
+        except (ValueError, TypeError):
+            return []
+        return data if isinstance(data, list) else []
 
 
 class CustomFont(db.Model):

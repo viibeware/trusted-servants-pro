@@ -7,7 +7,47 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 1.10.4 — 2026-05-15 (latest) — Visitor metrics: no more phantom traffic when the public site is off
+## 1.10.5 — 2026-05-15 (latest) — Blog overhaul: visual block editor, redesigned editor sidebar, classic detail polish
+
+A sweeping refresh of the blog module — the markdown textarea is gone, replaced by a delightful visual editor; the edit page got a metadata sidebar; the classic public template adopts the design-token primary card look; and a few admin-set knobs that quietly weren't responding (template background, mesh randomize, comments) are fixed or retired.
+
+### Writing a post
+
+- **Visual drag-and-drop body editor.** The body is now a stack of block cards — paragraph, heading (H2 / H3 / H4), image, button, list (bulleted or numbered), quote, callout (info / success / warn / danger), divider, video (YouTube / Vimeo URL → auto-embed, or self-hosted MP4), and code. Click the floating **+ Add block** pill in the bottom-right (same chrome as the page builder) to drop a fresh block, or drag any tile from the palette right into the canvas at the exact insert point — an animated marker shows where the block will land.
+- **Each block edits inline.** No modals. Drag handle on the left of every block to reorder; toolbar on top to duplicate, move up / down, or delete. Lists handle `Enter` (add row) and `Backspace` (remove the empty row + jump to the previous).
+- **Image blocks have a file-library picker.** Click **Browse** to pick from images you've already uploaded — same modal as the page builder, with search by filename and inline drag-to-upload. Or just paste a URL.
+- **Markdown still works inline.** Paragraph, list, quote, and callout bodies all support `**bold**`, `*italic*`, `[link](https://…)` so prose-style writers don't lose anything.
+- **Older posts keep their Markdown body** until you re-save with blocks. Nothing migrates automatically.
+
+### Edit page layout
+
+- **Two-column layout.** The main column (Post + Body) fills the available width; a new ~320px metadata column on the right holds everything else — publication, author, categories & tags, and featured image — merged into one card with section headings.
+- **Categories as a checkmark list** (not pills any more) with an **Add new category** field below it. Type a name, click Add (or press Enter), and the new category appears pre-checked. Same UX for tags now — checkmark list of every tag plus inline `Add new tag`. Pressing Enter in either field used to accidentally publish the post; that's fixed (a form-level guard now intercepts Enter on every text input *except* the title, where it still submits for muscle memory).
+- **Author picker is now an Intergroup roster dropdown.** Lists every member from *Settings → Global*, labelled `Name — Role` so two members with the same first name stay distinguishable. Existing posts whose `author_name` doesn't match a current roster entry surface a "(legacy)" option so a Save doesn't silently drop the previously-saved byline. The free-form bio textarea is gone (the column stays so existing public templates that show a bio still work).
+- **Featured image gets a Browse Library button** next to Upload — same library modal as the body image blocks. Picking a tile sets the post's featured image to the chosen file (no duplicate on disk) and shows a "Will use: <filename>" indicator until save.
+- **Live title → slug** — typing the title rewrites the URL field as you type, with a brand-tinted highlight (same as the announcement / event editor).
+- **View on Frontend ↗** button in the top action bar — opens the public `/blog/<slug>` URL in a new tab whenever the Web Frontend module is on and the post isn't a draft or archived.
+
+### Comments feature removed
+
+The **Allow comments** checkbox in the publication section is gone, along with the comments feature entirely — no UI, no public render path, no downstream consumer. The underlying database column is preserved (SQLite can't drop a column in-place without rebuilding the table, which the safety rule rightly blocks) but nothing reads it.
+
+### Classic blog detail template polish
+
+- **Primary card surface, hover lift, and accent border** now apply to the main post card, the Related / Categories sidebar widgets, and the author bio aside. Adjust the look site-wide from *Web Frontend → Design → Card styles → Primary card*.
+- **Featured image now leads the post card** — sits above the category chips, title, and byline, and bleeds edge-to-edge across the card's top with rounded corners that match the card. Same look as the list-view cards.
+- **Sidebar widgets are toggleable per-template** — *Web Frontend → Templates → Blog detail → Classic → Customize* now exposes Show *Related* widget / Show *Categories* widget. Turn one off and only the other shows; turn both off and the right rail disappears entirely, letting the post expand to the full container width.
+
+### Fixed
+
+- **Template background settings now apply on the classic blog detail.** The article was painting its own surface from a variable that never read the admin-chosen background — the static colour / gradient / image picker now flows through. For dynamic animated backgrounds (mesh / aurora / etc.) the article renders transparent so the animated canvas shows behind the post card.
+- **Mesh-gradient randomize toggles actually randomize on the classic blog detail.** Selecting *random colors* + *random positions* on a mesh background now repaints the palette + mesh anchor / angle on every page load (the host element was missing the CSS variables the mesh CSS consumes). Other surfaces that already worked are unchanged.
+
+### Blog list cards
+
+- **All card-shaped list layouts** (Cards / Sidebar / Magazine / Mosaic) now inherit the Primary card design-token surface — same bg / border / border-radius / shadow / hover lift / hover accent border as the rest of the project. Gazette and Minimal are text-row layouts so they're untouched.
+
+## 1.10.4 — 2026-05-15 — Visitor metrics: no more phantom traffic when the public site is off
 
 A small follow-up to 1.10.3. When the web frontend was disabled, the Visitor Metrics widget was still counting scanner / crawler hits to public-site URLs (`/`, `/meetings`, `/events`, etc.) — those requests get redirected to the login screen as designed, but the recorder was already writing the row before the redirect kicked in.
 

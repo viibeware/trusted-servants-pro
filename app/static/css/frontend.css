@@ -10558,3 +10558,156 @@ body.fe-frontend-force-dark .fe-card-secondary {
   background: var(--fe-color-card-secondary-bg-dark, #131a33);
   border-color: var(--fe-color-card-secondary-border-dark, #131a33);
 }
+
+/* ── Blog body blocks (.bb-*) ─────────────────────────────────────
+   Rendered output of the visual drag-and-drop blog-body editor (see
+   `app/templates/_blog_blocks.html` and `static/js/post_body_editor.js`).
+   Variables on the host (`.fe-blog-post-body`, `.fe-blog-cls-body`,
+   `.fe-blog-longform-body`) supply blog-specific palette colours so
+   per-template overrides win without selector gymnastics. */
+.bb-paragraph { margin: 0 0 1.3rem; line-height: 1.75; }
+.bb-paragraph:last-child { margin-bottom: 0; }
+.bb-paragraph p:last-child { margin-bottom: 0; }
+.bb-paragraph a { color: var(--blog-accent, var(--fe-color-accent, #1f4e79)); }
+
+.bb-heading {
+  font-weight: 700; line-height: 1.2;
+  margin: 2rem 0 .85rem;
+  font-family: var(--tpl-heading-font, var(--fe-font-heading, inherit));
+}
+.bb-heading-h2 { font-size: clamp(1.5rem, 3vw, 1.85rem); }
+.bb-heading-h3 { font-size: 1.3rem; font-weight: 600; }
+.bb-heading-h4 { font-size: 1.1rem; font-weight: 600; }
+.bb-heading:first-child { margin-top: 0; }
+
+.bb-image {
+  margin: 1.5rem auto; max-width: var(--bb-img-width, 100%);
+}
+.bb-image--left  { margin-left: 0; margin-right: auto; }
+.bb-image--right { margin-left: auto; margin-right: 0; }
+.bb-image--center { margin-left: auto; margin-right: auto; }
+.bb-image img { display: block; width: 100%; height: auto; border-radius: 8px; }
+.bb-image-caption {
+  margin-top: .55rem; font-size: .88rem; line-height: 1.45;
+  color: var(--blog-ink-soft, var(--fe-color-muted, #6b7280));
+  text-align: center;
+}
+
+.bb-button {
+  margin: 1.5rem 0;
+  display: flex;
+}
+.bb-button--left   { justify-content: flex-start; }
+.bb-button--center { justify-content: center; }
+.bb-button--right  { justify-content: flex-end; }
+.bb-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 22px; border-radius: 999px;
+  font-weight: 600; font-size: .95rem; line-height: 1;
+  text-decoration: none;
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+.bb-btn--primary {
+  background: var(--blog-accent, var(--fe-color-accent, #1f4e79));
+  color: var(--fe-color-accent-contrast, #ffffff);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.10);
+}
+.bb-btn--primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.16);
+  color: var(--fe-color-accent-contrast, #ffffff);
+}
+.bb-btn--secondary {
+  background: transparent;
+  color: var(--blog-accent, var(--fe-color-accent, #1f4e79));
+  border: 1.5px solid currentColor;
+}
+.bb-btn--secondary:hover {
+  background: color-mix(in srgb, var(--blog-accent, var(--fe-color-accent, #1f4e79)) 10%, transparent);
+  transform: translateY(-1px);
+}
+
+.bb-list {
+  margin: 0 0 1.4rem; padding-left: 1.6rem;
+  line-height: 1.7;
+}
+.bb-list li { margin-bottom: .35rem; }
+.bb-list li:last-child { margin-bottom: 0; }
+.bb-list a { color: var(--blog-accent, var(--fe-color-accent, #1f4e79)); }
+
+.bb-quote {
+  margin: 1.8rem 0;
+  padding: .25rem 0 .25rem 1.4rem;
+  border-left: 4px solid var(--blog-accent, var(--fe-color-accent, #1f4e79));
+  font-style: italic;
+  color: var(--blog-ink-soft, var(--fe-color-muted, #4b5563));
+}
+.bb-quote p { margin: 0 0 .4rem; font-size: 1.1rem; line-height: 1.55; }
+.bb-quote p:last-child { margin-bottom: 0; }
+.bb-quote-cite {
+  display: block; font-size: .9rem; font-style: normal;
+  color: var(--blog-ink-soft, var(--fe-color-muted, #6b7280));
+}
+
+.bb-callout {
+  display: flex; gap: 12px;
+  margin: 1.6rem 0; padding: 14px 16px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bb-callout-tone, #1f4e79) 8%, transparent);
+  border-left: 4px solid var(--bb-callout-tone, #1f4e79);
+}
+.bb-callout--info    { --bb-callout-tone: var(--blog-accent, #1f4e79); }
+.bb-callout--success { --bb-callout-tone: #047857; }
+.bb-callout--warn    { --bb-callout-tone: #b45309; }
+.bb-callout--danger  { --bb-callout-tone: #b91c1c; }
+.bb-callout-icon {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--bb-callout-tone, #1f4e79);
+  color: #ffffff; font-weight: 700;
+}
+.bb-callout-body { flex: 1 1 auto; min-width: 0; }
+.bb-callout-body p:last-child { margin-bottom: 0; }
+.bb-callout-title {
+  font-weight: 700; margin-bottom: .35rem;
+  color: var(--bb-callout-tone, #1f4e79);
+}
+
+.bb-separator {
+  border: 0; border-top: 1px solid var(--blog-rule, var(--fe-color-border, #e5e7eb));
+  margin: 2rem auto; max-width: 200px;
+}
+
+.bb-video { margin: 1.8rem 0; }
+.bb-video-frame {
+  position: relative; aspect-ratio: 16 / 9;
+  background: #000; border-radius: 10px; overflow: hidden;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.10);
+}
+.bb-video-frame iframe,
+.bb-video-frame video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; border: 0;
+}
+.bb-video-caption {
+  margin-top: .55rem; font-size: .88rem; text-align: center;
+  color: var(--blog-ink-soft, var(--fe-color-muted, #6b7280));
+}
+
+.bb-code {
+  margin: 1.6rem 0; padding: 1rem 1.1rem;
+  background: var(--blog-bg, #f3f4f6);
+  border: 1px solid var(--blog-rule, var(--fe-color-border, #e5e7eb));
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: .92rem; line-height: 1.55;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.bb-code code { background: transparent; padding: 0; }
+
+@media (max-width: 720px) {
+  .bb-heading-h2 { font-size: 1.4rem; }
+  .bb-quote p { font-size: 1rem; }
+  .bb-image { max-width: 100% !important; }
+}

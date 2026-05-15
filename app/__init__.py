@@ -1382,6 +1382,11 @@ def _migrate_sqlite(app):
             add("post", col, ddl)
         for col, ddl in (("published_at", "DATETIME"),):
             add("story", col, ddl)
+        # Blog post body block editor: stores the visual drag-and-drop
+        # payload as a JSON list. NULL means "fall back to the legacy
+        # markdown `body` column" so upgrades don't blank existing posts.
+        for col, ddl in (("body_blocks_json", "TEXT"),):
+            add("blog_post", col, ddl)
         for col, ddl in (("is_archived", "BOOLEAN NOT NULL DEFAULT 0"),
                          ("archived_at", "DATETIME")):
             add("access_request", col, ddl)

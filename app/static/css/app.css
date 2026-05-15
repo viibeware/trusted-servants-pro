@@ -10869,3 +10869,421 @@ input.be-container-color-text.is-invalid {
 .vm-widget-spark-empty {
   padding: 16px; text-align: center; color: var(--muted); font-size: 0.8125rem;
 }
+
+/* ── Blog post body block editor (.pbe-*) ─────────────────────────
+   Visual drag-and-drop editor mounted on `templates/blog_edit.html`.
+   The canvas holds an ordered list of "block" cards; each block has
+   a left drag handle, a top toolbar (type chip + per-block actions),
+   and a type-specific editor body. The floating "Add block" pill
+   re-uses the chrome from `.fe-page-palette-floating` (page builder)
+   but tile interactions are namespaced to `data-pbe-*` so the two
+   editors never cross-wire. */
+
+.pbe-card { position: relative; }
+.pbe-pill-inline {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--brand-soft, var(--panel-2));
+  color: var(--brand, var(--access));
+  font-weight: 600; font-size: 0.8em;
+  vertical-align: middle;
+}
+.pbe-pill-inline .icon { width: 11px; height: 11px; }
+.pbe-handle-inline {
+  display: inline-flex; align-items: center;
+  padding: 0 2px;
+  color: var(--brand, var(--access));
+  vertical-align: middle;
+}
+.pbe-handle-inline .icon { width: 14px; height: 14px; }
+
+/* ── Canvas ──────────────────────────────────────────────────────
+   The blocks sit on a softly-tinted rail so the writer can see the
+   "compose zone" at a glance. Dashed border on hover / drag-over to
+   reinforce the drop affordance without making the resting state
+   feel busy. */
+.pbe-canvas {
+  display: flex; flex-direction: column; gap: 12px;
+  min-height: 220px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--panel-2, var(--panel));
+  border: 1px dashed var(--border);
+  transition: border-color 160ms ease, background 160ms ease;
+}
+body.pbe-is-dragging .pbe-canvas,
+body.pbe-is-palette-dragging .pbe-canvas {
+  border-color: var(--brand, var(--access));
+  background: color-mix(in srgb, var(--brand, var(--access)) 4%, var(--panel-2, var(--panel)));
+}
+
+/* Empty state — visible only when there are no blocks yet. Render
+   takes care of show/hide; CSS just polishes the layout. */
+.pbe-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  text-align: center;
+  padding: 32px 24px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+.pbe-empty-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px; border-radius: 50%;
+  background: var(--brand-soft, color-mix(in srgb, var(--brand, var(--access)) 14%, transparent));
+  color: var(--brand, var(--access));
+}
+.pbe-empty-icon .icon { width: 22px; height: 22px; }
+.pbe-empty-title { font-size: 1.05rem; font-weight: 600; }
+.pbe-empty-help { max-width: 460px; line-height: 1.55; }
+.pbe-empty-help .icon { width: 13px; height: 13px; vertical-align: -2px; }
+
+/* Insert marker. A 2px coloured rule that appears between blocks
+   while a drag is over the canvas — gives the writer a precise
+   "drop here" target. */
+.pbe-insert-marker {
+  height: 4px; margin: -8px 0;
+  border-radius: 999px;
+  background: var(--brand, var(--access));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand, var(--access)) 24%, transparent);
+  animation: pbe-pulse 900ms ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes pbe-pulse {
+  0%, 100% { opacity: 0.9; transform: scaleY(1); }
+  50%      { opacity: 1;   transform: scaleY(1.4); }
+}
+
+/* ── Block card ─────────────────────────────────────────────────
+   `position: relative` so the drag handle can sit on the inside
+   edge without throwing off the grid. The handle floats outside
+   the toolbar so the user can hit it without aiming around the
+   buttons. */
+.pbe-block {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  row-gap: 6px;
+  padding: 12px 14px 14px 8px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: box-shadow 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+.pbe-block:hover {
+  border-color: color-mix(in srgb, var(--brand, var(--access)) 35%, var(--border));
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+}
+.pbe-block:focus-within {
+  border-color: var(--brand, var(--access));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand, var(--access)) 18%, transparent);
+}
+.pbe-block.is-dragging {
+  opacity: 0.55;
+  transform: rotate(-0.4deg);
+}
+
+/* Drag handle — vertical column of dots, only the handle itself
+   triggers a reorder drag. Inputs / textareas inside the block keep
+   their native text-selection drag behaviour. */
+.pbe-block-handle {
+  grid-row: 1 / span 2;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 6px;
+  cursor: grab;
+  color: var(--muted, #6b7280);
+  border-radius: 8px;
+  transition: background 120ms ease, color 120ms ease;
+}
+.pbe-block-handle:hover {
+  background: color-mix(in srgb, var(--brand, var(--access)) 10%, transparent);
+  color: var(--brand, var(--access));
+}
+.pbe-block-handle:active { cursor: grabbing; }
+.pbe-block-handle .icon { width: 16px; height: 16px; }
+
+/* Toolbar — type chip on the left, per-block actions on the right. */
+.pbe-block-toolbar {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex; align-items: center; gap: 4px;
+  flex-wrap: wrap;
+}
+.pbe-block-type-chip {
+  margin-right: auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 999px;
+  background: var(--brand-soft, color-mix(in srgb, var(--brand, var(--access)) 12%, transparent));
+  color: var(--brand, var(--access));
+  font-size: 0.78rem; font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.pbe-block-action {
+  background: transparent; border: 0; padding: 6px;
+  border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--muted, #6b7280);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.pbe-block-action:hover {
+  background: var(--panel-2, color-mix(in srgb, var(--brand, var(--access)) 8%, transparent));
+  color: var(--text);
+}
+.pbe-block-action:disabled {
+  opacity: 0.3; cursor: not-allowed; pointer-events: none;
+}
+.pbe-block-action--danger:hover {
+  background: color-mix(in srgb, #dc2626 12%, transparent);
+  color: #dc2626;
+}
+.pbe-block-action .icon { width: 14px; height: 14px; }
+
+.pbe-block-body {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+/* ── Per-block surfaces ───────────────────────────────────────── */
+.pbe-input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.95rem; line-height: 1.5;
+  font-family: inherit;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.pbe-input:focus {
+  outline: none;
+  border-color: var(--brand, var(--access));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand, var(--access)) 16%, transparent);
+}
+.pbe-textarea {
+  resize: vertical; min-height: 60px;
+}
+.pbe-select { cursor: pointer; }
+
+.pbe-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.pbe-mini-label {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 0.78rem; font-weight: 600;
+  color: var(--muted, #6b7280);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+
+.pbe-check {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.88rem; color: var(--text);
+  cursor: pointer;
+}
+.pbe-check input { cursor: pointer; }
+
+/* Segmented control — small pill-shaped radio group. */
+.pbe-segmented {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--panel-2, var(--panel));
+  border: 1px solid var(--border);
+}
+.pbe-segmented-btn {
+  border: 0; padding: 5px 12px;
+  background: transparent; color: var(--muted);
+  font-size: 0.82rem; font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.pbe-segmented-btn:hover { color: var(--text); }
+.pbe-segmented-btn.is-active {
+  background: var(--brand, var(--access));
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.10);
+}
+
+.pbe-range { width: 120px; accent-color: var(--brand, var(--access)); }
+.pbe-range-label { gap: 10px; }
+.pbe-range-value { font-variant-numeric: tabular-nums; min-width: 32px; }
+
+/* ── Heading block ──────────────────────────────────────────────
+   The heading-text input adapts its typography to the chosen level
+   so the writer sees H2 vs H3 vs H4 size in the editor. */
+.pbe-heading-body { gap: 8px; }
+.pbe-heading-level { width: auto; max-width: 160px; }
+.pbe-heading-input { font-weight: 700; }
+.pbe-heading-input[data-level="2"] { font-size: 1.45rem; }
+.pbe-heading-input[data-level="3"] { font-size: 1.2rem;  }
+.pbe-heading-input[data-level="4"] { font-size: 1.05rem; }
+
+/* ── Image block ────────────────────────────────────────────────
+   Preview frame sits on top; URL row + alt/caption underneath; an
+   align segmented + width slider live in the controls row. */
+.pbe-image-preview {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 80px;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--panel-2, var(--panel));
+  border: 1px dashed var(--border);
+}
+.pbe-image-preview img {
+  max-width: 100%; max-height: 220px;
+  border-radius: 6px;
+  display: block;
+}
+.pbe-image-empty {
+  font-size: 0.85rem; color: var(--muted);
+  padding: 14px;
+}
+.pbe-image-row { flex-wrap: nowrap; }
+.pbe-image-row .pbe-input { flex: 1 1 auto; }
+.pbe-upload-btn { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.pbe-upload-btn .icon { width: 14px; height: 14px; }
+.pbe-image-controls { gap: 18px; }
+
+/* ── List block ─────────────────────────────────────────────────
+   Each list row shows its bullet / number on the left so the writer
+   sees the rendered ordering at a glance. */
+.pbe-list-items {
+  list-style: none;
+  margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 4px;
+  counter-reset: pbe-list;
+}
+.pbe-list-item {
+  display: flex; align-items: center; gap: 6px;
+  position: relative;
+  padding-left: 22px;
+}
+.pbe-list-item::before {
+  position: absolute; left: 4px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+.pbe-list-items:not(.is-ordered) .pbe-list-item::before { content: '•'; }
+.pbe-list-items.is-ordered .pbe-list-item {
+  counter-increment: pbe-list;
+}
+.pbe-list-items.is-ordered .pbe-list-item::before {
+  content: counter(pbe-list) '.';
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.pbe-list-item-input { flex: 1 1 auto; }
+.pbe-list-item-remove {
+  background: transparent; border: 0; padding: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--muted); border-radius: 6px;
+  cursor: pointer;
+  opacity: 0; transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+}
+.pbe-list-item:hover .pbe-list-item-remove,
+.pbe-list-item:focus-within .pbe-list-item-remove { opacity: 1; }
+.pbe-list-item-remove:hover {
+  background: color-mix(in srgb, #dc2626 12%, transparent);
+  color: #dc2626;
+}
+.pbe-list-item-remove .icon { width: 12px; height: 12px; }
+.pbe-list-add {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.pbe-list-add .icon { width: 13px; height: 13px; }
+
+/* ── Quote block — italicised border-left preview style ────────── */
+.pbe-quote-body .pbe-textarea {
+  font-style: italic;
+  border-left: 3px solid color-mix(in srgb, var(--brand, var(--access)) 60%, transparent);
+  border-radius: 8px;
+  padding-left: 14px;
+}
+
+/* ── Callout block — variant-tinted border ─────────────────────── */
+.pbe-block--callout {
+  --pbe-callout: #1f4e79;
+  border-left: 4px solid var(--pbe-callout);
+}
+.pbe-block--callout[data-callout-variant="info"]    { --pbe-callout: var(--brand, var(--access)); }
+.pbe-block--callout[data-callout-variant="success"] { --pbe-callout: #047857; }
+.pbe-block--callout[data-callout-variant="warn"]    { --pbe-callout: #b45309; }
+.pbe-block--callout[data-callout-variant="danger"]  { --pbe-callout: #b91c1c; }
+
+/* ── Separator block — visual placeholder for an <hr>. */
+.pbe-separator-body { gap: 6px; }
+.pbe-sep-preview hr {
+  border: 0; border-top: 1.5px solid var(--border);
+  margin: 4px auto;
+  max-width: 60%;
+}
+.pbe-mini-help { font-size: 0.82rem; }
+
+/* ── Video block — iframe preview frame. */
+.pbe-video-preview {
+  position: relative;
+  aspect-ratio: 16 / 9; max-width: 480px;
+  margin: 0 auto;
+  border-radius: 10px; overflow: hidden;
+  background: #000;
+  border: 1px solid var(--border);
+}
+.pbe-video-preview iframe,
+.pbe-video-preview video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; border: 0;
+}
+.pbe-video-preview .pbe-image-empty {
+  position: relative;
+  background: var(--panel-2, var(--panel)); color: var(--muted);
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%;
+}
+
+/* ── Code block — monospaced field. */
+.pbe-code-body { gap: 6px; }
+.pbe-code-lang { max-width: 280px; }
+.pbe-code-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.88rem;
+  background: var(--panel-2, var(--panel));
+}
+
+/* ── Palette specialisation ─────────────────────────────────────
+   We re-use `.fe-page-palette-floating` for layout + animation, then
+   layer on a few overrides so the blog editor palette doesn't share
+   z-index / position with a page-builder palette that might also be
+   in the DOM. */
+.pbe-palette { z-index: 1200; }
+.pbe-palette-grid { max-height: 360px; }
+.pbe-palette-tile:focus-visible {
+  outline: 2px solid var(--brand, var(--access));
+  outline-offset: 2px;
+}
+
+/* On narrow screens, collapse the block's grid: handle moves above
+   the toolbar (becoming a slim drag bar) and the body uses the full
+   width. Keeps the editor usable on phones without sacrificing the
+   per-block affordances. */
+@media (max-width: 640px) {
+  .pbe-block {
+    grid-template-columns: 1fr;
+  }
+  .pbe-block-handle {
+    grid-row: 1; grid-column: 1;
+    width: 100%; height: 18px;
+    padding-top: 0;
+    flex-direction: row;
+  }
+  .pbe-block-handle .icon { transform: rotate(90deg); }
+  .pbe-block-toolbar,
+  .pbe-block-body { grid-column: 1; }
+}

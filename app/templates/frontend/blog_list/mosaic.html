@@ -34,7 +34,7 @@
     {% else %}
     <div class="fe-blog-mos-grid">
       {% for p in all_posts %}
-      <article class="fe-blog-mos-card{% if p.featured_image_filename %} has-image{% endif %}{% if p.is_featured %} is-featured{% endif %}{% if loop.index0 % 5 == 0 %} is-large{% endif %}">
+      <article class="fe-blog-mos-card fe-card-primary{% if p.featured_image_filename %} has-image{% endif %}{% if p.is_featured %} is-featured{% endif %}{% if loop.index0 % 5 == 0 %} is-large{% endif %}">
         <a class="fe-blog-mos-link" href="{{ url_for('frontend.blog_post_detail', slug=p.public_slug) }}">
           {% if p.featured_image_filename %}
           <div class="fe-blog-mos-art">
@@ -145,18 +145,12 @@
   }
   @media (max-width: 980px) { .fe-blog-mos-grid { column-count: 2; } }
   @media (max-width: 600px) { .fe-blog-mos-grid { column-count: 1; } }
+  /* Surface chrome comes from `.fe-card-primary`. Mosaic only
+     needs the masonry break-inside guard + bottom spacing
+     + overflow clip for the bleeding featured-image. */
   .fe-blog-mos-card {
     break-inside: avoid; margin-bottom: 1.5rem;
-    background: var(--blog-card);
-    border: 1px solid var(--blog-rule);
-    border-radius: 14px;
     overflow: hidden;
-    transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
-  }
-  .fe-blog-mos-card:hover {
-    transform: translateY(-3px);
-    border-color: color-mix(in srgb, var(--blog-accent) 35%, var(--blog-rule));
-    box-shadow: 0 18px 40px -16px color-mix(in srgb, var(--blog-accent) 25%, rgba(0,0,0,.18));
   }
   .fe-blog-mos-card.is-featured {
     border-color: color-mix(in srgb, var(--blog-accent) 50%, var(--blog-rule));

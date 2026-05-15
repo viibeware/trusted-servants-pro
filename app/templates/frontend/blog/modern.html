@@ -52,7 +52,12 @@
     </header>
 
     <div class="fe-blog-post-body" data-lightbox-scope>
-      {{ (post.body or '')|markdown }}
+      {% if post.body_blocks %}
+        {% from "_blog_blocks.html" import render_blog_blocks %}
+        {{ render_blog_blocks(post.body_blocks) }}
+      {% else %}
+        {{ (post.body or '')|markdown }}
+      {% endif %}
     </div>
 
     {% if post.tags %}

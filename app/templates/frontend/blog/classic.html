@@ -2,7 +2,16 @@
 {% block title %}{{ post.title }} · {{ frontend_title }}{% endblock %}
 {% block content %}
 {%- set _dynbg_active = tpl_dynbg_key or tpl_dynbg_overlay -%}
-<div class="fe-page-dynbg-host{% if _dynbg_active %} fe-dynbg-host{% endif %}"{% if tpl_style %} style="{{ tpl_style }}"{% endif %}>
+{# Resolve the dynbg colour + position CSS variables and stamp them
+   on the host's `style` attribute. Without this, the
+   `randomize_colors` / `randomize_positions` admin toggles do
+   nothing — the apply partial only emits the dynbg children, not
+   the host vars they consume. Same pattern as meetings_list.html. #}
+{%- set _dynbg_color_vars = dynbg_colors_css(dynbg_resolve_colors(tpl_dynbg_config)) if _dynbg_active else '' -%}
+{%- set _dynbg_pos_vars = dynbg_resolve_positions(tpl_dynbg_config, tpl_dynbg_key) if _dynbg_active else '' -%}
+{%- set _dynbg_inline = (_dynbg_color_vars ~ ' ' ~ _dynbg_pos_vars) | trim -%}
+{%- set _host_style = ((tpl_style or '') ~ ' ' ~ _dynbg_inline) | trim -%}
+<div class="fe-page-dynbg-host{% if _dynbg_active %} fe-dynbg-host{% endif %}"{% if _host_style %} style="{{ _host_style }}"{% endif %}>
 {% if _dynbg_active %}{% with dynbg_key=tpl_dynbg_key, dynbg_config=tpl_dynbg_config %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}
 
 {# Classic layout — main content + right sticky sidebar (categories,
@@ -11,8 +20,24 @@
   <div class="fe-container fe-blog-cls-shell">
     <a class="fe-blog-cls-back" href="{{ url_for('frontend.blog_list') }}">← All posts</a>
 
-    <div class="fe-blog-cls-grid">
-      <main class="fe-blog-cls-main">
+    {# Right-rail visibility — admin-controlled per-template. When
+       both widgets are off we drop the rail entirely and switch
+       the grid to a single column so the post takes the full
+       container width. #}
+    {%- set _has_side = (show_related_widget and related) or (show_categories_widget and all_categories) -%}
+    <div class="fe-blog-cls-grid{% if not _has_side %} fe-blog-cls-grid--solo{% endif %}">
+      <main class="fe-blog-cls-main fe-card-primary">
+        {# Featured image leads the post card — sits inside the same
+           horizontal padding as the title / body so the visual aligns
+           with the prose instead of bleeding to the card edges. #}
+        {% if post.featured_image_filename %}
+        <figure class="fe-blog-cls-figure" data-lightbox-scope>
+          <img src="{{ url_for('public.blog_post_featured_image', bid=post.id, thumb=1200) }}"
+               data-lightbox-src="{{ url_for('public.blog_post_featured_image', bid=post.id) }}"
+               alt="{{ post.title }}" loading="eager">
+        </figure>
+        {% endif %}
+
         <header class="fe-blog-cls-head">
           {% if post.categories %}
           <div class="fe-blog-cls-cats">
@@ -30,16 +55,13 @@
           </div>
         </header>
 
-        {% if post.featured_image_filename %}
-        <figure class="fe-blog-cls-figure" data-lightbox-scope>
-          <img src="{{ url_for('public.blog_post_featured_image', bid=post.id, thumb=1200) }}"
-               data-lightbox-src="{{ url_for('public.blog_post_featured_image', bid=post.id) }}"
-               alt="{{ post.title }}" loading="eager">
-        </figure>
-        {% endif %}
-
         <div class="fe-blog-cls-body" data-lightbox-scope>
-          {{ (post.body or '')|markdown }}
+          {% if post.body_blocks %}
+            {% from "_blog_blocks.html" import render_blog_blocks %}
+            {{ render_blog_blocks(post.body_blocks) }}
+          {% else %}
+            {{ (post.body or '')|markdown }}
+          {% endif %}
         </div>
 
         {% if post.tags %}
@@ -52,7 +74,7 @@
         {% endif %}
 
         {% if post.author_name and post.author_bio %}
-        <aside class="fe-blog-cls-bio">
+        <aside class="fe-blog-cls-bio fe-card-primary">
           <div class="fe-blog-cls-bio-avatar">{{ post.author_name[:1] }}</div>
           <div>
             <h3 class="fe-blog-cls-bio-name">{{ post.author_name }}</h3>
@@ -62,9 +84,10 @@
         {% endif %}
       </main>
 
+      {% if _has_side %}
       <aside class="fe-blog-cls-side">
-        {% if related %}
-        <section class="fe-blog-cls-widget">
+        {% if show_related_widget and related %}
+        <section class="fe-blog-cls-widget fe-card-primary">
           <h3 class="fe-blog-cls-widget-title">Related</h3>
           <ul class="fe-blog-cls-related" role="list">
             {% for r in related %}
@@ -84,8 +107,8 @@
         </section>
         {% endif %}
 
-        {% if all_categories %}
-        <section class="fe-blog-cls-widget">
+        {% if show_categories_widget and all_categories %}
+        <section class="fe-blog-cls-widget fe-card-primary">
           <h3 class="fe-blog-cls-widget-title">Categories</h3>
           <ul class="fe-blog-cls-cat-list" role="list">
             {% for c in all_categories %}
@@ -101,6 +124,7 @@
         </section>
         {% endif %}
       </aside>
+      {% endif %}{# /_has_side #}
     </div>
   </div>
 </article>
@@ -108,7 +132,12 @@
 
 <style>
   .fe-blog-post-classic {
-    --blog-bg: var(--fe-color-surface, #f9fafb);
+    /* `--tpl-bg` carries the admin-chosen template background (solid
+       colour / gradient / image) via `tpl_style` on the outer
+       wrapper. We chain `--blog-bg` through it so the article's
+       background actually reflects what the admin picked, with the
+       site surface token as the fallback when nothing's set. */
+    --blog-bg: var(--tpl-bg, var(--fe-color-surface, #f9fafb));
     --blog-card: var(--fe-color-bg, #ffffff);
     --blog-ink: var(--fe-color-text, #111827);
     --blog-ink-soft: var(--fe-color-muted, #6b7280);
@@ -118,8 +147,21 @@
     padding: clamp(2rem, 5vw, 3.5rem) 0 clamp(4rem, 8vw, 6rem);
   }
   [data-theme="dark"] .fe-blog-post-classic {
-    --blog-bg: #0f172a; --blog-card: #1f2937;
+    /* Same chain in dark mode — admin background wins; the dark
+       default only kicks in when no template background is set. */
+    --blog-bg: var(--tpl-bg, #0f172a);
+    --blog-card: #1f2937;
     --blog-ink: #e5e7eb; --blog-ink-soft: #9ca3af; --blog-rule: #374151;
+  }
+  /* Dynamic-background mode: the wrapper paints an animated canvas
+     behind everything via `.fe-dynbg-host`. Stamp the article
+     transparent in that case so the canvas shows through — the
+     card inside still has its own solid surface. The existing
+     `fe-dynbg-host > .fe-section/section` rule in frontend.css
+     doesn't catch this template because the host's child is an
+     `<article>`, not a section. */
+  .fe-page-dynbg-host.fe-dynbg-host > .fe-blog-post-classic {
+    background: transparent;
   }
   .fe-blog-cls-back {
     display: inline-block; margin-bottom: 1.5rem;
@@ -130,12 +172,23 @@
   .fe-blog-cls-grid {
     display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: clamp(2rem, 4vw, 3rem);
   }
+  /* When both rail widgets are off, the layout collapses to a
+     single full-width track so the post body fills the container. */
+  .fe-blog-cls-grid--solo { grid-template-columns: minmax(0, 1fr); }
   @media (max-width: 880px) { .fe-blog-cls-grid { grid-template-columns: 1fr; } }
+  /* Card chrome (bg / border / radius / shadow / hover) comes from
+     the `.fe-card-primary` token aggregator in frontend.css. We
+     keep only the layout-specific bits here so this rule doesn't
+     override the design-token surface.
+
+     `overflow: hidden` lets the featured image's negative margins
+     bleed to the card's edges and still be clipped to its rounded
+     corners — same look the blog-list cards have. Box-shadow
+     paints outside the box and isn't affected, so the hover lift
+     still reads cleanly. */
   .fe-blog-cls-main {
-    background: var(--blog-card);
-    border: 1px solid var(--blog-rule);
-    border-radius: 12px;
     padding: clamp(1.5rem, 4vw, 3rem);
+    overflow: hidden;
   }
   .fe-blog-cls-cats { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1rem; }
   .fe-blog-cls-cat {
@@ -164,8 +217,22 @@
   .fe-blog-cls-byline > *:not(:first-child)::before {
     content: "·"; margin-right: .8rem; opacity: .55;
   }
-  .fe-blog-cls-figure { margin: 0 -1.5rem 1.8rem; overflow: hidden; }
-  .fe-blog-cls-figure img { width: 100%; display: block; }
+  /* Featured image bleeds to the card edges — mirrors the list-view
+     card chrome where the thumbnail caps the card's top. The
+     negative margins cancel out the card padding on three sides
+     (top + left + right); the bottom margin keeps spacing between
+     the image and the header below. The card's own
+     `overflow: hidden` clips the image to the rounded top corners,
+     so the figure doesn't need its own radius. */
+  .fe-blog-cls-figure {
+    margin: calc(0px - clamp(1.5rem, 4vw, 3rem))
+            calc(0px - clamp(1.5rem, 4vw, 3rem))
+            1.8rem;
+    overflow: hidden;
+  }
+  .fe-blog-cls-figure img {
+    width: 100%; height: auto; display: block;
+  }
   .fe-blog-cls-body {
     font-family: var(--tpl-body-font, var(--fe-font-body, 'Inter', system-ui, sans-serif));
     font-size: 1.05rem; line-height: 1.75; color: var(--blog-ink);
@@ -198,11 +265,11 @@
     border: 1px solid var(--blog-rule);
   }
   .fe-blog-cls-tag:hover { color: var(--blog-accent); border-color: var(--blog-accent); }
+  /* Layout only — surface chrome (bg / border / radius / shadow /
+     hover) comes from `.fe-card-primary`. */
   .fe-blog-cls-bio {
     display: flex; gap: 1rem;
     margin-top: 2.5rem; padding: 1.4rem;
-    background: var(--blog-bg);
-    border-radius: 8px;
   }
   .fe-blog-cls-bio-avatar {
     width: 56px; height: 56px; border-radius: 50%;
@@ -215,9 +282,9 @@
   /* ── Side ─────────────────────────────────────────────── */
   .fe-blog-cls-side { position: sticky; top: 90px; align-self: start; }
   @media (max-width: 880px) { .fe-blog-cls-side { position: static; } }
+  /* Layout only — surface chrome comes from `.fe-card-primary`. */
   .fe-blog-cls-widget {
-    background: var(--blog-card); border: 1px solid var(--blog-rule);
-    border-radius: 12px; padding: 1.2rem 1.4rem;
+    padding: 1.2rem 1.4rem;
     margin-bottom: 1.2rem;
   }
   .fe-blog-cls-widget-title {

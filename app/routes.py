@@ -15,7 +15,7 @@ from .models import (db, User, Meeting, MeetingFile, MeetingSchedule, MeetingLib
                      Post, Story, BlogPost, BlogCategory, BlogTag,
                      ZoomAccount, ZoomOtpEmail, Location, Library, LibraryItem,
                      LibraryCategory, MediaItem, NavLink, SiteSetting,
-                     IntergroupAccount, AccessRequest, ContactSubmission, PasswordResetToken,
+                     IntergroupAccount, IntergroupOfficer, AccessRequest, ContactSubmission, PasswordResetToken,
                      FrontendNavItem, UrlRedirect, EntitySlugHistory, Page,
                      FrontendNavColumn, FrontendNavLink, FILE_CATEGORIES,
                      DAYS_OF_WEEK, INTERGROUP_LIBRARY_NAMES)
@@ -5597,6 +5597,16 @@ def frontend_template_settings_save(kind, key):
         leaf["bg_dynbg_randomize_positions"] = True
     if dynbg_cfg.get("animate") is False:
         leaf["bg_dynbg_animate"] = False
+    # Classic blog detail toggles for the right-side rail. Stored
+     # only as explicit `False` so the JSON stays lean — missing keys
+     # mean "show the widget" (the default). When the user unchecks
+     # the box the form omits the field, so we record the False
+     # state; checking it again drops the key back out.
+    if kind == "blog_post" and key == "classic":
+        if request.form.get("show_related_widget") != "1":
+            leaf["show_related_widget"] = False
+        if request.form.get("show_categories_widget") != "1":
+            leaf["show_categories_widget"] = False
     for fkey in ("heading_font", "body_font"):
         v = (request.form.get(fkey) or "").strip()
         if v and font_by_key(v):
@@ -11428,6 +11438,160 @@ def _estimate_reading_minutes(text):
     return max(1, (word_count + 224) // 225)
 
 
+# Block types the visual blog-body editor knows how to render. The
+# save handler drops unknown types so a tampered form post can't
+# slip an arbitrary block schema into storage. Keep in sync with
+# the JS palette in `static/js/post_body_editor.js` AND the public
+# render macro in `templates/_blog_blocks.html`.
+_BLOG_BLOCK_TYPES = {
+    "paragraph", "heading", "image", "button", "list",
+    "quote", "callout", "separator", "video", "code",
+}
+
+
+def _sanitize_blog_body_blocks(raw):
+    """Normalize the JSON payload submitted by the visual block editor.
+    Returns a JSON string ready for storage (or NULL when the input
+    is empty / malformed). Strips unknown block types, coerces field
+    types, caps string lengths, and limits nesting so a malicious
+    form post can't smuggle arbitrary HTML or oversized payloads.
+
+    The editor always submits a JSON array; the per-block ``data``
+    dict is shaped by ``renderBlock()`` in post_body_editor.js."""
+    import json
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(parsed, list):
+        return None
+    out = []
+    for entry in parsed[:200]:  # hard cap on block count
+        if not isinstance(entry, dict):
+            continue
+        t = entry.get("type")
+        if t not in _BLOG_BLOCK_TYPES:
+            continue
+        d = entry.get("data") if isinstance(entry.get("data"), dict) else {}
+        clean = _sanitize_blog_block_data(t, d)
+        out.append({"type": t, "data": clean})
+    if not out:
+        return None
+    return json.dumps(out, ensure_ascii=False)
+
+
+def _sanitize_blog_block_data(t, d):
+    """Per-type field coercion for the visual block editor. Each branch
+    cherry-picks the fields it cares about so a forged payload can't
+    smuggle extra keys into storage. Length caps are generous but
+    bounded; rich-text fields (`md`) ride through the existing
+    bleach-allowlist markdown filter on the render side, so storing
+    raw markdown here is safe."""
+    def s(v, cap=10000):
+        if v is None:
+            return ""
+        return str(v)[:cap]
+    if t == "paragraph":
+        return {"md": s(d.get("md"), 20000)}
+    if t == "heading":
+        try:
+            lvl = int(d.get("level") or 2)
+        except (TypeError, ValueError):
+            lvl = 2
+        lvl = lvl if lvl in (2, 3, 4) else 2
+        return {"level": lvl, "text": s(d.get("text"), 400)}
+    if t == "image":
+        try:
+            w = int(d.get("width_pct") or 100)
+        except (TypeError, ValueError):
+            w = 100
+        w = max(20, min(100, w))
+        align = (d.get("align") or "center").lower()
+        if align not in ("left", "center", "right"):
+            align = "center"
+        return {
+            "src": s(d.get("src"), 1000),
+            "alt": s(d.get("alt"), 400),
+            "caption": s(d.get("caption"), 600),
+            "align": align,
+            "width_pct": w,
+        }
+    if t == "button":
+        style = (d.get("style") or "primary").lower()
+        if style not in ("primary", "secondary"):
+            style = "primary"
+        align = (d.get("align") or "left").lower()
+        if align not in ("left", "center", "right"):
+            align = "left"
+        return {
+            "label": s(d.get("label"), 200) or "Click here",
+            "url": s(d.get("url"), 1000) or "#",
+            "style": style,
+            "align": align,
+            "new_tab": bool(d.get("new_tab")),
+        }
+    if t == "list":
+        items = d.get("items") if isinstance(d.get("items"), list) else []
+        clean_items = []
+        for item in items[:200]:
+            clean_items.append(s(item, 1000))
+        return {"ordered": bool(d.get("ordered")), "items": clean_items}
+    if t == "quote":
+        return {"text": s(d.get("text"), 4000),
+                "author": s(d.get("author"), 200)}
+    if t == "callout":
+        variant = (d.get("variant") or "info").lower()
+        if variant not in ("info", "warn", "success", "danger"):
+            variant = "info"
+        return {"variant": variant,
+                "title": s(d.get("title"), 200),
+                "md": s(d.get("md"), 8000)}
+    if t == "separator":
+        return {}
+    if t == "video":
+        return {"url": s(d.get("url"), 1000),
+                "caption": s(d.get("caption"), 400)}
+    if t == "code":
+        return {"lang": s(d.get("lang"), 40),
+                "code": s(d.get("code"), 20000)}
+    return {}
+
+
+def _blog_blocks_to_plain_text(blocks):
+    """Best-effort plain-text projection of the block list. Used as the
+    word-count source for the auto reading-time estimate. Skips block
+    types that don't carry prose (image / separator / video URL)."""
+    if not blocks:
+        return ""
+    bits = []
+    for b in blocks:
+        if not isinstance(b, dict):
+            continue
+        t = b.get("type")
+        d = b.get("data") or {}
+        if t == "paragraph":
+            bits.append(str(d.get("md") or ""))
+        elif t == "heading":
+            bits.append(str(d.get("text") or ""))
+        elif t == "list":
+            for it in (d.get("items") or []):
+                bits.append(str(it))
+        elif t == "quote":
+            bits.append(str(d.get("text") or ""))
+            bits.append(str(d.get("author") or ""))
+        elif t == "callout":
+            bits.append(str(d.get("title") or ""))
+            bits.append(str(d.get("md") or ""))
+        elif t == "code":
+            bits.append(str(d.get("code") or ""))
+        elif t == "image":
+            bits.append(str(d.get("caption") or ""))
+            bits.append(str(d.get("alt") or ""))
+    return " ".join(filter(None, bits))
+
+
 def _resolve_blog_category_ids(form):
     """Pull selected category ids out of the multi-checkbox form. Filters
     out anything that doesn't resolve to an existing row so a stale
@@ -11554,13 +11718,41 @@ def blog_index():
                            counts=counts)
 
 
+def _blog_author_choices():
+    """Intergroup officers — the public-facing roster managed from
+    Settings → Global — surfaced as the author picker on the blog
+    edit page. We pull `name` (falling back to `role` when the
+    officer row hasn't been given a name yet) and ignore empty
+    entries so the dropdown doesn't carry blank options.
+
+    The picker stores the resolved name string in `BlogPost.author_name`
+    so the public templates keep rendering the byline as text —
+    decoupled from the officer row's id, which means renaming the
+    officer later won't retroactively change historical posts'
+    bylines."""
+    seen = set()
+    out = []
+    rows = (IntergroupOfficer.query
+            .order_by(IntergroupOfficer.sort_order, IntergroupOfficer.role)
+            .all())
+    for o in rows:
+        name = (o.name or o.role or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        out.append({"name": name, "role": o.role or ""})
+    return out
+
+
 @bp.route("/blog/new")
 @login_required
 def blog_new():
     _require_blog_enabled()
     categories = BlogCategory.query.order_by(BlogCategory.position, BlogCategory.name).all()
     tags = BlogTag.query.order_by(BlogTag.name).all()
-    return render_template("blog_edit.html", post=None, categories=categories, tags=tags)
+    return render_template("blog_edit.html", post=None,
+                           categories=categories, tags=tags,
+                           author_choices=_blog_author_choices())
 
 
 @bp.route("/blog/<int:bid>")
@@ -11570,7 +11762,9 @@ def blog_edit(bid):
     post = db.session.get(BlogPost, bid) or abort(404)
     categories = BlogCategory.query.order_by(BlogCategory.position, BlogCategory.name).all()
     tags = BlogTag.query.order_by(BlogTag.name).all()
-    return render_template("blog_edit.html", post=post, categories=categories, tags=tags)
+    return render_template("blog_edit.html", post=post,
+                           categories=categories, tags=tags,
+                           author_choices=_blog_author_choices())
 
 
 @bp.route("/blog/save", methods=["POST"])
@@ -11611,18 +11805,33 @@ def blog_save():
 
     post.summary = (request.form.get("summary") or "").strip() or None
     post.body = (request.form.get("body") or "").strip() or None
+    # Drag-and-drop block editor payload — saved verbatim when the form
+    # carries a JSON-list value. The JS editor always submits a JSON
+    # array (possibly empty); `_sanitize_blog_body_blocks` strips
+    # unknown block types, coerces fields, and re-serialises so a
+    # malicious form post can't smuggle arbitrary HTML into storage.
+    blocks_raw = (request.form.get("body_blocks_json") or "").strip()
+    if blocks_raw:
+        post.body_blocks_json = _sanitize_blog_body_blocks(blocks_raw)
+    else:
+        post.body_blocks_json = None
     post.author_name = (request.form.get("author_name") or "").strip()[:120] or None
-    post.author_bio = (request.form.get("author_bio") or "").strip() or None
+    # author_bio is no longer surfaced in the editor — legacy values
+    # on existing posts are preserved (the column stays on the
+    # model) but the form never overwrites them.
     post.published_at = _parse_post_dt(request.form.get("published_at"))
     post.is_featured = request.form.get("is_featured") == "1"
     post.is_pinned = request.form.get("is_pinned") == "1"
-    post.allow_comments = request.form.get("allow_comments") == "1"
 
     rm_raw = (request.form.get("reading_minutes") or "").strip()
     if rm_raw.isdigit():
         post.reading_minutes = max(1, min(999, int(rm_raw)))
     else:
-        post.reading_minutes = _estimate_reading_minutes(post.body or "")
+        # Estimate from blocks first (they're the source of truth for
+        # newly-edited posts); fall back to the legacy markdown body
+        # for posts that haven't been converted yet.
+        est_source = _blog_blocks_to_plain_text(post.body_blocks) or (post.body or "")
+        post.reading_minutes = _estimate_reading_minutes(est_source)
 
     if request.form.get("clear_featured_image") == "1":
         old = post.featured_image_filename
@@ -11630,11 +11839,29 @@ def blog_save():
         _cleanup_retired_asset(old)
     uploaded = request.files.get("featured_image")
     if uploaded and uploaded.filename:
+        # Fresh upload — wins over any library pick on the same submit.
+        # The "Browse library" JS clears the file input on pick (and
+        # vice-versa) so a single save round-trip only carries one of
+        # the two, but if both happen to arrive together the upload
+        # is the more recent intent.
         old = post.featured_image_filename
         stored, _original = _save_upload(uploaded)
         post.featured_image_filename = stored
         if old and old != stored:
             _cleanup_retired_asset(old)
+    else:
+        # Library pick — the writer clicked Browse, picked a tile,
+        # and the JS stamped the MediaItem id into the hidden field.
+        # Look up the row and reuse its already-stored filename so we
+        # don't duplicate the file on disk.
+        media_id_raw = (request.form.get("featured_image_media_id") or "").strip()
+        if media_id_raw.isdigit():
+            m = db.session.get(MediaItem, int(media_id_raw))
+            if m and m.stored_filename:
+                old = post.featured_image_filename
+                post.featured_image_filename = m.stored_filename
+                if old and old != m.stored_filename:
+                    _cleanup_retired_asset(old)
 
     # Category + tag relations — must flush the post first when creating
     # so the M2M tables have a real id to reference.
@@ -11738,7 +11965,6 @@ def blog_duplicate(bid):
         is_pinned=False,
         is_draft=True,
         is_archived=False,
-        allow_comments=src.allow_comments,
         reading_minutes=src.reading_minutes,
         created_by=getattr(current_user, "id", None),
     )
@@ -11958,6 +12184,70 @@ def blog_category_save():
     db.session.commit()
     flash("Category saved", "success")
     return redirect(url_for("main.blog_categories"))
+
+
+@bp.route("/blog/tags/quick-add", methods=["POST"])
+@login_required
+def blog_tag_quick_add():
+    """JSON endpoint that mints a fresh `BlogTag` from a single name
+    and returns the new row's id/name/slug. Powers the inline
+    "Add new tag" affordance on the blog-post edit sidebar so writers
+    can tag a post under a brand-new label without leaving the
+    editor. Idempotent by name — calling twice with the same name
+    just returns the existing row instead of creating a duplicate."""
+    _require_blog_enabled()
+    name = (request.form.get("name") or "").strip()[:80]
+    if not name:
+        return jsonify({"ok": False, "error": "name required"}), 400
+    existing = (BlogTag.query
+                .filter(db.func.lower(BlogTag.name) == name.lower())
+                .first())
+    if existing:
+        return jsonify({"ok": True, "tag": {
+            "id": existing.id, "name": existing.name,
+            "slug": existing.slug,
+        }, "deduped": True})
+    slug = _unique_blog_taxonomy_slug(BlogTag,
+                                       _normalize_slug(name) or name.lower())
+    tag = BlogTag(name=name, slug=slug)
+    db.session.add(tag)
+    db.session.commit()
+    return jsonify({"ok": True, "tag": {
+        "id": tag.id, "name": tag.name, "slug": tag.slug,
+    }, "deduped": False})
+
+
+@bp.route("/blog/categories/quick-add", methods=["POST"])
+@login_required
+def blog_category_quick_add():
+    """JSON endpoint that creates a fresh `BlogCategory` from just a
+    name and returns the new row's id/name/slug/color. Powers the
+    inline "Add new category" affordance on the blog-post edit
+    sidebar so writers can file a post under a brand-new category
+    without leaving the editor. Idempotent by name — if a category
+    with the same casefold name already exists, we return that
+    row instead of creating a duplicate."""
+    _require_blog_enabled()
+    name = (request.form.get("name") or "").strip()[:120]
+    if not name:
+        return jsonify({"ok": False, "error": "name required"}), 400
+    existing = (BlogCategory.query
+                .filter(db.func.lower(BlogCategory.name) == name.lower())
+                .first())
+    if existing:
+        return jsonify({"ok": True, "category": {
+            "id": existing.id, "name": existing.name,
+            "slug": existing.slug, "color": existing.color or "",
+        }, "deduped": True})
+    slug = _unique_blog_taxonomy_slug(BlogCategory,
+                                       _normalize_slug(name) or name.lower())
+    cat = BlogCategory(name=name, slug=slug)
+    db.session.add(cat)
+    db.session.commit()
+    return jsonify({"ok": True, "category": {
+        "id": cat.id, "name": cat.name,
+        "slug": cat.slug, "color": cat.color or "",
+    }, "deduped": False})
 
 
 @bp.route("/blog/categories/<int:cid>/delete", methods=["POST"])

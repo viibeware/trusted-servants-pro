@@ -32,7 +32,7 @@
         <ul class="fe-blog-sb-list" role="list">
           {% for p in all_posts %}
           <li class="fe-blog-sb-item">
-            <article class="fe-blog-sb-card">
+            <article class="fe-blog-sb-card fe-card-primary">
               <a class="fe-blog-sb-card-link" href="{{ url_for('frontend.blog_post_detail', slug=p.public_slug) }}">
                 {% if p.featured_image_filename %}
                 <div class="fe-blog-sb-art">
@@ -145,17 +145,9 @@
   .fe-blog-sb-active-desc { color: var(--blog-ink-soft); }
   .fe-blog-sb-empty { color: var(--blog-ink-soft); font-style: italic; padding: 2rem 0; }
   .fe-blog-sb-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 1.75rem; }
-  .fe-blog-sb-card {
-    background: var(--blog-card);
-    border: 1px solid var(--blog-rule);
-    border-radius: 12px; overflow: hidden;
-    transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
-  }
-  .fe-blog-sb-card:hover {
-    transform: translateY(-2px);
-    border-color: color-mix(in srgb, var(--blog-accent) 30%, var(--blog-rule));
-    box-shadow: 0 12px 30px -10px rgba(15,23,42,.15);
-  }
+  /* Surface chrome (bg / border / radius / shadow / hover) comes
+     from `.fe-card-primary`. Only structural rules here. */
+  .fe-blog-sb-card { overflow: hidden; }
   .fe-blog-sb-card-link {
     display: grid; grid-template-columns: 220px 1fr;
     color: inherit; text-decoration: none;

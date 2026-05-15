@@ -7,6 +7,18 @@
   <a class="btn" href="{{ url_for('main.blog_index') }}">← All posts</a>
   {% if _p and _p.is_draft %}<span class="post-chip post-chip-draft post-chip-header">Draft</span>{% endif %}
   {% if _p and _p.is_archived %}<span class="post-chip post-chip-header">Archived</span>{% endif %}
+  {# Open the public blog-post page in a new tab. Mirrors the
+     "View on Frontend" button on `post_edit.html` — gated on the
+     Web Frontend module being on so we don't link to a 404 when
+     the public site is disabled. Drafts and archived posts have a
+     publicly-resolvable URL too (the public route 404s by visibility,
+     not by URL absence) — but the link wouldn't render anything
+     useful, so hide it in those states. #}
+  {% if _p and site and site.frontend_module_enabled
+        and not _p.is_draft and not _p.is_archived %}
+  <a class="btn" target="_blank" rel="noopener"
+     href="{{ url_for('frontend.blog_post_detail', slug=_p.public_slug) }}">View on Frontend ↗</a>
+  {% endif %}
   {% if _p and not _p.is_archived %}
   <form method="post" action="{{ url_for('main.blog_archive', bid=_p.id) }}" style="display:inline">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -43,10 +55,17 @@
   {% endif %}
 {% endblock %}
 {% block content %}
-<form id="blog-edit-form" class="form post-form" method="post"
+<form id="blog-edit-form" class="form post-form blog-edit-form" method="post"
       action="{{ url_for('main.blog_save') }}" enctype="multipart/form-data">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% if _p %}<input type="hidden" name="post_id" value="{{ _p.id }}">{% endif %}
+
+  {# Two-column layout — main column (Post + Body) maxes at 900px;
+     right sidebar holds the metadata cards. The form remains a
+     single submit target; the grid is purely presentational. On
+     narrow screens the sidebar collapses below the main column. #}
+  <div class="blog-edit-grid">
+  <div class="blog-edit-main">
 
   {# ── Title + body ─────────────────────────────────────────── #}
   <section class="card">
@@ -82,98 +101,134 @@
       <textarea name="summary" rows="2"
                 placeholder="One or two sentences — what's this post about?">{{ (_p.summary if _p else '') or '' }}</textarea>
     </label>
-    <label>Body <span class="muted small">(full content, Markdown supported)</span>
-      <textarea name="body" rows="14"
-                placeholder="The full body of the post. Markdown supported.">{{ (_p.body if _p else '') or '' }}</textarea>
-    </label>
   </section>
 
-  {# ── Categories + tags ─────────────────────────────────────── #}
-  <section class="card">
-    <div class="card-head">
-      <h2>Categories &amp; tags</h2>
-      <span class="muted smaller">Pick one or more categories to file the post under. Tags are free-form topic labels — the frontend block can scope a list to either.</span>
-    </div>
-    {% if categories %}
-    <div class="blog-tax-grid">
-      {% for c in categories %}
-      <label class="blog-tax-pill">
-        <input type="checkbox" name="category_ids" value="{{ c.id }}"
-               {% if _p and c in _p.categories %}checked{% endif %}>
-        <span class="blog-tax-pill-body" {% if c.color %}style="--blog-cat-color: {{ c.color }};"{% endif %}>
-          {% if c.color %}<span class="blog-tax-swatch" style="background: {{ c.color }};"></span>{% endif %}
-          <span class="blog-tax-name">{{ c.name }}</span>
-        </span>
-      </label>
-      {% endfor %}
-    </div>
-    {% else %}
-    <p class="muted small">No categories yet. <a href="{{ url_for('main.blog_categories') }}">Create one</a> to start filing posts.</p>
-    {% endif %}
+  {# ── Body (visual drag-and-drop block editor) ───────────────
+     The "Add block" pill in the bottom-right corner — same pill as
+     the page builder — drops fresh blocks into the canvas below.
+     Each block renders inline so the editor stays close to a true
+     preview, and a drag handle on the left of every block lets the
+     writer reorder by dragging.
 
-    <div class="blog-tax-tags">
-      <label>Existing tags <span class="muted small">(hold ⌘/Ctrl to multi-select)</span>
-        <select name="tag_ids" multiple size="6" class="blog-tag-select">
-          {% for t in tags %}
-          <option value="{{ t.id }}" {% if _p and t in _p.tags %}selected{% endif %}>#{{ t.name }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      <label>Add new tags <span class="muted small">(comma-separated; new ones are auto-created)</span>
-        <input type="text" name="tag_names_new" placeholder="recovery, h&i, literature">
-      </label>
-    </div>
-  </section>
-
-  {# ── Featured image ─────────────────────────────────────────── #}
-  <section class="card">
+     `body_blocks_json` is the hidden form field carrying the editor's
+     current state to `blog_save`; `body` (legacy markdown) is kept
+     as a separate hidden field so unconverted posts retain their
+     content until the writer re-saves with blocks. #}
+  <section class="card pbe-card">
     <div class="card-head">
-      <h2>Featured image</h2>
-      <span class="muted smaller">Displayed at the top of the post, in list cards, and in link-preview cards. PNG, JPG, or WebP.</span>
+      <h2>Body</h2>
+      <span class="muted smaller">Drag blocks from the floating
+        <span class="pbe-pill-inline">{{ icon('plus') }} Add block</span> pill in the corner — or click a block to drop it at the end. Reorder by dragging the <span class="pbe-handle-inline" aria-hidden="true">{{ icon('grip-vertical') }}</span> handle on the left.</span>
     </div>
-    <div class="og-image-row">
-      <div class="og-image-preview">
-        {% if _p and _p.featured_image_filename %}
-        <img src="{{ url_for('public.blog_post_featured_image', bid=_p.id) }}" alt="Featured image">
-        <label class="check fe-logo-clear-label">
-          <input type="checkbox" name="clear_featured_image" value="1"><span>Remove current image</span>
-        </label>
-        {% else %}
-        <div class="og-image-empty muted small">No image uploaded yet.</div>
-        {% endif %}
-      </div>
-      <div class="og-image-fields">
-        <label>Replace image
-          <input type="file" name="featured_image" accept="image/png,image/jpeg,image/webp">
-        </label>
+    <input type="hidden" name="body_blocks_json" id="pbe-blocks-json"
+           value='{{ (_p.body_blocks_json if (_p and _p.body_blocks_json) else "") }}'>
+    {# Preserve the legacy markdown body so posts authored before the
+       block editor existed don't lose content when the writer opens
+       the edit page without touching the body. The visual editor
+       takes precedence once any blocks are saved. #}
+    <input type="hidden" name="body" id="pbe-legacy-body"
+           value="{{ (_p.body if _p else '') or '' }}">
+    <div class="pbe-canvas" id="pbe-canvas"
+         data-legacy-body="{{ (_p.body if _p else '') or '' }}"
+         aria-label="Post body — drag blocks to compose">
+      <div class="pbe-empty" data-pbe-empty>
+        <div class="pbe-empty-icon" aria-hidden="true">{{ icon('layout-grid') }}</div>
+        <div class="pbe-empty-title">A blank canvas — start composing</div>
+        <p class="pbe-empty-help muted">
+          Click <b>{{ icon('plus') }} Add block</b> in the bottom-right
+          corner, or drag any tile from the palette onto this canvas.
+          Pick a paragraph for prose, a heading to break up sections,
+          an image to illustrate, a button for a call-to-action — mix
+          and match.
+        </p>
       </div>
     </div>
   </section>
 
-  {# ── Author byline ─────────────────────────────────────────── #}
-  <section class="card">
-    <div class="card-head">
-      <h2>Author</h2>
-      <span class="muted smaller">Optional byline shown publicly. The bio appears in the author card on the detail page.</span>
-    </div>
-    <label>Author name
-      <input type="text" name="author_name" maxlength="120"
-             value="{{ (_p.author_name if _p else '') or '' }}"
-             placeholder="J. Doe">
-    </label>
-    <label>Author bio <span class="muted small">(short paragraph, plain text)</span>
-      <textarea name="author_bio" rows="3"
-                placeholder="A few sentences about the author.">{{ (_p.author_bio if _p else '') or '' }}</textarea>
-    </label>
-  </section>
+  {# Floating block palette — same FAB → expanding panel chrome the
+     page builder uses (`.fe-page-palette-floating`). The blog
+     editor's palette is namespaced via `.pbe-palette` so each tile's
+     drag payload routes to the canvas above instead of the page
+     builder tree. #}
+  <div class="pbe-palette fe-page-palette-floating" data-pbe-palette>
+    <button type="button" class="fe-page-palette-fab"
+            data-pbe-palette-toggle
+            aria-expanded="false"
+            aria-controls="pbe-palette-panel"
+            aria-label="Open block palette">
+      <span class="fe-page-palette-fab-icon" aria-hidden="true">{{ icon('plus') }}</span>
+      <span class="fe-page-palette-fab-label">Add block</span>
+    </button>
+    <section class="fe-page-palette-panel"
+             id="pbe-palette-panel"
+             role="dialog"
+             aria-label="Block palette"
+             aria-hidden="true">
+      <header class="fe-page-palette-panel-head">
+        <div class="fe-page-palette-panel-title">
+          <span class="fe-page-palette-panel-icon" aria-hidden="true">{{ icon('grip-vertical') }}</span>
+          <h3>Add blocks</h3>
+        </div>
+        <button type="button" class="icon-btn fe-page-palette-close"
+                data-pbe-palette-toggle
+                aria-label="Close block palette">{{ icon('x') }}</button>
+      </header>
+      <p class="muted smaller fe-page-palette-hint">
+        Drag a tile onto the canvas, or click to append it to the end.
+      </p>
+      <div class="fe-page-palette-grid pbe-palette-grid">
+        {% set _pbe_catalog = [
+          {'key': 'paragraph', 'name': 'Paragraph',  'icon': 'type',
+           'desc': 'A block of prose. Markdown supported for inline links / bold / italic.'},
+          {'key': 'heading',   'name': 'Heading',    'icon': 'heading',
+           'desc': 'Section heading. Pick H2, H3, or H4.'},
+          {'key': 'image',     'name': 'Image',      'icon': 'image',
+           'desc': 'Upload or paste an image URL. Aligns left, center, or right.'},
+          {'key': 'button',    'name': 'Button',     'icon': 'mouse-pointer-click',
+           'desc': 'A call-to-action button linked to any URL.'},
+          {'key': 'list',      'name': 'List',       'icon': 'list',
+           'desc': 'Bulleted or numbered list. One item per row.'},
+          {'key': 'quote',     'name': 'Quote',      'icon': 'quote',
+           'desc': 'Pull-quote with optional attribution.'},
+          {'key': 'callout',   'name': 'Callout',    'icon': 'alert-triangle',
+           'desc': 'Highlight an info, success, warn, or danger note.'},
+          {'key': 'video',     'name': 'Video',      'icon': 'video',
+           'desc': 'Embed a YouTube / Vimeo URL or a self-hosted MP4.'},
+          {'key': 'code',      'name': 'Code',       'icon': 'code',
+           'desc': 'Monospaced code block with optional language tag.'},
+          {'key': 'separator', 'name': 'Divider',    'icon': 'minus',
+           'desc': 'A horizontal rule to split sections.'},
+        ] %}
+        {% for entry in _pbe_catalog %}
+        <div class="fe-page-palette-tile pbe-palette-tile" draggable="true"
+             data-pbe-block-type="{{ entry.key }}"
+             data-pbe-block-name="{{ entry.name }}"
+             title="{{ entry.desc }}"
+             tabindex="0" role="button"
+             aria-label="Add {{ entry.name }} block">
+          <span class="fe-page-palette-icon">{{ icon(entry.icon) }}</span>
+          <span class="fe-page-palette-name">{{ entry.name }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
 
-  {# ── Publication settings ─────────────────────────────────────── #}
-  <section class="card">
-    <div class="card-head">
-      <h2>Publication</h2>
-      <span class="muted smaller">Date displayed under the title (also drives newest-first ordering). Featured / pinned posts surface at the top of lists.</span>
-    </div>
-    <div class="form-row">
+  </div>{# /.blog-edit-main #}
+
+  <aside class="blog-edit-side">
+
+  {# Single combined "Post settings" card. Sections inside follow the
+     order writers naturally reach for: publication state first
+     (publish date / pinning), then who's authoring, then how the
+     post is filed (categories + tags), then the visual featured
+     image. The visually loud preview lands at the bottom so the
+     sticky sidebar's first viewport stays scannable. #}
+  <section class="card blog-side-card">
+
+    {# ── Publication ───────────────────────────────────────── #}
+    <div class="blog-side-section">
+      <h3 class="blog-side-h3">Publication</h3>
       <label>Publish date
         <input type="datetime-local" name="published_at"
                value="{% if _p and _p.published_at %}{{ _p.published_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
@@ -182,50 +237,698 @@
         <input type="number" name="reading_minutes" min="1" max="999"
                value="{{ (_p.reading_minutes if _p else '') or '' }}">
       </label>
+      <label class="check">
+        <input type="checkbox" name="is_pinned" value="1" {% if _p and _p.is_pinned %}checked{% endif %}>
+        <span>Pin to top of lists</span>
+      </label>
+      <label class="check">
+        <input type="checkbox" name="is_featured" value="1" {% if _p and _p.is_featured %}checked{% endif %}>
+        <span>Featured (highlighted in magazine layouts)</span>
+      </label>
     </div>
-    <label class="check">
-      <input type="checkbox" name="is_pinned" value="1" {% if _p and _p.is_pinned %}checked{% endif %}>
-      <span>Pin to top of lists</span>
-    </label>
-    <label class="check">
-      <input type="checkbox" name="is_featured" value="1" {% if _p and _p.is_featured %}checked{% endif %}>
-      <span>Featured (highlighted in magazine layouts)</span>
-    </label>
-    <label class="check">
-      <input type="checkbox" name="allow_comments" value="1" {% if not _p or _p.allow_comments %}checked{% endif %}>
-      <span>Allow comments</span>
-    </label>
+
+    {# ── Author ────────────────────────────────────────────────
+       Dropdown lists every intergroup officer name (Settings →
+       Global). The stored value is the officer's name string —
+       compatible with `BlogPost.author_name` so legacy posts keep
+       rendering and the public templates need zero changes. The
+       officer's role is shown next to the name as a hint so two
+       Marys with different positions are distinguishable.
+
+       When an existing post carries an author_name that doesn't
+       match any current officer — e.g. the officer row was renamed
+       or removed — we surface a "(legacy)" option so the writer's
+       previously-saved byline survives a Save round-trip. #}
+    {% set _selected_author = (_p.author_name if _p else '') or '' %}
+    {% set _author_names = author_choices | map(attribute='name') | list %}
+    <div class="blog-side-section">
+      <h3 class="blog-side-h3">Author</h3>
+      <label>Byline <span class="muted small">(pick from the intergroup roster)</span>
+        <select name="author_name" class="blog-author-select">
+          <option value="" {% if not _selected_author %}selected{% endif %}>— No byline —</option>
+          {% if _selected_author and _selected_author not in _author_names %}
+          <option value="{{ _selected_author }}" selected>{{ _selected_author }} (legacy)</option>
+          {% endif %}
+          {% for o in author_choices %}
+          <option value="{{ o.name }}"
+                  {% if o.name == _selected_author %}selected{% endif %}>{{ o.name }}{% if o.role %} — {{ o.role }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% if not author_choices %}
+      <p class="muted small">No intergroup members yet. <a href="{{ url_for('main.intergroup') }}" target="_blank">Add one in Settings → Global</a>.</p>
+      {% endif %}
+    </div>
+
+    {# ── Categories + tags ─────────────────────────────────────
+       Categories now render as a vertical checkbox list (one row
+       per category, color swatch on the left). The "Add new
+       category" affordance below is wired in JS — Enter or click
+       posts to /blog/categories/quick-add and appends a new
+       (pre-checked) row to the list without leaving the editor. #}
+    <div class="blog-side-section">
+      <h3 class="blog-side-h3">Categories &amp; tags</h3>
+      <div class="blog-cat-list" id="blog-cat-list"
+           data-quick-add-url="{{ url_for('main.blog_category_quick_add') }}"
+           data-csrf="{{ csrf_token() }}">
+        {% for c in categories %}
+        <label class="blog-cat-row">
+          <input type="checkbox" name="category_ids" value="{{ c.id }}"
+                 {% if _p and c in _p.categories %}checked{% endif %}>
+          {% if c.color %}<span class="blog-cat-swatch" style="background: {{ c.color }};" aria-hidden="true"></span>{% endif %}
+          <span class="blog-cat-name">{{ c.name }}</span>
+        </label>
+        {% else %}
+        <p class="muted small blog-cat-empty">No categories yet — add one below.</p>
+        {% endfor %}
+      </div>
+
+      <div class="blog-cat-add">
+        <input type="text" id="blog-cat-add-name"
+               placeholder="Add new category…"
+               aria-label="Add new category"
+               maxlength="120">
+        <button type="button" class="btn btn-sm" id="blog-cat-add-btn">
+          {{ icon('plus') }} <span>Add</span>
+        </button>
+      </div>
+      <div class="blog-cat-add-status muted smaller" id="blog-cat-add-status" aria-live="polite"></div>
+
+      {# Tags get the same checklist + inline-add UX as categories so
+         the two taxonomies feel like siblings. Each tag is a row in
+         the scrollable list; clicking the row toggles its checkbox.
+         The "Add" button on the row below creates a fresh tag and
+         appends it pre-checked. #}
+      <div class="blog-tag-section">
+        <div class="blog-tag-section-head">
+          <span class="blog-side-sublabel">Tags</span>
+          <span class="muted small">Topic labels — multi-select.</span>
+        </div>
+        <div class="blog-tag-list" id="blog-tag-list"
+             data-quick-add-url="{{ url_for('main.blog_tag_quick_add') }}"
+             data-csrf="{{ csrf_token() }}">
+          {% for t in tags %}
+          <label class="blog-tag-row">
+            <input type="checkbox" name="tag_ids" value="{{ t.id }}"
+                   {% if _p and t in _p.tags %}checked{% endif %}>
+            <span class="blog-tag-hash" aria-hidden="true">#</span>
+            <span class="blog-tag-name">{{ t.name }}</span>
+          </label>
+          {% else %}
+          <p class="muted small blog-tag-empty">No tags yet — add one below.</p>
+          {% endfor %}
+        </div>
+
+        <div class="blog-tag-add">
+          <input type="text" id="blog-tag-add-name"
+                 placeholder="Add new tag…"
+                 aria-label="Add new tag"
+                 maxlength="80">
+          <button type="button" class="btn btn-sm" id="blog-tag-add-btn">
+            {{ icon('plus') }} <span>Add</span>
+          </button>
+        </div>
+        <div class="blog-tag-add-status muted smaller" id="blog-tag-add-status" aria-live="polite"></div>
+      </div>
+    </div>
+
+    {# ── Featured image ────────────────────────────────────── #}
+    <div class="blog-side-section">
+      <h3 class="blog-side-h3">Featured image</h3>
+      <p class="muted smaller blog-side-help">Displayed at the top of the post and in link-preview cards. PNG, JPG, or WebP.</p>
+      <div class="blog-fi" id="blog-fi"
+           data-current-src="{% if _p and _p.featured_image_filename %}{{ url_for('public.blog_post_featured_image', bid=_p.id) }}{% endif %}">
+        <div class="blog-fi-preview" data-blog-fi-preview>
+          {% if _p and _p.featured_image_filename %}
+          <img src="{{ url_for('public.blog_post_featured_image', bid=_p.id) }}" alt="Featured image"
+               data-blog-fi-img>
+          <label class="check fe-logo-clear-label">
+            <input type="checkbox" name="clear_featured_image" value="1"><span>Remove current image</span>
+          </label>
+          {% else %}
+          <div class="blog-fi-empty muted small" data-blog-fi-empty>No image uploaded yet.</div>
+          <img alt="Featured image preview" data-blog-fi-img hidden>
+          {% endif %}
+        </div>
+        {# Hidden field carries the chosen MediaItem id when the writer
+           picks from the library modal. The server prefers a fresh
+           file upload over this id; if both are blank, the existing
+           featured image (if any) is preserved. #}
+        <input type="hidden" name="featured_image_media_id" id="blog-fi-media-id" value="">
+        <div class="blog-fi-actions">
+          <label class="blog-fi-replace">Replace image
+            <input type="file" name="featured_image" accept="image/png,image/jpeg,image/webp"
+                   id="blog-fi-file">
+          </label>
+          <button type="button" class="btn btn-sm blog-fi-browse" id="blog-fi-browse"
+                  title="Pick from images already uploaded to this site">
+            {{ icon('folder') }} <span>Browse library</span>
+          </button>
+        </div>
+        <p class="muted smaller blog-fi-chosen" id="blog-fi-chosen" hidden></p>
+      </div>
+    </div>
+
   </section>
+
+  </aside>{# /.blog-edit-side #}
+  </div>{# /.blog-edit-grid #}
 </form>
 
 <style>
-  .blog-tax-grid {
-    display: flex; flex-wrap: wrap; gap: .55rem; margin-bottom: 1rem;
+  /* Two-column layout for the blog editor. The main column (Post +
+     Body) is capped so long-form prose stays at a comfortable
+     reading width; the sidebar column collects every metadata card
+     so the writer sees publishing context at a glance without
+     scrolling past the body. The host `.form` keeps its base
+     `display: flex` — hidden inputs are `display:none` so they
+     don't compete with the grid wrapper for flex space. */
+  .blog-edit-grid {
+    display: grid;
+    /* Main column flexes to consume every pixel between the app
+       sidebar and the metadata column on the right; the metadata
+       column itself stays a fixed-ish 320px so it doesn't crowd
+       the body when the viewport is wide. */
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+    gap: 24px;
+    align-items: start;
   }
-  .blog-tax-pill { margin: 0; }
-  .blog-tax-pill input { position: absolute; opacity: 0; pointer-events: none; }
-  .blog-tax-pill-body {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 7px 14px; border-radius: 999px;
-    border: 1px solid var(--border);
+  .blog-edit-main {
+    display: flex; flex-direction: column; gap: 2rem;
+    min-width: 0; /* lets the grid track shrink instead of overflowing */
+  }
+  .blog-edit-side {
+    display: flex; flex-direction: column; gap: 1.25rem;
+    /* Scrolls with the rest of the page — keeping the sidebar in
+       the natural document flow makes the merged settings card feel
+       like part of the form, not a floating rail. */
+    align-self: start;
+  }
+  /* Sidebar cards run a touch tighter than the main-column cards —
+     they hold short metadata, not long-form fields, so the extra
+     padding looks puffy in a narrow column. We also turn the card
+     body into a vertical flex container so siblings (labels +
+     widgets) get consistent breathing room without per-card margin
+     plumbing. */
+  .blog-edit-side .card {
+    padding: 16px 18px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .blog-edit-side .card-head { margin-bottom: 0; }
+  .blog-edit-side .card-head h2 { font-size: 1rem; }
+  .blog-edit-side .card-head .muted { font-size: .78rem; }
+  .blog-edit-side .blog-tax-tags { grid-template-columns: 1fr; }
+  /* Every input lives inside a tight 320px column. Force them to
+     respect the box so datetime-local + file pickers don't punch
+     out the right side of the card. `min-width: 0` is the magic
+     that lets a flex/grid child shrink below its content-width. */
+  .blog-edit-side input,
+  .blog-edit-side select,
+  .blog-edit-side textarea {
+    width: 100%; max-width: 100%; min-width: 0;
+    box-sizing: border-box;
+  }
+  /* `.check` rows are inline by intent — checkbox + label text on
+     one line; the global `width:100%` above would otherwise stretch
+     the checkbox to the column edge. */
+  .blog-edit-side .check input[type="checkbox"] {
+    width: auto; flex: 0 0 auto;
+  }
+  .blog-edit-side .check {
+    /* Switch from flex-column (the global `.form label` rule) to a
+       single-line row so the checkbox sits next to its text. */
+    flex-direction: row !important;
+    align-items: center; gap: 8px;
+    font-weight: 500; font-size: .9rem;
+    margin: 0;
+  }
+
+  /* Featured-image card — single-column stack so the preview + the
+     file input each get the full sidebar width. */
+  .blog-fi { display: flex; flex-direction: column; gap: 10px; }
+  .blog-fi-preview {
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .blog-fi-preview img {
+    display: block; width: 100%; max-width: 100%;
+    max-height: 200px; object-fit: cover;
+    border-radius: 8px; border: 1px solid var(--border);
+  }
+  .blog-fi-empty {
+    padding: 24px 12px; border: 1px dashed var(--border);
+    border-radius: 8px; text-align: center; background: var(--panel-2);
+  }
+  /* The file input itself needs an explicit width cap — Chromium
+     otherwise sizes it to its text content, which can overflow a
+     narrow sidebar. */
+  .blog-fi-replace input[type="file"] {
+    width: 100%; max-width: 100%; font-size: .85rem;
+  }
+  .blog-fi-actions { display: flex; flex-direction: column; gap: 8px; }
+  .blog-fi-browse {
+    display: inline-flex; align-items: center; gap: 6px;
+    align-self: flex-start;
+  }
+  .blog-fi-browse .icon { width: 13px; height: 13px; }
+  .blog-fi-chosen {
+    margin: 0; padding: 6px 10px;
+    background: color-mix(in srgb, var(--brand, var(--accent)) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--brand, var(--accent)) 30%, transparent);
+    color: var(--brand, var(--accent));
+    border-radius: 6px;
+    line-height: 1.4; word-break: break-all;
+  }
+  /* Collapse to a single column on narrower viewports — once the
+     viewport can't comfortably hold both the 900px main column AND
+     a usable sidebar, stacking reads better than cramming. */
+  @media (max-width: 1180px) {
+    .blog-edit-grid { grid-template-columns: 1fr; }
+  }
+
+  /* Merged sidebar card — internal sections are separated by hairline
+     dividers + a section heading so the four groups (Publication,
+     Author, Categories & tags, Featured image) feel discrete without
+     fragmenting into separate cards. */
+  .blog-side-card { gap: 18px !important; }
+  .blog-side-section {
+    display: flex; flex-direction: column; gap: 10px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .blog-side-section:last-child { padding-bottom: 0; border-bottom: 0; }
+  .blog-side-h3 {
+    margin: 0; font-size: .75rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted);
+  }
+  .blog-side-help { margin: 0; }
+
+  /* Category checklist — vertical rows, each a clickable label. Hover
+     tints the row so it's clear what you'll toggle, and a checked
+     row highlights with the category's color (or the brand fallback). */
+  .blog-cat-list {
+    display: flex; flex-direction: column;
+    max-height: 220px; overflow-y: auto;
+    border: 1px solid var(--border); border-radius: 8px;
     background: var(--panel-2, var(--panel));
-    cursor: pointer; transition: all .15s ease;
-    font-size: .9rem;
   }
-  .blog-tax-pill input:checked + .blog-tax-pill-body {
-    background: color-mix(in srgb, var(--blog-cat-color, var(--accent)) 18%, transparent);
-    border-color: color-mix(in srgb, var(--blog-cat-color, var(--accent)) 50%, transparent);
-    color: var(--blog-cat-color, var(--accent));
+  .blog-cat-row {
+    display: flex !important; flex-direction: row !important;
+    align-items: center; gap: 8px;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    font-weight: 500; font-size: .9rem;
+    transition: background 120ms ease;
+  }
+  .blog-cat-row:last-child { border-bottom: 0; }
+  .blog-cat-row:hover { background: color-mix(in srgb, var(--brand, var(--accent)) 6%, transparent); }
+  .blog-cat-row input[type="checkbox"] {
+    width: auto !important; flex: 0 0 auto; margin: 0;
+  }
+  .blog-cat-row:has(input:checked) {
+    background: color-mix(in srgb, var(--brand, var(--accent)) 12%, transparent);
+    color: var(--brand, var(--accent));
     font-weight: 600;
   }
-  .blog-tax-swatch {
-    width: 14px; height: 14px; border-radius: 50%;
+  .blog-cat-swatch {
+    width: 12px; height: 12px; border-radius: 50%;
     box-shadow: inset 0 0 0 1px rgba(0,0,0,.15);
+    flex: 0 0 12px;
   }
-  .blog-tax-tags {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+  .blog-cat-name { flex: 1 1 auto; min-width: 0; }
+  .blog-cat-empty { margin: 6px 10px; padding: 0; }
+
+  /* Inline add-category row — text input + "Add" button on the same
+     line. Lives below the checklist so the flow reads as
+     "review the existing → create a new one". */
+  .blog-cat-add {
+    display: flex; gap: 6px; align-items: stretch;
   }
-  @media (max-width: 720px) { .blog-tax-tags { grid-template-columns: 1fr; } }
-  .blog-tag-select { width: 100%; min-height: 7rem; }
+  .blog-cat-add input { flex: 1 1 auto; min-width: 0; }
+  .blog-cat-add .btn { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; }
+  .blog-cat-add .btn .icon { width: 12px; height: 12px; }
+  .blog-cat-add-status { margin: -4px 0 0; min-height: 1em; }
+  .blog-cat-add-status.is-error { color: #b91c1c; }
+  .blog-cat-add-status.is-success { color: #047857; }
+
+  /* Author dropdown — same width-respect rules as every other sidebar
+     select; nothing fancy beyond the existing input chrome. */
+  .blog-author-select { font-size: .92rem; }
+
+  /* Tag checklist — same shape as the category checklist (above)
+     so the two taxonomy widgets feel like siblings. The hash sits
+     in front of every name so the writer reads a tag as `#name`
+     even before they expand the row. */
+  .blog-tag-section { display: flex; flex-direction: column; gap: 8px; }
+  .blog-tag-section-head {
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .blog-side-sublabel {
+    font-size: .92rem; font-weight: 600;
+  }
+  .blog-tag-list {
+    display: flex; flex-direction: column;
+    max-height: 220px; overflow-y: auto;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--panel-2, var(--panel));
+  }
+  .blog-tag-row {
+    display: flex !important; flex-direction: row !important;
+    align-items: center; gap: 6px;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    font-weight: 500; font-size: .9rem;
+    transition: background 120ms ease;
+  }
+  .blog-tag-row:last-child { border-bottom: 0; }
+  .blog-tag-row:hover { background: color-mix(in srgb, var(--brand, var(--accent)) 6%, transparent); }
+  .blog-tag-row input[type="checkbox"] {
+    width: auto !important; flex: 0 0 auto; margin: 0;
+  }
+  .blog-tag-row:has(input:checked) {
+    background: color-mix(in srgb, var(--brand, var(--accent)) 12%, transparent);
+    color: var(--brand, var(--accent));
+    font-weight: 600;
+  }
+  .blog-tag-hash { color: var(--muted); }
+  .blog-tag-row:has(input:checked) .blog-tag-hash { color: inherit; }
+  .blog-tag-name { flex: 1 1 auto; min-width: 0; }
+  .blog-tag-empty { margin: 6px 10px; padding: 0; }
+
+  .blog-tag-add { display: flex; gap: 6px; align-items: stretch; }
+  .blog-tag-add input { flex: 1 1 auto; min-width: 0; }
+  .blog-tag-add .btn { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; }
+  .blog-tag-add .btn .icon { width: 12px; height: 12px; }
+  .blog-tag-add-status { margin: -4px 0 0; min-height: 1em; }
+  .blog-tag-add-status.is-error { color: #b91c1c; }
+  .blog-tag-add-status.is-success { color: #047857; }
 </style>
+{# Live title → slug sync. Mirrors `_normalize_slug` in routes.py:
+   lowercase, non-alphanumeric runs collapse to a single `-`, leading
+   and trailing hyphens stripped, capped at 200 chars. Fires on every
+   `input` event from the title field, briefly highlights the slug
+   field so the writer sees the URL changing alongside the title.
+   Same pattern as `post_edit.html` (announcement / event editor)
+   so the two editors behave identically. #}
+<script>
+(function () {
+  const form = document.getElementById('blog-edit-form');
+  if (!form) return;
+  const titleInput = form.querySelector('input[name="title"]');
+  const slugInput = form.querySelector('input[name="slug"]');
+  if (!titleInput || !slugInput) return;
+  function slugify(v) {
+    return String(v || '').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 200);
+  }
+  let highlightTimer = null;
+  titleInput.addEventListener('input', () => {
+    const next = slugify(titleInput.value);
+    if (slugInput.value === next) return;
+    slugInput.value = next;
+    // Restart the highlight animation on every keystroke — committing
+    // the class removal before re-adding by forcing a reflow is the
+    // cheapest cross-browser way to re-trigger a CSS animation.
+    slugInput.classList.remove('slug-input-field--synced');
+    void slugInput.offsetWidth;
+    slugInput.classList.add('slug-input-field--synced');
+    if (highlightTimer) clearTimeout(highlightTimer);
+    highlightTimer = setTimeout(() => {
+      slugInput.classList.remove('slug-input-field--synced');
+    }, 1400);
+  });
+})();
+</script>
+<script src="{{ url_for('static', filename='js/post_body_editor.js', v=app_build_id) }}" defer></script>
+{# Featured-image library picker. Reuses the existing image picker
+   modal exposed by post_body_editor.js as `window.pbeOpenImageBrowser`.
+   On pick: stamp the chosen MediaItem id into the hidden form input
+   and swap the preview <img> to the chosen file's URL so the writer
+   sees the change immediately. The server prefers a fresh file upload
+   over this id, so the existing "Replace image" file input is kept
+   as the higher-priority path. #}
+<script>
+(function () {
+  const root = document.getElementById('blog-fi');
+  const browseBtn = document.getElementById('blog-fi-browse');
+  const hidden = document.getElementById('blog-fi-media-id');
+  const fileInput = document.getElementById('blog-fi-file');
+  const chosen = document.getElementById('blog-fi-chosen');
+  if (!root || !browseBtn || !hidden) return;
+
+  const previewImg = root.querySelector('[data-blog-fi-img]');
+  const previewEmpty = root.querySelector('[data-blog-fi-empty]');
+  const clearCheckbox = root.querySelector('input[name="clear_featured_image"]');
+
+  browseBtn.addEventListener('click', () => {
+    if (typeof window.pbeOpenImageBrowser !== 'function') {
+      // Defensive guard — the picker script loads with `defer`, so
+      // by the time the button is clickable the function should be
+      // present. If somehow it isn't, surface a clear hint rather
+      // than swallowing the click.
+      alert('Image library is still loading — please try again in a moment.');
+      return;
+    }
+    window.pbeOpenImageBrowser(item => {
+      if (!item) return;
+      hidden.value = item.id || '';
+      // Picking from the library overrides any pending file upload —
+      // clear the file input so the server doesn't see both and the
+      // writer doesn't get a confusing "uploaded x.jpg" stale label.
+      if (fileInput) fileInput.value = '';
+      // Same for the "Remove current image" checkbox — picking a
+      // replacement is the opposite intent.
+      if (clearCheckbox) clearCheckbox.checked = false;
+      // Swap the live preview to the picked image.
+      if (previewImg) {
+        previewImg.src = item.url || ('/pub/' + (item.original_filename || ''));
+        previewImg.hidden = false;
+      }
+      if (previewEmpty) previewEmpty.hidden = true;
+      if (chosen) {
+        chosen.textContent = 'Will use: ' + (item.original_filename || '');
+        chosen.hidden = false;
+      }
+    });
+  });
+
+  // If the writer picks a fresh file via the existing upload input
+  // after browsing, clear the media-id so the server treats the
+  // upload as authoritative. Matches the "fresh upload beats library
+  // pick" priority on the server.
+  if (fileInput) {
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files[0]) {
+        hidden.value = '';
+        if (chosen) { chosen.hidden = true; chosen.textContent = ''; }
+      }
+    });
+  }
+})();
+</script>
+{# Defensive Enter guard. The save buttons live OUTSIDE the form
+   (in the top action bar) and use `form="blog-edit-form"` —
+   pressing Enter inside any text input in the form would otherwise
+   trigger an implicit submit on the first submit-typed button found,
+   which can mean "publish" even when the writer only meant "create
+   this tag". We block Enter on every <input type="text|search|email|url|tel|number">
+   that ISN'T the title field; the title still submits on Enter so
+   the muscle memory of "type title → Enter → Publish" stays
+   intact for short-form posts. Textareas already swallow Enter
+   for newlines. #}
+<script>
+(function () {
+  const form = document.getElementById('blog-edit-form');
+  if (!form) return;
+  form.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const t = e.target;
+    if (!t || !t.matches) return;
+    // Only intercept single-line text-ish inputs (not the title).
+    if (!t.matches('input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="tel"], input[type="number"]')) return;
+    if (t.name === 'title') return;
+    e.preventDefault();
+  });
+})();
+</script>
+{# Inline category quick-add. POSTs the new name to the
+   `blog_category_quick_add` endpoint, then appends a freshly-checked
+   row to the existing checklist so the writer can keep filing
+   without context-switching to the category admin page. Idempotent
+   on the server — if the name already matches an existing category
+   we just check that row instead of duplicating. #}
+<script>
+(function () {
+  const list = document.getElementById('blog-cat-list');
+  const input = document.getElementById('blog-cat-add-name');
+  const btn = document.getElementById('blog-cat-add-btn');
+  const status = document.getElementById('blog-cat-add-status');
+  if (!list || !input || !btn || !status) return;
+
+  function setStatus(text, kind) {
+    status.textContent = text || '';
+    status.classList.remove('is-error', 'is-success');
+    if (kind === 'error')   status.classList.add('is-error');
+    if (kind === 'success') status.classList.add('is-success');
+  }
+
+  function findRow(catId) {
+    return list.querySelector('input[name="category_ids"][value="' + catId + '"]');
+  }
+
+  function appendRow(cat) {
+    // Drop the "no categories yet" placeholder the first time we
+    // add a row to an empty list.
+    const empty = list.querySelector('.blog-cat-empty');
+    if (empty) empty.remove();
+    const label = document.createElement('label');
+    label.className = 'blog-cat-row';
+    label.innerHTML =
+      '<input type="checkbox" name="category_ids" value="' + cat.id + '" checked>' +
+      (cat.color
+        ? '<span class="blog-cat-swatch" style="background: ' + cat.color + ';" aria-hidden="true"></span>'
+        : '') +
+      '<span class="blog-cat-name"></span>';
+    label.querySelector('.blog-cat-name').textContent = cat.name;
+    list.appendChild(label);
+  }
+
+  function submit() {
+    const name = (input.value || '').trim();
+    if (!name) {
+      input.focus();
+      return;
+    }
+    btn.disabled = true;
+    setStatus('Adding…');
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('csrf_token', list.dataset.csrf || '');
+    fetch(list.dataset.quickAddUrl, {
+      method: 'POST', body: fd, credentials: 'same-origin',
+    }).then(r => r.json()).then(data => {
+      btn.disabled = false;
+      if (!data || !data.ok) {
+        setStatus(data && data.error || 'Could not add — please try again.', 'error');
+        return;
+      }
+      const cat = data.category;
+      const existing = findRow(cat.id);
+      if (existing) {
+        // Server deduplicated — surface the existing row and check
+        // it so the writer's intent ("file under this name") is met.
+        existing.checked = true;
+        existing.closest('.blog-cat-row').scrollIntoView({ block: 'nearest' });
+        setStatus('Already on the list — checked “' + cat.name + '”.', 'success');
+      } else {
+        appendRow(cat);
+        setStatus('Added “' + cat.name + '”.', 'success');
+      }
+      input.value = '';
+      // Auto-clear the status line after a beat so it doesn't pile
+      // up while the writer adds several categories in a row.
+      setTimeout(() => setStatus(''), 2500);
+    }).catch(err => {
+      btn.disabled = false;
+      console.warn('quick-add category failed', err);
+      setStatus('Network error — please try again.', 'error');
+    });
+  }
+
+  btn.addEventListener('click', submit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submit();
+    }
+  });
+})();
+</script>
+{# Inline tag quick-add — mirror of the category script above.
+   POSTs the typed name to `blog_tag_quick_add` and appends a
+   pre-checked row to the tag checklist. Idempotent: if the name
+   already exists we just check that row instead of duplicating. #}
+<script>
+(function () {
+  const list = document.getElementById('blog-tag-list');
+  const input = document.getElementById('blog-tag-add-name');
+  const btn = document.getElementById('blog-tag-add-btn');
+  const status = document.getElementById('blog-tag-add-status');
+  if (!list || !input || !btn || !status) return;
+
+  function setStatus(text, kind) {
+    status.textContent = text || '';
+    status.classList.remove('is-error', 'is-success');
+    if (kind === 'error')   status.classList.add('is-error');
+    if (kind === 'success') status.classList.add('is-success');
+  }
+
+  function findRow(tagId) {
+    return list.querySelector('input[name="tag_ids"][value="' + tagId + '"]');
+  }
+
+  function appendRow(tag) {
+    const empty = list.querySelector('.blog-tag-empty');
+    if (empty) empty.remove();
+    const label = document.createElement('label');
+    label.className = 'blog-tag-row';
+    label.innerHTML =
+      '<input type="checkbox" name="tag_ids" value="' + tag.id + '" checked>' +
+      '<span class="blog-tag-hash" aria-hidden="true">#</span>' +
+      '<span class="blog-tag-name"></span>';
+    label.querySelector('.blog-tag-name').textContent = tag.name;
+    list.appendChild(label);
+  }
+
+  function submit() {
+    const name = (input.value || '').trim();
+    if (!name) {
+      input.focus();
+      return;
+    }
+    btn.disabled = true;
+    setStatus('Adding…');
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('csrf_token', list.dataset.csrf || '');
+    fetch(list.dataset.quickAddUrl, {
+      method: 'POST', body: fd, credentials: 'same-origin',
+    }).then(r => r.json()).then(data => {
+      btn.disabled = false;
+      if (!data || !data.ok) {
+        setStatus(data && data.error || 'Could not add — please try again.', 'error');
+        return;
+      }
+      const tag = data.tag;
+      const existing = findRow(tag.id);
+      if (existing) {
+        existing.checked = true;
+        existing.closest('.blog-tag-row').scrollIntoView({ block: 'nearest' });
+        setStatus('Already on the list — checked “#' + tag.name + '”.', 'success');
+      } else {
+        appendRow(tag);
+        setStatus('Added “#' + tag.name + '”.', 'success');
+      }
+      input.value = '';
+      setTimeout(() => setStatus(''), 2500);
+    }).catch(err => {
+      btn.disabled = false;
+      console.warn('quick-add tag failed', err);
+      setStatus('Network error — please try again.', 'error');
+    });
+  }
+
+  btn.addEventListener('click', submit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submit();
+    }
+  });
+})();
+</script>
 {% endblock %}
