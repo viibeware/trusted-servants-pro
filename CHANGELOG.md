@@ -6,6 +6,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.0.1] — 2026-05-16
+
+### Fixed — Meetings-list cards no longer render translucent in dark mode
+
+Cards on the public meetings list (`.fe-mlist-card`) had two stacked dark-mode rules in `frontend.css`. The earlier one painted them at `rgba(5, 8, 15, 0.85)`, the later one at `rgba(255, 255, 255, 0.03)` — and the later rule won, producing a 3% white wash that read as transparent over the page surface. Both rules are now consolidated and point at the Primary-card design tokens: `background: var(--fe-color-card-primary-bg-dark, #131a33)` and `border-color: var(--fe-color-card-primary-border-dark, #1f2a44)`. Cards are now solid and re-tint when the admin edits *Site → Design → Card styles → Primary card → Background (dark)*. Light mode is unchanged.
+
+### Changed — Pro Tips cards adopt the Primary-card design-token recipe
+
+Each `.fe-faq-item` inside the standalone Pro Tips section (`_protips.html`) and the inline Pro Tips block on the sidebar meetings-list layout (`meetings_list/sidebar.html`) now carries an `fe-card-primary` opt-in class. The class is the canonical Primary-card surface (background / border / border-radius in light + dark, plus the shared `.fe-card-primary:hover` aggregator's lift + shadow + hover-border transition), so a single tunable point — *Site → Design → Card styles → Primary card* — drives meetings-list cards AND Pro Tips cards together. Three CSS rule blocks that were duplicating or fighting the recipe were removed: the hardcoded `.fe-mlist-protips-inline .fe-faq-item` light-mode bg + border, its `:hover` block, and the dark-mode override that pinned the Pro Tips bg to a translucent white. Kept the `.fe-mlist-protips-inline .fe-faq-item.is-open` accent-border rule since the hover aggregator doesn't address the open state.
+
 ## [2.0.0] — 2026-05-16
 
 ### Added — Watchtower: unified admin security + observability console

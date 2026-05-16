@@ -7,7 +7,16 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.0.0 — 2026-05-16 (latest) — Watchtower: one place to watch the door
+## 2.0.1 — 2026-05-16 (latest) — Meetings-list + Pro Tips cards now ride the Primary-card design tokens
+
+Two small but visible polish fixes for the public meetings page in dark mode:
+
+- **Meetings-list cards are solid again.** A stale CSS rule was painting them at 3% white — close to invisible — over the page background. They now read on a solid Primary-card-dark surface and pick up your *Site → Design → Card styles → Primary card → Background (dark)* token. Light mode is unchanged.
+- **Pro Tips cards match the meeting cards.** Each tip in the Pro Tips accordion (both the standalone block at the bottom of the directory + weekboard layouts and the inline block on the sidebar layout) now adopts the canonical Primary-card recipe — background, border, border-radius, hover lift, hover shadow, dark-mode swap — instead of its own hardcoded colours. Editing the Primary card design tokens once now re-tints the meeting cards and the Pro Tips cards together.
+
+No data changes, no admin action needed.
+
+## 2.0.0 — 2026-05-16 — Watchtower: one place to watch the door
 
 This is a major release. **Watchtower** is a new top-level admin module that replaces three older admin pages (User Log, Delete Log, Access Requests) with a single, security-focused dashboard — and adds real teeth: anomaly detection, an IP blocklist that actually blocks at the door, force-end on sessions, and a failed-login leaderboard with one-click bans. It's the new home for everything you'd want to know about who's signed in, who tried to sign in, what they did, what got deleted, and who's asking for an account.
 

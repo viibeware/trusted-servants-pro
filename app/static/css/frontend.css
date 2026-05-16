@@ -2588,20 +2588,17 @@ html[data-theme="dark"] .fe-meeting-card:hover { box-shadow: 0 10px 28px rgba(0,
 /* Meetings-list cards (`.fe-mlist-card`) — distinct from the
    homepage `.fe-meeting-card`. Without a dark-mode override these
    would inherit the default white bg and read as a stark light
-   tile against the dark page. Match the events-list `#131a33`
-   dark-mode card colour for visual continuity, but at 85% alpha
-   so any page-level dynbg behind the directory paints subtly
-   through the cards instead of the cards reading as opaque
-   blocks against the backdrop. */
+   tile against the dark page. Track the Primary-card dark-mode
+   tokens (`--fe-color-card-primary-bg-dark` /
+   `--fe-color-card-primary-border-dark`) so every primary-card
+   shape across the public site shares one dark surface that the
+   admin can re-tint from Site → Design → Card styles → Primary
+   card. Solid (not alpha) so a page-level dynbg can't paint
+   through and make the cards read as transparent. */
 html[data-theme="dark"] .fe-mlist-card,
 body.fe-frontend-force-dark .fe-mlist-card {
-  /* Darker than the page bg (`#0b1220`-ish under the default
-     theme) so each card reads as a sunken tile against the surface
-     rather than a lighter raised one. The `#05080f` base sits a
-     few stops below the page; 85% alpha lets any dynamic backdrop
-     paint subtly through. */
-  background: rgba(5, 8, 15, 0.85);
-  border-color: #1f2a44;
+  background: var(--fe-color-card-primary-bg-dark, #131a33);
+  border-color: var(--fe-color-card-primary-border-dark, #1f2a44);
 }
 html[data-theme="dark"] .fe-mlist-card:hover,
 body.fe-frontend-force-dark .fe-mlist-card:hover {
@@ -3843,6 +3840,13 @@ html[data-theme="dark"] .fe-faq-item {
   background: var(--fe-color-card-secondary-bg-dark, #131a33);
   border-color: var(--fe-color-card-secondary-border-dark, transparent);
 }
+/* Pro Tips cards adopt the Primary-card recipe via the
+   `fe-card-primary` opt-in class stamped on each `.fe-faq-item` in
+   the Pro Tips templates, so the canonical `.fe-card-primary` +
+   `[data-theme="dark"] .fe-card-primary` rules near the bottom of
+   this file (plus the shared primary-card hover aggregator) drive
+   bg / border / hover lift / shadow / dark-mode swap for them too.
+   No Pro-Tips-specific overrides needed. */
 html[data-theme="dark"] .fe-faq-item:hover,
 html[data-theme="dark"] .fe-faq-item.is-open {
   border-color: rgba(122, 163, 255, 0.4);
@@ -5108,24 +5112,14 @@ html[data-theme="dark"] .fe-edit-shortcut:focus-visible {
    + 1 px accent border + same border-radius — so the Pro Tips block
    reads as a peer surface to the directory cards. The base FAQ item
    uses panel-soft + border-token, both overridden here. */
-.fe-mlist-protips-inline .fe-faq-item {
-  background: #ffffff;
-  border: 1px solid var(--fe-accent);
-  /* Match the meeting-card hover affordance above: 1 px lift + soft
-     shadow on a 160 ms ease. The base .fe-faq-item only transitions
-     border-color + box-shadow, so transform is added explicitly. */
-  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
-}
-.fe-mlist-protips-inline .fe-faq-item:hover {
-  border-color: var(--fe-accent);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
-}
+/* Pro Tips cards opt into the Primary-card recipe via the
+   `fe-card-primary` class stamped on each `.fe-faq-item` in the
+   Pro Tips templates, so background / border / border-radius /
+   hover lift / shadow / dark-mode swap all come from the shared
+   Primary-card tokens + hover aggregator at the bottom of this
+   file. The only Pro-Tips-specific tweak left is the "open" state
+   border colour, which the aggregator doesn't address. */
 .fe-mlist-protips-inline .fe-faq-item.is-open { border-color: var(--fe-accent); }
-html[data-theme="dark"] .fe-mlist-protips-inline .fe-faq-item,
-body.fe-frontend-force-dark .fe-mlist-protips-inline .fe-faq-item {
-  background: rgba(255, 255, 255, 0.03);
-}
 /* Dark-mode polish for the inline Pro Tips section header — make sure
    the heading reads bright against the dark page surface, the
    subheading uses the muted-on-dark token, and the icon chip's
@@ -6114,10 +6108,15 @@ body.fe-frontend-force-dark .fe-mlist-card-action-stack .fe-btn-primary:hover {
   background: #2747a3; color: #ffffff;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
+/* Duplicate of the earlier `.fe-mlist-card` dark-mode rule kept in
+   the cascade because rules further down in this file would
+   otherwise win and reintroduce the translucent fill. Tracks the
+   Primary-card dark tokens so admin re-tints from Site → Design →
+   Card styles → Primary card → Background (dark) land here too. */
 html[data-theme="dark"] .fe-mlist-card,
 body.fe-frontend-force-dark .fe-mlist-card {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: var(--fe-color-card-primary-bg-dark, #131a33);
+  border-color: var(--fe-color-card-primary-border-dark, #1f2a44);
 }
 /* Dark-mode hover border — brighten the meeting card's edge to the
    same indigo tint the Pro Tips accordion uses on hover, so the
