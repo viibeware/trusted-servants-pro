@@ -173,6 +173,66 @@
             <p class="muted smaller">How long each block's fade-in lasts. Lower = snappier; higher = more dramatic.</p>
           </label>
         </div>
+
+        {# ---- Mobile overrides ------------------------------------ #}
+        {# The desktop speeds + the stagger toggle apply on every
+           viewport by default. The block below adds three mobile-
+           only knobs that take effect under the
+           @media (max-width: 720px) breakpoint the rest of the
+           megamenu styling uses: a separate stagger toggle (so the
+           reveal can be suppressed on phones where it reads as
+           jitter) and two independent speed sliders so the fade and
+           stagger can be tuned shorter or longer than the desktop
+           values. #}
+        <li class="special-page-row mega-anim-mobile-head"
+            style="list-style:none; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border, #e5e7eb);">
+          <div class="special-page-info">
+            <div class="u-name">Mobile (≤ 720 px)</div>
+            <p class="muted small">Overrides apply only on small viewports. Desktop tuning above is untouched.</p>
+          </div>
+        </li>
+
+        <li class="special-page-row" style="list-style:none; margin-top: 8px;">
+          <div class="special-page-info">
+            <div class="u-name">Staggered link entrance · mobile</div>
+            <p class="muted small">Toggle the staggered link reveal on small screens. Useful when the choreography reads as flicker on a phone.</p>
+          </div>
+          <label class="mode-toggle" title="Toggle mega menu staggered link entrance on mobile">
+            <input type="checkbox" name="frontend_megamenu_animate_mobile" value="1"
+                   data-animate-mobile-toggle
+                   {% if (site is none) or site.frontend_megamenu_animate_mobile %}checked{% endif %}>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+          </label>
+        </li>
+        {% set _animate_ms_m = site.frontend_megamenu_animate_mobile_ms if site and site.frontend_megamenu_animate_mobile_ms else 320 %}
+        <div class="mega-animate-speed-row" data-animate-mobile-speed-row
+             {% if site and not site.frontend_megamenu_animate_mobile %}hidden{% endif %}>
+          <label class="mega-animate-speed-label">
+            <div class="mega-animate-speed-head">
+              <span>Stagger speed · mobile</span>
+              <output data-animate-mobile-ms-out>{{ _animate_ms_m }}</output><span class="muted small">&nbsp;ms</span>
+            </div>
+            <input type="range" name="frontend_megamenu_animate_mobile_ms"
+                   min="100" max="1500" step="20" value="{{ _animate_ms_m }}"
+                   data-animate-mobile-ms-input>
+            <p class="muted smaller">Mobile-only stagger duration. Lower = snappier; higher = more dramatic.</p>
+          </label>
+        </div>
+
+        {% set _fade_ms_m = site.frontend_megamenu_panel_fade_mobile_ms if site and site.frontend_megamenu_panel_fade_mobile_ms is not none else 180 %}
+        <div class="mega-animate-speed-row">
+          <label class="mega-animate-speed-label">
+            <div class="mega-animate-speed-head">
+              <span>Fade speed · mobile</span>
+              <output data-panel-fade-mobile-ms-out>{{ _fade_ms_m }}</output><span class="muted small">&nbsp;ms</span>
+            </div>
+            <input type="range" name="frontend_megamenu_panel_fade_mobile_ms"
+                   min="0" max="1500" step="20" value="{{ _fade_ms_m }}"
+                   data-panel-fade-mobile-ms-input>
+            <p class="muted smaller">Mobile-only panel fade duration. 0 = instant. The desktop "Show on hover fade" toggle still gates whether the fade runs at all.</p>
+          </label>
+        </div>
+
         <div class="form-actions"><button class="btn btn-primary">Save Appearance</button></div>
       </form>
     </section>
@@ -254,8 +314,10 @@
   // missing (defensive — admin templates may strip either toggle in
   // the future).
   function wireSpeed(toggleSel, rowSel, inputSel, outSel) {
-    const toggle = document.querySelector(toggleSel);
-    const row = document.querySelector(rowSel);
+    // Tolerate null toggle / row selectors so callers can wire a
+    // standalone slider (live readout only, no companion toggle).
+    const toggle = toggleSel ? document.querySelector(toggleSel) : null;
+    const row = rowSel ? document.querySelector(rowSel) : null;
     const input = document.querySelector(inputSel);
     const out = document.querySelector(outSel);
     if (!input || !out) return;
@@ -268,6 +330,14 @@
             '[data-panel-fade-ms-input]', '[data-panel-fade-ms-out]');
   wireSpeed('[data-animate-toggle]',     '[data-animate-speed-row]',
             '[data-animate-ms-input]',   '[data-animate-ms-out]');
+  // Mobile counterparts — the mobile fade speed has no companion
+  // toggle (the desktop fade toggle still gates whether the panel
+  // fades at all), so pass null for the toggle + row selectors and
+  // the helper just wires the live readout.
+  wireSpeed('[data-animate-mobile-toggle]', '[data-animate-mobile-speed-row]',
+            '[data-animate-mobile-ms-input]', '[data-animate-mobile-ms-out]');
+  wireSpeed(null, null,
+            '[data-panel-fade-mobile-ms-input]', '[data-panel-fade-mobile-ms-out]');
 
   // Heading / link size sliders: live percentage readout. The slider
   // is centered at 100 — that position saves as NULL (theme default

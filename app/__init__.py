@@ -1321,6 +1321,9 @@ def _migrate_sqlite(app):
                          ("frontend_megamenu_animate_ms", "INTEGER NOT NULL DEFAULT 320"),
                          ("frontend_megamenu_panel_fade", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("frontend_megamenu_panel_fade_ms", "INTEGER NOT NULL DEFAULT 180"),
+                         ("frontend_megamenu_animate_mobile", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("frontend_megamenu_animate_mobile_ms", "INTEGER NOT NULL DEFAULT 320"),
+                         ("frontend_megamenu_panel_fade_mobile_ms", "INTEGER NOT NULL DEFAULT 180"),
                          ("frontend_megamenu_heading_size", "INTEGER"),
                          ("frontend_megamenu_subheading_size", "INTEGER"),
                          ("frontend_tagline_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
@@ -1385,7 +1388,8 @@ def _migrate_sqlite(app):
                          ("thumbnail_filename", "VARCHAR(500)"),
                          ("position", "INTEGER NOT NULL DEFAULT 0"),
                          ("created_by", "INTEGER REFERENCES user(id)"),
-                         ("public_visible", "BOOLEAN NOT NULL DEFAULT 1")):
+                         ("public_visible", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("summary", "TEXT")):
             add("reading", col, ddl)
         for col, ddl in (("dash_show_stats", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_intergroup", "BOOLEAN NOT NULL DEFAULT 1"),

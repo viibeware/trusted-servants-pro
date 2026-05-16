@@ -21,14 +21,23 @@
 {% set _panel_fade_ms = (site.frontend_megamenu_panel_fade_ms if site and site.frontend_megamenu_panel_fade_ms is not none else 180) %}
 {% set _animate = _panel_fade and site and site.frontend_megamenu_animate %}
 {% set _animate_ms = (site.frontend_megamenu_animate_ms if site and site.frontend_megamenu_animate_ms else 320) %}
+{# Mobile-only overrides. The CSS reads these custom properties
+   inside `@media (max-width: 720px)` and swaps the desktop values
+   for them. `_animate_mobile` = False stamps a class that disables
+   the stagger animation under the same breakpoint. #}
+{% set _panel_fade_mobile_ms = (site.frontend_megamenu_panel_fade_mobile_ms if site and site.frontend_megamenu_panel_fade_mobile_ms is not none else _panel_fade_ms) %}
+{% set _animate_mobile = (site is none) or site.frontend_megamenu_animate_mobile %}
+{% set _animate_mobile_ms = (site.frontend_megamenu_animate_mobile_ms if site and site.frontend_megamenu_animate_mobile_ms else _animate_ms) %}
 {% set _mm_h_pct = site.frontend_megamenu_heading_size if site and site.frontend_megamenu_heading_size else None %}
 {% set _mm_sh_pct = site.frontend_megamenu_subheading_size if site and site.frontend_megamenu_subheading_size else None %}
-<div class="fe-megamenu fe-megamenu-recovery-blue{% if _animate %} fe-megamenu-animate{% endif %}{% if _panel_fade %} fe-megamenu-panel-fade{% endif %}" data-megamenu-panel="{{ ni.id }}" aria-hidden="true"
+<div class="fe-megamenu fe-megamenu-recovery-blue{% if _animate %} fe-megamenu-animate{% endif %}{% if not _animate_mobile %} fe-megamenu-animate-mobile-off{% endif %}{% if _panel_fade %} fe-megamenu-panel-fade{% endif %}" data-megamenu-panel="{{ ni.id }}" aria-hidden="true"
      style="background: {{ _mega_bg }}; color: {{ _mega_fg }};
             border-bottom-left-radius: {{ _mega_bl }}px;
             border-bottom-right-radius: {{ _mega_br }}px;
             --fe-mm-reveal-ms: {{ _animate_ms }}ms;
-            --fe-mm-fade-ms: {{ _panel_fade_ms }}ms;{% if _mm_h_pct %}
+            --fe-mm-fade-ms: {{ _panel_fade_ms }}ms;
+            --fe-mm-reveal-ms-mobile: {{ _animate_mobile_ms }}ms;
+            --fe-mm-fade-ms-mobile: {{ _panel_fade_mobile_ms }}ms;{% if _mm_h_pct %}
             --fe-mm-heading-scale: {{ '%.2f'|format(_mm_h_pct / 100) }};{% endif %}{% if _mm_sh_pct %}
             --fe-mm-link-scale: {{ '%.2f'|format(_mm_sh_pct / 100) }};{% endif %}">
   <div class="fe-megamenu-inner">
@@ -63,6 +72,41 @@
               <span>{{ link.label }}</span>
               {% if link.icon_after %}<span class="fe-megamenu-icon"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>{% endif %}
             </a>
+          {% elif _k == 'admin_login' %}
+            {# Auth-aware button(s) using the same recipe as kind='button'.
+               Anonymous → single Login button. Authenticated → flex row
+               with Dashboard on the left and Logout on the far right.
+               The per-link size override (link_size_pct → --fe-mm-link-scale)
+               is bundled into the same inline style as --i so the
+               button(s) honour the slider just like a link kind. #}
+            {%- set _btn_style = link.button_style or 'pill' -%}
+            {%- set _row_style = '--i: ' ~ _i ~ ';' -%}
+            {%- if link.link_size_pct -%}
+              {%- set _row_style = _row_style ~ ' --fe-mm-link-scale: ' ~ ('%.2f'|format(link.link_size_pct / 100)) ~ ';' -%}
+            {%- endif -%}
+            {%- if current_user.is_authenticated -%}
+            <div class="fe-megamenu-block-authrow" style="{{ _row_style }}">
+              <a href="{{ url_for('main.index') }}"
+                 class="fe-megamenu-block-btn fe-megamenu-block-btn-{{ _btn_style }} fe-megamenu-block-btn--admin-auth">
+                <span class="fe-megamenu-icon"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before or 'layout-grid') }}</span>
+                <span>Back to TS Pro dashboard</span>
+                {% if link.icon_after %}<span class="fe-megamenu-icon"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>{% endif %}
+              </a>
+              <a href="{{ url_for('auth.logout', next=url_for('frontend.index')) }}"
+                 class="fe-megamenu-block-btn fe-megamenu-block-btn-{{ _btn_style }} fe-megamenu-block-btn--admin-auth fe-megamenu-block-btn--logout">
+                <span class="fe-megamenu-icon">{{ icon('log-out') }}</span>
+                <span>Logout</span>
+              </a>
+            </div>
+            {%- else -%}
+            <a href="{{ url_for('auth.login') }}"
+               class="fe-megamenu-block-btn fe-megamenu-block-btn-{{ _btn_style }} fe-megamenu-block-btn--admin-auth"
+               style="{{ _row_style }}">
+              <span class="fe-megamenu-icon"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before or 'log-in') }}</span>
+              <span>Login</span>
+              {% if link.icon_after %}<span class="fe-megamenu-icon"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>{% endif %}
+            </a>
+            {%- endif -%}
           {% else %}
             {% set _link_cls = 'fe-megamenu-link' %}
             {% set _link_style = '--i: ' ~ _i ~ ';' %}
@@ -73,16 +117,18 @@
               {% set _link_cls = _link_cls ~ ' fe-megamenu-link-colored' %}
               {% set _link_style = _link_style ~ ' --link-color-light: ' ~ link.custom_color ~ '; --link-color-dark: ' ~ (link.custom_color | dark_variant) ~ ';' %}
             {% endif %}
+            {%- set _label = link.label -%}
+            {%- set _href = link.url or '#' -%}
             {%- set _ft = ' data-fe-form-trigger="' ~ link.form_trigger ~ '"' if link.form_trigger else '' -%}
             {# External links (absolute http(s)/mailto/tel) get an
                external-link glyph instead of the chevron so the
                admin/visitor can tell at a glance which links leave
                the site. Same 20px sizing + currentColor stroke as
                the chevron path so visual weight stays uniform. #}
-            {%- set _is_external = link.url and (link.url.startswith('http://') or link.url.startswith('https://') or link.url.startswith('mailto:') or link.url.startswith('tel:')) -%}
-            <a href="{{ link.url or '#' }}"{{ _tgt|safe }}{{ _ft|safe }} class="{{ _link_cls }}" style="{{ _link_style }}">
+            {%- set _is_external = _href and (_href.startswith('http://') or _href.startswith('https://') or _href.startswith('mailto:') or _href.startswith('tel:')) -%}
+            <a href="{{ _href }}"{{ _tgt|safe }}{{ _ft|safe }} class="{{ _link_cls }}" style="{{ _link_style }}">
               {% if link.icon_before %}<span class="fe-megamenu-icon fe-megamenu-icon-before"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before) }}</span>{% endif %}
-              <span class="fe-megamenu-label">{{ link.label }}</span>
+              <span class="fe-megamenu-label">{{ _label }}</span>
               {% if link.icon_after %}<span class="fe-megamenu-icon fe-megamenu-icon-after"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>{% endif %}
               <span class="fe-megamenu-chevron{% if _is_external %} fe-megamenu-chevron--external{% endif %}" aria-hidden="true">{{ icon('external-link' if _is_external else 'chevron-right') }}</span>
             </a>

@@ -264,16 +264,32 @@
     });
   });
 
-  // Upload / Paste content mode toggle on reading forms.
+  // Content-mode segmented control for library-item forms. Three
+  // exclusive modes: upload | paste | link. Each mode-button maps to
+  // one `[data-content-panel=...]` block in the form — only the
+  // active panel is shown; the others are hidden + their inputs are
+  // `disabled` so the browser doesn't submit their values. The
+  // chosen mode rides in the hidden `content_mode` input so the
+  // server can branch on it. Falls back to the legacy 2-mode toggle
+  // shape (`[data-content-mode-check]` + `[data-content-mode-label]`)
+  // for any form that still uses it — keeps older templates working.
   document.querySelectorAll("[data-content-mode-toggle]").forEach(toggle => {
     const form = toggle.closest("form");
     if (!form) return;
     const hidden = toggle.querySelector("[data-content-mode-input]");
+    const buttons = toggle.querySelectorAll("[data-content-mode-option]");
     const check = toggle.querySelector("[data-content-mode-check]");
     const labels = toggle.querySelectorAll("[data-content-mode-label]");
     const panels = form.querySelectorAll("[data-content-panel]");
     function apply(mode) {
       if (hidden) hidden.value = mode;
+      buttons.forEach(b => {
+        const on = b.dataset.contentModeOption === mode;
+        b.classList.toggle("is-active", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      // Legacy 2-mode toggle support — preserved verbatim so any
+      // template still using the checkbox flavour keeps working.
       if (check) check.checked = (mode === "paste");
       labels.forEach(l => l.classList.toggle("active", l.dataset.contentModeLabel === mode));
       panels.forEach(p => {
@@ -284,6 +300,7 @@
         });
       });
     }
+    buttons.forEach(b => b.addEventListener("click", () => apply(b.dataset.contentModeOption)));
     if (check) check.addEventListener("change", () => apply(check.checked ? "paste" : "upload"));
     apply((hidden && hidden.value) || "upload");
   });

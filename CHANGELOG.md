@@ -6,6 +6,58 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.0.2] — 2026-05-16
+
+### Added — Mobile-specific mega-menu animation + fade controls
+
+Three new `SiteSetting` columns + admin UI under *Web Frontend → Navigation → Mega menu appearance → Mobile (≤ 720 px)*: `frontend_megamenu_animate_mobile` (bool, default True; toggles the staggered link entrance under the mobile breakpoint independently of the desktop toggle), `frontend_megamenu_animate_mobile_ms` (int, default 320; mobile-only stagger speed slider, 100–1500 ms), and `frontend_megamenu_panel_fade_mobile_ms` (int, default 180; mobile-only panel-fade speed slider, 0–1500 ms). All three are clamped to the same ranges as their desktop counterparts in the save handler, and additive `_migrate_sqlite` entries land them on existing installs. Renderers (`frontend/megamenus/classic.html` + `frontend/megamenus/recovery-blue.html`) stamp `--fe-mm-fade-ms-mobile` and (recovery-blue only) `--fe-mm-reveal-ms-mobile` in the panel's inline style and add a `fe-megamenu-animate-mobile-off` class when the toggle is off. One new `@media (max-width: 720px)` block in `frontend.css` re-binds `--fe-mm-fade-ms` / `--fe-mm-reveal-ms` to the mobile variants so every existing consumer (panel fade transition, recovery-blue reveal keyframes) swaps automatically, and the off-class zeroes the stagger keyframes under the same breakpoint. Admin form's `wireSpeed` helper now tolerates null toggle/row selectors so a standalone slider (the mobile fade speed has no companion toggle — the desktop *Show on hover fade* toggle still gates whether the fade runs at all) wires only the live readout.
+
+### Added — Floating "Edit post" affordance on every blog detail template
+
+A new `templates/frontend/_blog_edit_button.html` partial stamps a fixed-position chip in the bottom-right of `/blog/<slug>` for signed-in editors. Gated on `current_user.is_authenticated and current_user.can_edit() and not is_preview` — suppressed when the existing draft / archived preview banner already carries an edit link, so signed-in editors visiting a draft don't see two stacked edit affordances. Includes a pencil icon + "Edit post" label that collapses to icon-only below 640 px so the chip doesn't crowd the reading column on mobile. Dark-mode flip swaps the dark-on-light pill for a light-on-dark variant. Included in all four detail templates (classic / modern / cover / longform) right after the preview-banner include.
+
+### Added — `admin_login` mega-menu link kind with auth-aware Login / Dashboard + Logout button row
+
+A new `kind="admin_login"` value joins `link | title | button | section | search` in `FrontendNavLink._NAV_BLOCK_KINDS`, with a default label of `"Login"` baked into `_NAV_DEFAULT_LABEL`. The per-column add-row in `_nav_megacol.html` now includes a `+ Admin login` button so admins can drop one into any mega-menu column. In the editor (`_nav_megalink.html`), the kind suppresses the editable label + URL inputs (both are managed by the renderer) and replaces them with an explanatory note; it keeps every other styling field a regular `link` kind exposes (icon before / after, per-link size slider via `link_size_pct`, color override, open-in-new-tab) AND adopts the `button` kind's Style picker (Pill / Rounded). Form-trigger is hidden because the auto-managed href would always win.
+
+Both megamenu renderers (`frontend/megamenus/classic.html` + `frontend/megamenus/recovery-blue.html`) grew a dedicated `elif _k == 'admin_login'` branch so the kind renders as a button (not a link). Anonymous visitors see a single **Login** chip → `url_for('auth.login')`. Authenticated users see a flex row with two chips: **Back to TS Pro dashboard** → `url_for('main.index')` on the left and **Logout** pushed to the far right via `justify-content: space-between`. The row wrapper (`.fe-megamenu-classic-block-authrow` / `.fe-megamenu-block-authrow`) bundles `--i` (existing animation index) and `--fe-mm-link-scale` (per-link size override) into one inline `style=""` so the entire pair scales together when the admin moves the size slider. Default icons (`log-in` on Login, `layout-grid` on Dashboard, `log-out` on Logout) auto-render when the admin hasn't picked an icon, matching the footer admin_login block's hardcoded icons.
+
+### Added — Footer admin_login block flips to a Dashboard + Logout pair on sign-in
+
+`templates/frontend/footers/blocks/_admin_login.html` now branches on `current_user.is_authenticated`. Signed-out visitors see the existing single **Login** pill. Signed-in users see a new `.fe-footer-admin-login-row` flex container with two pills — **Back to TS Pro dashboard** (`layout-grid` icon) on the left and **Logout** (`log-out` icon, `--logout` modifier) on the far right via `margin-left: auto`. Both pills reuse the existing `.fe-footer-admin-login` recipe so surface / border / hover stay consistent with the meeting-locations block.
+
+### Added — `auth.logout` honours a validated `?next=` redirect target
+
+`auth.logout` now reads `?next=` from the query string and redirects there when the value is path-only (`/...`) and not protocol-relative (`//...`). Invalid or missing `next` falls back to the historical `auth.login` redirect, so admin-side logout links keep their old behaviour. All three frontend logout links (mega-menu classic + recovery-blue, footer block) now pass `next=url_for('frontend.index')` so signing out from a public page returns the visitor to the homepage instead of the admin sign-in screen. The path validation closes any open-redirect smuggle — `?next=//evil.example.com/x` falls through to the login screen.
+
+### Added — Library item summary field + redesigned Add modal
+
+`LibraryItem` gained an optional plain-text `summary` (Text column, additive `_migrate_sqlite` entry) — a short blurb that sits alongside the title in lists and link previews, independent of the long-form `body` (paste-mode content). The Add modal in `library_detail.html` got a substantial UX rework: the old two-mode Upload-vs-Paste toggle is replaced by a three-way segmented control (`.content-mode-seg`) with **Upload file / file browser**, **Paste / type content**, and **External link** options. Each option owns exactly one content field — switching modes hides the others (`[data-content-panel]` matching the active mode is shown, the rest are `hidden`-attribute hidden + their inputs `disabled` so the browser doesn't submit them). The "Add File" button + modal header + "Upload" submit label all renamed to **Add Item** / **Add item** for clarity. A textarea-shaped Summary field sits above the mode picker. The Edit modal got the same treatment — header renamed to "Edit Item", default mode resolved from existing data (file → upload, body → paste, url → link, empty → upload), and the same segmented control + per-mode panels + summary. The standalone `reading_form.html` (used outside the library detail page) was rebuilt with the same 3-mode shape so the two flows don't drift. New CSS recipe `.content-mode-seg` paints a pill-track segmented control with brand-tinted active pill, light + dark variants.
+
+### Changed — `_apply_reading_form` enforces single-channel content per item
+
+The save handler in `routes.py` was reworked so each mode owns exactly one content slot — `upload` clears body + url, `paste` clears file + url, `link` clears file + body. Empty/legacy submissions without a `content_mode` flag still fall back to the old permissive shape so historical form posts keep working. New items can never accidentally carry both a file and a URL the way some legacy rows could.
+
+### Changed — Mega-menu button-styled kinds (admin_login, kind=button) honour the per-link size slider
+
+`.fe-megamenu-classic-block-btn` and `.fe-megamenu-block-btn` now compute `font-size: calc(0.875rem * var(--fe-mm-link-scale, 1))` (or `0.9375rem` for the recovery-blue variant). Previously the size slider in the admin editor only affected `link`-kind anchors; button-styled kinds ignored it entirely. The default scale of 1 keeps existing button rendering byte-identical when the admin hasn't toggled the override.
+
+### Changed — admin_login mega-menu chips inherit the base button look + carry a Logout yellow modifier
+
+`.fe-megamenu-classic-block-btn--admin-auth` / `.fe-megamenu-block-btn--admin-auth` is a layout-only marker class — 7 px top/bottom padding and `width: auto; align-self: flex-start` (with `.fe-megamenu-recovery-blue` prefix so it beats the existing `width: 100%` rule for recovery-blue buttons). Background, border, text-color, and hover are all left to the underlying `.fe-megamenu-*-block-btn` base recipe so the chips match the existing `kind="button"` rendering — solid accent surface in classic, translucent-white in recovery-blue. Pill / rounded shape still comes from the admin-picked `-pill` / `-rounded` modifier so the editor's Style dropdown isn't a no-op. The `.fe-megamenu-classic-block-btn--logout` / `.fe-megamenu-block-btn--logout` modifier paints the Logout chip in opaque amber-yellow (`#facc15`) with black text in both themes; hover deepens to `#eab308`. A parallel `.fe-footer-admin-login--logout` modifier carries the same amber palette in the footer.
+
+### Changed — Sidebar admin section keeps Contact Form alongside Watchtower
+
+`_ADMIN_CATALOG` in `sidebar.py` lost the legacy `access_requests`, `user_log`, and `delete_log` rows when Watchtower absorbed them in 2.0.0; this release also drops their visibility checks from `_is_visible` since the catalog entries no longer exist. (Their POST action endpoints had already moved under `/watchtower/...` namespaced endpoints.)
+
+### Fixed — `<fieldset class="fieldset" hidden>` was still rendering
+
+The base `.fieldset` rule in `app.css` set `display: flex; flex-direction: column; …`, which beat the user-agent stylesheet's `[hidden] { display: none }` and kept hidden fieldsets visible. Added `.fieldset[hidden] { display: none; }` so any panel toggled via the `hidden` attribute (library content-mode picker, future toggled fieldsets) actually disappears.
+
+### Fixed — Meeting card titles on the homepage now read at weight 600
+
+Added `font-weight: 600` to all five `.fe-meeting-card-link` selector variants (base + `.fe-page` / `.frontend-body` prefixes for the page-builder cascade). Previously the title weight was inherited from the wrapping `<h3>` (typically 700) which read heavier than other card titles on the same page.
+
 ## [2.0.1] — 2026-05-16
 
 ### Fixed — Meetings-list cards no longer render translucent in dark mode

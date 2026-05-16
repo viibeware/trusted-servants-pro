@@ -1,0 +1,52 @@
+{# Floating "Edit post" affordance stamped on every blog detail
+   template for signed-in editors. Suppressed when ``is_preview`` is
+   True since the preview banner already carries an edit link — two
+   "Edit post" buttons stacked above each other on a draft would
+   read as a bug, not a feature. Position: fixed bottom-right so it
+   sits above the post body without fighting any per-template
+   header layout (classic's headline+rail, modern's hero, cover's
+   overlay, longform's centered eyebrow). Below 640 px the button
+   collapses to an icon-only pill so it doesn't crowd the reading
+   column on mobile. #}
+{% if current_user.is_authenticated and current_user.can_edit() and not is_preview %}
+<a class="fe-blog-edit-fab"
+   href="{{ url_for('main.blog_edit', bid=post.id) }}"
+   title="Edit this post in the admin"
+   aria-label="Edit this post">
+  <span class="fe-blog-edit-fab-icon" aria-hidden="true">{{ icon('pencil') }}</span>
+  <span class="fe-blog-edit-fab-label">Edit post</span>
+</a>
+<style>
+  .fe-blog-edit-fab {
+    position: fixed; right: 18px; bottom: 18px; z-index: 60;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: #0f172a; color: #f8fafc;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.28);
+    font: inherit; font-size: 0.9rem; font-weight: 600;
+    text-decoration: none;
+    transition: transform 160ms ease, box-shadow 160ms ease,
+                background-color 160ms ease;
+  }
+  .fe-blog-edit-fab:hover {
+    background: #1e293b;
+    transform: translateY(-1px);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.36);
+  }
+  .fe-blog-edit-fab:focus-visible {
+    outline: 2px solid #38bdf8; outline-offset: 3px;
+  }
+  .fe-blog-edit-fab-icon { display: inline-flex; }
+  .fe-blog-edit-fab-icon svg { width: 16px; height: 16px; }
+  [data-theme="dark"] .fe-blog-edit-fab {
+    background: #e2e8f0; color: #0f172a;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+  }
+  [data-theme="dark"] .fe-blog-edit-fab:hover { background: #f1f5f9; }
+  @media (max-width: 640px) {
+    .fe-blog-edit-fab { padding: 10px 12px; right: 12px; bottom: 12px; }
+    .fe-blog-edit-fab-label { display: none; }
+  }
+</style>
+{% endif %}

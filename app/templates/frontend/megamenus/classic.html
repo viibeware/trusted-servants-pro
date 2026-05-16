@@ -15,8 +15,15 @@
 {% set _mm_sh_pct = site.frontend_megamenu_subheading_size if site and site.frontend_megamenu_subheading_size else None %}
 {% set _panel_fade = (site is none) or site.frontend_megamenu_panel_fade %}
 {% set _panel_fade_ms = (site.frontend_megamenu_panel_fade_ms if site and site.frontend_megamenu_panel_fade_ms is not none else 180) %}
+{# Mobile panel-fade override. Classic doesn't run the staggered
+   reveal so the mobile animate toggle + reveal-ms setting only
+   matter for recovery-blue; only the fade override is relevant
+   here. The CSS reads `--fe-mm-fade-ms-mobile` under
+   `@media (max-width: 720px)` and swaps it onto `--fe-mm-fade-ms`. #}
+{% set _panel_fade_mobile_ms = (site.frontend_megamenu_panel_fade_mobile_ms if site and site.frontend_megamenu_panel_fade_mobile_ms is not none else _panel_fade_ms) %}
 <div class="fe-megamenu fe-megamenu-classic{% if _panel_fade %} fe-megamenu-panel-fade{% endif %}" data-megamenu-panel="{{ ni.id }}" aria-hidden="true"
-     style="--fe-mm-fade-ms: {{ _panel_fade_ms }}ms;">
+     style="--fe-mm-fade-ms: {{ _panel_fade_ms }}ms;
+            --fe-mm-fade-ms-mobile: {{ _panel_fade_mobile_ms }}ms;">
   <div class="fe-megamenu-classic-card"
        style="background: {{ _mega_bg }}; color: {{ _mega_fg }};
               border-bottom-left-radius: {{ _mega_bl }}px;
@@ -55,6 +62,47 @@
                 <span>{{ link.label }}</span>
                 {% if link.icon_after %}<span class="fe-megamenu-classic-icon"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>{% endif %}
               </a>
+            {% elif _k == 'admin_login' %}
+              {# Auth-aware button(s) using the same recipe as kind='button'.
+                 Anonymous → single Login button. Authenticated → flex row
+                 with Dashboard button on the left and Logout button on
+                 the far right (space-between). Both buttons inherit the
+                 admin-chosen pill/rounded button_style and the per-link
+                 size override (--fe-mm-link-scale). #}
+              {%- set _btn_style = link.button_style or 'pill' -%}
+              {%- set _scale_style = '' -%}
+              {%- if link.link_size_pct -%}
+                {%- set _scale_style = 'style="--fe-mm-link-scale: ' ~ ('%.2f'|format(link.link_size_pct / 100)) ~ ';"' -%}
+              {%- endif -%}
+              {%- if current_user.is_authenticated -%}
+              <div class="fe-megamenu-classic-block-authrow" {{ _scale_style|safe }}>
+                <a href="{{ url_for('main.index') }}"
+                   class="fe-megamenu-classic-block-btn fe-megamenu-classic-block-btn-{{ _btn_style }} fe-megamenu-classic-block-btn--admin-auth">
+                  {# Default Dashboard icon when no admin override; mirrors
+                     the footer's `layout-grid` chip so both surfaces read
+                     the same when the picker is empty. #}
+                  <span class="fe-megamenu-classic-icon"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before or 'layout-grid') }}</span>
+                  <span>Back to TS Pro dashboard</span>
+                  {% if link.icon_after %}<span class="fe-megamenu-classic-icon"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>{% endif %}
+                </a>
+                <a href="{{ url_for('auth.logout', next=url_for('frontend.index')) }}"
+                   class="fe-megamenu-classic-block-btn fe-megamenu-classic-block-btn-{{ _btn_style }} fe-megamenu-classic-block-btn--admin-auth fe-megamenu-classic-block-btn--logout">
+                  <span class="fe-megamenu-classic-icon">{{ icon('log-out') }}</span>
+                  <span>Logout</span>
+                </a>
+              </div>
+              {%- else -%}
+              <a href="{{ url_for('auth.login') }}"
+                 class="fe-megamenu-classic-block-btn fe-megamenu-classic-block-btn-{{ _btn_style }} fe-megamenu-classic-block-btn--admin-auth"
+                 {{ _scale_style|safe }}>
+                {# Default Login icon when no admin override; matches the
+                   footer's `log-in` chip so anonymous visitors see the
+                   same affordance in both surfaces. #}
+                <span class="fe-megamenu-classic-icon"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before or 'log-in') }}</span>
+                <span>Login</span>
+                {% if link.icon_after %}<span class="fe-megamenu-classic-icon"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>{% endif %}
+              </a>
+              {%- endif -%}
             {% else %}
               {% set _link_cls = 'fe-megamenu-classic-link' %}
               {% set _link_style = '' %}
@@ -65,14 +113,16 @@
                 {% set _link_cls = _link_cls ~ ' fe-megamenu-classic-link-colored' %}
                 {% set _link_style = _link_style ~ '--link-color-light: ' ~ link.custom_color ~ '; --link-color-dark: ' ~ (link.custom_color | dark_variant) ~ ';' %}
               {% endif %}
+              {%- set _label = link.label -%}
+              {%- set _href = link.url or '#' -%}
               {%- set _ft = ' data-fe-form-trigger="' ~ link.form_trigger ~ '"' if link.form_trigger else '' -%}
               {# External links (absolute http(s)/mailto/tel) swap the
                  chevron for an external-link glyph so visitors can
                  spot at a glance which links leave the site. #}
-              {%- set _is_external = link.url and (link.url.startswith('http://') or link.url.startswith('https://') or link.url.startswith('mailto:') or link.url.startswith('tel:')) -%}
-              <a href="{{ link.url or '#' }}"{{ _tgt|safe }}{{ _ft|safe }} class="{{ _link_cls }}"{% if _link_style %} style="{{ _link_style }}"{% endif %}>
+              {%- set _is_external = _href and (_href.startswith('http://') or _href.startswith('https://') or _href.startswith('mailto:') or _href.startswith('tel:')) -%}
+              <a href="{{ _href }}"{{ _tgt|safe }}{{ _ft|safe }} class="{{ _link_cls }}"{% if _link_style %} style="{{ _link_style }}"{% endif %}>
                 {% if link.icon_before %}<span class="fe-megamenu-classic-icon"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before) }}</span>{% endif %}
-                <span class="fe-megamenu-classic-label">{{ link.label }}</span>
+                <span class="fe-megamenu-classic-label">{{ _label }}</span>
                 {% if link.icon_after %}<span class="fe-megamenu-classic-icon"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>
                 {% else %}<span class="fe-megamenu-classic-arrow{% if _is_external %} fe-megamenu-classic-arrow--external{% endif %}" aria-hidden="true">{{ icon('external-link' if _is_external else 'chevron-right') }}</span>
                 {% endif %}

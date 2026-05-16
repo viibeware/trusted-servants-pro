@@ -2,6 +2,7 @@
 {% block title %}{{ post.title }} · {{ frontend_title }}{% endblock %}
 {% block content %}
 {% include "frontend/_blog_preview_banner.html" %}
+{% include "frontend/_blog_edit_button.html" %}
 {%- set _dynbg_active = tpl_dynbg_key or tpl_dynbg_overlay -%}
 {# Resolve the dynbg colour + position CSS variables and stamp them
    on the host's `style` attribute. Without this, the

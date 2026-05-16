@@ -3887,6 +3887,12 @@ form[data-savebar-row].is-dirty {
 
 .fieldset { border: 1px solid var(--border); border-radius: 10px; padding: 2rem; margin: 0;
   display: flex; flex-direction: column; gap: 2rem; }
+/* `display: flex` above overrides the user-agent `display: none`
+   that the HTML `hidden` attribute would normally apply, so a
+   `<fieldset class="fieldset" hidden>` would otherwise still render.
+   Re-assert the hide so toggled panels (library content-mode picker,
+   etc.) actually disappear. */
+.fieldset[hidden] { display: none; }
 .fieldset legend { font-size: 1rem; font-weight: 700; color: var(--muted);
   text-transform: uppercase; letter-spacing: .5px; padding: 0 6px; }
 .fieldset-inline { padding: 1rem 1.25rem; gap: 0.75rem; }
@@ -11624,3 +11630,60 @@ body.pbe-is-palette-dragging .pbe-section-canvas {
 }
 .btn-ghost:hover { background: rgba(148,163,184,0.10); color: var(--text, #0f172a); }
 [data-theme="dark"] .btn-ghost:hover { background: rgba(255,255,255,0.06); color: #f1f5f9; }
+
+/* ── Library add/edit modal: content-mode segmented control ──────
+   Three-way picker (upload / paste / link) that lives at the top of
+   the library-item form. Each button toggles its sibling
+   `[data-content-panel=...]` block via the JS wiring in app.js.
+   Pill-row visual recipe — soft track with the active option
+   floating on a brand-tinted surface so the picked mode reads at
+   a glance. */
+.content-mode-seg-wrap { margin: 4px 0 10px; }
+.content-mode-seg {
+  display: inline-flex; flex-wrap: wrap; gap: 4px;
+  padding: 4px;
+  background: var(--panel, #f1f5f9);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 999px;
+}
+.content-mode-seg-btn {
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted, #475569);
+  font: inherit; font-size: 0.88rem; font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease,
+              border-color 140ms ease, box-shadow 140ms ease;
+}
+.content-mode-seg-btn:hover {
+  background: rgba(15, 23, 42, 0.04);
+  color: var(--text, #0f172a);
+}
+.content-mode-seg-btn.is-active {
+  background: var(--bg, #ffffff);
+  color: var(--text, #0f172a);
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.10);
+}
+.content-mode-seg-btn:focus-visible {
+  outline: 2px solid var(--brand, #2563eb);
+  outline-offset: 2px;
+}
+[data-theme="dark"] .content-mode-seg {
+  background: #0f172a;
+  border-color: #1f2937;
+}
+[data-theme="dark"] .content-mode-seg-btn { color: #94a3b8; }
+[data-theme="dark"] .content-mode-seg-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #e5e7eb;
+}
+[data-theme="dark"] .content-mode-seg-btn.is-active {
+  background: #1f2937;
+  color: #f1f5f9;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}

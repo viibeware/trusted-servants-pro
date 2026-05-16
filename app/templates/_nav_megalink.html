@@ -24,10 +24,29 @@
       </div>
       <p class="muted smaller" style="margin: 4px 2px 0;">Renders as a full-width pill search bar. Search functionality coming soon.</p>
     {% else %}
+      {% if _kind == 'admin_login' %}
+        {# Label + URL are managed by the renderer (auth-aware). Showing
+           the inputs anyway would invite admins to "fix" values that
+           the public renderer ignores. The stored label survives in
+           the DB but is never displayed — kept as a hidden field so
+           the bulk-save IIFE in app.js doesn't choke on a missing
+           expected attribute. #}
+        <div class="nav-megalink-row nav-megalink-row-single">
+          <p class="muted small" style="margin: 0; padding: 6px 0;">
+            Renders <b>Login</b> for signed-out visitors and
+            <b>Back to TS Pro dashboard</b> for signed-in users.
+            Label and URL are managed automatically — every other
+            option below works just like a regular link.
+          </p>
+        </div>
+        <input type="hidden" data-block-field="label" value="{{ link.label or 'Login' }}">
+        <input type="hidden" data-block-field="url" value="">
+      {% else %}
       <div class="nav-megalink-row nav-megalink-row-text">
         <input type="text" data-block-field="label" value="{{ link.label }}" placeholder="Text" required>
         <input type="text" data-block-field="url" value="{{ link.url or '' }}" placeholder="https://…">
       </div>
+      {% endif %}
       <div class="nav-megalink-row nav-megalink-row-icons">
         <div class="nav-megalink-field nav-megalink-icon-field{% if link.icon_before %} has-icon{% endif %}" data-icon-field>
           <span class="nav-megalink-field-lbl">Icon before</span>
@@ -75,13 +94,16 @@
           <input type="hidden" id="nav-icon-after-size-{{ link.id }}"
                  data-block-field="icon_after_size" value="{{ link.icon_after_size or '' }}">
         </div>
-        {% if _kind == 'link' %}
+        {% if _kind == 'link' or _kind == 'admin_login' %}
         {# Per-link override of the global "Link font size" slider in
            Mega menu appearance. Toggle off (default) → this link
            inherits the global scale. Toggle on → the slider's value
            is written as a percentage; 100 % matches the global scale,
            below shrinks, above grows. The slider is hidden until the
-           toggle is on so the field stays compact for the common case. #}
+           toggle is on so the field stays compact for the common case.
+           `admin_login` kind shares this whole styling block so its
+           label gets the same per-link scale + colour treatments as
+           a regular link. #}
         <div class="nav-megalink-field nav-megalink-size-field{% if link.link_size_pct %} is-on{% endif %}" data-size-override-field>
           <span class="nav-megalink-field-lbl">Override font size</span>
           <div class="nav-megalink-size-row">
@@ -117,7 +139,7 @@
           </div>
         </div>
         {% endif %}
-        {% if _kind == 'button' %}
+        {% if _kind == 'button' or _kind == 'admin_login' %}
         <div class="nav-megalink-field">
           <span class="nav-megalink-field-lbl">Style</span>
           <select data-block-field="button_style">
@@ -136,7 +158,11 @@
         </div>
         {# Form-trigger picker — when set, clicking this link opens
            the matching form modal instead of navigating. The URL
-           field above stays as a no-JS / right-click fallback. #}
+           field above stays as a no-JS / right-click fallback.
+           Hidden for the `admin_login` kind because its href is
+           auto-managed (login page vs dashboard) and a modal trigger
+           would override that intended navigation. #}
+        {% if _kind != 'admin_login' %}
         {% set _forms = (form_registry_all if form_registry_all is defined else []) %}
         <div class="nav-megalink-field nav-megalink-field-form-trigger">
           <span class="nav-megalink-field-lbl">Triggers form</span>
@@ -150,6 +176,7 @@
             {% endfor %}
           </select>
         </div>
+        {% endif %}
       </div>
     {% endif %}
   </div>

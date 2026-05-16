@@ -978,6 +978,17 @@ class SiteSetting(db.Model):
     # Duration of the panel's opacity + slide-in transition, in
     # milliseconds. Reads through `--fe-mm-fade-ms` on the panel.
     frontend_megamenu_panel_fade_ms = db.Column(db.Integer, nullable=False, default=180)
+    # Mobile-only overrides (apply under the @media (max-width: 720px)
+    # breakpoint the rest of the megamenu styling uses). The animate
+    # toggle lets admins suppress the staggered-link entrance on phones
+    # where the choreography reads as jitter; the two _ms columns
+    # carry independent speeds for the panel fade and link stagger so
+    # the desktop tuning stays untouched. NULL on either _ms column
+    # would fall through to the desktop value; storing NOT NULL +
+    # default keeps the renderer logic simple.
+    frontend_megamenu_animate_mobile = db.Column(db.Boolean, nullable=False, default=True)
+    frontend_megamenu_animate_mobile_ms = db.Column(db.Integer, nullable=False, default=320)
+    frontend_megamenu_panel_fade_mobile_ms = db.Column(db.Integer, nullable=False, default=180)
     # Optional size overrides for the mega-menu block-title heading and
     # the link rows below it, expressed as integer percentages where
     # 100 = the theme's baked default. Sliders run 50 – 200 (half-size
@@ -1320,6 +1331,12 @@ class LibraryItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     library_id = db.Column(db.Integer, db.ForeignKey("library.id", ondelete="CASCADE"), nullable=False)
     title = db.Column(db.String(255), nullable=False)
+    # Optional short blurb shown alongside the title in lists / link
+    # previews. Plain text — no markdown rendering. Independent from
+    # `body` (the paste-mode long-form content that opens as its own
+    # document) so an admin can pin a one-liner on a file or link item
+    # without using paste mode.
+    summary = db.Column(db.Text)
     body = db.Column(db.Text)
     url = db.Column(db.String(1000))
     stored_filename = db.Column(db.String(500))

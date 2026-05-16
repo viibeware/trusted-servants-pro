@@ -1,12 +1,39 @@
 {% extends "base.html" %}
 {% block heading %}{{ "Edit Item" if reading else "Add to Library" }}{% endblock %}
 {% block content %}
-<form method="post" class="form card" enctype="multipart/form-data">
+{# Default content mode mirrors the modal in library_detail.html:
+   pick whichever content slot is non-empty, falling back to upload
+   when the row is empty. #}
+{% if reading and reading.stored_filename %}
+  {% set _default_mode = 'upload' %}
+{% elif reading and reading.body %}
+  {% set _default_mode = 'paste' %}
+{% elif reading and reading.url %}
+  {% set _default_mode = 'link' %}
+{% else %}
+  {% set _default_mode = 'upload' %}
+{% endif %}
+<form method="post" class="form card" enctype="multipart/form-data" data-content-mode-form>
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="muted small">Library: {{ library.name }}</div>
   <label>Title<input name="title" required value="{{ reading.title if reading else '' }}"></label>
+  <label>Summary <span class="muted small">(optional)</span>
+    <textarea name="summary" rows="3" maxlength="500"
+              placeholder="Short blurb shown next to the title in lists and previews.">{{ reading.summary if reading and reading.summary else '' }}</textarea></label>
 
-  <fieldset class="fieldset">
+  <div class="content-mode-toggle content-mode-seg-wrap" data-content-mode-toggle>
+    <input type="hidden" name="content_mode" value="{{ _default_mode }}" data-content-mode-input>
+    <div class="content-mode-seg" role="tablist" aria-label="Content source">
+      <button type="button" class="content-mode-seg-btn{% if _default_mode == 'upload' %} is-active{% endif %}"
+              data-content-mode-option="upload" aria-pressed="{{ 'true' if _default_mode == 'upload' else 'false' }}">Upload file / file browser</button>
+      <button type="button" class="content-mode-seg-btn{% if _default_mode == 'paste' %} is-active{% endif %}"
+              data-content-mode-option="paste" aria-pressed="{{ 'true' if _default_mode == 'paste' else 'false' }}">Paste / type content</button>
+      <button type="button" class="content-mode-seg-btn{% if _default_mode == 'link' %} is-active{% endif %}"
+              data-content-mode-option="link" aria-pressed="{{ 'true' if _default_mode == 'link' else 'false' }}">External link</button>
+    </div>
+  </div>
+
+  <fieldset class="fieldset" data-content-panel="upload"{% if _default_mode != 'upload' %} hidden{% endif %}>
     <legend>File <span class="muted small">(PDF, DOC, JPG, PNG, MP4, MOV, or other)</span></legend>
     {% if reading and reading.stored_filename %}
     <div class="logo-current">
@@ -18,9 +45,18 @@
            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.mp4,.mov,application/pdf,image/*,video/*">
   </fieldset>
 
-  <label>External Link <span class="muted small">(optional)</span>
-    <input name="url" type="url" placeholder="https://…" value="{{ reading.url if reading and reading.url else '' }}">
-  </label>
+  <div data-content-panel="paste"{% if _default_mode != 'paste' %} hidden{% endif %}>
+    <label>Body <span class="muted small">(Markdown supported, opens as a document)</span>
+      <textarea name="body" rows="10">{{ reading.body if reading else '' }}</textarea>
+    </label>
+  </div>
+
+  <fieldset class="fieldset" data-content-panel="link"{% if _default_mode != 'link' %} hidden{% endif %}>
+    <legend>External link</legend>
+    <label>URL
+      <input name="url" type="url" placeholder="https://…" value="{{ reading.url if reading and reading.url else '' }}">
+    </label>
+  </fieldset>
 
   <fieldset class="fieldset">
     <legend>Thumbnail <span class="muted small">(optional)</span></legend>
@@ -32,10 +68,6 @@
     {% endif %}
     <input type="file" name="thumbnail" accept="image/*">
   </fieldset>
-
-  <label>Body <span class="muted small">(optional inline text)</span>
-    <textarea name="body" rows="10">{{ reading.body if reading else '' }}</textarea>
-  </label>
 
   {% if library.is_intergroup %}
   <fieldset class="fieldset">
@@ -60,7 +92,7 @@
 
   <div class="form-actions">
     <a href="{{ url_for('main.library_detail', slug=library.public_slug) }}" class="btn">Cancel</a>
-    <button class="btn btn-primary">{{ "Save" if reading else "Add" }}</button>
+    <button class="btn btn-primary">{{ "Save" if reading else "Add item" }}</button>
   </div>
 </form>
 {% endblock %}

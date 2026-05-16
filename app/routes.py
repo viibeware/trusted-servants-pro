@@ -3960,6 +3960,21 @@ def frontend_nav_appearance_save():
     except ValueError:
         fms = 180
     s.frontend_megamenu_panel_fade_ms = max(0, min(fms, 1500))
+    # Mobile-only overrides — independent toggle + speeds applied via
+    # the existing @media (max-width: 720px) breakpoint. Clamped to
+    # the same ranges as the desktop sliders so a forged POST can't
+    # push wild values into the JSON column.
+    s.frontend_megamenu_animate_mobile = request.form.get("frontend_megamenu_animate_mobile") == "1"
+    try:
+        ams_m = int(request.form.get("frontend_megamenu_animate_mobile_ms") or 320)
+    except ValueError:
+        ams_m = 320
+    s.frontend_megamenu_animate_mobile_ms = max(100, min(ams_m, 1500))
+    try:
+        fms_m = int(request.form.get("frontend_megamenu_panel_fade_mobile_ms") or 180)
+    except ValueError:
+        fms_m = 180
+    s.frontend_megamenu_panel_fade_mobile_ms = max(0, min(fms_m, 1500))
     # Heading + link font-size overrides as integer percentages
     # (50 – 200, 100 = theme default). The sliders are centered at 100
     # so a value of exactly 100 is also treated as "no override" — it
@@ -4128,13 +4143,18 @@ def frontend_nav_columns_reorder(nid):
 
 # ---- Links (blocks) ----
 from .icons import icon_names as _icon_names
-_NAV_BLOCK_KINDS = {"link", "title", "button", "section", "search"}
+_NAV_BLOCK_KINDS = {"link", "title", "button", "section", "search", "admin_login"}
 _NAV_BUTTON_STYLES = {"pill", "rounded"}
 _NAV_LINK_SIZES = {"small", "large"}
+# `admin_login` is special — the renderer ignores the stored label/url
+# and swaps in "Login" → /auth/login for anonymous visitors, or
+# "Back to TS Pro dashboard" → /tspro for signed-in users. Storage
+# defaults so admin-side UI placeholders have something to show.
 _NAV_DEFAULT_LABEL = {
     "link": "New link", "title": "Section title",
     "button": "Call to action", "section": "Group heading",
     "search": "Search…",
+    "admin_login": "Login",
 }
 _HEX_COLOR_RE = _re.compile(r"^#[0-9a-fA-F]{3,8}$")
 _CUSTOM_ICON_RE = _re.compile(r"^custom:(\d+)$")
@@ -8665,29 +8685,42 @@ def _resolve_reading_categories(library, form):
 
 def _apply_reading_form(r, form, files):
     r.title = form["title"].strip()
+    r.summary = (form.get("summary") or "").strip() or None
     mode = (form.get("content_mode") or "").strip()
-    # Only write body when the paste panel was active (mode=paste), or when
-    # the form doesn't carry a mode flag (legacy submissions).
-    if mode == "paste" or not mode:
+    # Three-mode authoring: each mode owns exactly one content field.
+    # Empty / legacy submissions (no `content_mode` flag) fall through
+    # to the old permissive shape so older form posts still work.
+    if mode == "paste":
         r.body = form.get("body", "").strip()
-    if mode == "upload":
-        # Switched explicitly to upload mode — clear any prior body.
+        r.url = None
+    elif mode == "link":
+        r.url = (form.get("url") or "").strip() or None
         r.body = ""
-    r.url = form.get("url", "").strip() or None
+    elif mode == "upload":
+        r.body = ""
+        r.url = None
+    else:
+        r.body = form.get("body", "").strip()
+        r.url = (form.get("url") or "").strip() or None
+    # File / media-picker write-back. Only honoured for `upload` mode
+    # AND legacy submissions (no mode). Switching to paste or link
+    # explicitly clears any prior file at the bottom of the block.
     uploaded = files.get("file")
     media_id = (form.get("media_id") or "").strip()
-    if uploaded and uploaded.filename:
-        r.stored_filename, r.original_filename = _save_upload(uploaded)
-    elif media_id:
-        m = db.session.get(MediaItem, int(media_id)) if media_id.isdigit() else None
-        if m:
-            r.stored_filename, r.original_filename = m.stored_filename, m.original_filename
+    if mode in ("upload", ""):
+        if uploaded and uploaded.filename:
+            r.stored_filename, r.original_filename = _save_upload(uploaded)
+        elif media_id:
+            m = db.session.get(MediaItem, int(media_id)) if media_id.isdigit() else None
+            if m:
+                r.stored_filename, r.original_filename = m.stored_filename, m.original_filename
     if form.get("remove_file") == "1" and r.stored_filename:
         r.stored_filename = None
         r.original_filename = None
-    # Switching to paste mode implicitly clears any existing file so a single
-    # reading doesn't carry both body and file simultaneously.
-    if mode == "paste" and r.stored_filename:
+    # Switching to paste or link mode implicitly clears any existing
+    # file so a single library item never carries two competing
+    # content sources simultaneously.
+    if mode in ("paste", "link") and r.stored_filename:
         r.stored_filename = None
         r.original_filename = None
     thumb = files.get("thumbnail")

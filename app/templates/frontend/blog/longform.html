@@ -2,6 +2,7 @@
 {% block title %}{{ post.title }} · {{ frontend_title }}{% endblock %}
 {% block content %}
 {% include "frontend/_blog_preview_banner.html" %}
+{% include "frontend/_blog_edit_button.html" %}
 {%- set _dynbg_active = tpl_dynbg_key or tpl_dynbg_overlay -%}
 <div class="fe-page-dynbg-host{% if _dynbg_active %} fe-dynbg-host{% endif %}"{% if tpl_style %} style="{{ tpl_style }}"{% endif %}>
 {% if _dynbg_active %}{% with dynbg_key=tpl_dynbg_key, dynbg_config=tpl_dynbg_config %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}

@@ -1,11 +1,26 @@
-{# Admin login block — single pill anchor pointing visitors at the
-   backend sign-in. Reuses the .fe-footer-location-directions pill
-   styling so the surface, border, and hover behaviour match the
-   "Get directions" buttons in the meeting-locations block. The
-   auth.login view auto-redirects already-authenticated users to the
-   admin dashboard, so the same link is safe for every visitor. #}
+{# Admin login block. Anonymous visitors see one pill: "Login" → the
+   sign-in page. Signed-in users see a two-pill row — "Back to TS
+   Pro dashboard" on the left and "Logout" pushed to the far right
+   via space-between — so the admin can drop back into the portal
+   OR sign out without leaving the public site. Both pills reuse
+   the .fe-footer-admin-login recipe (same as the
+   .fe-footer-location-directions "Get directions" buttons), so
+   the surface / border / hover treatment is consistent with the
+   meeting-locations block. #}
 <div class="fe-footer-block fe-footer-block-admin-login">
+  {% if current_user.is_authenticated %}
+  <div class="fe-footer-admin-login-row">
+    <a class="fe-footer-admin-login" href="{{ url_for('main.index') }}">
+      {{ icon('layout-grid') }}<span>Back to TS Pro dashboard</span>
+    </a>
+    <a class="fe-footer-admin-login fe-footer-admin-login--logout"
+       href="{{ url_for('auth.logout', next=url_for('frontend.index')) }}">
+      {{ icon('log-out') }}<span>Logout</span>
+    </a>
+  </div>
+  {% else %}
   <a class="fe-footer-admin-login" href="{{ url_for('auth.login') }}">
     {{ icon('log-in') }}<span>Login</span>
   </a>
+  {% endif %}
 </div>

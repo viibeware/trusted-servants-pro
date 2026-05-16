@@ -422,6 +422,16 @@ def logout():
     except Exception:
         db.session.rollback()
     logout_user()
+    # Optional ``?next=`` redirect target. Mega-menu + footer logout
+    # links pass `next=/` so signing out from a public page returns
+    # the visitor to the homepage instead of bouncing them to the
+    # admin login screen. Validate strictly: must be a path-only
+    # value (`/...`) without a scheme or protocol-relative `//` to
+    # close any open-redirect smuggle. Default behaviour for admin
+    # surfaces (no `next` provided) is unchanged — login screen.
+    nxt = (request.args.get("next") or "").strip()
+    if nxt and nxt.startswith("/") and not nxt.startswith("//"):
+        return redirect(nxt)
     return redirect(url_for("auth.login"))
 
 

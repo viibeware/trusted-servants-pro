@@ -13,7 +13,7 @@
 {% block top_actions %}
   {% if current_user.can_edit_library(library) %}
   <button type="button" class="btn" data-open-modal="library-import-modal">Import Multiple</button>
-  <button type="button" class="btn btn-primary" data-open-modal="add-library-file-modal">+ Add File</button>
+  <button type="button" class="btn btn-primary" data-open-modal="add-library-file-modal">+ Add Item</button>
   {% endif %}
   {% if current_user.can_manage_libraries() and current_user.can_edit_library(library) %}
   <button type="button" class="btn btn-primary" data-open-modal="library-edit-modal">Edit</button>
@@ -203,7 +203,20 @@
         {% endif %}
       </div>
       {% if can_edit and current_user.can_edit_library_item(r) %}
-      {% set _default_mode = 'paste' if (r.body and not r.stored_filename) else 'upload' %}
+      {# Default mode picks whichever content slot is non-empty.
+         Precedence: file > body > URL > upload (the empty case). A
+         row carrying both a file and a URL (legacy data) opens in
+         upload mode; switching to link and saving will clear the
+         file by design (see `_apply_reading_form`). #}
+      {% if r.stored_filename %}
+        {% set _default_mode = 'upload' %}
+      {% elif r.body %}
+        {% set _default_mode = 'paste' %}
+      {% elif r.url %}
+        {% set _default_mode = 'link' %}
+      {% else %}
+        {% set _default_mode = 'upload' %}
+      {% endif %}
       <div class="modal" id="{{ edit_id }}-modal" aria-hidden="true">
         <div class="modal-backdrop" data-close></div>
         <div class="modal-panel" role="dialog" aria-modal="true">
@@ -212,19 +225,24 @@
                 data-inline-save data-row-id="{{ r.id }}" data-content-mode-form>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="modal-head">
-              <h2>Edit File</h2>
+              <h2>Edit Item</h2>
               <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
             </div>
             <div class="modal-body">
               <label>Title<input name="title" required value="{{ r.title }}"></label>
-              <div class="content-mode-toggle" data-content-mode-toggle>
+              <label>Summary <span class="muted small">(optional)</span>
+                <textarea name="summary" rows="3" maxlength="500"
+                          placeholder="Short blurb shown next to the title in lists and previews.">{{ r.summary or '' }}</textarea></label>
+              <div class="content-mode-toggle content-mode-seg-wrap" data-content-mode-toggle>
                 <input type="hidden" name="content_mode" value="{{ _default_mode }}" data-content-mode-input>
-                <label class="mode-toggle content-mode-switch">
-                  <span class="content-mode-label" data-content-mode-label="upload">Upload file</span>
-                  <input type="checkbox" data-content-mode-check {% if _default_mode == 'paste' %}checked{% endif %}>
-                  <span class="mode-track"><span class="mode-thumb"></span></span>
-                  <span class="content-mode-label" data-content-mode-label="paste">Paste / type content</span>
-                </label>
+                <div class="content-mode-seg" role="tablist" aria-label="Content source">
+                  <button type="button" class="content-mode-seg-btn{% if _default_mode == 'upload' %} is-active{% endif %}"
+                          data-content-mode-option="upload" aria-pressed="{{ 'true' if _default_mode == 'upload' else 'false' }}">Upload file / file browser</button>
+                  <button type="button" class="content-mode-seg-btn{% if _default_mode == 'paste' %} is-active{% endif %}"
+                          data-content-mode-option="paste" aria-pressed="{{ 'true' if _default_mode == 'paste' else 'false' }}">Paste / type content</button>
+                  <button type="button" class="content-mode-seg-btn{% if _default_mode == 'link' %} is-active{% endif %}"
+                          data-content-mode-option="link" aria-pressed="{{ 'true' if _default_mode == 'link' else 'false' }}">External link</button>
+                </div>
               </div>
               <fieldset class="fieldset" data-content-panel="upload"{% if _default_mode != 'upload' %} hidden{% endif %}>
                 <legend>File <span class="muted small">(PDF, DOC, JPG, PNG, MP4, MOV)</span></legend>
@@ -256,8 +274,11 @@
                   </div>
                 </div>
               </div>
-              <label>External Link <span class="muted small">(optional)</span>
-                <input name="url" type="url" placeholder="https://..." value="{{ r.url or '' }}"></label>
+              <fieldset class="fieldset" data-content-panel="link"{% if _default_mode != 'link' %} hidden{% endif %}>
+                <legend>External link</legend>
+                <label>URL
+                  <input name="url" type="url" placeholder="https://..." value="{{ r.url or '' }}"></label>
+              </fieldset>
               <fieldset class="fieldset">
                 <legend>Thumbnail <span class="muted small">(optional)</span></legend>
                 {% if r.thumbnail_filename %}
@@ -300,7 +321,7 @@
 
   {% if can_edit %}
   <div class="card-foot">
-    <button type="button" class="btn btn-sm" data-open-modal="add-library-file-modal">+ Add File</button>
+    <button type="button" class="btn btn-sm" data-open-modal="add-library-file-modal">+ Add Item</button>
     <button type="button" class="btn btn-sm" data-open-modal="library-import-modal">Import Multiple</button>
   </div>
   {% endif %}
@@ -315,19 +336,30 @@
           data-content-mode-form>
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="modal-head">
-        <h2>Add File</h2>
+        <h2>Add Item</h2>
         <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
       </div>
       <div class="modal-body">
         <label>Title<input name="title" required></label>
-        <div class="content-mode-toggle" data-content-mode-toggle>
+        <label>Summary <span class="muted small">(optional)</span>
+          <textarea name="summary" rows="3" maxlength="500"
+                    placeholder="Short blurb shown next to the title in lists and previews."></textarea></label>
+        {# Three-mode segmented control. The hidden `content_mode`
+           input rides the active mode to the server; each button
+           swaps `[data-content-panel=...]` visibility via the JS
+           wiring in app.js. Upload + paste hide the external-link
+           panel and vice versa, so each library item carries one
+           authoring channel. #}
+        <div class="content-mode-toggle content-mode-seg-wrap" data-content-mode-toggle>
           <input type="hidden" name="content_mode" value="upload" data-content-mode-input>
-          <label class="mode-toggle content-mode-switch">
-            <span class="content-mode-label" data-content-mode-label="upload">Upload file</span>
-            <input type="checkbox" data-content-mode-check>
-            <span class="mode-track"><span class="mode-thumb"></span></span>
-            <span class="content-mode-label" data-content-mode-label="paste">Paste / type content</span>
-          </label>
+          <div class="content-mode-seg" role="tablist" aria-label="Content source">
+            <button type="button" class="content-mode-seg-btn"
+                    data-content-mode-option="upload" aria-pressed="true">Upload file / file browser</button>
+            <button type="button" class="content-mode-seg-btn"
+                    data-content-mode-option="paste" aria-pressed="false">Paste / type content</button>
+            <button type="button" class="content-mode-seg-btn"
+                    data-content-mode-option="link" aria-pressed="false">External link</button>
+          </div>
         </div>
         <fieldset class="fieldset" data-content-panel="upload">
           <legend>File <span class="muted small">(PDF, DOC, JPG, PNG, MP4, MOV)</span></legend>
@@ -353,8 +385,11 @@
             </div>
           </div>
         </div>
-        <label>External Link <span class="muted small">(optional)</span>
-          <input name="url" type="url" placeholder="https://..."></label>
+        <fieldset class="fieldset" data-content-panel="link" hidden>
+          <legend>External link</legend>
+          <label>URL
+            <input name="url" type="url" placeholder="https://..."></label>
+        </fieldset>
         <label>Thumbnail <span class="muted small">(optional)</span>
           <input type="file" name="thumbnail" accept="image/*"></label>
         {% if library.categories or is_ig %}
@@ -378,7 +413,7 @@
       </div>
       <div class="modal-foot">
         <button type="button" class="btn" data-close>Cancel</button>
-        <button type="submit" class="btn btn-primary">Upload</button>
+        <button type="submit" class="btn btn-primary">Add item</button>
       </div>
     </form>
   </div>

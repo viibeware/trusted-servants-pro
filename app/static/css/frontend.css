@@ -1281,6 +1281,7 @@ html[data-theme="dark"] body[data-fe-theme="recovery-blue"] .fe-btn-ghost:hover 
 .frontend-body .fe-meeting-card-link,
 .frontend-body .fe-meeting-card-link:hover {
   color: inherit; text-decoration: none;
+  font-weight: 600;
 }
 /* Stretched-link overlay — makes the whole card clickable while still
    leaving inner buttons (zoom / directions) clickable separately via
@@ -2117,7 +2118,13 @@ html[data-theme="dark"] .fe-megamenu-search-input::placeholder { color: #64748b;
 .fe-megamenu-block-section-label { font-size: 0.75rem; font-weight: 600;
   letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
 .fe-megamenu-block-btn { display: inline-flex; align-items: center; gap: 8px;
-  margin: 6px 10px; padding: 9px 16px; font-weight: 600; font-size: 0.9375rem;
+  margin: 6px 10px; padding: 9px 16px; font-weight: 600;
+  /* font-size honors the per-link "Override size" slider via the
+     same `--fe-mm-link-scale` variable the link kind consumes, so
+     admins can resize an admin_login (or future button-styled link)
+     from the same picker. Default scale of 1 preserves the
+     original 0.9375rem so existing buttons render identically. */
+  font-size: calc(0.9375rem * var(--fe-mm-link-scale, 1));
   text-decoration: none; color: #fff; background: rgba(255,255,255,0.18);
   border: 1px solid rgba(255,255,255,0.28); align-self: flex-start;
   transition: background 140ms ease, transform 140ms ease; }
@@ -2162,6 +2169,36 @@ html[data-theme="dark"] .fe-megamenu-search-input::placeholder { color: #64748b;
 @media (prefers-reduced-motion: reduce) {
   .fe-megamenu-recovery-blue.fe-megamenu-animate .fe-megamenu-blocks > *,
   .fe-megamenu-recovery-blue.fe-megamenu-animate.open .fe-megamenu-blocks > * {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+}
+
+/* ── Mobile-only overrides for mega-menu animation + fade ────────
+   The admin can tune the staggered link reveal and the panel fade
+   independently for small viewports via three SiteSetting fields:
+     • frontend_megamenu_animate_mobile      → toggle stagger
+     • frontend_megamenu_animate_mobile_ms   → stagger duration
+     • frontend_megamenu_panel_fade_mobile_ms → fade duration
+   The Jinja renderer stamps three CSS custom properties on the
+   panel root —
+     --fe-mm-fade-ms-mobile / --fe-mm-reveal-ms-mobile
+   plus a `.fe-megamenu-animate-mobile-off` class when the toggle
+   is off. The rules below re-bind `--fe-mm-fade-ms` /
+   `--fe-mm-reveal-ms` to the mobile values inside the breakpoint
+   so every consumer that already reads those vars (panel fade
+   transition, recovery-blue reveal keyframes) picks up the swap
+   automatically. The off-class kills the stagger by zeroing
+   opacity-on / removing the animation, matching what
+   prefers-reduced-motion already does for users who request it. */
+@media (max-width: 720px) {
+  .fe-megamenu {
+    --fe-mm-fade-ms: var(--fe-mm-fade-ms-mobile, var(--fe-mm-fade-ms, 180ms));
+    --fe-mm-reveal-ms: var(--fe-mm-reveal-ms-mobile, var(--fe-mm-reveal-ms, 320ms));
+  }
+  .fe-megamenu-recovery-blue.fe-megamenu-animate-mobile-off .fe-megamenu-blocks > *,
+  .fe-megamenu-recovery-blue.fe-megamenu-animate-mobile-off.open .fe-megamenu-blocks > * {
     opacity: 1;
     transform: none;
     animation: none;
@@ -2275,7 +2312,12 @@ html[data-theme="dark"] .fe-megamenu-classic-search-input::placeholder { color: 
 .fe-megamenu-classic-block-section-label { font-size: 0.6875rem; font-weight: 700;
   letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
 .fe-megamenu-classic-block-btn { display: inline-flex; align-items: center; gap: 8px;
-  margin: 6px 10px; padding: 8px 16px; font-weight: 600; font-size: 0.875rem;
+  margin: 6px 10px; padding: 8px 16px; font-weight: 600;
+  /* Same scale recipe as `.fe-megamenu-block-btn` above — picks up
+     the per-link `--fe-mm-link-scale` set by the admin's size
+     slider so button-styled kinds (admin_login, future button)
+     resize alongside link-styled kinds. */
+  font-size: calc(0.875rem * var(--fe-mm-link-scale, 1));
   text-decoration: none; color: #fff; background: var(--fe-recovery-blue, #0B5CFF);
   border: 1px solid transparent; align-self: flex-start;
   transition: background 140ms ease, transform 140ms ease; }
@@ -10730,3 +10772,138 @@ body.fe-frontend-force-dark .fe-card-secondary {
 .bb-section { display: block; }
 .bb-section > *:first-child { margin-top: 0; }
 .bb-section > *:last-child  { margin-bottom: 0; }
+
+/* ─── Mega-menu + footer admin-login auth row ─────────────────────
+   When the visitor is signed in, the admin_login link renders as
+   TWO buttons on one row — "Back to TS Pro dashboard" on the left
+   and "Logout" pushed to the far right via space-between. Each
+   button keeps the existing pill / rounded recipe (`-btn`,
+   `-btn-pill`, `-btn-rounded`); these wrapper rules only handle
+   the row layout so the buttons sit at the column edges.
+
+   The `align-self: flex-start` baked into `.fe-megamenu-classic-block-btn`
+   keeps a lone button left-aligned. Inside an auth-row the row
+   itself spans the column, and `margin: 0` zeroes the buttons'
+   default `6px 10px` margin so the row's own margin owns the spacing. */
+.fe-megamenu-classic-block-authrow,
+.fe-megamenu-block-authrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 10px;
+  flex-wrap: wrap;
+}
+.fe-megamenu-classic-block-authrow > .fe-megamenu-classic-block-btn,
+.fe-megamenu-block-authrow > .fe-megamenu-block-btn {
+  margin: 0;
+  align-self: auto;
+}
+
+/* Admin-auth marker — every button rendered by the `admin_login`
+   kind (Login / Back to TS Pro dashboard / Logout) carries this
+   class. Intentionally LEAVES background, border-color, text
+   color, and hover state to the underlying `.fe-megamenu-*-block-btn`
+   recipe so the Login + Dashboard buttons match the existing
+   menu-button style (solid accent surface in classic, translucent
+   white in recovery-blue) and hover the same way as a kind='button'
+   block. Only the chip-flavoured layout bits live here:
+     • 7 px top/bottom padding for the tighter chip rhythm
+     • content-width (width: auto, align-self: flex-start) so the
+       chip doesn't stretch the full column — defeats the
+       `.fe-megamenu-recovery-blue .fe-megamenu-block-btn
+       { width: 100% }` rule above via higher-specificity selector.
+   border-radius isn't touched — the admin-picked
+   `-pill` / `-rounded` modifier on the same element drives the
+   shape, so the Style dropdown in the editor isn't a no-op. The
+   later `.--logout` modifier still overrides background/border/
+   color for the Logout pill (opaque yellow, black text). */
+.fe-megamenu-classic-block-btn--admin-auth,
+.fe-megamenu-block-btn--admin-auth,
+.fe-megamenu-recovery-blue .fe-megamenu-block-btn--admin-auth {
+  padding-top: 7px;
+  padding-bottom: 7px;
+  padding-left: 12px;
+  padding-right: 12px;
+  width: auto;
+  align-self: flex-start;
+}
+
+/* Logout modifier — opaque amber-yellow surface with black text so
+   the sign-out action reads distinctly from the primary "Back to
+   dashboard" CTA. Same colour both themes; hover deepens the
+   surface slightly. */
+.fe-megamenu-classic-block-btn--logout,
+.fe-megamenu-block-btn--logout {
+  background: #facc15;
+  color: #000000;
+  border-color: #facc15;
+}
+.fe-megamenu-classic-block-btn--logout:hover,
+.fe-megamenu-block-btn--logout:hover {
+  background: #eab308;
+  color: #000000;
+  border-color: #eab308;
+}
+html[data-theme="dark"] .fe-megamenu-classic-block-btn--logout,
+html[data-theme="dark"] .fe-megamenu-block-btn--logout {
+  background: #facc15;
+  color: #000000;
+  border-color: #facc15;
+}
+html[data-theme="dark"] .fe-megamenu-classic-block-btn--logout:hover,
+html[data-theme="dark"] .fe-megamenu-block-btn--logout:hover {
+  background: #eab308;
+  color: #000000;
+}
+
+/* Footer Logout pill matches the mega-menu modifier — same amber
+   tint so the logout affordance reads consistently across both
+   surfaces. Overrides the inherited `.fe-footer-admin-login`
+   recipe (which uses the brand link colour) for this one pill. */
+.fe-footer-admin-login--logout {
+  background: rgba(245, 158, 11, 0.14);
+  color: #92400e;
+  border-color: rgba(245, 158, 11, 0.55);
+}
+.fe-footer-admin-login--logout:hover,
+.fe-footer-admin-login--logout:focus-visible {
+  background: rgba(245, 158, 11, 0.24);
+  color: #78350f;
+  border-color: rgba(245, 158, 11, 0.80);
+}
+html[data-theme="dark"] .fe-footer-admin-login--logout,
+body.fe-footer-force-dark .fe-footer-admin-login--logout {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fde68a;
+  border-color: rgba(245, 158, 11, 0.55);
+}
+html[data-theme="dark"] .fe-footer-admin-login--logout:hover,
+html[data-theme="dark"] .fe-footer-admin-login--logout:focus-visible,
+body.fe-footer-force-dark .fe-footer-admin-login--logout:hover,
+body.fe-footer-force-dark .fe-footer-admin-login--logout:focus-visible {
+  background: rgba(245, 158, 11, 0.30);
+  color: #fff7d6;
+  border-color: rgba(245, 158, 11, 0.80);
+}
+
+/* Footer admin-login auth row — same layout idea (space-between,
+   pills at the column edges) so the signed-in footer matches the
+   mega-menu treatment. `width: 100%` lets the row fill the block
+   container's column flow regardless of which footer layout it's
+   dropped into. */
+.fe-footer-admin-login-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+.fe-footer-admin-login--logout {
+  /* Force the Logout pill toward the far end of the row when the
+     footer block is narrower than the row's natural content. With
+     flex-wrap allowed, this keeps the pair visually paired even
+     after a wrap. */
+  margin-left: auto;
+}

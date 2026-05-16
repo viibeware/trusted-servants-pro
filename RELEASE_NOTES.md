@@ -7,7 +7,55 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.0.1 — 2026-05-16 (latest) — Meetings-list + Pro Tips cards now ride the Primary-card design tokens
+## 2.0.2 — 2026-05-16 (latest) — Frontend admin tools: blog edit chip, auth-aware menu/footer, library item summaries
+
+A round of frontend polish focused on giving signed-in admins fast tools on the public site, and making library authoring more flexible.
+
+### Edit any blog post from the public page
+
+Signed-in editors now see a floating **Edit post** chip in the bottom-right corner of every `/blog/<slug>` page. One click lands you in the admin editor. Hidden on mobile labels (icon-only below 640 px) so it doesn't crowd the reading column. Anonymous visitors see nothing. The existing draft / archived preview banner still carries its own edit link, so drafts don't show two stacked affordances.
+
+### Auth-aware Login / Dashboard / Logout in the mega menu and footer
+
+A new **Admin login** block type joins the mega-menu builder under *Web Frontend → Navigation*. Drag it into any column and it renders as a styled button (pill or rounded, your pick) that auto-swaps based on visitor state:
+
+- **Anonymous:** a single **Login** button → the sign-in page.
+- **Signed in:** a button row — **Back to TS Pro dashboard** on the left, a yellow **Logout** button on the far right.
+
+The footer's existing Login pill got the same treatment automatically — flips to a Dashboard + Logout pair when an admin is viewing the site. Both surfaces share one visual language (icons, padding, hover) and respect the per-link size slider. **Logout** on the public site now returns visitors to the homepage, not the admin sign-in screen.
+
+### Library Add modal: pick how the item gets its content
+
+The **Add Item** modal (renamed from *Add File*) replaces the old two-mode Upload / Paste toggle with a three-way picker:
+
+- **Upload file / file browser** — same as before; pick a file or grab one from the File Browser.
+- **Paste / type content** — Markdown-supported body that opens as its own document.
+- **External link** — a URL field for items that live elsewhere.
+
+Each option owns its own content slot: switching tabs hides the others, and saving in a given mode clears the slots it doesn't use. An optional **Summary** field (multi-line, up to 500 chars) sits above the picker for a short blurb that shows alongside the title in lists. The Edit modal got the same treatment — opens in whichever mode matches the existing data.
+
+### Mobile-only mega-menu animation + fade controls
+
+The *Web Frontend → Navigation → Mega menu appearance* page grew a **Mobile (≤ 720 px)** subsection with three new knobs that only kick in on small viewports:
+
+- **Staggered link entrance · mobile** — turn the staggered reveal off on phones where it can read as flicker.
+- **Stagger speed · mobile** — independent ms slider.
+- **Fade speed · mobile** — independent ms slider for the panel fade-in.
+
+Desktop tuning is untouched. The desktop *Show on hover fade* toggle still gates whether the panel fades at all on every viewport.
+
+### Polish
+
+- **Meeting card titles** on the homepage now render at weight 600 instead of inheriting the heavier 700 from their wrapping heading.
+- **Hidden fieldsets actually hide** — a CSS rule was overriding the user-agent's `[hidden] { display: none }` for `.fieldset` elements, so any toggled fieldset (like the library content-mode panels) kept rendering. One-line fix.
+
+### Under the hood
+
+- New `LibraryItem.summary` column (additive migration; existing data untouched).
+- `auth.logout` now accepts a validated `?next=` redirect target. Strict path-only validation — open-redirect smuggles get bounced.
+- The library save handler enforces single-channel content per item — a row can never carry both a file and a URL the way some legacy rows could. Existing data is preserved until you next edit + save.
+
+## 2.0.1 — 2026-05-16 — Meetings-list + Pro Tips cards now ride the Primary-card design tokens
 
 Two small but visible polish fixes for the public meetings page in dark mode:
 
