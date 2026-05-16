@@ -1,11 +1,11 @@
-{# One row of the User Log activity feed. Shared by the initial
-   server-side render in user_log.html and the JSON pagination API
+{# One row of the activity feed. Shared by the initial server-side
+   render in watchtower/access.html and the JSON pagination API
    (/api/user-log-events) so the markup stays in one place. #}
 <li class="ulog-event ulog-event-{{ ev.action.split('.')[0] }}">
   <span class="ulog-event-icon">{{ icon(ev.icon) }}</span>
   <div class="ulog-event-body">
     <div class="ulog-event-title">
-      {% if show_all %}{% if ev.user_id %}<a class="ulog-event-user" href="{{ url_for('main.user_log') }}?user_id={{ ev.user_id }}">{{ ev.username or 'user #' ~ ev.user_id }}</a>{% else %}<span class="muted">deleted user</span>{% endif %} · {% endif %}
+      {% if show_all %}{% if ev.user_id %}<a class="ulog-event-user" href="{{ url_for('main.watchtower_access') }}?user_id={{ ev.user_id }}">{{ ev.username or 'user #' ~ ev.user_id }}</a>{% else %}<span class="muted">deleted user</span>{% endif %} · {% endif %}
       {{ ev.label }}
     </div>
     {% if ev.summary %}<div class="ulog-event-summary muted small">{{ ev.summary }}</div>{% endif %}

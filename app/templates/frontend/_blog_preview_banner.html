@@ -1,0 +1,57 @@
+{# Stamped on top of any blog detail template when an authenticated
+   editor visits the public URL of an unpublished post. Drafts and
+   archived posts both surface this banner so the previewer knows
+   exactly why a regular visitor wouldn't see this page. Edit-link
+   targets the admin form so the writer can jump back into the
+   editor in one click. #}
+{% if is_preview %}
+<div class="fe-blog-preview-banner" role="status" aria-label="Editor preview">
+  <div class="fe-blog-preview-banner-inner">
+    <span class="fe-blog-preview-banner-tag">
+      {% if preview_state == 'archived' %}Archived preview{% else %}Draft preview{% endif %}
+    </span>
+    <span class="fe-blog-preview-banner-msg">
+      You're seeing this page because you're signed in.
+      {% if preview_state == 'archived' %}
+      This post is archived — visitors don't see it on the public site.
+      {% else %}
+      This post is a draft and isn't visible to the public yet.
+      {% endif %}
+    </span>
+    {% if current_user.is_authenticated and current_user.can_edit() %}
+    <a class="fe-blog-preview-banner-edit"
+       href="{{ url_for('main.blog_edit', bid=post.id) }}">Edit post →</a>
+    {% endif %}
+  </div>
+</div>
+<style>
+  .fe-blog-preview-banner {
+    /* Outside the page-card flow — sits flush above the main content
+       so the preview indicator is the first thing the editor sees,
+       and reads even when the post's own card has a custom background. */
+    background: #b45309;
+    color: #fffbeb;
+    border-bottom: 2px solid #92400e;
+  }
+  .fe-blog-preview-banner-inner {
+    max-width: 1100px; margin: 0 auto;
+    padding: 12px clamp(16px, 4vw, 32px);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    font-size: .95rem;
+  }
+  .fe-blog-preview-banner-tag {
+    display: inline-flex; align-items: center;
+    padding: 4px 10px; border-radius: 999px;
+    background: rgba(0, 0, 0, 0.22);
+    font-weight: 700; font-size: .78rem;
+    text-transform: uppercase; letter-spacing: .06em;
+  }
+  .fe-blog-preview-banner-msg { flex: 1 1 auto; min-width: 0; line-height: 1.4; }
+  .fe-blog-preview-banner-edit {
+    flex: 0 0 auto;
+    color: #fffbeb; text-decoration: underline;
+    font-weight: 600;
+  }
+  .fe-blog-preview-banner-edit:hover { text-decoration: none; }
+</style>
+{% endif %}

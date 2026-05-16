@@ -40,19 +40,45 @@
     try {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        blocks = parsed.map(b => ({
-          id: nextId(),
-          type: b.type,
-          data: b.data || {},
-        }));
+        blocks = parsed.map(b => assignIds(b));
       }
     } catch (err) {
       console.warn('post body editor: malformed JSON, starting empty', err);
     }
   }
 
+  // Recursively stamp a fresh ephemeral id on every block + every
+  // child of a Section. Storage doesn't carry ids — they're only
+  // for the editor's drag-and-drop / move bookkeeping — so the loader
+  // mints fresh ones on every page load.
+  function assignIds(b) {
+    const data = b.data || {};
+    const out = { id: nextId(), type: b.type, data: data };
+    if (b.type === 'section' && Array.isArray(data.blocks)) {
+      out.data = Object.assign({}, data, {
+        blocks: data.blocks.map(child => assignIds(child)),
+      });
+    }
+    return out;
+  }
+
+  // Serialise a block stripped of its ephemeral id (and recursively
+  // for Sections). Only `type` + `data` are persisted.
+  function stripBlock(b) {
+    const data = b.data || {};
+    if (b.type === 'section' && Array.isArray(data.blocks)) {
+      return {
+        type: b.type,
+        data: Object.assign({}, data, {
+          blocks: data.blocks.map(stripBlock),
+        }),
+      };
+    }
+    return { type: b.type, data: data };
+  }
+
   function commit() {
-    const payload = blocks.map(b => ({ type: b.type, data: b.data }));
+    const payload = blocks.map(stripBlock);
     hidden.value = JSON.stringify(payload);
     // The legacy markdown body stays in the hidden `body` field, but
     // once the editor has any blocks at all the public render reads
@@ -78,14 +104,24 @@
     separator: () => ({}),
     video:     () => ({ url: '', caption: '' }),
     code:      () => ({ lang: '', code: '' }),
+    section:   () => ({ margin_top: 3, margin_bottom: 3, blocks: [] }),
   };
 
   const BLOCK_LABELS = {
     paragraph: 'Paragraph', heading:   'Heading',  image: 'Image',
     button:    'Button',    list:      'List',     quote: 'Quote',
     callout:   'Callout',   separator: 'Divider',  video: 'Video',
-    code:      'Code',
+    code:      'Code',      section:   'Section',
   };
+
+  // Section can hold nested blocks but the schema is intentionally
+  // flat after that — a Section can't contain another Section. The
+  // server sanitizer enforces the same cap; this client check keeps
+  // the palette from offering Section drops inside an existing
+  // section so the UI matches storage.
+  function canHostSections(host) {
+    return host === blocks;
+  }
 
   // ── Element helpers ──────────────────────────────────────────────
   // `el()` is a tiny hyperscript so the per-block render functions
@@ -204,11 +240,23 @@
   }
 
   function renderImage(b) {
+    if (typeof b.data.shadow !== 'string') b.data.shadow = '';
+    // Box-shadow recipes mirror `_blog_blocks.html` so the preview
+    // matches the public render exactly.
+    const SHADOW_RECIPES = {
+      sm: '0 1px 2px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.10)',
+      md: '0 4px 6px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.06)',
+      lg: '0 10px 15px rgba(0,0,0,.10), 0 4px 6px rgba(0,0,0,.08)',
+      xl: '0 20px 25px rgba(0,0,0,.15), 0 10px 10px rgba(0,0,0,.06)',
+    };
+
     const preview = el('div', { class: 'pbe-image-preview' });
     function repaintPreview() {
       preview.innerHTML = '';
       if (b.data.src) {
-        preview.appendChild(el('img', { src: b.data.src, alt: b.data.alt || '' }));
+        const img = el('img', { src: b.data.src, alt: b.data.alt || '' });
+        img.style.boxShadow = SHADOW_RECIPES[b.data.shadow] || '';
+        preview.appendChild(img);
       } else {
         preview.appendChild(el('div', { class: 'pbe-image-empty' }, ['No image yet — upload or paste a URL below.']));
       }
@@ -290,6 +338,47 @@
       commit();
     });
 
+    // Box-shadow tier — None plus four intensities matching the
+    // `_blog_blocks.html` recipes. `repaintPreview` reads
+    // `b.data.shadow` on every rebuild so picking a tier just needs
+    // to mutate the field and re-repaint; a fresh `<img>` after a
+    // src / library pick also inherits the current shadow for free.
+    const shadowGroup = renderSegmented(
+      [['', 'None'], ['sm', 'Small'], ['md', 'Medium'],
+       ['lg', 'Large'], ['xl', 'X-Large']],
+      b.data.shadow || '',
+      v => { b.data.shadow = v; commit(); repaintPreview(); }
+    );
+
+    // Top + bottom margin (rem) — defaults to 1.5 to preserve the
+    // longstanding `.bb-image` CSS spacing so existing posts keep
+    // their familiar rhythm until the writer dials it. Same input
+    // shape + sanitiser as the Section block's margin controls,
+    // so the two read as siblings.
+    if (typeof b.data.margin_top    !== 'number') b.data.margin_top    = 1.5;
+    if (typeof b.data.margin_bottom !== 'number') b.data.margin_bottom = 1.5;
+    function imageMarginInput(key, label) {
+      const inp = el('input', {
+        type: 'number', class: 'pbe-input pbe-section-margin-input',
+        min: '0', max: '20', step: '0.25',
+        'aria-label': label,
+      });
+      inp.value = String(b.data[key]);
+      inp.addEventListener('input', e => {
+        const n = parseFloat(e.target.value);
+        if (!isFinite(n)) return;
+        b.data[key] = Math.max(0, Math.min(20, n));
+        commit();
+      });
+      return el('label', { class: 'pbe-mini-label pbe-section-margin-label' }, [
+        label,
+        el('span', { class: 'pbe-section-margin-row' }, [
+          inp,
+          el('span', { class: 'pbe-section-margin-unit muted smaller' }, ['rem']),
+        ]),
+      ]);
+    }
+
     return el('div', { class: 'pbe-block-body pbe-image-body' }, [
       preview,
       el('div', { class: 'pbe-row pbe-image-row' }, [
@@ -302,6 +391,11 @@
         el('label', { class: 'pbe-mini-label pbe-range-label' }, [
           'Width', widthInput, widthValue,
         ]),
+      ]),
+      el('div', { class: 'pbe-row pbe-image-controls' }, [
+        el('label', { class: 'pbe-mini-label' }, ['Shadow', shadowGroup]),
+        imageMarginInput('margin_top', 'Top margin'),
+        imageMarginInput('margin_bottom', 'Bottom margin'),
       ]),
     ]);
   }
@@ -790,6 +884,47 @@
     return el('div', { class: 'pbe-block-body pbe-code-body' }, [lang, code]);
   }
 
+  function renderSection(b) {
+    // Margin controls — top + bottom, in rem. Stored as numbers so
+    // the sanitiser can clamp; the renderer slaps "rem" on it.
+    if (typeof b.data.margin_top    !== 'number') b.data.margin_top    = 3;
+    if (typeof b.data.margin_bottom !== 'number') b.data.margin_bottom = 3;
+
+    function marginInput(key, label) {
+      const inp = el('input', {
+        type: 'number', class: 'pbe-input pbe-section-margin-input',
+        min: '0', max: '20', step: '0.25',
+        'aria-label': label,
+      });
+      inp.value = String(b.data[key]);
+      inp.addEventListener('input', e => {
+        const n = parseFloat(e.target.value);
+        if (!isFinite(n)) return;
+        b.data[key] = Math.max(0, Math.min(20, n));
+        commit();
+      });
+      return el('label', { class: 'pbe-mini-label pbe-section-margin-label' }, [
+        label,
+        el('span', { class: 'pbe-section-margin-row' }, [
+          inp,
+          el('span', { class: 'pbe-section-margin-unit muted smaller' }, ['rem']),
+        ]),
+      ]);
+    }
+
+    const controls = el('div', { class: 'pbe-section-controls' }, [
+      marginInput('margin_top', 'Top margin'),
+      marginInput('margin_bottom', 'Bottom margin'),
+    ]);
+
+    const inner = renderSectionCanvas(b, b.data.blocks);
+
+    return el('div', { class: 'pbe-block-body pbe-section-body' }, [
+      controls,
+      inner,
+    ]);
+  }
+
   const RENDERERS = {
     paragraph: renderParagraph,
     heading:   renderHeading,
@@ -801,6 +936,7 @@
     separator: renderSeparator,
     video:     renderVideo,
     code:      renderCode,
+    section:   renderSection,
   };
 
   // ── Shared widgets ───────────────────────────────────────────────
@@ -849,8 +985,27 @@
   }
 
   // ── Render ───────────────────────────────────────────────────────
+  //
+  // Block rendering threads a `host` array reference through every
+  // call so mutations operate on the right list — top-level `blocks`
+  // OR a section's `data.blocks`. Drag-and-drop uses a WeakMap keyed
+  // by zone DOM element to look the host back up after a drop.
+  //
+  // The canvas-bound drag handlers are registered once on the
+  // outer canvas and delegate to whichever `[data-pbe-zone]` the
+  // event is happening inside — so adding a section spawns a fresh
+  // working drop zone for free.
 
-  function renderBlock(b, index) {
+  // Zone → host array map. Rebuilt on every render() so stale
+  // section refs from a previous tree don't survive.
+  const zoneHostMap = new WeakMap();
+
+  // Source-of-current-drag bookkeeping. The drag handle's dragstart
+  // stamps this; drop reads it to splice the block out of the
+  // correct host array regardless of where the user drops it.
+  let _dragSource = null;
+
+  function renderBlock(b, index, host) {
     const wrap = el('div', {
       class: 'pbe-block pbe-block--' + b.type,
       'data-block-id': b.id,
@@ -867,27 +1022,22 @@
       draggable: 'true',
     });
     handle.innerHTML = svgIcon('grip-vertical');
-    // Drag handle is the only draggable surface — the textareas /
-    // inputs inside the block need to keep their native drag
-    // behaviour (text selection). Wire the drag events from the
-    // handle but stamp the *whole block* as the drag image so the
-    // visual feedback matches what the user is reordering.
     handle.addEventListener('dragstart', e => {
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('application/x-pbe-move', b.id);
-      // Use a slight offset on the drag image so it doesn't cover
-      // the cursor entirely while dragging.
-      try {
-        e.dataTransfer.setDragImage(wrap, 20, 20);
-      } catch (_) {}
+      try { e.dataTransfer.setDragImage(wrap, 20, 20); } catch (_) {}
       wrap.classList.add('is-dragging');
       document.body.classList.add('pbe-is-dragging');
+      // Capture the source host so the drop handler knows which
+      // array to splice the block out of — critical for moves
+      // across zones (top-level ↔ section children).
+      _dragSource = { id: b.id, host: host, type: b.type };
     });
     handle.addEventListener('dragend', () => {
       wrap.classList.remove('is-dragging');
       document.body.classList.remove('pbe-is-dragging');
-      // Clear any insert markers left over from the drop calc.
-      canvas.querySelectorAll('.pbe-insert-marker').forEach(n => n.remove());
+      _dragSource = null;
+      clearInsertMarkers();
     });
 
     const typeChip = el('span', { class: 'pbe-block-type-chip' }, [BLOCK_LABELS[b.type] || b.type]);
@@ -895,7 +1045,7 @@
     const upBtn = el('button', {
       type: 'button', class: 'pbe-block-action',
       title: 'Move up', 'aria-label': 'Move block up',
-      onclick: () => { if (index > 0) { moveBlock(index, index - 1); } },
+      onclick: () => { if (index > 0) moveBlock(host, index, index - 1); },
     });
     upBtn.innerHTML = svgIcon('chevron-up');
     if (index === 0) upBtn.disabled = true;
@@ -903,22 +1053,22 @@
     const downBtn = el('button', {
       type: 'button', class: 'pbe-block-action',
       title: 'Move down', 'aria-label': 'Move block down',
-      onclick: () => { if (index < blocks.length - 1) { moveBlock(index, index + 1); } },
+      onclick: () => { if (index < host.length - 1) moveBlock(host, index, index + 1); },
     });
     downBtn.innerHTML = svgIcon('chevron-down');
-    if (index === blocks.length - 1) downBtn.disabled = true;
+    if (index === host.length - 1) downBtn.disabled = true;
 
     const dupBtn = el('button', {
       type: 'button', class: 'pbe-block-action',
       title: 'Duplicate', 'aria-label': 'Duplicate block',
-      onclick: () => duplicateBlock(index),
+      onclick: () => duplicateBlock(host, index),
     });
     dupBtn.innerHTML = svgIcon('copy');
 
     const delBtn = el('button', {
       type: 'button', class: 'pbe-block-action pbe-block-action--danger',
       title: 'Delete', 'aria-label': 'Delete block',
-      onclick: () => deleteBlock(index),
+      onclick: () => deleteBlock(host, index),
     });
     delBtn.innerHTML = svgIcon('trash-2');
 
@@ -935,28 +1085,57 @@
   }
 
   function render() {
-    canvas.querySelectorAll('.pbe-block, .pbe-insert-marker').forEach(n => n.remove());
+    // Wipe the outer canvas children but keep the empty-state placeholder.
+    Array.from(canvas.querySelectorAll(':scope > .pbe-block, :scope > .pbe-insert-marker'))
+      .forEach(n => n.remove());
     const empty = canvas.querySelector('[data-pbe-empty]');
+    // Top-level canvas is itself a zone.
+    canvas.dataset.pbeZone = 'root';
+    zoneHostMap.set(canvas, blocks);
     if (blocks.length === 0) {
       if (empty) empty.style.display = '';
       commit();
       return;
     }
     if (empty) empty.style.display = 'none';
-    blocks.forEach((b, i) => canvas.appendChild(renderBlock(b, i)));
+    blocks.forEach((b, i) => canvas.appendChild(renderBlock(b, i, blocks)));
     commit();
   }
 
+  // Recursively render the blocks of a section into its own inner
+  // canvas. Each call registers the inner canvas as a zone so the
+  // outer drop handler routes inserts/moves to the right host.
+  function renderSectionCanvas(b, host) {
+    if (!Array.isArray(b.data.blocks)) b.data.blocks = [];
+    const inner = el('div', {
+      class: 'pbe-section-canvas',
+      'data-pbe-zone': 'section',
+    });
+    zoneHostMap.set(inner, b.data.blocks);
+    if (b.data.blocks.length === 0) {
+      inner.appendChild(el('div', { class: 'pbe-section-empty' }, [
+        'Empty section — drag blocks from the “Add block” palette here, or click a tile to drop one in.',
+      ]));
+    }
+    b.data.blocks.forEach((child, i) => {
+      inner.appendChild(renderBlock(child, i, b.data.blocks));
+    });
+    return inner;
+  }
+
   // ── Mutation helpers ────────────────────────────────────────────
+  // Every mutator takes `host` so the same logic services the
+  // top-level blocks AND any section's children. `appendBlock`
+  // still targets the top-level canvas — palette clicks land at
+  // the end of the main body unless the writer drags onto a
+  // section explicitly.
   function appendBlock(type) {
     const factory = BLOCK_DEFAULTS[type];
     if (!factory) return;
     blocks.push({ id: nextId(), type, data: factory() });
     render();
-    // Focus the first input of the newly-added block so the writer
-    // can start typing without a follow-up click.
     setTimeout(() => {
-      const last = canvas.querySelector('.pbe-block:last-of-type');
+      const last = canvas.querySelector(':scope > .pbe-block:last-of-type');
       if (last) {
         const inp = last.querySelector('input, textarea, select');
         if (inp) inp.focus();
@@ -965,52 +1144,87 @@
     }, 30);
   }
 
-  function insertBlockAt(type, index) {
+  function insertBlockAt(type, index, host) {
     const factory = BLOCK_DEFAULTS[type];
     if (!factory) return;
-    const idx = Math.max(0, Math.min(blocks.length, index));
-    blocks.splice(idx, 0, { id: nextId(), type, data: factory() });
+    // Sections aren't allowed inside other sections — sanitiser
+    // strips them server-side, but blocking the drop here keeps
+    // the editor honest.
+    if (type === 'section' && !canHostSections(host)) return;
+    const target = host || blocks;
+    const idx = Math.max(0, Math.min(target.length, index));
+    target.splice(idx, 0, { id: nextId(), type, data: factory() });
     render();
   }
 
-  function moveBlock(from, to) {
-    if (from === to || from < 0 || to < 0 || from >= blocks.length || to >= blocks.length) return;
-    const [b] = blocks.splice(from, 1);
-    blocks.splice(to, 0, b);
+  function moveBlock(host, from, to) {
+    if (from === to || from < 0 || to < 0 || from >= host.length || to >= host.length) return;
+    const [b] = host.splice(from, 1);
+    host.splice(to, 0, b);
     render();
   }
 
-  function moveBlockById(id, toIdx) {
-    const from = blocks.findIndex(b => b.id === id);
+  // Move a block from its source host (captured at dragstart) into a
+  // target zone's host at the given index. Handles same-zone reorder
+  // AND cross-zone moves (top-level ↔ section children). The index
+  // is from the drop calc BEFORE the splice — so for same-zone moves
+  // where the source sat above the target we have to compensate by
+  // 1, otherwise the moved block bounces back to its original slot.
+  function moveBlockToZone(id, targetHost, toIdx) {
+    if (!_dragSource || _dragSource.id !== id) {
+      // No captured source (rare — maybe the user manipulated
+      // the DOM via dev tools). Fall back to a global search.
+      const found = findBlockHost(id);
+      if (!found) return;
+      _dragSource = found;
+    }
+    const sourceHost = _dragSource.host;
+    const sourceType = _dragSource.type;
+    // Refuse cross-zone moves that would land a section inside
+    // another section.
+    if (sourceType === 'section' && !canHostSections(targetHost)) return;
+    const from = sourceHost.indexOf(sourceHost.find(b => b.id === id));
     if (from < 0) return;
-    // The drop calc gives us the index BEFORE the move; if the
-    // moved block was already above the target, the splice shifts
-    // it by one. Correct that here so dragging "to the slot just
-    // below" doesn't bounce the block back to its original place.
     let to = toIdx;
-    if (from < to) to -= 1;
-    to = Math.max(0, Math.min(blocks.length - 1, to));
-    moveBlock(from, to);
-  }
-
-  function duplicateBlock(index) {
-    const src = blocks[index];
-    if (!src) return;
-    const clone = { id: nextId(), type: src.type, data: deepClone(src.data) };
-    blocks.splice(index + 1, 0, clone);
+    if (sourceHost === targetHost && from < to) to -= 1;
+    to = Math.max(0, Math.min(targetHost.length, to));
+    const [block] = sourceHost.splice(from, 1);
+    targetHost.splice(to, 0, block);
     render();
   }
 
-  function deleteBlock(index) {
-    const src = blocks[index];
+  // Walk the entire tree looking for the block with the given id;
+  // returns the host array + index, or null. Only invoked as a
+  // safety net when `_dragSource` is missing.
+  function findBlockHost(id) {
+    function walk(arr) {
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i].id === id) return { id, host: arr, type: arr[i].type };
+        if (arr[i].type === 'section' && Array.isArray(arr[i].data.blocks)) {
+          const inner = walk(arr[i].data.blocks);
+          if (inner) return inner;
+        }
+      }
+      return null;
+    }
+    return walk(blocks);
+  }
+
+  function duplicateBlock(host, index) {
+    const src = host[index];
     if (!src) return;
-    // Confirmation only when the block has user-typed content; empty
-    // blocks vanish silently so the trash icon isn't a nuisance for
-    // mid-compose cleanup.
+    const clone = assignIds(stripBlock(src));
+    host.splice(index + 1, 0, clone);
+    render();
+  }
+
+  function deleteBlock(host, index) {
+    const src = host[index];
+    if (!src) return;
     if (hasContent(src) && !confirm('Delete this ' + (BLOCK_LABELS[src.type] || 'block') + ' block?')) {
       return;
     }
-    blocks.splice(index, 1);
+    host.splice(index, 1);
     render();
   }
 
@@ -1026,6 +1240,7 @@
       case 'callout':   return !!((d.title && d.title.trim()) || (d.md && d.md.trim()));
       case 'video':     return !!(d.url && d.url.trim());
       case 'code':      return !!(d.code && d.code.trim());
+      case 'section':   return (d.blocks || []).length > 0;
       default:          return false;
     }
   }
@@ -1034,91 +1249,110 @@
     return JSON.parse(JSON.stringify(obj || {}));
   }
 
-  // ── Drag & drop on the canvas ────────────────────────────────────
-  // The canvas is one big drop zone. We compute an insert index
-  // based on the cursor's Y position relative to the children and
-  // either insert a fresh block (palette → drop) or reorder an
-  // existing one (handle → drop).
-  function indexFromY(clientY) {
-    const children = Array.from(canvas.querySelectorAll('.pbe-block'));
+  // ── Drag & drop ──────────────────────────────────────────────────
+  // Listeners are bound to the outer canvas but delegate to whichever
+  // `[data-pbe-zone]` the event is inside — so the same logic powers
+  // drops onto the top-level body AND drops onto a section's inner
+  // canvas. The closest-zone walk lets a section's canvas claim a
+  // drop even though the listener lives on its ancestor.
+  function zoneFromEvent(e) {
+    const t = e.target;
+    if (!t || !t.closest) return null;
+    return t.closest('[data-pbe-zone]');
+  }
+
+  function indexFromYInZone(zone, clientY) {
+    const children = Array.from(zone.querySelectorAll(':scope > .pbe-block'));
     for (let i = 0; i < children.length; i++) {
       const rect = children[i].getBoundingClientRect();
-      if (clientY < rect.top + rect.height / 2) {
-        return i;
-      }
+      if (clientY < rect.top + rect.height / 2) return i;
     }
     return children.length;
   }
 
-  function showInsertMarker(index) {
-    canvas.querySelectorAll('.pbe-insert-marker').forEach(n => n.remove());
+  function showInsertMarkerIn(zone, index) {
+    clearInsertMarkers();
     const marker = el('div', { class: 'pbe-insert-marker' });
-    const children = Array.from(canvas.querySelectorAll('.pbe-block'));
+    // Marker is `position: absolute` so the canvas DOESN'T reflow as
+    // the cursor moves between insert positions during a drag — that
+    // reflow was the source of the disorienting page-jump bug. We
+    // compute the marker's `top` from neighbouring block offsets so
+    // it still reads as "between block N-1 and block N".
+    zone.appendChild(marker);
+    const children = Array.from(zone.querySelectorAll(':scope > .pbe-block'));
+    let top;
     if (children.length === 0) {
-      canvas.appendChild(marker);
-      return;
-    }
-    if (index >= children.length) {
-      children[children.length - 1].after(marker);
+      top = 14; // canvas padding-top
+    } else if (index <= 0) {
+      // Above the first block.
+      top = children[0].offsetTop - 8;
+    } else if (index >= children.length) {
+      // Below the last block.
+      const last = children[children.length - 1];
+      top = last.offsetTop + last.offsetHeight + 6;
     } else {
-      children[index].before(marker);
+      // Centred in the gap between block[index-1] and block[index].
+      const prev = children[index - 1];
+      const next = children[index];
+      const prevBottom = prev.offsetTop + prev.offsetHeight;
+      top = (prevBottom + next.offsetTop) / 2 - 2;
     }
+    marker.style.top = top + 'px';
+  }
+
+  function clearInsertMarkers() {
+    canvas.querySelectorAll('.pbe-insert-marker').forEach(n => n.remove());
   }
 
   canvas.addEventListener('dragover', e => {
-    // Accept either a palette drag (new block) or a handle drag
-    // (reorder). `dragover` runs many times per second; only
-    // recompute the marker when the index changes.
     const types = e.dataTransfer && e.dataTransfer.types;
     const hasNew = types && Array.from(types).includes('application/x-pbe-new');
     const hasMove = types && Array.from(types).includes('application/x-pbe-move');
-    // Body-class fallback: some browsers (Firefox in particular)
-    // hide custom MIME types from the types list during dragover
-    // until the actual drop. The class set on dragstart bridges
-    // that gap so we still recognise our own drags.
     const isPaletteDrag = hasNew ||
       document.body.classList.contains('pbe-is-palette-dragging');
     const isMoveDrag = hasMove ||
       document.body.classList.contains('pbe-is-dragging');
     if (!isPaletteDrag && !isMoveDrag) return;
+    const zone = zoneFromEvent(e);
+    if (!zone) return;
     e.preventDefault();
-    // `dropEffect` MUST match the drag source's `effectAllowed` or
-    // the browser rejects the drop and `drop` never fires. Palette
-    // tiles allow 'copy' (a fresh block is created); the in-canvas
-    // drag handle allows 'move' (reorder). Picking the right one
-    // here lets both flows work without an "all" sledgehammer.
     e.dataTransfer.dropEffect = isPaletteDrag ? 'copy' : 'move';
-    const idx = indexFromY(e.clientY);
-    if (canvas.dataset.dragIndex !== String(idx)) {
-      canvas.dataset.dragIndex = String(idx);
-      showInsertMarker(idx);
+    const idx = indexFromYInZone(zone, e.clientY);
+    const key = (zone.dataset.pbeZone || '') + ':' + idx;
+    if (canvas.dataset.dragKey !== key) {
+      canvas.dataset.dragKey = key;
+      showInsertMarkerIn(zone, idx);
     }
   });
 
   canvas.addEventListener('dragleave', e => {
-    // Only clear markers when leaving the canvas itself; child
-    // dragleave events fire constantly during a drag and would
-    // otherwise flicker the marker off.
+    // Only clear markers when leaving the outer canvas itself —
+    // child dragleave fires constantly during a drag and would
+    // flicker the marker off.
     if (e.target === canvas) {
-      canvas.querySelectorAll('.pbe-insert-marker').forEach(n => n.remove());
-      delete canvas.dataset.dragIndex;
+      clearInsertMarkers();
+      delete canvas.dataset.dragKey;
     }
   });
 
   canvas.addEventListener('drop', e => {
+    const zone = zoneFromEvent(e);
+    if (!zone) return;
     e.preventDefault();
-    const idx = indexFromY(e.clientY);
-    canvas.querySelectorAll('.pbe-insert-marker').forEach(n => n.remove());
-    delete canvas.dataset.dragIndex;
+    const idx = indexFromYInZone(zone, e.clientY);
+    clearInsertMarkers();
+    delete canvas.dataset.dragKey;
+    const targetHost = zoneHostMap.get(zone);
+    if (!targetHost) return;
     const dt = e.dataTransfer;
     const newType = dt.getData('application/x-pbe-new');
     if (newType) {
-      insertBlockAt(newType, idx);
+      insertBlockAt(newType, idx, targetHost);
       return;
     }
     const moveId = dt.getData('application/x-pbe-move');
     if (moveId) {
-      moveBlockById(moveId, idx);
+      moveBlockToZone(moveId, targetHost, idx);
       return;
     }
   });

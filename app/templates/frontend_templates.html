@@ -210,12 +210,32 @@
                  data-tpl-bg-toggle>
           <span>Override page background color</span>
         </label>
-        <label>Color
+        <label>Light mode
           <input type="color" name="bg" value="{{ settings.bg or '#ffffff' }}"
                  data-tpl-bg-input
                  {% if not settings.bg %}disabled{% endif %}>
         </label>
-        <p class="muted small">When off, falls through to the global Design page surface color.</p>
+        {# Dark-mode behaviour. 'same' = no override; 'auto' = derive
+           from the light value at render time via derive_dark_color();
+           'manual' = use the colour below verbatim. Manual swatch is
+           hidden unless that mode is selected so the picker stays
+           tidy. #}
+        {%- set _bg_dm = settings.get('bg_dark_mode') or 'same' -%}
+        <label>Dark mode
+          <select name="bg_dark_mode" data-tpl-bg-dm-mode
+                  {% if not settings.bg %}disabled{% endif %}>
+            <option value="same"   {% if _bg_dm == 'same' %}selected{% endif %}>Same as light</option>
+            <option value="auto"   {% if _bg_dm == 'auto' %}selected{% endif %}>Auto (Surface — Darkmode token)</option>
+            <option value="manual" {% if _bg_dm == 'manual' %}selected{% endif %}>Manual</option>
+          </select>
+        </label>
+        <label data-tpl-bg-dark-row {% if _bg_dm != 'manual' %}hidden{% endif %}>Dark color
+          <input type="color" name="bg_dark"
+                 value="{{ settings.get('bg_dark') or '#0f172a' }}"
+                 data-tpl-bg-dark-input
+                 {% if not settings.bg or _bg_dm != 'manual' %}disabled{% endif %}>
+        </label>
+        <p class="muted small">When off, falls through to the global Design page surface color. Auto pulls the <b>Surface — Darkmode</b> design token so the dark variant tracks site palette edits.</p>
         <div style="margin-top: 12px;">
           <span class="fe-tplgrid-bg-toggle" style="font-size: 0.875rem; font-weight: 600; display: block; margin-bottom: 6px;">Dynamic background</span>
           {% from "_dynbg_picker.html" import dynbg_trigger with context %}
@@ -1561,6 +1581,36 @@
   <form class="form" method="post"
         action="{{ url_for('main.frontend_blog_post_template_save') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {%- set _bpwmode = (site.frontend_blog_post_width_mode  if site else None) or 'boxed' -%}
+    {%- set _bpwpad  = (site.frontend_blog_post_padding_pct if site else 5) -%}
+    {%- set _bpwmax  = (site.frontend_blog_post_max_width   if site else 1160) -%}
+    <fieldset class="fieldset fe-mlist-width-fieldset">
+      <legend>Container width</legend>
+      <div class="fe-mlist-width-row">
+        <label class="check">
+          <input type="radio" name="frontend_blog_post_width_mode" value="boxed"
+                 {% if _bpwmode == 'boxed' %}checked{% endif %}>
+          <span><b>Boxed</b> — caps at the max-width below and centers in the viewport.</span>
+        </label>
+        <label class="check">
+          <input type="radio" name="frontend_blog_post_width_mode" value="full"
+                 {% if _bpwmode == 'full' %}checked{% endif %}>
+          <span><b>Full width</b> — spans the entire viewport with the side padding below applied as <code>vw</code> gutters.</span>
+        </label>
+      </div>
+      <div class="fe-mlist-width-controls">
+        <label class="fe-mlist-width-pad">
+          <span>Max width (px, boxed only)</span>
+          <input type="number" name="frontend_blog_post_max_width"
+                 min="640" max="2400" step="10" value="{{ _bpwmax }}">
+        </label>
+        <label class="fe-mlist-width-pad">
+          <span>Side padding (% of viewport, full-width only)</span>
+          <input type="number" name="frontend_blog_post_padding_pct"
+                 min="0" max="20" step="1" value="{{ _bpwpad }}">
+        </label>
+      </div>
+    </fieldset>
     <div class="form-actions">
       <a class="btn" href="{{ url_for('frontend.blog_list') }}" target="_blank" rel="noopener">Browse /blog ↗</a>
       <button class="btn btn-primary">Save Blog post template</button>
@@ -1866,11 +1916,26 @@
     });
   });
 
-  // Customize-panel: BG-override toggle enables/disables the color input.
+  // Customize-panel: BG-override toggle enables/disables the light
+  // colour input, the dark-mode <select>, and (when manual) the dark
+  // colour input. The dark-colour row also hides unless manual mode
+  // is picked so the panel doesn't show a swatch the admin can't use.
   document.querySelectorAll('[data-tpl-bg-toggle]').forEach(toggle => {
-    const input = toggle.closest('fieldset').querySelector('[data-tpl-bg-input]');
-    const sync = () => { if (input) input.disabled = !toggle.checked; };
+    const scope    = toggle.closest('fieldset');
+    const light    = scope.querySelector('[data-tpl-bg-input]');
+    const dmMode   = scope.querySelector('[data-tpl-bg-dm-mode]');
+    const darkRow  = scope.querySelector('[data-tpl-bg-dark-row]');
+    const darkInp  = scope.querySelector('[data-tpl-bg-dark-input]');
+    const sync = () => {
+      const on = toggle.checked;
+      if (light)  light.disabled  = !on;
+      if (dmMode) dmMode.disabled = !on;
+      const manual = on && dmMode && dmMode.value === 'manual';
+      if (darkRow) darkRow.hidden = !manual;
+      if (darkInp) darkInp.disabled = !manual;
+    };
     toggle.addEventListener('change', sync);
+    if (dmMode) dmMode.addEventListener('change', sync);
     sync();
   });
 

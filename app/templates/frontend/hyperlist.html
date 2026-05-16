@@ -28,11 +28,12 @@
    * Search input has a programmatic <label>, an <output aria-live="polite">
      for the "N meetings match" announcement, and a `/` keyboard shortcut
      when focus isn't already in an input.
-   * High-contrast palette (>= WCAG AAA against the white surface);
-     focus rings are explicit, thick, and non-colour-dependent.
+   * Permanently dark palette — decoupled from the site's light/dark
+     toggle AND the visitor's OS `prefers-color-scheme`. The brutalist
+     near-black surface with pale text is part of this template's
+     identity; high-contrast palette clears WCAG AAA either way.
+     Focus rings are explicit, thick, and non-colour-dependent.
    * prefers-reduced-motion blanket-disables every transition.
-   * prefers-color-scheme: dark mirrors the same contrast ratio with a
-     near-black surface and pale text.
    * No images, no icon fonts, no SVGs — every affordance is text.
 
    Routes here include the public meeting detail page so visitors who
@@ -60,14 +61,18 @@
      downloaded webfont they have to wait on. */
   *, *::before, *::after { box-sizing: border-box; }
   html { font-size: 100%; -webkit-text-size-adjust: 100%; }
+  /* Permanently dark palette — the hyperlist template is intentionally
+     decoupled from the site's light/dark mode and the OS preference.
+     The colour ratios still clear WCAG AAA against a near-black surface,
+     and the brutalist black look is part of this template's identity. */
   body {
     margin: 0;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
                  Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
     font-size: 1.125rem;       /* 18px floor — comfortable for low-vision visitors */
     line-height: 1.55;
-    color: #0a0a0a;            /* near-black on white = ~21:1, well past AAA */
-    background: #ffffff;
+    color: #f5f5f5;            /* near-white on near-black, AAA contrast */
+    background: #0a0a0a;
     text-rendering: optimizeLegibility;
   }
   /* Skip link — only visible when focused. AT users press Tab on load
@@ -76,8 +81,8 @@
     position: absolute;
     left: 0;
     top: 0;
-    background: #0a0a0a;
-    color: #ffffff;
+    background: #f5f5f5;
+    color: #0a0a0a;
     padding: 0.75rem 1rem;
     text-decoration: underline;
     font-weight: 700;
@@ -91,9 +96,9 @@
   .wrap { max-width: 56rem; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
 
   /* Page header */
-  header[role="banner"] { border-bottom: 2px solid #0a0a0a; padding-bottom: 1rem; margin-bottom: 1.5rem; }
+  header[role="banner"] { border-bottom: 2px solid #f5f5f5; padding-bottom: 1rem; margin-bottom: 1.5rem; }
   h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 0.5rem; }
-  .lede { font-size: 1.0625rem; color: #2a2a2a; margin: 0; }
+  .lede { font-size: 1.0625rem; color: #c8c8c8; margin: 0; }
 
   /* Live-meeting status region. Background colour is supportive, not
      load-bearing — the heading text "Currently in session" carries the
@@ -101,15 +106,15 @@
   .live {
     margin: 1.25rem 0 1.5rem;
     padding: 1rem 1.25rem;
-    background: #fff8d6;
-    border: 2px solid #8a6d00;
+    background: #2a2400;
+    border: 2px solid #ffd700;
     border-left-width: 8px;
-    color: #1a1400;
+    color: #fff8d6;
   }
   .live h2 { margin: 0 0 0.5rem; font-size: 1.25rem; }
   .live p  { margin: 0.25rem 0; }
   .live .live-name { font-weight: 700; font-size: 1.125rem; }
-  .live a { color: #1a1400; }
+  .live a { color: #fff8d6; }
 
   /* Quick controls — search + day index. Both stack on every viewport
      so reading order = visual order = DOM order. */
@@ -121,13 +126,13 @@
     font: inherit;
     font-size: 1.125rem;
     padding: 0.625rem 0.75rem;
-    border: 2px solid #0a0a0a;
+    border: 2px solid #f5f5f5;
     border-radius: 4px;
-    background: #ffffff;
-    color: #0a0a0a;
+    background: #1a1a1a;
+    color: #f5f5f5;
   }
-  .search-row .hint { display: block; margin-top: 0.25rem; color: #2a2a2a; font-size: 0.9375rem; }
-  .search-row output { display: block; margin-top: 0.25rem; font-style: italic; color: #2a2a2a; }
+  .search-row .hint { display: block; margin-top: 0.25rem; color: #c8c8c8; font-size: 0.9375rem; }
+  .search-row output { display: block; margin-top: 0.25rem; font-style: italic; color: #c8c8c8; }
 
   nav[aria-label="Jump to day"] h2 {
     font-size: 1rem;
@@ -147,16 +152,16 @@
   nav[aria-label="Jump to day"] a {
     display: inline-block;
     padding: 0.5rem 0.875rem;
-    border: 2px solid #0a0a0a;
+    border: 2px solid #f5f5f5;
     border-radius: 4px;
-    background: #ffffff;
-    color: #0a0a0a;
+    background: #1a1a1a;
+    color: #f5f5f5;
     text-decoration: none;
     font-weight: 600;
   }
   nav[aria-label="Jump to day"] a[aria-current="date"] {
-    background: #0a0a0a;
-    color: #ffffff;
+    background: #f5f5f5;
+    color: #0a0a0a;
   }
   nav[aria-label="Jump to day"] a:hover,
   nav[aria-label="Jump to day"] a:focus { text-decoration: underline; }
@@ -168,10 +173,10 @@
     font-size: 1.5rem;
     margin: 0 0 1rem;
     padding: 0.5rem 0 0.5rem;
-    border-bottom: 2px solid #0a0a0a;
+    border-bottom: 2px solid #f5f5f5;
   }
-  section.day h2 .day-count { font-size: 1rem; font-weight: 400; color: #2a2a2a; }
-  section.day .empty { color: #2a2a2a; font-style: italic; margin: 0.5rem 0 0; }
+  section.day h2 .day-count { font-size: 1rem; font-weight: 400; color: #c8c8c8; }
+  section.day .empty { color: #c8c8c8; font-style: italic; margin: 0.5rem 0 0; }
 
   /* Meeting list */
   ol.meetings { list-style: none; margin: 0; padding: 0; }
@@ -179,16 +184,16 @@
     counter-increment: meeting;
     margin: 0 0 1.25rem;
     padding: 1rem 1.125rem;
-    border: 1px solid #0a0a0a;
+    border: 1px solid #c8c8c8;
     border-radius: 6px;
-    background: #ffffff;
+    background: #131313;
   }
   ol.meetings > li[hidden] { display: none; }
   article.meeting h3 { margin: 0 0 0.5rem; font-size: 1.1875rem; line-height: 1.3; }
-  article.meeting h3 a { color: #0a0a0a; text-decoration: underline; }
+  article.meeting h3 a { color: #f5f5f5; text-decoration: underline; }
 
   dl.meeting-data { margin: 0.5rem 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
-  dl.meeting-data dt { font-weight: 700; color: #2a2a2a; }
+  dl.meeting-data dt { font-weight: 700; color: #c8c8c8; }
   dl.meeting-data dd { margin: 0; }
   dl.meeting-data .copy { font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; word-break: break-all; }
   /* Address: name on its own line; <address> below renders the street
@@ -202,40 +207,35 @@
   .meeting-actions a {
     display: inline-block;
     padding: 0.4375rem 0.75rem;
-    border: 2px solid #0a0a0a;
+    border: 2px solid #f5f5f5;
     border-radius: 4px;
-    color: #0a0a0a;
+    background: #1a1a1a;
+    color: #f5f5f5;
     text-decoration: underline;
     font-weight: 600;
   }
-  .meeting-actions a.zoom { background: #0a0a0a; color: #ffffff; }
+  .meeting-actions a.zoom { background: #f5f5f5; color: #0a0a0a; }
 
   /* Generic links */
-  a { color: #0033a0; }
-  a:hover, a:focus { color: #001a55; }
+  a { color: #8ab4ff; }
+  a:hover, a:focus { color: #c0d4ff; }
 
   /* Focus rings — thick, high-contrast, never colour-only. */
   :focus-visible {
-    outline: 3px solid #0033a0;
+    outline: 3px solid #ffd700;
     outline-offset: 2px;
-  }
-  /* For dark-on-light buttons (day pills, zoom CTA), invert the ring
-     so it stays visible against the dark surface. */
-  nav[aria-label="Jump to day"] a[aria-current="date"]:focus-visible,
-  .meeting-actions a.zoom:focus-visible {
-    outline-color: #ffd700;
   }
 
   /* Footer */
   footer[role="contentinfo"] {
     margin-top: 3rem;
     padding-top: 1.25rem;
-    border-top: 2px solid #0a0a0a;
+    border-top: 2px solid #f5f5f5;
     font-size: 0.9375rem;
-    color: #2a2a2a;
+    color: #c8c8c8;
   }
   footer[role="contentinfo"] ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; }
-  footer[role="contentinfo"] a { color: #0033a0; }
+  footer[role="contentinfo"] a { color: #8ab4ff; }
 
   /* Visually hidden — content stays in the accessibility tree. */
   .sr-only {
@@ -251,37 +251,6 @@
   /* Reduced motion — disable every animation/transition. */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
-  }
-
-  /* Dark mode — keep the same contrast ratio, just inverted. Triggered
-     by the OS preference; visitors who don't want dark mode get light
-     either way. No JS toggle here on purpose — fewer moving parts. */
-  @media (prefers-color-scheme: dark) {
-    body { background: #0a0a0a; color: #f5f5f5; }
-    .lede, dl.meeting-data dt, section.day h2 .day-count, section.day .empty,
-    .search-row .hint, .search-row output, footer[role="contentinfo"] { color: #c8c8c8; }
-    a { color: #8ab4ff; }
-    a:hover, a:focus { color: #c0d4ff; }
-    header[role="banner"], section.day h2, footer[role="contentinfo"] { border-color: #f5f5f5; }
-    .skip-link { background: #f5f5f5; color: #0a0a0a; }
-    .search-row input[type="search"] { background: #1a1a1a; color: #f5f5f5; border-color: #f5f5f5; }
-    nav[aria-label="Jump to day"] a {
-      background: #1a1a1a; color: #f5f5f5; border-color: #f5f5f5;
-    }
-    nav[aria-label="Jump to day"] a[aria-current="date"] {
-      background: #f5f5f5; color: #0a0a0a;
-    }
-    ol.meetings > li { background: #131313; border-color: #c8c8c8; }
-    article.meeting h3 a { color: #f5f5f5; }
-    .meeting-actions a { background: #1a1a1a; color: #f5f5f5; border-color: #f5f5f5; }
-    .meeting-actions a.zoom { background: #f5f5f5; color: #0a0a0a; }
-    .live {
-      background: #2a2400;
-      border-color: #ffd700;
-      color: #fff8d6;
-    }
-    .live a { color: #fff8d6; }
-    :focus-visible { outline-color: #ffd700; }
   }
 </style>
 </head>
@@ -321,7 +290,7 @@
              aria-describedby="hyperlist-search-hint"
              autocomplete="off"
              inputmode="search">
-      <span id="hyperlist-search-hint" class="hint">Press the slash key to focus this field. Press Escape to clear it. Filter is optional — without JavaScript every meeting stays visible.</span>
+      <span id="hyperlist-search-hint" class="hint">Press the slash key to focus this field. Press Escape to clear it.</span>
       <output for="hyperlist-search" aria-live="polite" id="hyperlist-search-count"></output>
     </div>
 

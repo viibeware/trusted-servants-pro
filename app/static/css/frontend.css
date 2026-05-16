@@ -9224,6 +9224,16 @@ html[data-theme="dark"] [style*="--tsp-border-dm"] {
   border-color: var(--tsp-border-dm) !important;
 }
 
+/* Per-template page-background dark-mode swap. The frontend-templates
+   "Override page background color" picker emits `--tpl-bg` (light) and
+   optionally `--tpl-bg-dark` (auto-derived or manual). In dark theme,
+   swap the live `--tpl-bg` value to the dark variant so every consumer
+   of `var(--tpl-bg, …)` — section backgrounds, card surfaces — flips
+   in one step. */
+html[data-theme="dark"] [style*="--tpl-bg-dark"] {
+  --tpl-bg: var(--tpl-bg-dark) !important;
+}
+
 /* ── Wiki sidebar block (toc_sidebar) ────────────────────────────
    On-page TOC built from heading blocks. Sits in any column of any
    container layout; sticks to the viewport top when `is-sticky` is
@@ -10711,3 +10721,13 @@ body.fe-frontend-force-dark .fe-card-secondary {
   .bb-quote p { font-size: 1rem; }
   .bb-image { max-width: 100% !important; }
 }
+
+/* Blog body Section block — wraps a stack of child blocks with admin-
+   tuned top/bottom margins. The inline `style` from the renderer
+   sets the spacing; the first/last-child resets keep the section's
+   first heading or paragraph from doubling up with its own margin
+   collapse, and the `display: block` is explicit so this stays a
+   plain stacking context inside the blog body. */
+.bb-section { display: block; }
+.bb-section > *:first-child { margin-top: 0; }
+.bb-section > *:last-child  { margin-bottom: 0; }

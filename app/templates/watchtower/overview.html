@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+{% block title %}Watchtower · Trusted Servants Pro{% endblock %}
+{% block heading %}Watchtower{% endblock %}
+{% block heading_help %}Security + observability dashboard. Visitors, sessions, admin actions, suspicious IPs, and system health — all in one place.{% endblock %}
+{% block content %}
+{% include "watchtower/_tabs.html" %}
+
+{# ───────── Anomaly banner ───────── #}
+{% if anomalies %}
+<section class="wt-anomalies">
+  {% for a in anomalies %}
+  <div class="wt-anomaly wt-anomaly--{{ a.level }}">
+    <span class="wt-anomaly-icon">{{ icon('alert-triangle' if a.level == 'critical' else 'alert-circle') }}</span>
+    <div class="wt-anomaly-body">
+      <strong>{{ a.title }}</strong>
+      <span class="muted small"> · {{ a.detail }}</span>
+    </div>
+    <a class="wt-anomaly-action" href="{{ url_for('main.watchtower_access') }}">Review →</a>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{# ───────── KPI tiles ───────── #}
+<section class="wt-kpi-grid">
+  <div class="wt-kpi">
+    <div class="wt-kpi-label">Views today</div>
+    <div class="wt-kpi-value">{{ '{:,}'.format(kpis.views_today) }}</div>
+    <div class="wt-kpi-sub muted small">{{ '{:,}'.format(kpis.uniques_today) }} unique visitor{{ '' if kpis.uniques_today == 1 else 's' }}</div>
+  </div>
+  <div class="wt-kpi">
+    <div class="wt-kpi-label">Online now</div>
+    <div class="wt-kpi-value">{{ kpis.online_now }}</div>
+    <div class="wt-kpi-sub muted small">last 15 min activity</div>
+  </div>
+  <div class="wt-kpi {% if kpis.failed_logins_24h > 50 %}wt-kpi--warn{% endif %} {% if kpis.failed_logins_24h > 200 %}wt-kpi--crit{% endif %}">
+    <div class="wt-kpi-label">Failed logins · 24h</div>
+    <div class="wt-kpi-value">{{ '{:,}'.format(kpis.failed_logins_24h) }}</div>
+    <div class="wt-kpi-sub muted small">rate-limited at 5 per 15 min</div>
+  </div>
+  <div class="wt-kpi {% if kpis.blocked_ips %}wt-kpi--accent{% endif %}">
+    <div class="wt-kpi-label">Blocked IPs</div>
+    <div class="wt-kpi-value">{{ kpis.blocked_ips }}</div>
+    <div class="wt-kpi-sub muted small">currently active</div>
+  </div>
+  <div class="wt-kpi">
+    <div class="wt-kpi-label">Pending requests</div>
+    <div class="wt-kpi-value">{{ kpis.pending_requests }}</div>
+    <div class="wt-kpi-sub muted small"><a href="{{ url_for('main.watchtower_requests') }}">View inbox →</a></div>
+  </div>
+  <div class="wt-kpi">
+    <div class="wt-kpi-label">Files in trash</div>
+    <div class="wt-kpi-value">{{ kpis.trash_count }}</div>
+    <div class="wt-kpi-sub muted small"><a href="{{ url_for('main.watchtower_deletes') }}">Recycle bin →</a></div>
+  </div>
+</section>
+
+{# ───────── System metrics row ───────── #}
+<section class="card wt-system-card">
+  <div class="card-head">
+    <h2>System</h2>
+    <span class="muted smaller">{{ system.os or 'Linux' }} · {{ system.hostname or 'host' }}{% if system.host_mode %} · host-mode{% endif %}</span>
+  </div>
+  <div class="wt-sys-grid">
+    <div class="wt-sys-tile">
+      <div class="wt-sys-label">CPU</div>
+      <div class="wt-sys-value">{{ '%.1f'|format(system.cpu_percent or 0) }}<span class="wt-sys-unit">%</span></div>
+      <div class="wt-sys-bar"><span style="width: {{ (system.cpu_percent or 0)|int }}%"></span></div>
+      <div class="wt-sys-sub muted small">{{ system.cpu_count }} core{{ '' if system.cpu_count == 1 else 's' }}</div>
+    </div>
+    <div class="wt-sys-tile">
+      <div class="wt-sys-label">Memory</div>
+      <div class="wt-sys-value">{{ '%.1f'|format(system.memory_percent or 0) }}<span class="wt-sys-unit">%</span></div>
+      <div class="wt-sys-bar"><span style="width: {{ (system.memory_percent or 0)|int }}%"></span></div>
+      <div class="wt-sys-sub muted small">
+        {% set mem_gb = (system.memory_used or 0) / 1073741824 %}
+        {% set tot_gb = (system.memory_total or 0) / 1073741824 %}
+        {{ '%.1f'|format(mem_gb) }} GB / {{ '%.1f'|format(tot_gb) }} GB
+      </div>
+    </div>
+    <div class="wt-sys-tile">
+      <div class="wt-sys-label">Load avg</div>
+      <div class="wt-sys-value wt-sys-load">{{ '%.2f'|format((system.load_avg or [0])[0]) }}</div>
+      <div class="wt-sys-sub muted small">1m · {{ '%.2f'|format((system.load_avg or [0,0])[1]) }} · 5m · {{ '%.2f'|format((system.load_avg or [0,0,0])[2]) }} · 15m</div>
+    </div>
+    <div class="wt-sys-tile">
+      <div class="wt-sys-label">Uptime</div>
+      <div class="wt-sys-value wt-sys-uptime">
+        {% set up_s = system.uptime_seconds or 0 %}
+        {% set d = (up_s // 86400)|int %}
+        {% set h = ((up_s % 86400) // 3600)|int %}
+        {% set m = ((up_s % 3600) // 60)|int %}
+        {% if d > 0 %}{{ d }}d {{ h }}h{% elif h > 0 %}{{ h }}h {{ m }}m{% else %}{{ m }}m{% endif %}
+      </div>
+      <div class="wt-sys-sub muted small">since boot</div>
+    </div>
+  </div>
+</section>
+
+{# ───────── Charts: visitors over 30d + failed logins over 24h ───────── #}
+{% set max_views = (daily|map(attribute='views')|max) or 1 %}
+{% set max_uniq  = (daily|map(attribute='uniques')|max) or 1 %}
+{% set chart_max = ([max_views, max_uniq]|max) or 1 %}
+<section class="card wt-chart-card">
+  <div class="card-head">
+    <h2>Visitor traffic · last 30 days</h2>
+    <span class="muted smaller"><a href="{{ url_for('main.watchtower_visitors') }}">Open Visitors →</a></span>
+  </div>
+  <div class="wt-chart-wrap">
+    <svg class="wt-chart" viewBox="0 0 600 180" preserveAspectRatio="none" role="img" aria-label="Daily visits over the last 30 days">
+      <defs>
+        <linearGradient id="wt-grad-views" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="rgba(59,130,246,0.45)"/>
+          <stop offset="100%" stop-color="rgba(59,130,246,0.02)"/>
+        </linearGradient>
+      </defs>
+      {# Axis baseline #}
+      <line x1="0" y1="170" x2="600" y2="170" stroke="rgba(148,163,184,0.25)" stroke-width="1"/>
+      {% set n = daily|length %}
+      {% set step = 600 / (n - 1) if n > 1 else 0 %}
+      {# Area fill #}
+      <path d="M 0 170
+        {%- for d in daily -%}
+          L {{ '%.1f'|format(loop.index0 * step) }} {{ '%.1f'|format(170 - (d.views / chart_max) * 150) }}
+        {%- endfor -%}
+        L 600 170 Z" fill="url(#wt-grad-views)"/>
+      {# Views stroke #}
+      <path d="M
+        {%- for d in daily -%}
+          {{ '%.1f'|format(loop.index0 * step) }},{{ '%.1f'|format(170 - (d.views / chart_max) * 150) }}{% if not loop.last %} L {% endif %}
+        {%- endfor -%}" fill="none" stroke="rgb(59,130,246)" stroke-width="2"/>
+      {# Uniques stroke (dashed) #}
+      <path d="M
+        {%- for d in daily -%}
+          {{ '%.1f'|format(loop.index0 * step) }},{{ '%.1f'|format(170 - (d.uniques / chart_max) * 150) }}{% if not loop.last %} L {% endif %}
+        {%- endfor -%}" fill="none" stroke="rgb(16,185,129)" stroke-width="2" stroke-dasharray="4 4"/>
+    </svg>
+    <div class="wt-chart-legend">
+      <span class="wt-chart-key wt-chart-key--views">Views</span>
+      <span class="wt-chart-key wt-chart-key--uniques">Uniques</span>
+      <span class="muted smaller">peak {{ chart_max }}/day</span>
+    </div>
+  </div>
+</section>
+
+{% set max_fail = (hourly_fail|map(attribute='count')|max) or 1 %}
+{% set total_fail_24h = hourly_fail|sum(attribute='count') %}
+<section class="card wt-chart-card">
+  <div class="card-head">
+    <h2>Failed logins · last 24 hours</h2>
+    <span class="muted smaller">{{ total_fail_24h }} total</span>
+  </div>
+  <div class="wt-chart-wrap">
+    <svg class="wt-chart wt-chart--bars" viewBox="0 0 600 140" preserveAspectRatio="none" role="img" aria-label="Failed login attempts per hour">
+      <line x1="0" y1="130" x2="600" y2="130" stroke="rgba(148,163,184,0.25)" stroke-width="1"/>
+      {% set bn = hourly_fail|length %}
+      {% set bw = 600 / bn if bn else 0 %}
+      {% for h in hourly_fail %}
+        {% set hb = ((h.count / max_fail) * 115) if h.count > 0 else 0 %}
+        <rect x="{{ '%.1f'|format(loop.index0 * bw + 1) }}" y="{{ '%.1f'|format(130 - hb) }}"
+              width="{{ '%.1f'|format(bw - 2) }}" height="{{ '%.1f'|format(hb) }}"
+              fill="{% if h.count > 10 %}rgb(220,38,38){% elif h.count > 3 %}rgb(245,158,11){% else %}rgb(148,163,184){% endif %}"
+              rx="2">
+          <title>{{ h.hour }}: {{ h.count }} failure{{ '' if h.count == 1 else 's' }}</title>
+        </rect>
+      {% endfor %}
+    </svg>
+  </div>
+</section>
+
+{# ───────── Two-column: suspicious IPs + recent activity ───────── #}
+<div class="wt-two-col">
+  <section class="card">
+    <div class="card-head">
+      <h2>Suspicious IPs · last 7 days</h2>
+      <span class="muted smaller">{{ top_ips|length }} address{{ '' if top_ips|length == 1 else 'es' }}</span>
+    </div>
+    {% if not top_ips %}
+    <p class="muted">No failed-login traffic in the last 7 days — that's a good sign.</p>
+    {% else %}
+    <div class="wt-ip-table-scroll">
+    <table class="tbl wt-ip-table">
+      <thead><tr><th>IP</th><th>Attempts</th><th>Last seen</th><th></th></tr></thead>
+      <tbody>
+        {% for r in top_ips %}
+        <tr>
+          <td class="mono">{{ r.ip }}{% if r.blocked %} <span class="badge badge-danger">blocked</span>{% endif %}</td>
+          <td>{{ r.attempts }}</td>
+          <td class="muted small">{{ r.last_attempt.strftime('%b %d, %H:%M') if r.last_attempt else '—' }}</td>
+          <td class="wt-ip-actions">
+            {% if r.blocked %}
+            <form method="post" action="{{ url_for('main.watchtower_unban_ip', bid=r.block_id) }}" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="return_url" value="{{ url_for('main.watchtower') }}">
+              <button class="btn btn-sm btn-secondary">Unblock</button>
+            </form>
+            {% else %}
+            <form method="post" action="{{ url_for('main.watchtower_ban_ip') }}" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="ip" value="{{ r.ip }}">
+              <input type="hidden" name="reason" value="Failed login attempts ({{ r.attempts }} in 7d)">
+              <input type="hidden" name="ttl_hours" value="0">
+              <input type="hidden" name="return_url" value="{{ url_for('main.watchtower') }}">
+              <button class="btn btn-sm btn-danger">Block</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Recent admin activity</h2>
+      <span class="muted smaller"><a href="{{ url_for('main.watchtower_access') }}">Full log →</a></span>
+    </div>
+    {% if not recent %}
+    <p class="muted">No write activity has been logged yet.</p>
+    {% else %}
+    <ol class="wt-activity-feed">
+      {% for ev in recent %}
+      <li class="wt-activity-item">
+        <span class="wt-activity-dot"></span>
+        <div class="wt-activity-body">
+          <div class="wt-activity-line">
+            <strong>{{ ev.user.username if ev.user else 'deleted user' }}</strong>
+            <span class="muted">· {{ ev.action.replace('.', ' › ') }}</span>
+          </div>
+          {% if ev.summary %}<div class="muted small wt-activity-sum">{{ ev.summary }}</div>{% endif %}
+          <div class="muted smaller">{{ ev.created_at.strftime('%b %d %H:%M') }}{% if ev.ip %} · <span class="mono">{{ ev.ip }}</span>{% endif %}</div>
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+    {% endif %}
+  </section>
+</div>
+
+{# ───────── Active sessions + blocked IPs ───────── #}
+<div class="wt-two-col">
+  <section class="card">
+    <div class="card-head">
+      <h2>Active sessions</h2>
+      <span class="muted smaller">{{ active_sess|length }} open</span>
+    </div>
+    {% if not active_sess %}
+    <p class="muted">Nobody signed in right now.</p>
+    {% else %}
+    <table class="tbl wt-session-table">
+      <thead><tr><th>User</th><th>IP</th><th>Last activity</th><th></th></tr></thead>
+      <tbody>
+        {% for s in active_sess %}
+        <tr>
+          <td>{{ s.user.username if s.user else '—' }}</td>
+          <td class="mono small">{{ s.ip or '—' }}</td>
+          <td class="muted small">{{ s.last_activity_at.strftime('%H:%M') }}</td>
+          <td>
+            <form method="post" action="{{ url_for('main.watchtower_end_session', sid=s.id) }}" style="display:inline"
+                  onsubmit="return confirm('Force-end {{ (s.user.username if s.user else 'this session')|escape }}?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="return_url" value="{{ url_for('main.watchtower') }}">
+              <button class="btn btn-sm btn-secondary">End</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>IP blocklist</h2>
+      <span class="muted smaller">{{ blocked|length }} active</span>
+    </div>
+    {% if not blocked %}
+    <p class="muted">No IPs are currently blocked.</p>
+    {% else %}
+    <table class="tbl wt-block-table">
+      <thead><tr><th>IP</th><th>Reason</th><th>Hits</th><th>Expires</th><th></th></tr></thead>
+      <tbody>
+        {% for b in blocked %}
+        <tr>
+          <td class="mono">{{ b.ip }}</td>
+          <td class="muted small">{{ b.reason or '—' }}</td>
+          <td>{{ b.hit_count or 0 }}</td>
+          <td class="muted small">{% if b.expires_at %}{{ b.expires_at.strftime('%b %d %H:%M') }}{% else %}—{% endif %}</td>
+          <td>
+            <form method="post" action="{{ url_for('main.watchtower_unban_ip', bid=b.id) }}" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="return_url" value="{{ url_for('main.watchtower') }}">
+              <button class="btn btn-sm btn-secondary">Unblock</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+</div>
+
+{% endblock %}

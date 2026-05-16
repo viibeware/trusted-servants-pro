@@ -819,6 +819,14 @@ class SiteSetting(db.Model):
     frontend_blog_list_heading = db.Column(db.String(200))
     frontend_blog_list_subheading = db.Column(db.String(500))
     frontend_blog_post_template = db.Column(db.String(64), nullable=False, default="modern")
+    # Container width controls for the blog detail page (`/blog/<slug>`).
+    # Same shape as the blog-list controls above: `boxed` caps the
+    # content at `max_width` pixels and centres it with viewport-%
+    # gutters; `full` lets the content span the viewport. Defaults
+    # match the list page so the two read as a pair.
+    frontend_blog_post_width_mode = db.Column(db.String(16), nullable=False, default="boxed")
+    frontend_blog_post_max_width = db.Column(db.Integer, nullable=False, default=1160)
+    frontend_blog_post_padding_pct = db.Column(db.Integer, nullable=False, default=5)
     frontend_blog_list_bg_dynamic_key = db.Column(db.String(64))
     frontend_blog_list_bg_dynbg_config_json = db.Column(db.Text)
     frontend_blog_post_bg_dynamic_key = db.Column(db.String(64))
@@ -1845,6 +1853,27 @@ class LoginFailure(db.Model):
     __table_args__ = (
         db.Index("ix_login_failure_kind_key_time", "kind", "key", "failed_at"),
     )
+
+
+class IPBlock(db.Model):
+    """Admin-managed IP block list. The Watchtower request hook rejects
+    any inbound request whose source IP matches an unexpired row with a
+    403, so a single ban click in the admin UI cuts off a misbehaving
+    client at the door. ``expires_at`` is nullable — NULL means
+    permanent. ``blocked_by`` references the admin who placed the ban
+    so the dashboard can show who acted."""
+    __tablename__ = "ip_block"
+    id = db.Column(db.Integer, primary_key=True)
+    ip = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    reason = db.Column(db.String(255))
+    blocked_by = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"))
+    blocked_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow,
+                           index=True)
+    expires_at = db.Column(db.DateTime)
+    hit_count = db.Column(db.Integer, nullable=False, default=0)
+    last_hit_at = db.Column(db.DateTime)
+
+    blocked_by_user = db.relationship("User", foreign_keys=[blocked_by])
 
 
 class ActivityLog(db.Model):

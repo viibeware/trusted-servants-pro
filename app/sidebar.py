@@ -41,10 +41,13 @@ _MAIN_CATALOG = [
 
 _ADMIN_CATALOG = [
     # Items that are always admin-only by code, not configuration.
-    {"key": "access_requests", "label": "Access Requests",        "endpoint": "main.access_requests",  "active_kind": "contains:access_request"},
+    # Watchtower absorbs the legacy Access Requests, User Log, and
+    # Delete Log surfaces into a single tabbed dashboard with new
+    # security analytics on top. The legacy routes still resolve so
+    # external bookmarks keep working — the sidebar only shows
+    # Watchtower as the canonical entry point.
+    {"key": "watchtower",      "label": "Watchtower",             "endpoint": "main.watchtower",       "active_kind": "contains:watchtower"},
     {"key": "contact_form",    "label": "Contact Form",           "endpoint": "main.contact_form",     "active_kind": "contains:contact_form"},
-    {"key": "user_log",        "label": "User Log",               "endpoint": "main.user_log",         "active_kind": "contains:user_log"},
-    {"key": "delete_log",      "label": "Delete Log",             "endpoint": "main.delete_log",       "active_kind": "contains:delete_log"},
 ]
 
 # Static (non-library) items that live inside the "Intergroup" sidebar
@@ -115,10 +118,8 @@ def _is_visible(key, site, user):
     if key == "blog":
         return bool(site and getattr(site, "blog_enabled", False)
                     and user_meets_role(user, getattr(site, "blog_required_role", "admin")))
-    if key == "access_requests": return bool(user.is_admin())
+    if key == "watchtower":      return bool(user.is_admin())
     if key == "contact_form":    return bool(user.is_admin())
-    if key == "user_log":        return bool(user.is_admin())
-    if key == "delete_log":      return bool(user.is_admin())
     if key == "web_frontend":
         # The Web Frontend's route gates resolve to admin-only via
         # ``can_edit_frontend`` (the dedicated frontend_editor role

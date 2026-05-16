@@ -1,12 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Delete Log · Trusted Servants Pro{% endblock %}
-{% block heading %}Delete Log{% endblock %}
+{% block title %}Watchtower · Deletes{% endblock %}
+{% block heading %}Watchtower{% endblock %}
+{% block heading_help %}Recycle bin for soft-deleted files. Restorable for {{ retention_days }} days; then permanently purged on the next sweep.{% endblock %}
 {% block content %}
+{% include "watchtower/_tabs.html" %}
 
 <section class="card">
   <div class="card-head">
     <h2>Recently deleted files</h2>
-    <span class="muted smaller">Files are restorable for {{ retention_days }} days · then permanently purged</span>
+    <span class="muted smaller">{{ items|length }} file{{ '' if items|length == 1 else 's' }} in the bin</span>
   </div>
   {% if not items %}
   <p class="muted">No files in the recycle bin. Library files, meeting attachments, and File-Browser entries land here when deleted.</p>
@@ -30,11 +32,11 @@
           </div>
         </div>
         <div class="dlog-actions">
-          <form method="post" action="{{ url_for('main.delete_log_restore', rid=it.id) }}" style="display:inline">
+          <form method="post" action="{{ url_for('main.watchtower_delete_restore', rid=it.id) }}" style="display:inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm btn-primary" title="Restore this file to its original location">Restore</button>
           </form>
-          <form method="post" action="{{ url_for('main.delete_log_purge', rid=it.id) }}"
+          <form method="post" action="{{ url_for('main.watchtower_delete_purge', rid=it.id) }}"
                 onsubmit='return confirm("Permanently delete " + {{ (it.original_filename or it.title or "this file")|tojson }} + "? This cannot be undone.");'
                 style="display:inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

@@ -92,7 +92,7 @@
             </div>
             {% if current_user.is_admin() %}
             <a class="metric-tile metric-tile-text metric-tile-link" id="online-users-tile"
-                 href="{{ url_for('main.user_log') }}"
+                 href="{{ url_for('main.watchtower_access') }}"
                  data-endpoint="{{ url_for('main.api_online_users') }}"
                  title="{% for u in online_users %}{{ u.username }} ({{ u.role }}){% if not loop.last %}, {% endif %}{% endfor %}">
               <div class="metric-label">Online</div>
@@ -216,13 +216,13 @@
 
   {% if widget_key == 'deletions' and current_user.is_admin() and current_user.dash_show_deletions %}
     {% call dash_widget(key='deletions', title='Recent Deletions',
-                         view_all_url=url_for('main.delete_log'),
-                         view_all_label='Open Delete Log') %}
+                         view_all_url=url_for('main.watchtower_deletes'),
+                         view_all_label='Open Watchtower · Deletes') %}
       {% if recent_deletions %}
       <ul class="list dash-deletions-list">
         {% for d in recent_deletions %}
         <li>
-          <a href="{{ url_for('main.delete_log') }}">
+          <a href="{{ url_for('main.watchtower_deletes') }}">
             <span class="dash-deletion-name">{{ d.original_filename or d.title or '(untitled)' }}</span>
             <span class="muted smaller dash-deletion-meta">
               {% if d.parent_label %}{{ d.parent_label }} · {% endif %}{{ d.deleted_at.strftime('%b %d') }}
@@ -263,12 +263,12 @@
         {% if access_requests %}
         <ul class="list">
           {% for r in access_requests %}
-          <li><a href="{{ url_for('main.access_requests') }}"><span>{{ r.name }}</span><span class="muted">{{ r.created_at.strftime('%b %d') }}</span></a></li>
+          <li><a href="{{ url_for('main.watchtower_requests') }}"><span>{{ r.name }}</span><span class="muted">{{ r.created_at.strftime('%b %d') }}</span></a></li>
           {% endfor %}
         </ul>
         {% else %}<p class="muted">No pending requests.</p>{% endif %}
         <div class="access-requests-foot">
-          <a href="{{ url_for('main.access_requests') }}" class="btn btn-sm">View all requests</a>
+          <a href="{{ url_for('main.watchtower_requests') }}" class="btn btn-sm">View all requests</a>
         </div>
       </div>
 

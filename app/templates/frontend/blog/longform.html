@@ -1,6 +1,7 @@
 {% extends "frontend/base.html" %}
 {% block title %}{{ post.title }} · {{ frontend_title }}{% endblock %}
 {% block content %}
+{% include "frontend/_blog_preview_banner.html" %}
 {%- set _dynbg_active = tpl_dynbg_key or tpl_dynbg_overlay -%}
 <div class="fe-page-dynbg-host{% if _dynbg_active %} fe-dynbg-host{% endif %}"{% if tpl_style %} style="{{ tpl_style }}"{% endif %}>
 {% if _dynbg_active %}{% with dynbg_key=tpl_dynbg_key, dynbg_config=tpl_dynbg_config %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}
@@ -9,7 +10,13 @@
    serif body, narrow column, subtle drop-cap on the opening
    paragraph, dropped header, no hero image (or small inline). #}
 <article class="fe-blog-post fe-blog-post-longform">
-  <div class="fe-blog-lf-shell">
+  {# Container width — see classic.html for the pattern. The longform
+     stylesheet sets a narrow essay-friendly 680px by default; the
+     admin's chosen `post_max_width` (640–2400 px) wins via inline
+     style so the override actually lands. #}
+  <div class="fe-blog-lf-shell {% if post_width_mode == 'full' %}fe-blog-lf-shell--full{% endif %}"
+       {% if post_width_mode == 'boxed' %}style="max-width: {{ post_max_width }}px;"
+       {%- elif post_padding_pct %}style="max-width: none; padding-left: {{ post_padding_pct }}vw; padding-right: {{ post_padding_pct }}vw;"{% endif %}>
     <a class="fe-blog-lf-back" href="{{ url_for('frontend.blog_list') }}">← All posts</a>
 
     <header class="fe-blog-lf-head">

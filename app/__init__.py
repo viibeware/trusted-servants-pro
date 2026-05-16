@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import hashlib
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta
 import bleach
 import markdown as md_lib
 from markupsafe import Markup
@@ -338,6 +338,45 @@ def create_app():
         "/cgi-bin/",
         "/admin.php", "/adminer.php",
     )
+
+    @app.before_request
+    def _ip_block_gate():
+        """Reject inbound traffic from admin-banned IP addresses with a
+        flat 403. Runs ahead of routing + the probe gate so a banned IP
+        gets dropped on every request — including assets — for the full
+        duration of the ban. Hit-count + last-hit-at are stamped on the
+        matching row so the Watchtower dashboard can show whether the
+        ban is actually being exercised."""
+        from .models import IPBlock
+        ip = (request.remote_addr or "").strip()
+        if not ip:
+            return None
+        try:
+            now = datetime.utcnow()
+            row = IPBlock.query.filter_by(ip=ip).first()
+            if not row:
+                return None
+            if row.expires_at and row.expires_at <= now:
+                # Lazy expiry: delete the row in-place so the dashboard
+                # reflects "no longer active" the next time it polls.
+                try:
+                    db.session.delete(row)
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                return None
+            row.hit_count = (row.hit_count or 0) + 1
+            row.last_hit_at = now
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+            return ("Access denied", 403, {"Cache-Control": "no-store"})
+        except Exception:
+            # Never let the gate break the request; log + fall through.
+            app.logger.exception("ip_block_gate failed")
+            db.session.rollback()
+            return None
 
     @app.before_request
     def _block_known_probes():
@@ -1249,6 +1288,9 @@ def _migrate_sqlite(app):
                          ("frontend_blog_list_heading", "VARCHAR(200)"),
                          ("frontend_blog_list_subheading", "VARCHAR(500)"),
                          ("frontend_blog_post_template", "VARCHAR(64) NOT NULL DEFAULT 'modern'"),
+                         ("frontend_blog_post_width_mode", "VARCHAR(16) NOT NULL DEFAULT 'boxed'"),
+                         ("frontend_blog_post_max_width", "INTEGER NOT NULL DEFAULT 1160"),
+                         ("frontend_blog_post_padding_pct", "INTEGER NOT NULL DEFAULT 5"),
                          ("frontend_blog_list_bg_dynamic_key", "VARCHAR(64)"),
                          ("frontend_blog_list_bg_dynbg_config_json", "TEXT"),
                          ("frontend_blog_post_bg_dynamic_key", "VARCHAR(64)"),

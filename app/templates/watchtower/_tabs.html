@@ -1,0 +1,31 @@
+{# Watchtower tab strip. Renders the five primary surfaces so a click
+   moves between Overview / Visitors / Access / Deletes / Requests
+   without forcing a sidebar trip. `active_tab` is passed in by every
+   route under /watchtower so the chip lights up correctly. #}
+<nav class="wt-tabs" aria-label="Watchtower sections">
+  <a href="{{ url_for('main.watchtower') }}"
+     class="wt-tab {% if active_tab == 'overview' %}is-active{% endif %}">
+    <span class="wt-tab-icon">{{ icon('activity') }}</span>
+    <span class="wt-tab-label">Overview</span>
+  </a>
+  <a href="{{ url_for('main.watchtower_visitors') }}"
+     class="wt-tab {% if active_tab == 'visitors' %}is-active{% endif %}">
+    <span class="wt-tab-icon">{{ icon('users') }}</span>
+    <span class="wt-tab-label">Visitors</span>
+  </a>
+  <a href="{{ url_for('main.watchtower_access') }}"
+     class="wt-tab {% if active_tab == 'access' %}is-active{% endif %}">
+    <span class="wt-tab-icon">{{ icon('key') }}</span>
+    <span class="wt-tab-label">Access</span>
+  </a>
+  <a href="{{ url_for('main.watchtower_deletes') }}"
+     class="wt-tab {% if active_tab == 'deletes' %}is-active{% endif %}">
+    <span class="wt-tab-icon">{{ icon('trash-2') }}</span>
+    <span class="wt-tab-label">Deletes</span>
+  </a>
+  <a href="{{ url_for('main.watchtower_requests') }}"
+     class="wt-tab {% if active_tab == 'requests' %}is-active{% endif %}">
+    <span class="wt-tab-icon">{{ icon('mail') }}</span>
+    <span class="wt-tab-label">Requests</span>
+  </a>
+</nav>

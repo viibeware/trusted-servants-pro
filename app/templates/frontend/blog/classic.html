@@ -1,6 +1,7 @@
 {% extends "frontend/base.html" %}
 {% block title %}{{ post.title }} · {{ frontend_title }}{% endblock %}
 {% block content %}
+{% include "frontend/_blog_preview_banner.html" %}
 {%- set _dynbg_active = tpl_dynbg_key or tpl_dynbg_overlay -%}
 {# Resolve the dynbg colour + position CSS variables and stamp them
    on the host's `style` attribute. Without this, the
@@ -17,7 +18,13 @@
 {# Classic layout — main content + right sticky sidebar (categories,
    tags, related). Resembles WordPress / Ghost defaults. #}
 <article class="fe-blog-post fe-blog-post-classic">
-  <div class="fe-container fe-blog-cls-shell">
+  {# Container width controlled from Web Frontend → Templates → Blog detail.
+     Boxed shells cap at `post_max_width` px and centre; full-width shells
+     span the viewport with `post_padding_pct` vw gutters. Matches the
+     blog-list page so the two read as a pair. #}
+  <div class="fe-blog-cls-shell {% if post_width_mode == 'boxed' %}fe-container{% else %}fe-blog-cls-shell--full{% endif %}"
+       {% if post_width_mode == 'boxed' %}style="max-width: {{ post_max_width }}px;"
+       {%- elif post_padding_pct %}style="padding-left: {{ post_padding_pct }}vw; padding-right: {{ post_padding_pct }}vw;"{% endif %}>
     <a class="fe-blog-cls-back" href="{{ url_for('frontend.blog_list') }}">← All posts</a>
 
     {# Right-rail visibility — admin-controlled per-template. When
@@ -189,6 +196,33 @@
   .fe-blog-cls-main {
     padding: clamp(1.5rem, 4vw, 3rem);
     overflow: hidden;
+  }
+  /* Suppress the `.fe-card-primary:hover` lift / shadow / border-color
+     swap on the blog detail. The blog post is a static reading
+     surface — visitors aren't picking from a grid of cards, so
+     hovering the card shouldn't move it or change its border. We
+     scope to `.fe-blog-post-classic` descendants so the rule has
+     higher specificity than the token aggregator's `:hover` and
+     wins regardless of stylesheet order. Killing the `border-color`
+     transition belt-and-suspenders so even if a hover token leaks
+     through, no animation runs and the border stays put. */
+  .fe-blog-post-classic .fe-blog-cls-main,
+  .fe-blog-post-classic .fe-blog-cls-widget,
+  .fe-blog-post-classic .fe-blog-cls-bio {
+    transition: background-color var(--fe-card-primary-transition, 200ms ease),
+                box-shadow var(--fe-card-primary-transition, 200ms ease);
+  }
+  .fe-blog-post-classic .fe-blog-cls-main:hover,
+  .fe-blog-post-classic .fe-blog-cls-widget:hover,
+  .fe-blog-post-classic .fe-blog-cls-bio:hover {
+    transform: none;
+    box-shadow: var(--fe-card-primary-shadow, none);
+    border-color: var(--fe-color-card-primary-border, var(--fe-accent));
+  }
+  [data-theme="dark"] .fe-blog-post-classic .fe-blog-cls-main:hover,
+  [data-theme="dark"] .fe-blog-post-classic .fe-blog-cls-widget:hover,
+  [data-theme="dark"] .fe-blog-post-classic .fe-blog-cls-bio:hover {
+    border-color: var(--fe-color-card-primary-border-dark, #1f2a44);
   }
   .fe-blog-cls-cats { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1rem; }
   .fe-blog-cls-cat {

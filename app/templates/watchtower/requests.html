@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}Watchtower · Requests{% endblock %}
+{% block heading %}Watchtower{% endblock %}
+{% block heading_help %}Access requests and password-reset activity. Process new requests, archive handled ones, and audit reset history.{% endblock %}
+{% block content %}
+{% include "watchtower/_tabs.html" %}
+
+{% if pending_resets %}
+<section class="card pending-resets-card">
+  <div class="card-head">
+    <h2>Pending password resets</h2>
+    <span class="muted smaller">Accounts with a live reset link in their inbox. Resetting here invalidates the pending email link.</span>
+  </div>
+  <table class="tbl">
+    <thead><tr><th>User</th><th>Email</th><th>Requested</th><th>Link expires</th><th></th></tr></thead>
+    <tbody>
+      {% for u, tok, mins in pending_resets %}
+      <tr>
+        <td><b>{{ u.username }}</b></td>
+        <td class="muted small">{{ u.email or '—' }}</td>
+        <td class="muted small">{{ tok.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="muted small">{{ tok.expires_at.strftime('%H:%M') }}{% if mins > 0 %}<span class="muted smaller"> · in ~{{ mins }} min</span>{% endif %}</td>
+        <td class="nowrap">
+          <button type="button" class="btn btn-sm btn-primary js-pwreset-open"
+                  data-uid="{{ u.id }}" data-username="{{ u.username }}" data-email="{{ u.email or '' }}"
+                  title="Open the reset-password modal for {{ u.username }}">Reset password</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if recent_resets %}
+<section class="card recent-resets-card">
+  <div class="card-head">
+    <h2>Recent password resets</h2>
+    <span class="muted smaller">Last 30 days · {{ recent_resets|length }} event{{ '' if recent_resets|length == 1 else 's' }}{% if recent_resets|length == 100 %} · capped{% endif %}</span>
+  </div>
+  <table class="tbl ar-recent-resets-tbl">
+    <thead><tr><th>User</th><th>Email</th><th>Type</th><th>Status</th><th>When</th><th>Actor</th></tr></thead>
+    <tbody>
+      {% for r in recent_resets %}
+      <tr>
+        <td><b>{{ r.username }}</b></td>
+        <td class="muted small">{{ r.email or '—' }}</td>
+        <td>{% if r.kind == 'admin' %}<span class="badge badge-muted">Admin reset</span>{% else %}<span class="badge badge-muted">Self-service</span>{% endif %}</td>
+        <td>
+          {% if r.status == 'admin_reset' or r.status == 'used' %}
+            <span class="badge badge-success">Reset</span>
+          {% elif r.status == 'expired' %}
+            <span class="badge badge-muted">Expired</span>
+          {% elif r.status == 'pending' %}
+            <span class="badge badge-warning">Link live</span>
+          {% endif %}
+        </td>
+        <td class="muted small">{{ r.effective_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="muted small">{{ r.actor }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section class="card">
+  <div class="card-head ar-card-head">
+    <h2>Requests</h2>
+    <div class="ar-view-tabs" role="tablist">
+      <a href="{{ url_for('main.watchtower_requests', view='active') }}"
+         class="ar-view-tab {% if view == 'active' %}is-active{% endif %}"
+         role="tab" aria-selected="{{ 'true' if view == 'active' else 'false' }}">
+        Active{% if active_count %}<span class="ar-view-count">{{ active_count }}</span>{% endif %}
+      </a>
+      <a href="{{ url_for('main.watchtower_requests', view='archived') }}"
+         class="ar-view-tab {% if view == 'archived' %}is-active{% endif %}"
+         role="tab" aria-selected="{{ 'true' if view == 'archived' else 'false' }}">
+        Archived{% if archived_count %}<span class="ar-view-count">{{ archived_count }}</span>{% endif %}
+      </a>
+    </div>
+  </div>
+  {% if not items %}
+  <p class="muted">
+    {% if view == 'archived' %}No archived requests yet. Click <i>Archive</i> on a handled request to move it here.{% else %}No access requests yet.{% endif %}
+  </p>
+  {% else %}
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>Status</th><th>Name</th><th>Contact</th><th>Roles</th><th>Meeting</th><th>Submitted</th>
+        {% if view == 'archived' %}<th>Archived</th>{% endif %}<th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in items %}
+      <tr>
+        <td><span class="badge {% if r.status == 'pending' %}badge-warning{% else %}badge-muted{% endif %}">{{ r.status }}</span></td>
+        <td>{{ r.name }}</td>
+        <td class="muted small"><div><a href="mailto:{{ r.email }}">{{ r.email }}</a></div><div>{{ r.phone }}</div></td>
+        <td>{% for role in r.roles %}<span class="chip">{{ role }}</span>{% endfor %}</td>
+        <td class="muted">{{ r.meeting_name or '—' }}</td>
+        <td class="muted small">{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        {% if view == 'archived' %}<td class="muted small">{% if r.archived_at %}{{ r.archived_at.strftime('%Y-%m-%d %H:%M') }}{% else %}—{% endif %}</td>{% endif %}
+        <td class="nowrap">
+          {% if view == 'active' %}
+          <button type="button" class="btn btn-sm btn-primary"
+                  data-create-user-from-request data-email="{{ r.email }}"
+                  data-name="{{ r.name }}" data-phone="{{ r.phone or '' }}">Create User</button>
+          <form method="post" action="{{ url_for('main.watchtower_request_handled', rid=r.id) }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="view" value="{{ view }}">
+            <button class="btn btn-sm">{% if r.status == 'pending' %}Mark Handled{% else %}Reopen{% endif %}</button>
+          </form>
+          {% if r.status == 'handled' %}
+          <form method="post" action="{{ url_for('main.watchtower_request_archive', rid=r.id) }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="view" value="{{ view }}">
+            <button class="btn btn-sm" title="Move to archive">Archive</button>
+          </form>
+          {% else %}
+          <form method="post" action="{{ url_for('main.watchtower_request_archive', rid=r.id) }}"
+                onsubmit="return confirm('Archive this pending request? It will be marked handled and moved to the archive.');" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="view" value="{{ view }}">
+            <button class="btn btn-sm">Archive</button>
+          </form>
+          {% endif %}
+          {% else %}
+          <form method="post" action="{{ url_for('main.watchtower_request_unarchive', rid=r.id) }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="view" value="{{ view }}">
+            <button class="btn btn-sm btn-primary" title="Restore to active list">Restore</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('main.watchtower_request_delete', rid=r.id) }}"
+                onsubmit="return confirm('Delete this request permanently?');" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="view" value="{{ view }}">
+            <button class="btn btn-sm btn-danger">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+{% with return_url = url_for('main.watchtower_requests', view=view) %}
+  {% include "_pwreset_modal.html" %}
+{% endwith %}
+{% endblock %}

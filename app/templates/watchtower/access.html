@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}Watchtower · Access{% endblock %}
+{% block heading %}Watchtower{% endblock %}
+{% block heading_help %}Admin activity, login sessions, failed-login analytics, and the IP blocklist — everything signed-in users do plus the security signals around it.{% endblock %}
+{% block content %}
+{% include "watchtower/_tabs.html" %}
+
+{% if not users %}
+<section class="card"><p class="muted">No users on file.</p></section>
+{% else %}
+
+{% include "_online_widget.html" %}
+
+{% set window_options = [(1, 'Last 24 hours'), (7, 'Last 7 days'), (30, 'Last 30 days'), (90, 'Last 90 days'), (365, 'Last year')] %}
+{% set scope_value = 'all' if show_all else selected.id %}
+
+{# ───── Suspicious IPs table (the security pivot) ───── #}
+<section class="card">
+  <div class="card-head">
+    <h2>Top failed-login IPs · last 7 days</h2>
+    <span class="muted smaller">Click <b>Block</b> to drop the IP at the request gate; <b>Clear</b> wipes its failure record.</span>
+  </div>
+  {% if not top_ips %}
+  <p class="muted">No failed-login traffic in the last 7 days.</p>
+  {% else %}
+  <table class="tbl wt-ip-table">
+    <thead><tr><th>IP</th><th>Attempts</th><th>Last seen</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for r in top_ips %}
+      <tr>
+        <td class="mono">{{ r.ip }}</td>
+        <td>{{ r.attempts }}</td>
+        <td class="muted small">{{ r.last_attempt.strftime('%b %d, %H:%M') if r.last_attempt else '—' }}</td>
+        <td>{% if r.blocked %}<span class="badge badge-danger">blocked</span>{% else %}<span class="badge badge-muted">tracking</span>{% endif %}</td>
+        <td class="wt-ip-actions">
+          {% if r.blocked %}
+          <form method="post" action="{{ url_for('main.watchtower_unban_ip', bid=r.block_id) }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="return_url" value="{{ url_for('main.watchtower_access') }}">
+            <button class="btn btn-sm btn-secondary">Unblock</button>
+          </form>
+          {% else %}
+          <form method="post" action="{{ url_for('main.watchtower_ban_ip') }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="ip" value="{{ r.ip }}">
+            <input type="hidden" name="reason" value="Failed logins ({{ r.attempts }} in 7d)">
+            <input type="hidden" name="ttl_hours" value="0">
+            <input type="hidden" name="return_url" value="{{ url_for('main.watchtower_access') }}">
+            <button class="btn btn-sm btn-danger">Block</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('main.watchtower_clear_failures') }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="ip" value="{{ r.ip }}">
+            <input type="hidden" name="return_url" value="{{ url_for('main.watchtower_access') }}">
+            <button class="btn btn-sm btn-ghost">Clear</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+{# ───── IP blocklist + manual ban form ───── #}
+<section class="card">
+  <div class="card-head">
+    <h2>IP blocklist</h2>
+    <span class="muted smaller">{{ blocked|length }} active</span>
+  </div>
+  <form method="post" action="{{ url_for('main.watchtower_ban_ip') }}" class="wt-ban-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="return_url" value="{{ url_for('main.watchtower_access') }}">
+    <label>IP address
+      <input type="text" name="ip" placeholder="192.0.2.42" required pattern="^[0-9a-fA-F:.]+$" maxlength="64">
+    </label>
+    <label>Reason
+      <input type="text" name="reason" placeholder="Why are you blocking this IP?" maxlength="255">
+    </label>
+    <label>Duration
+      <select name="ttl_hours">
+        <option value="0">Permanent</option>
+        <option value="1">1 hour</option>
+        <option value="24">24 hours</option>
+        <option value="168">7 days</option>
+        <option value="720">30 days</option>
+      </select>
+    </label>
+    <button class="btn btn-danger">Block IP</button>
+  </form>
+
+  {% if blocked %}
+  <table class="tbl wt-block-table">
+    <thead><tr><th>IP</th><th>Reason</th><th>Blocked by</th><th>Blocked at</th><th>Expires</th><th>Hits</th><th></th></tr></thead>
+    <tbody>
+      {% for b in blocked %}
+      <tr>
+        <td class="mono">{{ b.ip }}</td>
+        <td class="muted small">{{ b.reason or '—' }}</td>
+        <td class="muted small">{{ b.blocked_by_user.username if b.blocked_by_user else '—' }}</td>
+        <td class="muted small">{{ b.blocked_at.strftime('%b %d, %H:%M') }}</td>
+        <td class="muted small">{% if b.expires_at %}{{ b.expires_at.strftime('%b %d, %H:%M') }}{% else %}Permanent{% endif %}</td>
+        <td>{{ b.hit_count or 0 }}</td>
+        <td>
+          <form method="post" action="{{ url_for('main.watchtower_unban_ip', bid=b.id) }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="return_url" value="{{ url_for('main.watchtower_access') }}">
+            <button class="btn btn-sm btn-secondary">Unblock</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+{# ───── Account picker ───── #}
+<section class="card">
+  <form method="get" action="{{ url_for('main.watchtower_access') }}" class="wt-picker-form">
+    <label>Account
+      <select name="user_id" onchange="this.form.submit()">
+        <option value="all" {% if show_all %}selected{% endif %}>All users</option>
+        {% for u in users %}
+        <option value="{{ u.id }}" {% if not show_all and selected and u.id == selected.id %}selected{% endif %}>{{ u.username }} ({{ u.role.replace('_', ' ') }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <input type="hidden" name="days" value="{{ days }}">
+    <input type="hidden" name="sdays" value="{{ sdays }}">
+    <noscript><button class="btn btn-sm">Apply</button></noscript>
+  </form>
+</section>
+
+{# ───── Login sessions (rendered above the activity feed so the
+       "who's signed in" answer is the first thing on the page when an
+       admin lands here looking for a security signal) ───── #}
+<section class="card">
+  <div class="card-head">
+    <h2>Login sessions</h2>
+    <form method="get" action="{{ url_for('main.watchtower_access') }}" class="wt-card-form">
+      <input type="hidden" name="user_id" value="{{ scope_value }}">
+      <input type="hidden" name="days" value="{{ days }}">
+      <select name="sdays" onchange="this.form.submit()">
+        {% for d, lbl in window_options %}
+        <option value="{{ d }}" {% if sdays == d %}selected{% endif %}>{{ lbl }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+  {% if not sessions %}
+  <p class="muted">No login activity in this window.</p>
+  {% else %}
+  <table class="tbl wt-session-table">
+    <thead><tr>
+      <th>Status</th>{% if show_all %}<th>User</th>{% endif %}
+      <th>Started</th><th>Last activity</th><th>Ended</th><th>IP</th><th>Browser</th><th></th>
+    </tr></thead>
+    <tbody>
+      {% for s in sessions %}
+      <tr class="{% if s.is_active %}wt-session-active{% endif %}">
+        <td>{% if s.is_active %}<span class="badge badge-success">Active</span>{% else %}<span class="badge badge-muted">{{ s.end_reason or 'ended' }}</span>{% endif %}</td>
+        {% if show_all %}<td><a href="{{ url_for('main.watchtower_access') }}?user_id={{ s.user_id }}">{{ s.user.username if s.user else '—' }}</a></td>{% endif %}
+        <td class="muted small">{{ s.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="muted small">{{ s.last_activity_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="muted small">{% if s.ended_at %}{{ s.ended_at.strftime('%Y-%m-%d %H:%M') }}{% else %}—{% endif %}</td>
+        <td class="mono small">{{ s.ip or '—' }}</td>
+        <td class="muted small wt-ua" title="{{ s.user_agent or '' }}">{{ (s.user_agent or '—')[:60] }}{% if s.user_agent and s.user_agent|length > 60 %}…{% endif %}</td>
+        <td>
+          {% if s.is_active %}
+          <form method="post" action="{{ url_for('main.watchtower_end_session', sid=s.id) }}" style="display:inline"
+                onsubmit="return confirm('Force-end this session?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="return_url" value="{{ url_for('main.watchtower_access') }}">
+            <button class="btn btn-sm btn-secondary">End</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+{# ───── Activity feed (truncated to 20 rows; remaining initial-load
+       rows hide behind a CSS class that the expand button toggles.
+       The infinite-scroll sentinel sits below and stays hidden until
+       the user expands — keeps an unopened section from triggering
+       extra API page fetches just because IntersectionObserver sees
+       a sentinel near the viewport) ───── #}
+{% set _truncate_at = 20 %}
+{% set _has_more_loaded = events|length > _truncate_at %}
+{% set _has_more_api = total_events > events|length %}
+<section class="card">
+  <div class="card-head">
+    <h2>Activity feed</h2>
+    <span class="muted smaller">
+      Showing {{ events|length if not _has_more_loaded else _truncate_at }}
+      {% if _has_more_loaded or _has_more_api %}of {{ '{:,}'.format(total_events) }}{% endif %}
+      event{{ '' if total_events == 1 else 's' }}
+    </span>
+    <form method="get" action="{{ url_for('main.watchtower_access') }}" class="wt-card-form">
+      <input type="hidden" name="user_id" value="{{ scope_value }}">
+      <input type="hidden" name="sdays" value="{{ sdays }}">
+      <select name="days" onchange="this.form.submit()">
+        {% for d, lbl in window_options %}
+        <option value="{{ d }}" {% if days == d %}selected{% endif %}>{{ lbl }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+  {% if not events %}
+  <p class="muted">No activity recorded for {{ 'any user' if show_all else selected.username }} in this window.</p>
+  {% else %}
+  <ol class="ulog-feed {% if _has_more_loaded %}ulog-feed--truncated{% endif %}" id="ulog-feed"
+      data-endpoint="{{ url_for('main.api_user_log_events') }}"
+      data-user-id="{{ scope_value }}"
+      data-days="{{ days }}"
+      data-offset="{{ events|length }}"
+      data-total="{{ total_events }}"
+      data-page-size="{{ page_size }}">
+    {% for ev in events %}
+      {% include "_ulog_event.html" %}
+    {% endfor %}
+  </ol>
+  {% if _has_more_loaded or _has_more_api %}
+  <button type="button" class="btn btn-sm ulog-expand-btn" data-ulog-expand>
+    Show {% if _has_more_loaded %}{{ events|length - _truncate_at }}{% else %}more{% endif %}
+    {% if _has_more_api %} more · {{ '{:,}'.format(total_events) }} total{% endif %}
+  </button>
+  {% endif %}
+  <div class="ulog-feed-sentinel" id="ulog-feed-sentinel"
+       {% if _has_more_loaded or not _has_more_api %}hidden{% endif %}>
+    <span class="muted smaller ulog-feed-status">Loading more…</span>
+  </div>
+  {% endif %}
+</section>
+
+{% endif %}
+
+{# Activity-feed expand button + infinite-scroll wiring. Expand drops
+   the `--truncated` class (revealing rows 21..N already in the DOM)
+   and reveals the sentinel so the IntersectionObserver can start
+   fetching subsequent API pages. Until expand is clicked the
+   sentinel is `hidden` and the observer never triggers. #}
+<script>
+(function(){
+  const feed = document.getElementById('ulog-feed');
+  const sentinel = document.getElementById('ulog-feed-sentinel');
+  if (!feed) return;
+  const expandBtn = document.querySelector('[data-ulog-expand]');
+  if (expandBtn) {
+    expandBtn.addEventListener('click', () => {
+      feed.classList.remove('ulog-feed--truncated');
+      expandBtn.remove();
+      // Reveal the sentinel if there are more pages to pull from the API.
+      const offset = parseInt(feed.dataset.offset || '0', 10);
+      const total = parseInt(feed.dataset.total || '0', 10);
+      if (sentinel && total > offset) sentinel.hidden = false;
+    });
+  }
+  if (!sentinel) return;
+  const total = parseInt(feed.dataset.total || '0', 10);
+  if (parseInt(feed.dataset.offset || '0', 10) >= total) { sentinel.hidden = true; return; }
+  const statusEl = sentinel.querySelector('.ulog-feed-status');
+  let inflight = false, done = false;
+  async function loadMore(){
+    if (done || inflight) return;
+    inflight = true;
+    if (statusEl) statusEl.textContent = 'Loading more…';
+    try {
+      const offset = parseInt(feed.dataset.offset || '0', 10);
+      const params = new URLSearchParams({
+        user_id: feed.dataset.userId, days: feed.dataset.days, offset: String(offset)
+      });
+      const r = await fetch(feed.dataset.endpoint + '?' + params.toString(), { credentials: 'same-origin' });
+      if (!r.ok) throw new Error('http ' + r.status);
+      const data = await r.json();
+      if (data.html) feed.insertAdjacentHTML('beforeend', data.html);
+      const newOffset = data.next_offset != null ? data.next_offset : (offset + (data.count || 0));
+      feed.dataset.offset = String(newOffset);
+      if (!data.has_more || (data.count || 0) === 0) { done = true; sentinel.hidden = true; }
+    } catch (e) {
+      if (statusEl) statusEl.textContent = 'Couldn’t load more — scroll to retry.';
+    } finally { inflight = false; }
+  }
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting) loadMore(); },
+                                        { rootMargin: '600px 0px' });
+    io.observe(sentinel);
+  } else {
+    window.addEventListener('scroll', () => {
+      if (sentinel.getBoundingClientRect().top < window.innerHeight + 600) loadMore();
+    }, { passive: true });
+  }
+})();
+</script>
+{% endblock %}

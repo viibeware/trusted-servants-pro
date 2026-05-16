@@ -1,6 +1,7 @@
 {% extends "frontend/base.html" %}
 {% block title %}{{ post.title }} · {{ frontend_title }}{% endblock %}
 {% block content %}
+{% include "frontend/_blog_preview_banner.html" %}
 {%- set _dynbg_active = tpl_dynbg_key or tpl_dynbg_overlay -%}
 <div class="fe-page-dynbg-host{% if _dynbg_active %} fe-dynbg-host{% endif %}"{% if tpl_style %} style="{{ tpl_style }}"{% endif %}>
 {% if _dynbg_active %}{% with dynbg_key=tpl_dynbg_key, dynbg_config=tpl_dynbg_config %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}
@@ -14,7 +15,10 @@
   </div>
   {% endif %}
 
-  <div class="fe-container fe-blog-post-shell">
+  {# Container width — see classic.html for the pattern. #}
+  <div class="fe-blog-post-shell {% if post_width_mode == 'boxed' %}fe-container{% else %}fe-blog-post-shell--full{% endif %}"
+       {% if post_width_mode == 'boxed' %}style="max-width: {{ post_max_width }}px;"
+       {%- elif post_padding_pct %}style="padding-left: {{ post_padding_pct }}vw; padding-right: {{ post_padding_pct }}vw;"{% endif %}>
     <header class="fe-blog-post-head">
       <a class="fe-blog-post-back" href="{{ url_for('frontend.blog_list') }}">← All posts</a>
 

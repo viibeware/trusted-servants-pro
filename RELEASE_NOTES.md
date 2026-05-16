@@ -7,9 +7,66 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 1.10.5 — 2026-05-15 (latest) — Blog overhaul: visual block editor, redesigned editor sidebar, classic detail polish
+## 2.0.0 — 2026-05-16 (latest) — Watchtower: one place to watch the door
+
+This is a major release. **Watchtower** is a new top-level admin module that replaces three older admin pages (User Log, Delete Log, Access Requests) with a single, security-focused dashboard — and adds real teeth: anomaly detection, an IP blocklist that actually blocks at the door, force-end on sessions, and a failed-login leaderboard with one-click bans. It's the new home for everything you'd want to know about who's signed in, who tried to sign in, what they did, what got deleted, and who's asking for an account.
+
+### Where to find it
+
+Sidebar → **Admin → Watchtower** (admin-only). The old **Access Requests**, **User Log**, and **Delete Log** items are gone — their data lives inside Watchtower now. Anyone deep-linking the old URLs (`/user-log`, `/delete-log`, `/access-requests`) will see a 404 — please update bookmarks to `/watchtower`.
+
+### What's in it
+
+- **Overview tab.** Seven KPI tiles at a glance — views today, unique visitors, who's online right now, failed login attempts in the last 24 hours, blocked IPs, pending access requests, and files in the recycle bin. A system-health card with live CPU, memory, load average, and uptime. A 30-day visitor traffic chart, a 24-hour failed-login bar chart that colours hot hours red, a banner that fires when something looks off ("brute-force attempt in progress", "concentrated attack from 1.2.3.4"), a top suspicious-IPs table with one-click **Block**, a recent admin-activity feed, an active-sessions list with **End session**, and the live IP blocklist.
+
+- **Visitors tab.** Everything from the old Visitor Metrics page — KPI strip, traffic chart, top paths, top referrers, device breakdown, hour-of-day distribution — now inside the Watchtower shell.
+
+- **Access tab.** The new security operations centre. A failed-login leaderboard for the last 7 days with **Block**, **Unblock**, and **Clear** on every row; a manual ban form (permanent, or 1 hour / 24 hours / 7 days / 30 days); the active blocklist with hit counters so you can see whether each ban is actually being hit. Below that, **Login sessions** at the top of the audit-log area (the answer to "who's signed in?" is the first thing you see), followed by the activity feed — now showing the most recent 20 entries with an inline **Show N more** button to expand the rest without leaving the page.
+
+- **Deletes tab.** The recycle bin with **Restore** / **Purge now** on each row. Files are restorable for 30 days; the auto-purge runs on every page load.
+
+- **Requests tab.** Active and archived access requests with **Create User**, **Mark Handled**, **Archive**, **Delete**. Pending password resets and the 30-day reset history sit alongside.
+
+### Block an IP at the door
+
+Watchtower ships a real IP blocklist. When you click **Block** anywhere — on the Overview, on the suspicious-IPs table, or via the manual form — the IP is added to a database table. From that moment on, *every* request from that address gets a 403 before the page renders, before assets are served, before anything else runs. A hit counter on each row tells you whether the ban is actually catching traffic. Temporary bans expire automatically; permanent bans stay until you click **Unblock**.
+
+Every ban, unban, session-end, and failure-clear is written to the activity log, so you can always answer "who did this and when".
+
+### Polish
+
+- **Page background colour** in *Web Frontend → Templates → Customize* now supports a dark-mode variant — pick **Same as light**, **Auto** (uses the *Surface — Darkmode* design token, so it tracks your site palette), or **Manual** (set your own hex). Every existing frontend template picks up the swap automatically.
+- **Classic blog detail** no longer shows a subtle border-colour flash when you hover over the article body or its sidebar cards.
+
+### Migration notes
+
+- The new `ip_block` table is created automatically on first boot.
+- Three legacy URLs were removed (`/user-log`, `/delete-log`, `/access-requests`). All POST action endpoints that used to live under those paths now live under `/watchtower/...` — internal links were updated.
+- No data migration; everything historic (activity log entries, login sessions, deleted files, access requests, visitor events) shows up in Watchtower untouched.
+
+## 1.10.5 — 2026-05-15 — Blog overhaul: visual block editor, redesigned editor sidebar, classic detail polish
 
 A sweeping refresh of the blog module — the markdown textarea is gone, replaced by a delightful visual editor; the edit page got a metadata sidebar; the classic public template adopts the design-token primary card look; and a few admin-set knobs that quietly weren't responding (template background, mesh randomize, comments) are fixed or retired.
+
+### Section block: group blocks with controllable spacing
+
+The body editor's palette gained a new **Section** block — a container that wraps other blocks with adjustable top and bottom margin (rem, default 3 / 3). Drag it from the palette like any other block; once it's on the canvas, drag more blocks straight into its inner drop zone, or drag existing blocks from the top level into the section (or back out). Each section gets its own zone with the same insert-marker affordance. Sections can hold any block type *except* another section.
+
+### Container width control on the blog detail page
+
+*Web Frontend → Templates → Blog detail* now has a **Container width** fieldset that matches the Blog list one: pick **Boxed** (capped max-width, default 1160 px, range 640–2400) or **Full width** (spans the viewport with side padding as a viewport-% gutter, default 5%). Applies to all four detail templates — classic, modern, cover, and longform. Longform's narrow-essay default still kicks in by default, but the admin's chosen width wins when set.
+
+### Preview unpublished posts on the public URL
+
+Signed-in editors can now visit `/blog/<slug>` for any **draft** or **archived** post and see it rendered exactly as it would publish — with an amber **Draft preview** / **Archived preview** banner at the top reminding them why a regular visitor wouldn't see this page. The banner carries a one-click **Edit post →** link back to the admin form. Anonymous visitors still get a clean 404 on unpublished URLs.
+
+The action-bar **View on Frontend ↗** button on the blog edit page also shows for drafts and archives now — its label flips to **Preview draft ↗** / **Preview archived ↗** so you know what you're opening.
+
+### Hyperlist is now permanently dark + starts the week on Sunday
+
+The accessibility-first Hyperlist (`/hyperlist`) used to follow the OS preference for light vs dark — that meant the page looked different depending on the visitor's system. It now ships a permanent near-black palette, decoupled from both the site theme and the OS preference. The brutalist white-on-black look is part of the template's identity.
+
+The day sections also reorder to **Sunday → Saturday** to match the calendars folks read in everyday life. The "Filter is optional — without JavaScript every meeting stays visible." sentence in the search hint was removed.
 
 ### Writing a post
 

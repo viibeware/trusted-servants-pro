@@ -819,7 +819,8 @@ def template_settings(site, kind, key):
     A value of ``0`` means "no override" (the template falls through to its
     own responsive default). Valid range is 0.5–4.0 rem."""
     import json
-    defaults = {"bg": "", "heading_font": "", "body_font": "",
+    defaults = {"bg": "", "bg_dark": "", "bg_dark_mode": "same",
+                "heading_font": "", "body_font": "",
                 "heading_size": 0.0, "body_size": 0.0}
     raw = (site.frontend_template_settings_json if site else None) or ""
     if not raw:
@@ -832,6 +833,10 @@ def template_settings(site, kind, key):
     out = dict(defaults)
     if isinstance(leaf.get("bg"), str) and _HEX_RE_TPL.match(leaf["bg"]):
         out["bg"] = leaf["bg"]
+    if isinstance(leaf.get("bg_dark"), str) and _HEX_RE_TPL.match(leaf["bg_dark"]):
+        out["bg_dark"] = leaf["bg_dark"]
+    if leaf.get("bg_dark_mode") in ("same", "auto", "manual"):
+        out["bg_dark_mode"] = leaf["bg_dark_mode"]
     if isinstance(leaf.get("heading_font"), str):
         out["heading_font"] = leaf["heading_font"].strip()
     if isinstance(leaf.get("body_font"), str):
@@ -905,9 +910,28 @@ def template_css_vars(settings):
     on narrow viewports — matching the responsive behavior of each
     template's built-in defaults."""
     from .fonts import font_stack
+    from .design import derive_dark_color
     parts = []
-    if settings.get("bg"):
-        parts.append(f"--tpl-bg: {settings['bg']};")
+    bg = settings.get("bg")
+    if bg:
+        parts.append(f"--tpl-bg: {bg};")
+        # Dark-mode variant. `bg_dark_mode` is 'same' (no override),
+        # 'auto' (use the Design "Surface — Darkmode" token so the
+        # template tracks the admin's site palette), or 'manual' (use
+        # the admin-provided `bg_dark` hex; fall back to the token if
+        # blank). Emitted as `--tpl-bg-dark`; the global rule under
+        # `html[data-theme="dark"] [style*="--tpl-bg-dark"]` swaps
+        # `--tpl-bg` to it so every consumer of the variable picks up
+        # the dark colour automatically.
+        bg_dm_mode = (settings.get("bg_dark_mode") or "same").strip()
+        bg_dark_val = None
+        if bg_dm_mode == "auto":
+            bg_dark_val = "var(--fe-color-surface-dark)"
+        elif bg_dm_mode == "manual":
+            manual = (settings.get("bg_dark") or "").strip()
+            bg_dark_val = manual or "var(--fe-color-surface-dark)"
+        if bg_dark_val:
+            parts.append(f"--tpl-bg-dark: {bg_dark_val};")
     if settings.get("heading_font"):
         parts.append(f"--tpl-heading-font: {font_stack(settings['heading_font'])};")
     if settings.get("body_font"):
@@ -1648,6 +1672,11 @@ def hyperlist():
     for bucket in day_buckets:
         bucket["items"].sort(key=lambda it: ((it["schedule"].start_time or "99:99"),
                                              (it["meeting"].name or "").lower()))
+    # Rotate the bucket list so the week reads Sunday → Saturday.
+    # `day_of_week` on the schedule rows stays the same 0=Mon..6=Sun
+    # enum used everywhere else; we only reorder the rendered
+    # sections. Matches the meetings_list ordering.
+    day_buckets = [day_buckets[6]] + day_buckets[:6]
     today_dow = now_in(site).weekday()
     live = current_live_meeting(site)
     return render_template("frontend/hyperlist.html",
@@ -2894,8 +2923,11 @@ def blog_list():
 def blog_post_detail(slug):
     """Public blog post detail. The slug is the post title with non-
     alphanumerics collapsed to hyphens (or the explicit slug an editor
-    set on the admin form). Drafts + archives are not viewable. Old
-    slugs 301-redirect to the current one via EntitySlugHistory.
+    set on the admin form). Drafts + archives are normally not
+    viewable; an authenticated editor can preview them via the same
+    URL — a "Draft preview" banner is stamped on top so the previewer
+    knows they're looking at unpublished content. Old slugs
+    301-redirect to the current one via EntitySlugHistory.
 
     Reserves the slugs ``category`` and ``tag`` so /blog/category/<slug>
     and /blog/tag/<slug> can serve filtered list views without
@@ -2908,7 +2940,18 @@ def blog_post_detail(slug):
         return gate
     if not site or not getattr(site, "blog_enabled", False):
         abort(404)
-    candidates = _blog_visible_query().all()
+    # Authenticated editors get to preview drafts + archived posts;
+    # everyone else only sees the published set. The `is_preview`
+    # flag rides through to the template so it can stamp a banner.
+    can_preview = (current_user.is_authenticated
+                   and current_user.can_edit())
+    if can_preview:
+        all_posts = BlogPost.query.order_by(BlogPost.is_pinned.desc(),
+                                             BlogPost.published_at.desc().nulls_last(),
+                                             BlogPost.created_at.desc()).all()
+    else:
+        all_posts = _blog_visible_query().all()
+    candidates = all_posts
     post = next((p for p in candidates if p.public_slug == slug), None)
     if post is None:
         from .models import EntitySlugHistory
@@ -2973,6 +3016,28 @@ def blog_post_detail(slug):
     # even if only `classic` actually consumes them today.
     show_related_widget = bool(_tpl_settings.get("show_related_widget", True))
     show_categories_widget = bool(_tpl_settings.get("show_categories_widget", True))
+    # Container width controls — same shape as the blog-list page.
+    # Templates render either a boxed shell (max-width: Npx) or a
+    # full-bleed shell (padding-left/right: Nvw).
+    post_width_mode = (site.frontend_blog_post_width_mode if site else None) or "boxed"
+    if post_width_mode not in ("boxed", "full"):
+        post_width_mode = "boxed"
+    try:
+        post_max_width = int(site.frontend_blog_post_max_width) if site else 1160
+    except (TypeError, ValueError):
+        post_max_width = 1160
+    post_max_width = max(640, min(2400, post_max_width))
+    try:
+        post_padding_pct = int(site.frontend_blog_post_padding_pct) if site else 5
+    except (TypeError, ValueError):
+        post_padding_pct = 5
+    post_padding_pct = max(0, min(20, post_padding_pct))
+    # The preview banner shows on any unpublished state — drafts AND
+    # archives — so the editor isn't surprised that an archived post
+    # is reachable via the public URL.
+    is_preview = can_preview and (post.is_draft or post.is_archived)
+    preview_state = ("draft" if post.is_draft
+                     else ("archived" if post.is_archived else ""))
     return render_template(tpl["partial"], post=post,
                            tpl_style=tpl_style,
                            tpl_dynbg_key=tpl_dynbg_key,
@@ -2983,6 +3048,11 @@ def blog_post_detail(slug):
                            all_categories=all_categories,
                            show_related_widget=show_related_widget,
                            show_categories_widget=show_categories_widget,
+                           post_width_mode=post_width_mode,
+                           post_max_width=post_max_width,
+                           post_padding_pct=post_padding_pct,
+                           is_preview=is_preview,
+                           preview_state=preview_state,
                            **og,
                            **ctx)
 

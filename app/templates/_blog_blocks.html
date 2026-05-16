@@ -46,11 +46,27 @@
   {% elif t == 'image' %}
     {% set _w = (d.width_pct or 100) | int %}
     {% set _align = d.align or 'center' %}
+    {# Box-shadow recipes mirror `_blocks.html` so a shadow set on
+       a blog image visually matches the same shadow on a page
+       builder image. Empty key skips the rule entirely. #}
+    {%- set _shadow_recipes = {
+        'sm': '0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.10)',
+        'md': '0 4px 6px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.06)',
+        'lg': '0 10px 15px rgba(0, 0, 0, 0.10), 0 4px 6px rgba(0, 0, 0, 0.08)',
+        'xl': '0 20px 25px rgba(0, 0, 0, 0.15), 0 10px 10px rgba(0, 0, 0, 0.06)',
+    } -%}
+    {%- set _shadow = _shadow_recipes.get(d.shadow or '', '') -%}
+    {# Vertical margins are admin-controlled. Defaults to 1.5rem so
+       legacy posts that never set the keys explicitly keep the
+       longstanding `.bb-image { margin: 1.5rem auto }` look. #}
+    {%- set _mt = d.margin_top if d.margin_top is not none else 1.5 -%}
+    {%- set _mb = d.margin_bottom if d.margin_bottom is not none else 1.5 -%}
     <figure class="bb-image bb-image--{{ _align }}"
-            style="--bb-img-width: {{ _w }}%;">
+            style="--bb-img-width: {{ _w }}%; margin-top: {{ _mt }}rem; margin-bottom: {{ _mb }}rem;">
       {% if d.src %}
       <img src="{{ d.src }}" alt="{{ d.alt or '' }}" loading="lazy"
-           data-lightbox-src="{{ d.src }}">
+           data-lightbox-src="{{ d.src }}"
+           {% if _shadow %}style="box-shadow: {{ _shadow }};"{% endif %}>
       {% endif %}
       {% if d.caption %}<figcaption class="bb-image-caption">{{ d.caption }}</figcaption>{% endif %}
     </figure>
@@ -120,6 +136,20 @@
 
   {% elif t == 'code' %}
     <pre class="bb-code"><code{% if d.lang %} class="language-{{ d.lang }}"{% endif %}>{{ d.code or '' }}</code></pre>
+
+  {% elif t == 'section' %}
+    {# Container block. Top + bottom margin ride through inline
+       style so admin-tuned spacing wins over the stylesheet's
+       generic margins. Children render recursively via the same
+       `render_blog_block` macro so a Section with nested
+       paragraphs, headings, callouts, etc. emits the same markup
+       it would at the top level. #}
+    {%- set _mt = d.margin_top if d.margin_top is not none else 3 -%}
+    {%- set _mb = d.margin_bottom if d.margin_bottom is not none else 3 -%}
+    <section class="bb-section"
+             style="margin-top: {{ _mt }}rem; margin-bottom: {{ _mb }}rem;">
+      {% for child in (d.blocks or []) %}{{ render_blog_block(child) }}{% endfor %}
+    </section>
   {% endif %}
 {% endmacro %}
 

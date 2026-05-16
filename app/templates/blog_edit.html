@@ -7,17 +7,16 @@
   <a class="btn" href="{{ url_for('main.blog_index') }}">← All posts</a>
   {% if _p and _p.is_draft %}<span class="post-chip post-chip-draft post-chip-header">Draft</span>{% endif %}
   {% if _p and _p.is_archived %}<span class="post-chip post-chip-header">Archived</span>{% endif %}
-  {# Open the public blog-post page in a new tab. Mirrors the
-     "View on Frontend" button on `post_edit.html` — gated on the
-     Web Frontend module being on so we don't link to a 404 when
-     the public site is disabled. Drafts and archived posts have a
-     publicly-resolvable URL too (the public route 404s by visibility,
-     not by URL absence) — but the link wouldn't render anything
-     useful, so hide it in those states. #}
-  {% if _p and site and site.frontend_module_enabled
-        and not _p.is_draft and not _p.is_archived %}
+  {# Open the public blog-post page in a new tab. Drafts and
+     archived posts are now reachable too — the public route lets
+     signed-in editors preview them with a "Draft preview" banner
+     stamped on top. We still gate the button on the Web Frontend
+     module being on so we don't link to a 404 when the public site
+     is disabled. Button label adapts to the post state so the
+     editor knows whether they're previewing or visiting live. #}
+  {% if _p and site and site.frontend_module_enabled %}
   <a class="btn" target="_blank" rel="noopener"
-     href="{{ url_for('frontend.blog_post_detail', slug=_p.public_slug) }}">View on Frontend ↗</a>
+     href="{{ url_for('frontend.blog_post_detail', slug=_p.public_slug) }}">{% if _p.is_draft %}Preview draft ↗{% elif _p.is_archived %}Preview archived ↗{% else %}View on Frontend ↗{% endif %}</a>
   {% endif %}
   {% if _p and not _p.is_archived %}
   <form method="post" action="{{ url_for('main.blog_archive', bid=_p.id) }}" style="display:inline">
@@ -178,6 +177,8 @@
       </p>
       <div class="fe-page-palette-grid pbe-palette-grid">
         {% set _pbe_catalog = [
+          {'key': 'section',   'name': 'Section',    'icon': 'layout-grid',
+           'desc': 'A container that wraps other blocks with adjustable top/bottom margin.'},
           {'key': 'paragraph', 'name': 'Paragraph',  'icon': 'type',
            'desc': 'A block of prose. Markdown supported for inline links / bold / italic.'},
           {'key': 'heading',   'name': 'Heading',    'icon': 'heading',

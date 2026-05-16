@@ -565,8 +565,11 @@ _ENDPOINT_LABELS = {
     "main.wp_import_dry_run":  "WordPress importer · Preview",
     "main.media":              "File browser",
     "main.locations":          "Meeting locations",
-    "main.access_requests":    "Access Requests",
-    "main.user_log":           "User Log",
+    "main.watchtower":         "Watchtower",
+    "main.watchtower_visitors": "Watchtower · Visitors",
+    "main.watchtower_access":  "Watchtower · Access",
+    "main.watchtower_deletes": "Watchtower · Deletes",
+    "main.watchtower_requests": "Watchtower · Requests",
     "main.frontend_dashboard": "Web Frontend",
     "auth.users":              "Settings → Users",
 }
@@ -804,7 +807,7 @@ def api_search():
                 "items": [{
                     "label": u.username,
                     "snippet": (u.email or "") + " · " + u.role.replace("_", " "),
-                    "url": url_for("main.user_log") + "?user_id=" + str(u.id),
+                    "url": url_for("main.watchtower_access") + "?user_id=" + str(u.id),
                     "icon": "user",
                 } for u in users],
             })
@@ -5559,6 +5562,15 @@ def frontend_template_settings_save(kind, key):
     bg = (request.form.get("bg") or "").strip()
     if _re.match(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$", bg) and request.form.get("bg_enabled") == "1":
         leaf["bg"] = bg
+        # Dark-mode behaviour for the override. 'same' is the implicit
+        # default and is dropped from JSON to keep the leaf lean.
+        bg_dm_mode = (request.form.get("bg_dark_mode") or "same").strip()
+        if bg_dm_mode in ("auto", "manual"):
+            leaf["bg_dark_mode"] = bg_dm_mode
+        if bg_dm_mode == "manual":
+            bg_dark = (request.form.get("bg_dark") or "").strip()
+            if _re.match(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$", bg_dark):
+                leaf["bg_dark"] = bg_dark
     # Per-template dynamic-background. Stored alongside the colour
     # override so a template can carry its own backdrop without
     # touching the site-wide hero / page settings. Coerced through
@@ -5874,12 +5886,28 @@ def frontend_blog_list_template_save():
 @bp.route("/frontend/blog-post-template", methods=["POST"])
 @admin_required
 def frontend_blog_post_template_save():
-    """Persist the per-blog-post detail template selection."""
+    """Persist the per-blog-post detail template selection AND its
+    container-width controls (same shape as the blog-list save)."""
     from .frontend import BLOG_POST_TEMPLATES
     s = _get_site_setting()
     key = (request.form.get("frontend_blog_post_template") or "").strip()
     if key in {t["key"] for t in BLOG_POST_TEMPLATES}:
         s.frontend_blog_post_template = key
+    width = (request.form.get("frontend_blog_post_width_mode") or "").strip()
+    if width in ("boxed", "full"):
+        s.frontend_blog_post_width_mode = width
+    if "frontend_blog_post_max_width" in request.form:
+        try:
+            max_w = int(request.form.get("frontend_blog_post_max_width") or 1160)
+        except ValueError:
+            max_w = 1160
+        s.frontend_blog_post_max_width = max(640, min(2400, max_w))
+    if "frontend_blog_post_padding_pct" in request.form:
+        try:
+            pad = int(request.form.get("frontend_blog_post_padding_pct") or 5)
+        except ValueError:
+            pad = 5
+        s.frontend_blog_post_padding_pct = max(0, min(20, pad))
     if "frontend_blog_post_bg_dynamic_key" in request.form:
         from . import dynbg as _dynbg
         s.frontend_blog_post_bg_dynamic_key = _dynbg.normalize(
@@ -9802,122 +9830,6 @@ def request_access_submit():
     return redirect(url_for("auth.login"))
 
 
-@bp.route("/access-requests")
-@admin_required
-def access_requests():
-    view = (request.args.get("view") or "active").strip().lower()
-    if view not in ("active", "archived"):
-        view = "active"
-    q = AccessRequest.query
-    if view == "archived":
-        q = q.filter(AccessRequest.is_archived.is_(True))
-        items = q.order_by(AccessRequest.archived_at.desc().nullslast(),
-                           AccessRequest.created_at.desc()).all()
-    else:
-        q = q.filter(AccessRequest.is_archived.is_(False))
-        # Active list: pending first (status='pending' > 'handled' alpha,
-        # but we want pending visible at the top, so explicit ordering).
-        items = q.order_by(AccessRequest.status.asc(),
-                           AccessRequest.created_at.desc()).all()
-    archived_count = AccessRequest.query.filter_by(is_archived=True).count()
-    active_count = AccessRequest.query.filter_by(is_archived=False).count()
-
-    # Pending password resets — distinct users with at least one live
-    # (unused, unexpired) reset token. A user can hold multiple live
-    # tokens if they re-requested in the same window; collapse to one
-    # row per user, surfacing the most recent token's timestamp +
-    # expiry. Only shown on the active view; the archive is purely
-    # access-request history and a stale forgot-password link wouldn't
-    # belong there.
-    pending_resets = []
-    recent_resets = []
-    if view == "active":
-        now = datetime.utcnow()
-        live_tokens = (PasswordResetToken.query
-                       .filter(PasswordResetToken.used_at.is_(None),
-                               PasswordResetToken.expires_at > now)
-                       .order_by(PasswordResetToken.created_at.desc())
-                       .all())
-        seen = {}
-        for tok in live_tokens:
-            if tok.user_id not in seen:
-                seen[tok.user_id] = tok
-        for tok in seen.values():
-            u = db.session.get(User, tok.user_id)
-            if u:
-                # Minutes-remaining is computed server-side so the
-                # template stays free of datetime arithmetic.
-                mins = max(0, int((tok.expires_at - now).total_seconds() // 60))
-                pending_resets.append((u, tok, mins))
-
-        # 30-day password reset activity. Includes self-service flows
-        # (PasswordResetToken rows: pending, used, or expired) AND
-        # admin-driven resets pulled from the activity log
-        # (``password.reset.admin``). Each entry carries a ``kind``
-        # tag so the template can format it consistently. Sorted
-        # newest-first; capped at 100 rows for legibility.
-        from .models import ActivityLog
-        cutoff = now - timedelta(days=30)
-        all_tokens = (PasswordResetToken.query
-                      .filter(PasswordResetToken.created_at >= cutoff)
-                      .order_by(PasswordResetToken.created_at.desc())
-                      .all())
-        for tok in all_tokens:
-            u = db.session.get(User, tok.user_id)
-            if not u:
-                continue
-            if tok.used_at is not None:
-                status = "used"
-                effective_at = tok.used_at
-            elif tok.expires_at <= now:
-                status = "expired"
-                effective_at = tok.expires_at
-            else:
-                status = "pending"
-                effective_at = tok.created_at
-            recent_resets.append({
-                "kind": "self_service",
-                "username": u.username,
-                "email": u.email or "",
-                "status": status,
-                "requested_at": tok.created_at,
-                "effective_at": effective_at,
-                "actor": u.username,
-            })
-        admin_resets = (ActivityLog.query
-                        .filter(ActivityLog.action == "password.reset.admin",
-                                ActivityLog.created_at >= cutoff)
-                        .order_by(ActivityLog.created_at.desc())
-                        .limit(200)
-                        .all())
-        for ev in admin_resets:
-            target = db.session.get(User, ev.entity_id) if ev.entity_id else None
-            actor = db.session.get(User, ev.user_id) if ev.user_id else None
-            recent_resets.append({
-                "kind": "admin",
-                "username": target.username if target else f"user #{ev.entity_id}",
-                "email": (target.email if target else "") or "",
-                "status": "admin_reset",
-                "requested_at": ev.created_at,
-                "effective_at": ev.created_at,
-                "actor": actor.username if actor else "(deleted user)",
-                "summary": ev.summary or "",
-            })
-        recent_resets.sort(key=lambda r: r["requested_at"], reverse=True)
-        recent_resets = recent_resets[:100]
-
-    resp = current_app.make_response(
-        render_template("access_requests.html", items=items, view=view,
-                        archived_count=archived_count, active_count=active_count,
-                        pending_resets=pending_resets,
-                        recent_resets=recent_resets)
-    )
-    # Defeat stale-HTML caching after the modal-driven Create User flow.
-    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    resp.headers["Pragma"] = "no-cache"
-    return resp
-
-
 USER_LOG_PAGE_SIZE = 100
 
 
@@ -9938,29 +9850,73 @@ def _user_log_event_dict(ev, label_for):
     }
 
 
-@bp.route("/user-log")
-@admin_required
-def user_log():
-    """Admin-only timeline of write actions. Scope is selected via the
-    ``?user_id=`` query string: an integer drills down to one account,
-    the sentinel ``all`` shows activity across every user. Defaults to
-    the cross-account "All users" view so the page is never blank on
-    first load and admins land on the broadest signal. Two sections:
-    login sessions table and activity feed (newest first), rendered
-    side-by-side on desktop. Activity feed seeds with the first
-    ``USER_LOG_PAGE_SIZE`` events; subsequent pages stream in via
-    /api/user-log-events as the operator scrolls."""
-    from . import activity
-    users = User.query.order_by(User.username).all()
-    if not users:
-        return render_template("user_log.html", users=[], selected=None,
-                               show_all=False, sessions=[], events=[],
-                               days=30, sdays=1,
-                               total_events=0, page_size=USER_LOG_PAGE_SIZE)
+# ---- Watchtower: unified admin security + observability console ----------
+#
+# Five-tab dashboard that consolidates User Log, Delete Log, Access
+# Requests, and Visitor Metrics into one admin-only surface and layers
+# new security tools (anomaly detection, IP blocklist, failed-login
+# leaderboard) on top. The legacy routes below still resolve so old
+# bookmarks and inbound links don't 404; the sidebar surfaces only
+# Watchtower.
 
+@bp.route("/watchtower")
+@admin_required
+def watchtower():
+    """Overview tab — KPI tiles, system metrics, anomaly callouts, the
+    last 30 days of visitor traffic, the last 24 hours of failed-login
+    attempts, top suspicious IPs, and recent admin activity. Polls
+    nothing — every panel renders from a fresh DB read so a refresh
+    always shows current state."""
+    from . import watchtower as wt
+    return render_template(
+        "watchtower/overview.html",
+        active_tab="overview",
+        kpis=wt.overview_kpis(),
+        daily=wt.daily_visits(days=30),
+        hourly_fail=wt.hourly_failed_logins(hours=24),
+        anomalies=wt.anomaly_signals(),
+        top_ips=wt.top_failed_login_ips(days=7, limit=10),
+        recent=wt.recent_admin_activity(limit=12),
+        active_sess=wt.active_sessions(minutes=60),
+        system=wt.system_snapshot(),
+        blocked=wt.blocked_ips(active_only=True),
+    )
+
+
+@bp.route("/watchtower/visitors")
+@admin_required
+def watchtower_visitors():
+    """Frontend visitor analytics tab. Same data as the standalone
+    /visitor-metrics page but rendered inside the Watchtower shell."""
+    from . import visitor_metrics as vm
+    try:
+        window = max(7, min(365, int(request.args.get("window", 30))))
+    except (TypeError, ValueError):
+        window = 30
+    return render_template(
+        "watchtower/visitors.html",
+        active_tab="visitors",
+        window=window,
+        windows=(7, 14, 30, 60, 90, 180, 365),
+        summary=vm.summary(days=window),
+        daily=vm.daily_series(days=window),
+        hourly=vm.hourly_distribution(days=min(14, window)),
+        top_paths=vm.top_paths(days=window, limit=10),
+        top_referrers=vm.top_referrers(days=window, limit=10),
+        devices=vm.device_breakdown(days=window),
+    )
+
+
+@bp.route("/watchtower/access")
+@admin_required
+def watchtower_access():
+    """Admin activity log + login sessions + IP blocklist + suspicious
+    IPs. The activity feed reuses the same per-user filter the legacy
+    /user-log page supports (``?user_id=<id>|all``) so deep links from
+    the old surface keep working."""
+    from . import activity, watchtower as wt
+    users = User.query.order_by(User.username).all()
     raw_uid = request.args.get("user_id")
-    # Default to All users when the query string omits ``user_id``.
-    # Passing ``user_id=all`` explicitly stays equivalent.
     show_all = raw_uid is None or (raw_uid or "").lower() == "all"
     selected = None
     if not show_all and raw_uid:
@@ -9969,36 +9925,258 @@ def user_log():
         except (TypeError, ValueError):
             selected = None
     if not show_all and selected is None:
-        # Bad ``user_id`` (e.g. deleted account) falls back to All
-        # users rather than picking an arbitrary fallback account.
         show_all = True
-
     scope_uid = None if show_all else selected.id
-    # Activity feed defaults to a 30-day window; login sessions default
-    # to 24 hours since "who's signed in right now" is the most common
-    # check. Each card has its own dropdown — the page accepts both
-    # ``?days=`` (activity feed) and ``?sdays=`` (sessions) so the two
-    # windows are independent.
     try:
         days = max(1, min(365, int(request.args.get("days", 30))))
     except (TypeError, ValueError):
         days = 30
     try:
-        sdays = max(1, min(365, int(request.args.get("sdays", 1))))
+        sdays = max(1, min(365, int(request.args.get("sdays", 7))))
     except (TypeError, ValueError):
-        sdays = 1
+        sdays = 7
     sessions = activity.recent_sessions(scope_uid, since_days=sdays)
     raw_events = activity.recent_activity(scope_uid, since_days=days,
                                           limit=USER_LOG_PAGE_SIZE, offset=0)
     total_events = activity.recent_activity_count(scope_uid, since_days=days)
     events = [_user_log_event_dict(ev, activity.label_for) for ev in raw_events]
-    return render_template("user_log.html",
-                           users=users, selected=selected,
-                           show_all=show_all,
-                           sessions=sessions, events=events,
-                           days=days, sdays=sdays,
-                           total_events=total_events,
-                           page_size=USER_LOG_PAGE_SIZE)
+    return render_template(
+        "watchtower/access.html",
+        active_tab="access",
+        users=users, selected=selected, show_all=show_all,
+        sessions=sessions, events=events,
+        days=days, sdays=sdays,
+        total_events=total_events,
+        page_size=USER_LOG_PAGE_SIZE,
+        top_ips=wt.top_failed_login_ips(days=7, limit=20),
+        blocked=wt.blocked_ips(active_only=True),
+    )
+
+
+@bp.route("/watchtower/deletes")
+@admin_required
+def watchtower_deletes():
+    """Recycle bin tab — same data and same restore/purge action URLs
+    as the legacy /delete-log page so nothing in the form actions has
+    to move."""
+    from . import trash
+    from .models import DeletedFile
+    try:
+        trash.expire_old()
+    except Exception:
+        db.session.rollback()
+    rows = (DeletedFile.query
+            .order_by(DeletedFile.deleted_at.desc())
+            .limit(500).all())
+    items = []
+    now = datetime.utcnow()
+    for row in rows:
+        seconds_left = max(0, (row.expires_at - now).total_seconds())
+        days_left = int((seconds_left + 86399) // 86400) if seconds_left > 0 else 0
+        parent_link = None
+        if row.parent_type == "library" and row.parent_id:
+            lib = db.session.get(Library, row.parent_id)
+            if lib:
+                parent_link = url_for("main.library_detail", slug=lib.public_slug)
+        elif row.parent_type == "meeting" and row.parent_id:
+            mt = db.session.get(Meeting, row.parent_id)
+            if mt:
+                parent_link = url_for("main.meeting_detail", slug=mt.public_slug)
+        crumbs = []
+        if row.source_type == "reading":
+            crumbs.append(("Library", row.parent_label or "(deleted library)", parent_link))
+            crumbs.append(("Item", row.title or "(untitled)", None))
+        elif row.source_type == "meeting_file":
+            import json as _json
+            try:
+                snap = _json.loads(row.snapshot_json or "{}")
+            except (ValueError, TypeError):
+                snap = {}
+            crumbs.append(("Meeting", row.parent_label or "(deleted meeting)", parent_link))
+            cat = snap.get("category") or "documents"
+            crumbs.append(("Category", cat.replace("_", " ").title(), None))
+            crumbs.append(("File", row.title or "(untitled)", None))
+        else:
+            crumbs.append(("File browser", row.original_filename or "(unknown file)", None))
+        deleter = db.session.get(User, row.deleted_by) if row.deleted_by else None
+        items.append({
+            "id": row.id,
+            "source_type": row.source_type,
+            "stored_filename": row.stored_filename,
+            "original_filename": row.original_filename,
+            "title": row.title,
+            "deleted_at": row.deleted_at,
+            "deleter": deleter.username if deleter else "(unknown)",
+            "expires_at": row.expires_at,
+            "days_left": days_left,
+            "crumbs": crumbs,
+        })
+    return render_template("watchtower/deletes.html",
+                           active_tab="deletes",
+                           items=items, retention_days=trash.RETENTION_DAYS)
+
+
+@bp.route("/watchtower/requests")
+@admin_required
+def watchtower_requests():
+    """Access-request inbox + active password resets. Action URLs
+    (mark handled, archive, delete) still post to the legacy
+    /access-requests/<id>/* endpoints so back-compat is automatic."""
+    view = (request.args.get("view") or "active").strip().lower()
+    if view not in ("active", "archived"):
+        view = "active"
+    q = AccessRequest.query
+    if view == "archived":
+        q = q.filter(AccessRequest.is_archived.is_(True))
+        items = q.order_by(AccessRequest.archived_at.desc().nullslast(),
+                           AccessRequest.created_at.desc()).all()
+    else:
+        q = q.filter(AccessRequest.is_archived.is_(False))
+        items = q.order_by(AccessRequest.status.asc(),
+                           AccessRequest.created_at.desc()).all()
+    archived_count = AccessRequest.query.filter_by(is_archived=True).count()
+    active_count = AccessRequest.query.filter_by(is_archived=False).count()
+    pending_resets = []
+    recent_resets = []
+    if view == "active":
+        now = datetime.utcnow()
+        live_tokens = (PasswordResetToken.query
+                       .filter(PasswordResetToken.used_at.is_(None),
+                               PasswordResetToken.expires_at > now)
+                       .order_by(PasswordResetToken.created_at.desc()).all())
+        seen = {}
+        for tok in live_tokens:
+            if tok.user_id not in seen:
+                seen[tok.user_id] = tok
+        for tok in seen.values():
+            u = db.session.get(User, tok.user_id)
+            if u:
+                mins = max(0, int((tok.expires_at - now).total_seconds() // 60))
+                pending_resets.append((u, tok, mins))
+        cutoff = now - timedelta(days=30)
+        all_tokens = (PasswordResetToken.query
+                      .filter(PasswordResetToken.created_at >= cutoff)
+                      .order_by(PasswordResetToken.created_at.desc()).all())
+        for tok in all_tokens:
+            u = db.session.get(User, tok.user_id)
+            if not u:
+                continue
+            if tok.used_at is not None:
+                status = "used"; effective_at = tok.used_at
+            elif tok.expires_at <= now:
+                status = "expired"; effective_at = tok.expires_at
+            else:
+                status = "pending"; effective_at = tok.created_at
+            recent_resets.append({
+                "kind": "self_service", "username": u.username,
+                "email": u.email or "", "status": status,
+                "requested_at": tok.created_at,
+                "effective_at": effective_at, "actor": u.username,
+            })
+        from .models import ActivityLog
+        admin_resets = (ActivityLog.query
+                        .filter(ActivityLog.action == "password.reset.admin",
+                                ActivityLog.created_at >= cutoff)
+                        .order_by(ActivityLog.created_at.desc())
+                        .limit(200).all())
+        for ev in admin_resets:
+            target = db.session.get(User, ev.entity_id) if ev.entity_id else None
+            actor = db.session.get(User, ev.user_id) if ev.user_id else None
+            recent_resets.append({
+                "kind": "admin",
+                "username": target.username if target else f"user #{ev.entity_id}",
+                "email": (target.email if target else "") or "",
+                "status": "admin_reset",
+                "requested_at": ev.created_at,
+                "effective_at": ev.created_at,
+                "actor": actor.username if actor else "(deleted user)",
+                "summary": ev.summary or "",
+            })
+        recent_resets.sort(key=lambda r: r["requested_at"], reverse=True)
+        recent_resets = recent_resets[:100]
+    return render_template("watchtower/requests.html",
+                           active_tab="requests",
+                           items=items, view=view,
+                           archived_count=archived_count,
+                           active_count=active_count,
+                           pending_resets=pending_resets,
+                           recent_resets=recent_resets)
+
+
+@bp.route("/watchtower/ban-ip", methods=["POST"])
+@admin_required
+def watchtower_ban_ip():
+    """Add (or refresh) an IP block. ``ttl_hours=0`` is permanent."""
+    from . import watchtower as wt, activity
+    ip = (request.form.get("ip") or "").strip()
+    reason = request.form.get("reason") or ""
+    try:
+        ttl_hours = int(request.form.get("ttl_hours") or 0)
+    except (TypeError, ValueError):
+        ttl_hours = 0
+    if not ip:
+        flash("Provide an IP to block.", "danger")
+        return redirect(url_for("main.watchtower_access"))
+    row = wt.ban_ip(ip, reason, current_user.id,
+                    ttl_hours=ttl_hours if ttl_hours > 0 else None)
+    if row:
+        activity.log("watchtower.ban_ip", entity_type="ip_block",
+                     entity_id=row.id,
+                     summary=f"Banned {ip}" + (f" ({reason})" if reason else ""))
+        flash(f"Blocked {ip}.", "success")
+    else:
+        flash("Couldn't block — invalid input.", "danger")
+    return redirect(request.form.get("return_url") or url_for("main.watchtower_access"))
+
+
+@bp.route("/watchtower/unban-ip/<int:bid>", methods=["POST"])
+@admin_required
+def watchtower_unban_ip(bid):
+    from . import watchtower as wt, activity
+    from .models import IPBlock
+    row = db.session.get(IPBlock, bid)
+    ip = row.ip if row else f"#{bid}"
+    ok = wt.unban_ip(bid)
+    if ok:
+        activity.log("watchtower.unban_ip", entity_type="ip_block",
+                     entity_id=bid, summary=f"Unblocked {ip}")
+        flash(f"Unblocked {ip}.", "success")
+    else:
+        flash("Block not found.", "danger")
+    return redirect(request.form.get("return_url") or url_for("main.watchtower_access"))
+
+
+@bp.route("/watchtower/end-session/<int:sid>", methods=["POST"])
+@admin_required
+def watchtower_end_session(sid):
+    from . import watchtower as wt, activity
+    from .models import LoginSession
+    s = db.session.get(LoginSession, sid)
+    label = (s.user.username if s and s.user else f"session #{sid}")
+    ok = wt.end_session(sid, reason="forced")
+    if ok:
+        activity.log("watchtower.end_session", entity_type="login_session",
+                     entity_id=sid,
+                     summary=f"Force-ended session for {label}")
+        flash(f"Ended session for {label}.", "success")
+    else:
+        flash("Session not open or not found.", "danger")
+    return redirect(request.form.get("return_url") or url_for("main.watchtower_access"))
+
+
+@bp.route("/watchtower/clear-failures", methods=["POST"])
+@admin_required
+def watchtower_clear_failures():
+    from . import watchtower as wt, activity
+    ip = (request.form.get("ip") or "").strip()
+    n = wt.clear_login_failures(ip)
+    if n > 0:
+        activity.log("watchtower.clear_failures", entity_type="ip",
+                     summary=f"Cleared {n} failed-login records for {ip}")
+        flash(f"Cleared {n} failed-login record(s) for {ip}.", "success")
+    else:
+        flash("No matching records.", "info")
+    return redirect(request.form.get("return_url") or url_for("main.watchtower_access"))
 
 
 @bp.route("/api/user-log-events")
@@ -10041,88 +10219,11 @@ def api_user_log_events():
     )
 
 
-# ---- Delete Log (recycle bin) -----------------------------------------------
+# ---- Watchtower Deletes tab actions (restore / purge) -----------------------
 
-@bp.route("/delete-log")
+@bp.route("/watchtower/deletes/<int:rid>/restore", methods=["POST"])
 @admin_required
-def delete_log():
-    """Admin recycle bin — every soft-deleted file from the last 30
-    days, sorted newest-first. Each row carries a captured snapshot
-    that the Restore button rebuilds into a live record at the
-    captured position. Auto-purges expired rows on every visit so the
-    list stays accurate without needing a separate cron."""
-    from . import trash
-    from .models import DeletedFile
-    # Lazy expiry sweep — best-effort; failures don't block the page.
-    try:
-        trash.expire_old()
-    except Exception:
-        db.session.rollback()
-    rows = (DeletedFile.query
-            .order_by(DeletedFile.deleted_at.desc())
-            .limit(500)
-            .all())
-    items = []
-    now = datetime.utcnow()
-    for row in rows:
-        # Days remaining (round up so a row with <24h showing "1 day"
-        # is never confusing).
-        seconds_left = max(0, (row.expires_at - now).total_seconds())
-        days_left = int((seconds_left + 86399) // 86400) if seconds_left > 0 else 0
-        # Resolve the parent into something the template can render
-        # without re-querying. Both lookups are scoped to the
-        # captured ``parent_id`` and gracefully fall back to the
-        # captured label when the parent has since been removed.
-        parent_link = None
-        if row.parent_type == "library" and row.parent_id:
-            lib = db.session.get(Library, row.parent_id)
-            if lib:
-                parent_link = url_for("main.library_detail", slug=lib.public_slug)
-        elif row.parent_type == "meeting" and row.parent_id:
-            mt = db.session.get(Meeting, row.parent_id)
-            if mt:
-                parent_link = url_for("main.meeting_detail", slug=mt.public_slug)
-        # Per-source-type breadcrumb building. Surfaces a nested tree
-        # under the filename: "Library: Foo → Item: Bar" etc.
-        crumbs = []
-        if row.source_type == "reading":
-            # source_type stays "reading" for back-compat with rows
-            # written under the previous naming; the user-facing
-            # crumb label uses the new "Library item" terminology.
-            crumbs.append(("Library", row.parent_label or "(deleted library)", parent_link))
-            crumbs.append(("Item", row.title or "(untitled)", None))
-        elif row.source_type == "meeting_file":
-            import json as _json
-            try:
-                snap = _json.loads(row.snapshot_json or "{}")
-            except (ValueError, TypeError):
-                snap = {}
-            crumbs.append(("Meeting", row.parent_label or "(deleted meeting)", parent_link))
-            cat = snap.get("category") or "documents"
-            crumbs.append(("Category", cat.replace("_", " ").title(), None))
-            crumbs.append(("File", row.title or "(untitled)", None))
-        else:
-            crumbs.append(("File browser", row.original_filename or "(unknown file)", None))
-        deleter = db.session.get(User, row.deleted_by) if row.deleted_by else None
-        items.append({
-            "id": row.id,
-            "source_type": row.source_type,
-            "stored_filename": row.stored_filename,
-            "original_filename": row.original_filename,
-            "title": row.title,
-            "deleted_at": row.deleted_at,
-            "deleter": deleter.username if deleter else "(unknown)",
-            "expires_at": row.expires_at,
-            "days_left": days_left,
-            "crumbs": crumbs,
-        })
-    return render_template("delete_log.html", items=items,
-                           retention_days=trash.RETENTION_DAYS)
-
-
-@bp.route("/delete-log/<int:rid>/restore", methods=["POST"])
-@admin_required
-def delete_log_restore(rid):
+def watchtower_delete_restore(rid):
     from . import trash, activity
     from .models import DeletedFile
     row = db.session.get(DeletedFile, rid) or abort(404)
@@ -10134,12 +10235,12 @@ def delete_log_restore(rid):
         flash(f"Restored “{label}”. {msg}.", "success")
     else:
         flash(f"Couldn't restore “{label}”: {msg}", "danger")
-    return redirect(url_for("main.delete_log"))
+    return redirect(url_for("main.watchtower_deletes"))
 
 
-@bp.route("/delete-log/<int:rid>/purge", methods=["POST"])
+@bp.route("/watchtower/deletes/<int:rid>/purge", methods=["POST"])
 @admin_required
-def delete_log_purge(rid):
+def watchtower_delete_purge(rid):
     from . import trash, activity
     from .models import DeletedFile
     row = db.session.get(DeletedFile, rid) or abort(404)
@@ -10148,12 +10249,12 @@ def delete_log_purge(rid):
                  summary=f"Permanently purged “{label}”")
     trash.purge(rid)
     flash(f"Permanently deleted “{label}”.", "success")
-    return redirect(url_for("main.delete_log"))
+    return redirect(url_for("main.watchtower_deletes"))
 
 
-@bp.route("/access-requests/<int:rid>/handled", methods=["POST"])
+@bp.route("/watchtower/requests/<int:rid>/handled", methods=["POST"])
 @admin_required
-def access_request_handled(rid):
+def watchtower_request_handled(rid):
     from datetime import datetime
     r = db.session.get(AccessRequest, rid) or abort(404)
     r.status = "handled" if r.status == "pending" else "pending"
@@ -10162,16 +10263,16 @@ def access_request_handled(rid):
     from . import activity
     activity.log("access_request.handle", entity_type="access_request", entity_id=r.id,
                  summary=f"Marked request from {r.name} <{r.email}> as {r.status}")
-    return redirect(url_for("main.access_requests",
+    return redirect(url_for("main.watchtower_requests",
                             view=request.form.get("view") or "active"))
 
 
-@bp.route("/access-requests/<int:rid>/archive", methods=["POST"])
+@bp.route("/watchtower/requests/<int:rid>/archive", methods=["POST"])
 @admin_required
-def access_request_archive(rid):
+def watchtower_request_archive(rid):
     """Move a handled request into the archive view. Pending requests
     are auto-flipped to handled at the same time so the archived row
-    has a coherent status. Reversible via ``access_request_unarchive``.
+    has a coherent status. Reversible via ``watchtower_request_unarchive``.
     """
     from datetime import datetime
     r = db.session.get(AccessRequest, rid) or abort(404)
@@ -10185,25 +10286,25 @@ def access_request_archive(rid):
     activity.log("access_request.archive", entity_type="access_request", entity_id=r.id,
                  summary=f"Archived request from {r.name} <{r.email}>")
     flash("Request archived", "success")
-    return redirect(url_for("main.access_requests",
+    return redirect(url_for("main.watchtower_requests",
                             view=request.form.get("view") or "active"))
 
 
-@bp.route("/access-requests/<int:rid>/unarchive", methods=["POST"])
+@bp.route("/watchtower/requests/<int:rid>/unarchive", methods=["POST"])
 @admin_required
-def access_request_unarchive(rid):
+def watchtower_request_unarchive(rid):
     r = db.session.get(AccessRequest, rid) or abort(404)
     r.is_archived = False
     r.archived_at = None
     db.session.commit()
     flash("Request restored from archive", "success")
-    return redirect(url_for("main.access_requests",
+    return redirect(url_for("main.watchtower_requests",
                             view=request.form.get("view") or "archived"))
 
 
-@bp.route("/access-requests/<int:rid>/delete", methods=["POST"])
+@bp.route("/watchtower/requests/<int:rid>/delete", methods=["POST"])
 @admin_required
-def access_request_delete(rid):
+def watchtower_request_delete(rid):
     r = db.session.get(AccessRequest, rid) or abort(404)
     from . import activity
     activity.log("access_request.delete", entity_type="access_request", entity_id=r.id,
@@ -10211,7 +10312,7 @@ def access_request_delete(rid):
     db.session.delete(r)
     db.session.commit()
     flash("Request deleted", "success")
-    return redirect(url_for("main.access_requests",
+    return redirect(url_for("main.watchtower_requests",
                             view=request.form.get("view") or "active"))
 
 
@@ -11446,6 +11547,7 @@ def _estimate_reading_minutes(text):
 _BLOG_BLOCK_TYPES = {
     "paragraph", "heading", "image", "button", "list",
     "quote", "callout", "separator", "video", "code",
+    "section",
 }
 
 
@@ -11467,32 +11569,66 @@ def _sanitize_blog_body_blocks(raw):
         return None
     if not isinstance(parsed, list):
         return None
-    out = []
-    for entry in parsed[:200]:  # hard cap on block count
-        if not isinstance(entry, dict):
-            continue
-        t = entry.get("type")
-        if t not in _BLOG_BLOCK_TYPES:
-            continue
-        d = entry.get("data") if isinstance(entry.get("data"), dict) else {}
-        clean = _sanitize_blog_block_data(t, d)
-        out.append({"type": t, "data": clean})
+    out = _sanitize_blog_block_list(parsed, depth=0)
     if not out:
         return None
     return json.dumps(out, ensure_ascii=False)
 
 
-def _sanitize_blog_block_data(t, d):
+def _sanitize_blog_block_list(items, depth):
+    """Walk a list of `{type, data}` block dicts, drop unknown types,
+    coerce each block's data through `_sanitize_blog_block_data`, and
+    return the cleaned list. Hard caps:
+      * 200 blocks per list
+      * 1 level of nesting (the Section block carries its own
+        children, but a Section can't contain another Section).
+    Both caps protect the JSON column from forged or runaway payloads."""
+    if not isinstance(items, list):
+        return []
+    out = []
+    for entry in items[:200]:
+        if not isinstance(entry, dict):
+            continue
+        t = entry.get("type")
+        if t not in _BLOG_BLOCK_TYPES:
+            continue
+        # Disallow nested sections beyond depth 1 — keeps the schema
+        # shallow and the editor predictable.
+        if t == "section" and depth >= 1:
+            continue
+        d = entry.get("data") if isinstance(entry.get("data"), dict) else {}
+        clean = _sanitize_blog_block_data(t, d, depth=depth)
+        out.append({"type": t, "data": clean})
+    return out
+
+
+def _sanitize_blog_block_data(t, d, depth=0):
     """Per-type field coercion for the visual block editor. Each branch
     cherry-picks the fields it cares about so a forged payload can't
     smuggle extra keys into storage. Length caps are generous but
     bounded; rich-text fields (`md`) ride through the existing
     bleach-allowlist markdown filter on the render side, so storing
-    raw markdown here is safe."""
+    raw markdown here is safe.
+
+    ``depth`` lets the Section branch recursively sanitize its
+    children with a depth +1 so nested sections are dropped."""
     def s(v, cap=10000):
         if v is None:
             return ""
         return str(v)[:cap]
+    def margin_rem(v, default):
+        # Margin inputs are numeric rem values. Coerce to float,
+        # clamp to a sensible range, and round to 2 dp so we don't
+        # persist 3.0000000001 noise from input rounding.
+        try:
+            n = float(v)
+        except (TypeError, ValueError):
+            return default
+        if n < 0:
+            n = 0
+        elif n > 20:
+            n = 20
+        return round(n, 2)
     if t == "paragraph":
         return {"md": s(d.get("md"), 20000)}
     if t == "heading":
@@ -11511,12 +11647,27 @@ def _sanitize_blog_block_data(t, d):
         align = (d.get("align") or "center").lower()
         if align not in ("left", "center", "right"):
             align = "center"
+        # Box-shadow intensity. Empty string means no shadow; the
+        # four named tiers (sm/md/lg/xl) match the recipes already
+        # used by the page-builder image block in `_blocks.html`
+        # so a writer who knows one knows the other.
+        shadow = (d.get("shadow") or "").lower()
+        if shadow not in ("", "sm", "md", "lg", "xl"):
+            shadow = ""
         return {
             "src": s(d.get("src"), 1000),
             "alt": s(d.get("alt"), 400),
             "caption": s(d.get("caption"), 600),
             "align": align,
             "width_pct": w,
+            "shadow": shadow,
+            # Per-image vertical spacing — defaults to 1.5rem to
+            # preserve the longstanding `.bb-image { margin: 1.5rem
+            # auto }` CSS default, so existing posts keep their
+            # familiar spacing until the writer dials it. Shares the
+            # same `margin_rem` clamp the Section block uses.
+            "margin_top": margin_rem(d.get("margin_top"), 1.5),
+            "margin_bottom": margin_rem(d.get("margin_bottom"), 1.5),
         }
     if t == "button":
         style = (d.get("style") or "primary").lower()
@@ -11556,6 +11707,17 @@ def _sanitize_blog_block_data(t, d):
     if t == "code":
         return {"lang": s(d.get("lang"), 40),
                 "code": s(d.get("code"), 20000)}
+    if t == "section":
+        # Container block. Stores top + bottom margin (in rem) and a
+        # recursive child block list. Inner sections are stripped by
+        # the depth gate in `_sanitize_blog_block_list`.
+        return {
+            "margin_top": margin_rem(d.get("margin_top"), 3),
+            "margin_bottom": margin_rem(d.get("margin_bottom"), 3),
+            "blocks": _sanitize_blog_block_list(
+                d.get("blocks") if isinstance(d.get("blocks"), list) else [],
+                depth=depth + 1),
+        }
     return {}
 
 
@@ -11589,6 +11751,10 @@ def _blog_blocks_to_plain_text(blocks):
         elif t == "image":
             bits.append(str(d.get("caption") or ""))
             bits.append(str(d.get("alt") or ""))
+        elif t == "section":
+            # Recurse into the section's children so prose inside a
+            # section contributes to the reading-time estimate.
+            bits.append(_blog_blocks_to_plain_text(d.get("blocks") or []))
     return " ".join(filter(None, bits))
 
 

@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Watchtower · Visitors{% endblock %}
+{% block heading %}Watchtower{% endblock %}
+{% block heading_help %}Anonymous traffic to the public web frontend. Signed-in users are excluded — these are real visitors.{% endblock %}
+{% block top_actions %}
+<form method="get" action="{{ url_for('main.watchtower_visitors') }}" class="wt-window-form">
+  <label>
+    <span class="visually-hidden">Window</span>
+    <select name="window" onchange="this.form.submit()">
+      {% for w in windows %}
+      <option value="{{ w }}" {% if w == window %}selected{% endif %}>Last {{ w }} days</option>
+      {% endfor %}
+    </select>
+  </label>
+</form>
+{% endblock %}
+{% block content %}
+{% include "watchtower/_tabs.html" %}
+
+<section class="wt-kpi-grid wt-kpi-grid--four">
+  <div class="wt-kpi wt-kpi--accent">
+    <div class="wt-kpi-label">Views · {{ window }}d</div>
+    <div class="wt-kpi-value">{{ '{:,}'.format(summary.views_window) }}</div>
+    <div class="wt-kpi-sub muted small">{{ '{:,}'.format(summary.uniques_window) }} unique</div>
+  </div>
+  <div class="wt-kpi">
+    <div class="wt-kpi-label">Today</div>
+    <div class="wt-kpi-value">{{ '{:,}'.format(summary.views_today) }}</div>
+    <div class="wt-kpi-sub muted small">
+      {% set diff = summary.views_today - summary.views_yesterday %}
+      {% if diff > 0 %}↑ {{ diff }} vs yesterday{% elif diff < 0 %}↓ {{ -diff }} vs yesterday{% else %}even with yesterday{% endif %}
+    </div>
+  </div>
+  <div class="wt-kpi">
+    <div class="wt-kpi-label">7-day uniques</div>
+    <div class="wt-kpi-value">{{ '{:,}'.format(summary.uniques_7d) }}</div>
+    <div class="wt-kpi-sub muted small">{{ '{:,}'.format(summary.views_7d) }} views</div>
+  </div>
+  <div class="wt-kpi">
+    <div class="wt-kpi-label">Lifetime</div>
+    <div class="wt-kpi-value">{{ '{:,}'.format(summary.total_views) }}</div>
+    <div class="wt-kpi-sub muted small">{% if summary.first_seen_at %}since {{ summary.first_seen_at.strftime('%b %d, %Y') }}{% else %}—{% endif %}</div>
+  </div>
+</section>
+
+{# Headline traffic chart #}
+{% set chart_max = ((daily|map(attribute='views')|max) if daily else 1) or 1 %}
+<section class="card wt-chart-card">
+  <div class="card-head">
+    <h2>Traffic · last {{ window }} days</h2>
+    <div class="muted smaller">
+      <span class="wt-chart-key wt-chart-key--views">Views</span>
+      <span class="wt-chart-key wt-chart-key--uniques">Uniques</span>
+    </div>
+  </div>
+  {% if daily %}
+  <div class="wt-chart-wrap">
+    <svg class="wt-chart wt-chart--tall" viewBox="0 0 900 240" preserveAspectRatio="none" role="img" aria-label="Visitor traffic">
+      <defs>
+        <linearGradient id="wt-v-grad" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="rgba(59,130,246,0.45)"/>
+          <stop offset="100%" stop-color="rgba(59,130,246,0.02)"/>
+        </linearGradient>
+      </defs>
+      <line x1="0" y1="230" x2="900" y2="230" stroke="rgba(148,163,184,0.25)"/>
+      {% set n = daily|length %}
+      {% set step = 900 / (n - 1) if n > 1 else 0 %}
+      <path d="M 0 230
+        {%- for d in daily -%}
+          L {{ '%.1f'|format(loop.index0 * step) }} {{ '%.1f'|format(230 - (d.views / chart_max) * 210) }}
+        {%- endfor -%}
+        L 900 230 Z" fill="url(#wt-v-grad)"/>
+      <path d="M
+        {%- for d in daily -%}
+          {{ '%.1f'|format(loop.index0 * step) }},{{ '%.1f'|format(230 - (d.views / chart_max) * 210) }}{% if not loop.last %} L {% endif %}
+        {%- endfor -%}" fill="none" stroke="rgb(59,130,246)" stroke-width="2.5"/>
+      <path d="M
+        {%- for d in daily -%}
+          {{ '%.1f'|format(loop.index0 * step) }},{{ '%.1f'|format(230 - (d.uniques / chart_max) * 210) }}{% if not loop.last %} L {% endif %}
+        {%- endfor -%}" fill="none" stroke="rgb(16,185,129)" stroke-width="2" stroke-dasharray="5 4"/>
+    </svg>
+  </div>
+  {% else %}
+  <p class="muted">No visits recorded yet.</p>
+  {% endif %}
+</section>
+
+<div class="wt-two-col">
+  <section class="card">
+    <div class="card-head"><h2>Top paths</h2><span class="muted smaller">{{ window }}d</span></div>
+    {% if not top_paths %}
+    <p class="muted">No data.</p>
+    {% else %}
+    {% set tp_max = (top_paths|map(attribute='count')|max) or 1 %}
+    <ul class="wt-rank-list">
+      {% for r in top_paths %}
+      <li class="wt-rank-row">
+        <div class="wt-rank-label mono small">{{ r.label }}</div>
+        <div class="wt-rank-bar"><span style="width: {{ (r.count / tp_max * 100)|round(0,'floor') }}%"></span></div>
+        <div class="wt-rank-count">{{ '{:,}'.format(r.count) }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Top referrers</h2><span class="muted smaller">{{ window }}d</span></div>
+    {% if not top_referrers %}
+    <p class="muted">No data.</p>
+    {% else %}
+    {% set tr_max = (top_referrers|map(attribute='count')|max) or 1 %}
+    <ul class="wt-rank-list">
+      {% for r in top_referrers %}
+      <li class="wt-rank-row">
+        <div class="wt-rank-label">{{ r.label }}</div>
+        <div class="wt-rank-bar"><span style="width: {{ (r.count / tr_max * 100)|round(0,'floor') }}%"></span></div>
+        <div class="wt-rank-count">{{ '{:,}'.format(r.count) }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-head"><h2>Devices</h2><span class="muted smaller">{{ window }}d</span></div>
+  {% if not devices %}
+  <p class="muted">No device data yet.</p>
+  {% else %}
+  {% set dev_total = devices|sum(attribute='count') %}
+  <ul class="wt-rank-list wt-rank-list--inline">
+    {% for r in devices %}
+    <li class="wt-rank-row">
+      <div class="wt-rank-label">{{ r.label|title }}</div>
+      <div class="wt-rank-bar"><span style="width: {{ (r.count / dev_total * 100)|round(0,'floor') }}%"></span></div>
+      <div class="wt-rank-count">{{ '{:,}'.format(r.count) }} · {{ '%.0f'|format(r.count / dev_total * 100) }}%</div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+{% set hr_max = (hourly|map(attribute='views')|max) if hourly else 0 %}
+<section class="card">
+  <div class="card-head"><h2>Hour of day</h2><span class="muted smaller">UTC · last {{ window if window <= 30 else 30 }}d</span></div>
+  {% if hr_max %}
+  <div class="wt-hourly">
+    {% for h in hourly %}
+    <div class="wt-hourly-col" title="{{ h.hour }}:00 · {{ h.views }} view{{ '' if h.views == 1 else 's' }}">
+      <div class="wt-hourly-track">
+        <div class="wt-hourly-bar" style="height: {{ (h.views / hr_max * 100)|round(0,'floor') }}%;"></div>
+      </div>
+      <div class="wt-hourly-tick">{% if h.hour % 4 == 0 %}{{ '%02d'|format(h.hour) }}{% endif %}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">Hour-of-day data appears once visits land.</p>
+  {% endif %}
+</section>
+
+{% endblock %}
