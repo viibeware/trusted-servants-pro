@@ -7,7 +7,25 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.0.3 — 2026-05-16 (latest) — Real client IPs in Watchtower, public library thumbnails
+## 2.0.4 — 2026-05-17 (latest) — Dashboard widgets: every widget has a visible grab handle, no more awkward gaps
+
+Two paired fixes for the admin dashboard.
+
+### Every widget now shows a visible grab handle
+
+Three widgets — **Recent Deletions**, **Frontend Visitor Metrics**, and **Contact Form** — were silently missing their drag handle and the underlying `draggable="true"` attribute, so you couldn't reorder them at all. They share a common macro with the rest of the dashboard widgets; a Jinja scoping quirk was causing the macro to skip both pieces of markup. Fixed at the source: every dashboard widget now consistently carries the grab handle and is draggable.
+
+The handle itself was also redesigned. It moved from the top-right (where it disappeared behind every widget's "View all" link and right-aligned metadata) to a **clearly visible chip in the top-left of each widget**, always at full opacity, with a subtle background + border so it reads as a deliberate UI control rather than a faint hover-only icon. Hover and active states still tighten the visual cue.
+
+### Widgets now pack tightly with no awkward vertical gaps
+
+The dashboard grid was a straight two-column layout, which meant whenever one column held a tall widget (e.g. Recent Meetings with many rows) and the other column held a short widget (e.g. Currently Online with one user), the short column would leave a large empty gap waiting for the tall column to finish before the next widget could appear.
+
+The grid is now a **masonry layout**: shorter widgets slide up to fill those gaps automatically. DOM order is still the preferred order — the masonry only back-fills empty space; reorder via the grab handle still does exactly what you expect. Below 720 px the dashboard collapses to a single stacked column with normal spacing.
+
+The layout recomputes itself whenever something changes — window resize, drag-reorder, the **Currently Online** widget's user count changing, the **Frontend Visitor Metrics** sparkline animating in — so the packing stays tight as widget heights flex.
+
+## 2.0.3 — 2026-05-16 — Real client IPs in Watchtower, public library thumbnails
 
 Two fixes that were each producing wrong-looking results in production:
 

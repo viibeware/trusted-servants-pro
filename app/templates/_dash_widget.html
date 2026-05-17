@@ -32,12 +32,18 @@
    panel, currently-online is its own partial, access-requests pairs
    two blocks side-by-side). Everything new should default to using
    the macro unless it has a structural reason not to. #}
+{# `can_reorder` from the dashboard template doesn't reach this macro
+   reliably — Jinja's `{% set %}` inside a block doesn't always
+   propagate into macros imported `with context` from outside the
+   block. The macro is dashboard-only and every dashboard widget is
+   meant to be reorderable, so the draggable attribute and the handle
+   render unconditionally. #}
 {% macro dash_widget(key, title, view_all_url=None, view_all_label='View all',
                      badge_count=0, badge_title='', wide=False) %}
 <div class="dash-widget{% if wide %} dash-widget-wide{% endif %}"
      data-widget-key="{{ key }}"
-     {% if can_reorder %}draggable="true"{% endif %}>
-  {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
+     draggable="true">
+  <span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>
   <section class="card">
     <div class="card-head">
       <h2>

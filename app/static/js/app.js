@@ -1589,6 +1589,10 @@
         dragging = null;
         commit();
         originalOrder = null;
+        // Reorder may have changed which widget is now at which
+        // column position — recompute spans so the masonry repacks
+        // cleanly around the new arrangement.
+        if (typeof window.__tspDashLayout === "function") window.__tspDashLayout();
       });
       w.addEventListener("dragover", (e) => {
         if (!dragging || dragging === w) return;
@@ -1609,6 +1613,85 @@
         w.classList.remove("drag-over");
       });
     });
+  })();
+
+  // Dashboard masonry layout. Companion to the CSS-Grid setup in
+  // `.dash-grid` (app.css). The grid uses fine 8px row tracks plus
+  // `grid-auto-flow: row dense`; here we measure each widget's
+  // rendered outer height and assign `grid-row: span N` so the grid
+  // engine packs widgets against each other with no awkward gaps
+  // when one column's content is much taller than the other's.
+  //
+  // The vertical visual gap between widgets is folded INTO the span
+  // (not implemented as a row-gap) because row-gap would multiply
+  // across every fine row track and explode the layout. Instead the
+  // span calculation adds `VISUAL_GAP` worth of empty tracks below
+  // each widget's content — those tracks remain unfilled because
+  // dense auto-flow only back-fills tracks that fit an entire item.
+  //
+  // Recompute triggers:
+  //   * initial load (DOMContentLoaded — this IIFE runs at that point)
+  //   * window resize (debounced)
+  //   * ResizeObserver on each widget (server-metrics sparkline
+  //     redraws change height; currently-online widget grows/shrinks
+  //     as users sign in/out; visitor-metrics sparkline animates in)
+  //   * after a drag/drop reorder commits (wired in the reorder block
+  //     above via window.__tspDashLayout).
+  (function initDashboardMasonry(){
+    const grid = document.querySelector(".dash-grid");
+    if (!grid) return;
+    if (window.matchMedia && window.matchMedia("(max-width: 720px)").matches) {
+      // Single-column layout — CSS handles spacing via normal row-gap.
+      // Still expose the layout function so the resize handler can
+      // re-enable masonry if the viewport widens past the breakpoint.
+    }
+    const ROW_HEIGHT = 8;
+    const VISUAL_GAP = 16;
+
+    function layout() {
+      const single = window.matchMedia && window.matchMedia("(max-width: 720px)").matches;
+      grid.querySelectorAll(".dash-widget").forEach(w => {
+        if (single) { w.style.gridRowEnd = ""; return; }
+        // Reset before measuring so a previously-set span from a
+        // shorter render doesn't clip the new measurement.
+        w.style.gridRowEnd = "";
+        const h = w.getBoundingClientRect().height;
+        if (!h) return;
+        const span = Math.max(1, Math.ceil((h + VISUAL_GAP) / ROW_HEIGHT));
+        w.style.gridRowEnd = "span " + span;
+      });
+    }
+
+    window.__tspDashLayout = layout;
+    // First measurement: defer one frame so the browser has applied
+    // the initial CSS spans + computed each widget's natural height
+    // before we read getBoundingClientRect.
+    requestAnimationFrame(layout);
+    // Re-run after window.load so late-arriving fonts / images / lazy
+    // SVG icons can't leave a widget with a stale-tall span (icon
+    // swap can shrink card-head height; we want masonry to repack).
+    window.addEventListener("load", () => requestAnimationFrame(layout));
+
+    // Debounced resize.
+    let rt = null;
+    window.addEventListener("resize", () => {
+      if (rt) cancelAnimationFrame(rt);
+      rt = requestAnimationFrame(layout);
+    });
+
+    // Per-widget ResizeObserver — covers widgets whose content height
+    // changes after first render (live polling widgets, image lazy
+    // loads, fonts swapping in). Coalesce into one rAF so a burst of
+    // observer callbacks doesn't trigger N layouts in one frame.
+    if (typeof ResizeObserver !== "undefined") {
+      let pending = false;
+      const ro = new ResizeObserver(() => {
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(() => { pending = false; layout(); });
+      });
+      grid.querySelectorAll(".dash-widget").forEach(w => ro.observe(w));
+    }
   })();
 
   // Server metrics widget

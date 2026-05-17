@@ -6,6 +6,20 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.0.4] — 2026-05-17
+
+### Fixed — Macro-rendered dashboard widgets were missing drag handles + draggable attribute
+
+Three dashboard widgets (Recent Deletions, Frontend Visitor Metrics, Contact Form) rendered without `draggable="true"` and without the `dash-drag-handle` span. The macro in `templates/_dash_widget.html` gated both on `{% if can_reorder %}`, but `can_reorder` was being set with `{% set can_reorder = true %}` inside `{% block content %}` in `templates/index.html` — Jinja's `with context` import does not reliably surface block-scoped `{% set %}` variables into the imported macro, so the gate evaluated as falsy and silently dropped both pieces of markup. The inline widgets (server-metrics, currently-online, access-requests) worked fine because they reference `can_reorder` from inside the block where it was set. The macro is dashboard-only and every dashboard widget is meant to be reorderable, so the gate is gone — `draggable="true"` and the handle span now render unconditionally inside the macro.
+
+### Changed — Dashboard widget grid is now a CSS-Grid pseudo-masonry layout
+
+`.dash-grid` switched from `grid-template-columns: 1fr 1fr; align-items: start` (which left awkward vertical gaps whenever the two columns' widgets had divergent heights) to a fine 8 px `grid-auto-rows` track with `grid-auto-flow: row dense` and a companion JS layout pass (`initDashboardMasonry` in `app/static/js/app.js`). The JS measures each widget's rendered `getBoundingClientRect().height`, computes `span = ceil((height + 16) / 8)` (the 16 px visual gap between widgets is folded into the span — actual `row-gap` is 0 because a real row-gap would multiply across every fine row track and explode the layout), and writes the result to `widget.style.gridRowEnd`. `dense` flow then back-fills earlier vacant tracks with later, shorter widgets so the dashboard packs tight. Recompute triggers: deferred initial run via `requestAnimationFrame`, `window.load` (covers late-loading fonts / icons), debounced `window.resize`, `ResizeObserver` per widget (covers live polling widgets whose content height changes), and after every drag-reorder commit (the reorder handler now calls `window.__tspDashLayout()`). Below the 720 px breakpoint the grid collapses to a single column with normal `row-gap: 16px` and the JS skips span assignment. `.dash-widget` carries a `grid-row-end: span 40` placeholder for first paint (uses the longhand so the JS-set `gridRowEnd` cleanly overrides — the shorthand `grid-row: span 40` expands to `grid-row-start: span 40; grid-row-end: auto` and would conflict).
+
+### Changed — Dashboard widget drag handle: always visible chip, top-left of widget
+
+`.dash-drag-handle` moved from absolute `top: 10px; right: 12px` at `opacity: 0.55` (revealed to 1 only on widget hover) to `top: 10px; left: 10px` at full opacity at rest, with a `var(--panel-2)` background, `var(--border)` border, and 6 px radius. Old placement disappeared behind right-aligned "View all" links and right-aligned `card-head` metadata text on most widgets, so even when the icon was rendered it was effectively invisible. Hover/active states still tighten the visual cue (brand-tinted bg, brand-tinted border) but the resting state is now a first-class affordance instead of a near-invisible ghost icon. To avoid the chip overlapping titles: `.dash-widget .card-head { padding-left: 38px; }` insets every `card-head` title; two widgets without a `card-head` get targeted padding (`.access-requests-card .ar-title` gets `padding-left: 38px`; `.server-metrics .role-panel` gets `padding-top: 18px` to clear the chip on the left column only — the right server-stats column stays at its natural top).
+
 ## [2.0.3] — 2026-05-16
 
 ### Fixed — Watchtower logged docker-bridge IPs instead of real client IPs
