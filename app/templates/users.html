@@ -2,81 +2,93 @@
 {% block heading %}Users{% endblock %}
 {% block content %}
 
-{# Top row: Create User (left) + Permissions explainer (right). Two
-   equal columns on wide screens; stack on narrow. #}
+{# Top card holds Create User + Roles & permissions side-by-side. The
+   two halves are sub-sections inside one data-card so the permissions
+   reference reads as guidance for picking the right role on the form,
+   not as a separate disconnected section. #}
 {% set _prefill = request.args.get('prefill', '') %}
 {% set _prefill_name = request.args.get('prefill_name', '') %}
 {% set _prefill_phone = request.args.get('prefill_phone', '') %}
 {% set _has_prefill = _prefill or _prefill_name or _prefill_phone %}
-<div class="users-top-grid">
-  <section class="card users-new-card"{% if _has_prefill %} data-autofocus-new-user{% endif %}>
-    <div class="card-head"><h2>Create User</h2></div>
-    <form method="post" action="{{ url_for('auth.users_create') }}" class="form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
-      <label>Username<input name="username" value="{{ _prefill }}" required></label>
-      <label>Email<input name="email" type="email" value="{{ _prefill }}" required></label>
-      <label>Phone<input name="phone" type="tel" value="{{ _prefill_phone }}" placeholder="(optional)"></label>
-      <label>Password<input name="password" type="password" required></label>
-      <label>Role
-        <select name="role">
-          {% for r in roles %}<option value="{{ r }}">{{ role_labels[r] if role_labels and r in role_labels else r }}</option>{% endfor %}
-        </select>
-      </label>
-      <label class="check welcome-email-check">
-        <input type="checkbox" name="send_welcome_email" value="1" checked>
-        <span>Email login details to the new user
-          <span class="muted smaller">— sends username, password, and a summary of what their role can do (requires SMTP).</span>
-        </span>
-      </label>
-      <div class="form-actions"><button class="btn btn-primary">Create</button></div>
-    </form>
-  </section>
-
-  <section class="card users-perm-card">
-    <div class="card-head">
-      <h2>Roles &amp; permissions</h2>
-      <span class="muted smaller">What each role can access. Module access is also gated per-module on the <b>Modules</b> tab.</span>
+<section class="card data-card users-create-card"{% if _has_prefill %} data-autofocus-new-user{% endif %}>
+  <div class="data-card-head">
+    {{ icon('user-plus') }}
+    <span>Add a user</span>
+  </div>
+  <p class="muted small data-card-lead">
+    Create a new account and review what each role can access before assigning one.
+  </p>
+  <div class="users-top-grid">
+    <div class="users-new-card">
+      <h3 class="users-subhead">Create user</h3>
+      <form method="post" action="{{ url_for('auth.users_create') }}" class="form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+        <label>Username<input name="username" value="{{ _prefill }}" required></label>
+        <label>Email<input name="email" type="email" value="{{ _prefill }}" required></label>
+        <label>Phone<input name="phone" type="tel" value="{{ _prefill_phone }}" placeholder="(optional)"></label>
+        <label>Password<input name="password" type="password" required></label>
+        <label>Role
+          <select name="role">
+            {% for r in roles %}<option value="{{ r }}">{{ role_labels[r] if role_labels and r in role_labels else r }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="check welcome-email-check">
+          <input type="checkbox" name="send_welcome_email" value="1" checked>
+          <span>Email login details to the new user
+            <span class="muted smaller">— sends username, password, and a summary of what their role can do (requires SMTP).</span>
+          </span>
+        </label>
+        <div class="form-actions"><button class="btn btn-primary">Create</button></div>
+      </form>
     </div>
-    <ul class="perm-list">
-      <li class="perm-row perm-row-admin">
-        <div class="perm-role">
-          <span class="perm-badge perm-badge-admin">Admin</span>
-        </div>
-        <div class="perm-blurb">
-          <div class="muted small">Full access. Manages users, modules, settings, the Web Frontend, and every other feature in the portal.</div>
-        </div>
-      </li>
-      <li class="perm-row perm-row-editor">
-        <div class="perm-role">
-          <span class="perm-badge perm-badge-editor">Editor</span>
-        </div>
-        <div class="perm-blurb">
-          <div class="muted small">Edits existing meetings, locations, schedules, Zoom accounts, and meeting attachments (any uploader). <b>Cannot create new meetings or delete existing ones</b> — that's gated to admins and Intergroup Members. On <b>libraries</b>: may add files to existing libraries (and edit / delete only those whose uploader was another Editor — admin-, Intergroup-Member-, and legacy library files are protected); <b>cannot create new libraries or edit library settings</b> (name, description, alert) — admin / Intergroup Member only. Cannot reach Settings, Users, or the Web Frontend module.</div>
-        </div>
-      </li>
-      <li class="perm-row perm-row-ig">
-        <div class="perm-role">
-          <span class="perm-badge perm-badge-ig">Intergroup member</span>
-        </div>
-        <div class="perm-blurb">
-          <div class="muted small">Inherits every <b>Editor</b> permission (meetings, libraries, readings, uploads), <b>plus</b> exclusive edit access to Intergroup-flagged libraries — which regular Editors cannot touch. May delete any library file. Cannot reach Settings, Users, the Web Frontend module, or the Intergroup Email Accounts page (admin-only).</div>
-        </div>
-      </li>
-      <li class="perm-row perm-row-viewer">
-        <div class="perm-role">
-          <span class="perm-badge perm-badge-viewer">Viewer</span>
-        </div>
-        <div class="perm-blurb">
-          <div class="muted small">Read-only. Sees meetings, libraries, files, and any module the admin opens to <i>All signed-in users</i>; cannot edit anything.</div>
-        </div>
-      </li>
-    </ul>
-  </section>
-</div>
 
-<section class="card">
-  <div class="card-head"><h2>All users</h2></div>
+    <div class="users-perm-card">
+      <h3 class="users-subhead">Roles &amp; permissions</h3>
+      <p class="muted smaller users-subhead-lead">What each role can access. Module access is also gated per-module on the <b>Modules</b> tab.</p>
+      <ul class="perm-list">
+        <li class="perm-row perm-row-admin">
+          <div class="perm-role">
+            <span class="perm-badge perm-badge-admin">Admin</span>
+          </div>
+          <div class="perm-blurb">
+            <div class="muted small">Full access. Manages users, modules, settings, the Web Frontend, and every other feature in the portal.</div>
+          </div>
+        </li>
+        <li class="perm-row perm-row-editor">
+          <div class="perm-role">
+            <span class="perm-badge perm-badge-editor">Editor</span>
+          </div>
+          <div class="perm-blurb">
+            <div class="muted small">Edits existing meetings, locations, schedules, Zoom accounts, and meeting attachments (any uploader). <b>Cannot create new meetings or delete existing ones</b> — that's gated to admins and Intergroup Members. On <b>libraries</b>: may add files to existing libraries (and edit / delete only those whose uploader was another Editor — admin-, Intergroup-Member-, and legacy library files are protected); <b>cannot create new libraries or edit library settings</b> (name, description, alert) — admin / Intergroup Member only. Cannot reach Settings, Users, or the Web Frontend module.</div>
+          </div>
+        </li>
+        <li class="perm-row perm-row-ig">
+          <div class="perm-role">
+            <span class="perm-badge perm-badge-ig">Intergroup member</span>
+          </div>
+          <div class="perm-blurb">
+            <div class="muted small">Inherits every <b>Editor</b> permission (meetings, libraries, readings, uploads), <b>plus</b> exclusive edit access to Intergroup-flagged libraries — which regular Editors cannot touch. May delete any library file. Cannot reach Settings, Users, the Web Frontend module, or the Intergroup Email Accounts page (admin-only).</div>
+          </div>
+        </li>
+        <li class="perm-row perm-row-viewer">
+          <div class="perm-role">
+            <span class="perm-badge perm-badge-viewer">Viewer</span>
+          </div>
+          <div class="perm-blurb">
+            <div class="muted small">Read-only. Sees meetings, libraries, files, and any module the admin opens to <i>All signed-in users</i>; cannot edit anything.</div>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="card data-card">
+  <div class="data-card-head">
+    {{ icon('users') }}
+    <span>All users</span>
+  </div>
   <table class="tbl users-tbl">
     <thead><tr><th>Username</th><th>Email</th><th>Phone</th><th>Role</th><th>Password</th><th></th></tr></thead>
     <tbody>
@@ -230,11 +242,16 @@
   </div>
 </div>
 
-<section class="card">
-  <div class="card-head"><h2>Public Information Chair</h2></div>
-  <p class="muted small">Contact information shown on the dashboard for members who need help.</p>
+<section class="card data-card">
+  <div class="data-card-head">
+    {{ icon('phone') }}
+    <span>Public Information Chair</span>
+  </div>
+  <p class="muted small data-card-lead">
+    Contact information shown on the dashboard for members who need help.
+  </p>
   <form class="form" method="post" action="{{ url_for('main.pic_save') }}" data-savebar-row data-row-label="Public Information Chair">
-<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
     <div class="pic-form-row">
       <label>Name<input type="text" name="pic_name" value="{{ (site.pic_name if site else '') or '' }}"></label>

@@ -1,18 +1,18 @@
 {% extends "base.html" %}
 {% block heading %}Locations{% endblock %}
-{% block top_actions %}
-<button type="button" class="btn btn-primary" data-open-modal="location-new-modal">+ New Location</button>
-{% endblock %}
 {% block content %}
 
-{% if embed %}
-<div class="embed-actions">
-  <button type="button" class="btn btn-primary" data-open-modal="location-new-modal">+ New Location</button>
-</div>
-{% endif %}
-
-<section class="card">
-  <div class="card-head"><h2>Locations</h2></div>
+<section class="card data-card">
+  <div class="data-card-head">
+    {{ icon('map-pin') }}
+    <span>Locations</span>
+    <div class="data-card-head-actions">
+      <button type="button" class="btn btn-primary" data-open-modal="location-new-modal">{{ icon('plus') }} New Location</button>
+    </div>
+  </div>
+  <p class="muted small data-card-lead">
+    Physical and online venues used by meetings. Each row defines a name, type, and (for in-person) a postal address with an optional Google Maps link.
+  </p>
   {% if locations %}
   <table class="tbl locations-tbl">
     <thead><tr><th>Name</th><th>Type</th><th>Address</th><th></th></tr></thead>
@@ -56,11 +56,14 @@
    then save persists the whole table. Drop a row's content blank +
    save to delete it.
 #}
-<section class="card officers-card">
-  <div class="card-head">
-    <h2>Intergroup Officers</h2>
-    <span class="muted smaller">Contact roster surfaced through the Intergroup Member page block. Edit or remove rows here and save — every page block referencing an officer renders the latest values.</span>
+<section class="card data-card officers-card">
+  <div class="data-card-head">
+    {{ icon('users') }}
+    <span>Intergroup Officers</span>
   </div>
+  <p class="muted small data-card-lead">
+    Contact roster surfaced through the Intergroup Member page block. Edit or remove rows here and save — every page block referencing an officer renders the latest values.
+  </p>
   <form method="post" action="{{ url_for('main.officers_save') }}" class="form officers-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
@@ -145,11 +148,14 @@
    resubmitted are deleted, so an admin can re-order by drag (future
    work) or just edit cells in place.
 #}
-<section class="card fellowships-card">
-  <div class="card-head">
-    <h2>Fellowships Index</h2>
-    <span class="muted smaller">Sister fellowships surfaced on the public /fellowships page. Toggle Virtual for online-only fellowships (geography hidden); leave it off and fill in the country + state/region for in-region fellowships. The Web Frontend → Templates panel controls the public layout.</span>
+<section class="card data-card fellowships-card">
+  <div class="data-card-head">
+    {{ icon('globe') }}
+    <span>Fellowships Index</span>
   </div>
+  <p class="muted small data-card-lead">
+    Sister fellowships surfaced on the public /fellowships page. Toggle Virtual for online-only fellowships (geography hidden); leave it off and fill in the country + state/region for in-region fellowships. The Web Frontend → Templates panel controls the public layout.
+  </p>
   <form method="post" action="{{ url_for('main.fellowships_save') }}" class="form fellowships-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}

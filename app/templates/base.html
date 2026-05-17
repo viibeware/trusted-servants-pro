@@ -192,7 +192,7 @@
       <button type="button" class="settings-tab" data-tab="locations">Global</button>
       <button type="button" class="settings-tab" data-tab="sidebar">Sidebar</button>
       <button type="button" class="settings-tab" data-tab="modules">Modules</button>
-      <button type="button" class="settings-tab" data-tab="email">Email</button>
+      <button type="button" class="settings-tab" data-tab="email">Domain / Email</button>
       <button type="button" class="settings-tab" data-tab="timezone">Timezone</button>
       <button type="button" class="settings-tab" data-tab="security">Security</button>
       <button type="button" class="settings-tab" data-tab="data">Data</button>
@@ -455,27 +455,6 @@
           </form>
         </section>
 
-        {# ── Public Domain ───────────────────────────────────────── #}
-        <section class="card data-card">
-          <div class="data-card-head">
-            {{ icon('globe') }}
-            <span>Public Domain</span>
-          </div>
-          <p class="muted small data-card-lead">
-            Canonical URL used in outbound emails and any other absolute link this portal sends out. Without this set, links fall back to whatever <code>Host</code> header the request carried — which is usually a Docker bridge IP for portals behind a reverse proxy. Save this once and every welcome email / access-request notification picks up the right hostname.
-          </p>
-          <form class="form appearance-site-url-form" method="post" action="{{ url_for('main.site_url_save') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <label>Site URL
-              <input name="site_url" type="url" value="{{ (site.site_url if site else '') or '' }}"
-                     placeholder="example.com">
-            </label>
-            <p class="muted smaller" style="margin-top:6px;">
-              Tip: omit the trailing slash. Bare domains (<code>example.com</code>) are auto-prefixed with <code>https://</code>.
-            </p>
-            <div class="data-card-actions"><button class="btn btn-primary">Save Domain</button></div>
-          </form>
-        </section>
         <script>
         (function(){
           const input = document.getElementById('og-image-input');
@@ -738,30 +717,39 @@
         {% set _side_mode = (site.sidebar_sort_mode if site else 'auto-asc') or 'auto-asc' %}
         {% set _side_catalog = sidebar_reorder_catalog(site) %}
         {% set _side_order = (site.sidebar_order_json or '{}') | from_json %}
-        <form class="form sidebar-order-form" method="post" action="{{ url_for('main.sidebar_save') }}" id="sidebar-order-form" data-refresh-sidebar="1">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <div class="sidebar-order-head">
-            <div class="u-name sidebar-order-title">Sidebar layout</div>
-            <button type="submit" class="btn btn-primary">Save sidebar order</button>
-          </div>
-          <p class="muted small">Reorder the items in the main sidebar and manage external links inline. Dashboard is always pinned at the top. Auto modes alphabetise items inside each section (Main → External → Admin order); pick Manual to drag any item or section to a new position.</p>
 
-          <fieldset class="sidebar-mode-fieldset">
-            <legend class="sr-only">Sort mode</legend>
-            {% for v, lbl in [('auto-asc', 'Auto · A → Z'), ('auto-desc', 'Auto · Z → A'), ('manual', 'Manual (drag &amp; drop)')] %}
-            <label class="sidebar-mode-pill">
-              <input type="radio" name="sidebar_sort_mode" value="{{ v }}"
-                     {% if _side_mode == v %}checked{% endif %}>
-              <span class="sidebar-mode-pill-label">{{ lbl|safe }}</span>
-            </label>
-            {% endfor %}
-          </fieldset>
+        {# ── Sidebar layout — reorder + external links ───────────── #}
+        <section class="card data-card">
+          <form class="form sidebar-order-form" method="post" action="{{ url_for('main.sidebar_save') }}" id="sidebar-order-form" data-refresh-sidebar="1">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="data-card-head">
+              {{ icon('panel-left') }}
+              <span>Sidebar layout</span>
+              <div class="data-card-head-actions">
+                <button type="submit" class="btn btn-primary">Save sidebar order</button>
+              </div>
+            </div>
+            <p class="muted small data-card-lead">
+              Reorder the items in the main sidebar and manage external links inline. Dashboard is always pinned at the top. Auto modes alphabetise items inside each section (Main → External → Admin order); pick Manual to drag any item or section to a new position.
+            </p>
 
-          <div class="sidebar-order-manual" data-sidebar-manual
-               {% if _side_mode != 'manual' %}hidden{% endif %}>
-            {% include "_sidebar_order_manual.html" %}
-          </div>
-        </form>
+            <fieldset class="sidebar-mode-fieldset">
+              <legend class="sr-only">Sort mode</legend>
+              {% for v, lbl in [('auto-asc', 'Auto · A → Z'), ('auto-desc', 'Auto · Z → A'), ('manual', 'Manual (drag &amp; drop)')] %}
+              <label class="sidebar-mode-pill">
+                <input type="radio" name="sidebar_sort_mode" value="{{ v }}"
+                       {% if _side_mode == v %}checked{% endif %}>
+                <span class="sidebar-mode-pill-label">{{ lbl|safe }}</span>
+              </label>
+              {% endfor %}
+            </fieldset>
+
+            <div class="sidebar-order-manual" data-sidebar-manual
+                 {% if _side_mode != 'manual' %}hidden{% endif %}>
+              {% include "_sidebar_order_manual.html" %}
+            </div>
+          </form>
+        </section>
 
         {# Modal: add a new external link. POST hits the existing
            /nav-links/new endpoint which redirects back so the modal
@@ -966,76 +954,121 @@
         </ul>
       </div>
       <div class="settings-pane" data-pane="email">
-        <div class="u-name">SMTP Server</div>
-        <p class="muted small">Used for sending notification emails, including access requests from the login screen.</p>
-        <form class="form" method="post" action="{{ url_for('main.email_save') }}">
-<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <div class="row">
-            <label>SMTP host<input name="smtp_host" type="text" value="{{ site.smtp_host or '' }}" placeholder="smtp.example.com"></label>
-            <label>Port<input name="smtp_port" type="number" min="1" max="65535" value="{{ site.smtp_port or '' }}" placeholder="587"></label>
+
+        {# ── Public Domain ───────────────────────────────────────── #}
+        <section class="card data-card">
+          <div class="data-card-head">
+            {{ icon('globe') }}
+            <span>Public Domain</span>
           </div>
-          <div class="row">
-            <label>Username<input name="smtp_username" type="text" value="{{ site.smtp_username or '' }}" autocomplete="off"></label>
-            <label>Security
-              <select name="smtp_security">
-                <option value="starttls" {% if site.smtp_security == 'starttls' %}selected{% endif %}>STARTTLS (port 587)</option>
-                <option value="ssl" {% if site.smtp_security == 'ssl' %}selected{% endif %}>SSL/TLS (port 465)</option>
-                <option value="none" {% if site.smtp_security == 'none' %}selected{% endif %}>None (plain)</option>
-              </select>
+          <p class="muted small data-card-lead">
+            Canonical URL used in outbound emails and any other absolute link this portal sends out. Without this set, links fall back to whatever <code>Host</code> header the request carried — which is usually a Docker bridge IP for portals behind a reverse proxy. Save this once and every welcome email / access-request notification picks up the right hostname.
+          </p>
+          <form class="form appearance-site-url-form" method="post" action="{{ url_for('main.site_url_save') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Site URL
+              <input name="site_url" type="url" value="{{ (site.site_url if site else '') or '' }}"
+                     placeholder="example.com">
             </label>
+            <p class="muted smaller" style="margin-top:6px;">
+              Tip: omit the trailing slash. Bare domains (<code>example.com</code>) are auto-prefixed with <code>https://</code>.
+            </p>
+            <div class="data-card-actions"><button class="btn btn-primary">Save Domain</button></div>
+          </form>
+        </section>
+
+        {# ── SMTP Server + Access Request Notifications ──────────── #}
+        <section class="card data-card">
+          <div class="data-card-head">
+            {{ icon('mail') }}
+            <span>SMTP Server</span>
           </div>
-          <label>Password
-            <input name="smtp_password" type="password" autocomplete="new-password"
-                   placeholder="{% if site.smtp_password_enc %}(leave blank to keep existing){% else %}Enter password{% endif %}">
-          </label>
-          {% if site.smtp_password_enc %}
-          <label class="check"><input type="checkbox" name="smtp_password_clear" value="1"><span>Remove stored password</span></label>
-          {% endif %}
-          <div class="row">
-            <label>From email<input name="smtp_from_email" type="email" value="{{ site.smtp_from_email or '' }}" placeholder="noreply@example.com"></label>
-            <label>From name<input name="smtp_from_name" type="text" value="{{ site.smtp_from_name or '' }}" placeholder="Trusted Servants Pro"></label>
+          <p class="muted small data-card-lead">
+            Used for sending notification emails, including access requests from the login screen.
+          </p>
+          <form class="form" method="post" action="{{ url_for('main.email_save') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row">
+              <label>SMTP host<input name="smtp_host" type="text" value="{{ site.smtp_host or '' }}" placeholder="smtp.example.com"></label>
+              <label>Port<input name="smtp_port" type="number" min="1" max="65535" value="{{ site.smtp_port or '' }}" placeholder="587"></label>
+            </div>
+            <div class="row">
+              <label>Username<input name="smtp_username" type="text" value="{{ site.smtp_username or '' }}" autocomplete="off"></label>
+              <label>Security
+                <select name="smtp_security">
+                  <option value="starttls" {% if site.smtp_security == 'starttls' %}selected{% endif %}>STARTTLS (port 587)</option>
+                  <option value="ssl" {% if site.smtp_security == 'ssl' %}selected{% endif %}>SSL/TLS (port 465)</option>
+                  <option value="none" {% if site.smtp_security == 'none' %}selected{% endif %}>None (plain)</option>
+                </select>
+              </label>
+            </div>
+            <label>Password
+              <input name="smtp_password" type="password" autocomplete="new-password"
+                     placeholder="{% if site.smtp_password_enc %}(leave blank to keep existing){% else %}Enter password{% endif %}">
+            </label>
+            {% if site.smtp_password_enc %}
+            <label class="check"><input type="checkbox" name="smtp_password_clear" value="1"><span>Remove stored password</span></label>
+            {% endif %}
+            <div class="row">
+              <label>From email<input name="smtp_from_email" type="email" value="{{ site.smtp_from_email or '' }}" placeholder="noreply@example.com"></label>
+              <label>From name<input name="smtp_from_name" type="text" value="{{ site.smtp_from_name or '' }}" placeholder="Trusted Servants Pro"></label>
+            </div>
+            <label>Send access requests to
+              <input name="access_request_to" type="text" value="{{ site.access_request_to or '' }}" placeholder="admin@example.com">
+              <span class="muted smaller">Access-request submissions from the login page are emailed here. Separate multiple recipients with commas.</span>
+            </label>
+            <div class="data-card-actions"><button class="btn btn-primary">Save Email Settings</button></div>
+          </form>
+        </section>
+
+        {# ── Send test email ─────────────────────────────────────── #}
+        <section class="card data-card">
+          <div class="data-card-head">
+            {{ icon('send') }}
+            <span>Send test email</span>
           </div>
+          <p class="muted small data-card-lead">
+            Verifies the SMTP credentials above by sending a test message.
+          </p>
+          <form class="form" method="post" action="{{ url_for('main.email_test') }}"
+                data-savebar-skip="1" data-email-test-form>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Recipient<input name="to" type="email" placeholder="{{ site.access_request_to or site.smtp_from_email or 'you@example.com' }}"></label>
+            <div class="data-card-actions"><button class="btn">Send Test</button></div>
+          </form>
+        </section>
 
-          <hr class="settings-sep">
-
-          <div class="u-name">Access Request Notifications</div>
-          <p class="muted small">Access-request submissions from the login page are emailed here. Separate multiple recipients with commas.</p>
-          <label>Send access requests to<input name="access_request_to" type="text" value="{{ site.access_request_to or '' }}" placeholder="admin@example.com"></label>
-
-          <div class="form-actions"><button class="btn btn-primary">Save Email Settings</button></div>
-        </form>
-
-        <hr class="settings-sep">
-
-        <div class="u-name">Send test email</div>
-        <p class="muted small">Verifies the SMTP credentials above by sending a test message.</p>
-        <form class="form" method="post" action="{{ url_for('main.email_test') }}"
-              data-savebar-skip="1" data-email-test-form>
-<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <label>Recipient<input name="to" type="email" placeholder="{{ site.access_request_to or site.smtp_from_email or 'you@example.com' }}"></label>
-          <div class="form-actions"><button class="btn">Send Test</button></div>
-        </form>
       </div>
       <div class="settings-pane" data-pane="timezone">
-        <div class="u-name">Server Timezone</div>
-        <p class="muted small">Determines what the portal calls "today" and "now" — used by the public meetings block and any other time-dependent display. Set this to your fellowship's local timezone, regardless of where the server is hosted.</p>
-        {% set _tz_current = site.timezone or 'UTC' %}
-        {% set _tz_now = now_in_timezone(_tz_current) %}
-        <form class="form" method="post" action="{{ url_for('main.timezone_save') }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <label>Timezone
-            <select name="timezone" id="tz-input" required>
-              {% for tz in available_timezone_names() %}
-                <option value="{{ tz }}" {% if tz == _tz_current %}selected{% endif %}>{{ tz }}</option>
-              {% endfor %}
-            </select>
-          </label>
-          <div class="tz-now-row muted small">
-            Current time in <b id="tz-now-name">{{ _tz_current }}</b>:
-            <span id="tz-now-value">{{ _tz_now.strftime('%A, %b %-d %Y · %-I:%M %p') }}</span>
+
+        {# ── Server Timezone ─────────────────────────────────────── #}
+        <section class="card data-card">
+          <div class="data-card-head">
+            {{ icon('clock') }}
+            <span>Server Timezone</span>
           </div>
-          <div class="form-actions"><button class="btn btn-primary">Save Timezone</button></div>
-        </form>
+          <p class="muted small data-card-lead">
+            Determines what the portal calls "today" and "now" — used by the public meetings block and any other time-dependent display. Set this to your fellowship's local timezone, regardless of where the server is hosted.
+          </p>
+          {% set _tz_current = site.timezone or 'UTC' %}
+          {% set _tz_now = now_in_timezone(_tz_current) %}
+          <form class="form" method="post" action="{{ url_for('main.timezone_save') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Timezone
+              <select name="timezone" id="tz-input" required>
+                {% for tz in available_timezone_names() %}
+                  <option value="{{ tz }}" {% if tz == _tz_current %}selected{% endif %}>{{ tz }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <div class="tz-now-row muted small">
+              Current time in <b id="tz-now-name">{{ _tz_current }}</b>:
+              <span id="tz-now-value">{{ _tz_now.strftime('%A, %b %-d %Y · %-I:%M %p') }}</span>
+            </div>
+            <div class="data-card-actions"><button class="btn btn-primary">Save Timezone</button></div>
+          </form>
+        </section>
+
         <script>
         (function(){
           const input = document.getElementById('tz-input');
@@ -1066,58 +1099,68 @@
         </script>
       </div>
       <div class="settings-pane" data-pane="security">
-        <div class="security-grid">
-          <div class="security-col">
-            <form class="form" method="post" action="{{ url_for('main.otp_email_save') }}">
-<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <div class="u-name">Zoom OTP Email</div>
-              <p class="muted small">Shared inbox where Zoom sends one-time-password codes. These credentials are shown to users on Online/Hybrid meeting pages so they can retrieve OTP codes when logging into Zoom.</p>
-              <label>Email Address<input name="email" type="email" value="{{ otp.email or '' }}"></label>
-              <label>Login URL<input name="login_url" type="url" value="{{ otp.login_url or '' }}" placeholder="https://mail.example.com"></label>
-              <label>Password <span class="muted smaller">(leave blank to keep current)</span>
-                <input name="password" type="password" placeholder="{% if otp.password_enc %}••••••••{% endif %}">
-              </label>
-              {% if otp.password_enc %}
-              <label class="check"><input type="checkbox" name="clear_password" value="1"><span>Clear stored password</span></label>
-              {% endif %}
-              <div class="form-actions"><button class="btn btn-primary">Save OTP Email</button></div>
-            </form>
+
+        {# ── Zoom OTP Email ──────────────────────────────────────── #}
+        <section class="card data-card">
+          <div class="data-card-head">
+            {{ icon('key') }}
+            <span>Zoom OTP Email</span>
           </div>
-          <div class="security-col">
-            <form class="form turnstile-form" method="post" action="{{ url_for('main.turnstile_save') }}">
-<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <div class="u-name">Login Bot Protection</div>
-              <p class="muted small">
-                Require a Cloudflare Turnstile challenge on the login screen.
-                Create a site at <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" rel="noopener">Cloudflare → Turnstile</a>
-                (widget mode: Managed), add your portal hostname to its domain list, then paste the keys below.
-              </p>
-              <label>Site key
-                <input name="turnstile_site_key" type="text" autocomplete="off"
-                       value="{{ site.turnstile_site_key or '' }}"
-                       placeholder="0x4AAAAAAA...">
-              </label>
-              <label>Secret key
-                <input name="turnstile_secret_key" type="password" autocomplete="new-password"
-                       placeholder="{% if site.turnstile_secret_key_enc %}•••••••• (saved — leave blank to keep){% else %}0x4AAAAAAA...{% endif %}">
-              </label>
-              {% if site.turnstile_secret_key_enc %}
-              <label class="check"><input type="checkbox" name="turnstile_secret_clear" value="1"><span>Clear the saved secret key</span></label>
-              {% endif %}
-              <li class="special-page-row login-fx-toggle-row">
-                <div class="special-page-info">
-                  <div class="u-name">Enable on login screen</div>
-                  <p class="muted small">When on, successful Turnstile verification is required before credentials are checked.</p>
-                </div>
-                <label class="mode-toggle" title="Enable Turnstile on login">
-                  <input type="checkbox" name="turnstile_enabled" value="1" {% if site.turnstile_enabled %}checked{% endif %}>
-                  <span class="mode-track"><span class="mode-thumb"></span></span>
-                </label>
-              </li>
-              <div class="form-actions"><button class="btn btn-primary">Save Bot Protection</button></div>
-            </form>
+          <p class="muted small data-card-lead">
+            Shared inbox where Zoom sends one-time-password codes. These credentials are shown to users on Online/Hybrid meeting pages so they can retrieve OTP codes when logging into Zoom.
+          </p>
+          <form class="form" method="post" action="{{ url_for('main.otp_email_save') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Email Address<input name="email" type="email" value="{{ otp.email or '' }}"></label>
+            <label>Login URL<input name="login_url" type="url" value="{{ otp.login_url or '' }}" placeholder="https://mail.example.com"></label>
+            <label>Password <span class="muted smaller">(leave blank to keep current)</span>
+              <input name="password" type="password" placeholder="{% if otp.password_enc %}••••••••{% endif %}">
+            </label>
+            {% if otp.password_enc %}
+            <label class="check"><input type="checkbox" name="clear_password" value="1"><span>Clear stored password</span></label>
+            {% endif %}
+            <div class="data-card-actions"><button class="btn btn-primary">Save OTP Email</button></div>
+          </form>
+        </section>
+
+        {# ── Login Bot Protection (Cloudflare Turnstile) ─────────── #}
+        <section class="card data-card">
+          <div class="data-card-head">
+            {{ icon('shield') }}
+            <span>Login Bot Protection</span>
           </div>
-        </div>
+          <p class="muted small data-card-lead">
+            Require a Cloudflare Turnstile challenge on the login screen.
+            Create a site at <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" rel="noopener">Cloudflare → Turnstile</a>
+            (widget mode: Managed), add your portal hostname to its domain list, then paste the keys below.
+          </p>
+          <form class="form turnstile-form" method="post" action="{{ url_for('main.turnstile_save') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Site key
+              <input name="turnstile_site_key" type="text" autocomplete="off"
+                     value="{{ site.turnstile_site_key or '' }}"
+                     placeholder="0x4AAAAAAA...">
+            </label>
+            <label>Secret key
+              <input name="turnstile_secret_key" type="password" autocomplete="new-password"
+                     placeholder="{% if site.turnstile_secret_key_enc %}•••••••• (saved — leave blank to keep){% else %}0x4AAAAAAA...{% endif %}">
+            </label>
+            {% if site.turnstile_secret_key_enc %}
+            <label class="check"><input type="checkbox" name="turnstile_secret_clear" value="1"><span>Clear the saved secret key</span></label>
+            {% endif %}
+            <li class="special-page-row login-fx-toggle-row">
+              <div class="special-page-info">
+                <div class="u-name">Enable on login screen</div>
+                <p class="muted small">When on, successful Turnstile verification is required before credentials are checked.</p>
+              </div>
+              <label class="mode-toggle" title="Enable Turnstile on login">
+                <input type="checkbox" name="turnstile_enabled" value="1" {% if site.turnstile_enabled %}checked{% endif %}>
+                <span class="mode-track"><span class="mode-thumb"></span></span>
+              </label>
+            </li>
+            <div class="data-card-actions"><button class="btn btn-primary">Save Bot Protection</button></div>
+          </form>
+        </section>
       </div>
       <div class="settings-pane" data-pane="data">
 

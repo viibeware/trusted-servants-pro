@@ -7,7 +7,27 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.0 — 2026-05-17 (latest) — Automated off-site backups + Appearance tab refactor
+## 2.1.1 — 2026-05-17 (latest) — Settings tabs unified, Locations + Sidebar buttons in card heads
+
+A polish release focused entirely on Settings. Seven tabs (**Appearance, Users, Global, Domain / Email, Timezone, Security, Sidebar**) now share the same card chrome the Data tab introduced: a brand-blue accent on the left edge, a soft drop shadow, an icon next to each section title, and a clean single-column stack instead of the previous mix of two-column grids and horizontal-rule dividers. The Settings modal now reads as one consistent visual language.
+
+### Tab-by-tab changes
+
+- **Email** renamed to **Domain / Email**. The **Public Domain** section moved here from Appearance, and the Access Request Notifications recipient field tucked into the SMTP card as one combined save — one fewer button to remember to click.
+- **Global** (Locations / Officers / Fellowships): the "+ New Location" button moved into the Locations card's title bar so it's always visible at the top, no longer a separate floating action above the card.
+- **Sidebar**: the "Save sidebar order" button now sits in the card's title bar too — you don't have to scroll past the long manual-reorder list to find it.
+- **Users**: Create User and Roles & permissions stay side-by-side inside a single "Add a user" card so the permissions reference reads as guidance for picking the right role on the form. The full users table and the Public Information Chair section each get their own card below.
+- **Timezone**, **Security**: each section is now a self-contained card. The two-column "OTP Email / Bot Protection" grid on Security is gone — the cards stack vertically with their own visual separation instead.
+
+### Release notes display in About tab
+
+When you open **Settings → About → Release notes**, each subsection heading now has 2 rem of breathing room above it (so headings don't crash into the prose of the previous section), and the paragraphs under each heading render as **brand-color bulleted list items**. Intro paragraphs at the top of each entry (like this one) stay as flowing prose — only the body paragraphs inside subsections get bulleted. Easier to scan when skimming "what changed" between versions.
+
+### Other polish
+
+- **Locations "+" button** is now full size and the "+" inside it shows up in white instead of being painted brand-blue (the same blue as the button background, which made it disappear).
+
+## 2.1.0 — 2026-05-17 — Automated off-site backups + Appearance tab refactor
 
 Big release. Three things landed together: a complete off-site backup system, a new dashboard widget to keep an eye on it, and a visual refresh for the Appearance tab in Settings.
 

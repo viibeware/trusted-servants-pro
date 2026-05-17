@@ -6,6 +6,38 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.1] — 2026-05-17
+
+### Changed — Settings modal tabs unified on a single data-card chrome
+
+Six settings tabs (Appearance, Users, Global, Domain / Email, Timezone, Security, Sidebar) now share the same `<section class="card data-card">` chrome the Data tab introduced — brand-blue left accent, soft shadow, icon-led head with a `data-card-head` Lucide icon + title, optional `data-card-lead` description, optional right-aligned `data-card-head-actions` slot for primary buttons. Every tab is now a single-column vertical stack of these cards. Tab-specific pane CSS converged on `padding: 20px 24px; gap: 8px; flex-direction: column` with a `.data-card > .form { margin: 0; padding: 0; gap: 14px }` rule per tab so forms inside cards adopt the card's spacing instead of the global `.form { gap: 2rem }`. Dead chrome — `.appearance-pane`, `.appearance-grid`, `.appearance-theme`, `.security-grid`, `.security-col`, `.users-top-grid > .card`, `.sidebar-order-head`, `.sidebar-order-title`, every `<hr class="settings-sep">` separator inside refactored panes — is gone.
+
+The Users tab is the one exception to "one card per section" — Create User and Roles & permissions stay side-by-side inside a single "Add a user" data-card. The permissions list reads as guidance for picking the right role on the form, not a disconnected reference, so collapsing them into one card with two `<h3 class="users-subhead">` sub-headings matches the user's expectation. All other refactored tabs render one stacked card per logical section.
+
+### Changed — Locations card hosts the "+ New Location" button in its head
+
+The Global tab's Locations section moved its primary action from a standalone bar at the top of the iframe (`embed-actions` div + `top_actions` block) into a new right-aligned slot inside the `data-card-head`. The slot is exposed as `.data-card-head-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; font-weight: 400 }` so any future card can use the same pattern. Companion rule `.data-card-head .btn .icon { color: currentColor }` overrides the brand-blue tint the head applies to its leading title icon so the "+" inside a `.btn-primary` doesn't render invisible against the brand-blue button background.
+
+### Changed — Email tab renamed to "Domain / Email"; Public Domain moved there
+
+The tab label `data-tab="email"` is now "Domain / Email" and the **Public Domain** section migrated from the Appearance tab into a new top card on this tab. Form action (`main.site_url_save`) is unchanged. The Access Request Notifications recipient field collapsed into the SMTP Server card as a single labeled input below the From-email row, eliminating the in-form `<hr class="settings-sep">` divider and the redundant inner `.u-name` sub-heading; one Save button now commits SMTP credentials + access-request recipient together. Test-email form moved to its own third data-card.
+
+### Changed — Embed-mode data-cards keep their brand accent + shadow
+
+`body.embed .card.data-card { ... }` restores `border-left: 4px solid var(--brand)`, `border-radius: var(--radius)`, `box-shadow: var(--shadow)`, `padding: 2rem`, `margin: 0 0 16px` inside iframe-embedded pages (Global tab, Backups admin modal, etc.). The generic `body.embed .card` rule from before this release stripped all of those for plain list cards to keep them flush inside iframes; data-cards rely on those declarations for their visual identity, so they needed an explicit override.
+
+### Changed — Release-notes formatting: 2 rem above headings, paragraphs as bullets
+
+In the About tab's "Release notes" `<details>`, every `<h3>` / `<h4>` subsection heading inside `.release-notes > li` now gets `margin-top: 2rem` (with a smaller `.75rem` for the very first heading in the entry so the date line + first section don't push off the top). Paragraphs that follow a heading — selected via the `h3 ~ p` sibling combinator — render as brand-bulleted list items via a `::before` content `"•"` on `padding-left: 1.15rem`. Intro paragraphs before the first heading stay as flowing prose; only body paragraphs within a subsection bullet.
+
+### Changed — Backups dashboard widget Open Graph icon reuse
+
+When the user opens the Manage Backups iframe modal, the existing iframe lazy-load path correctly restores `data-src` → `src` on next open even after the close handler blanks it out. Added `backups-frame` to the close-time blank list alongside `wp-import-frame`, `story-edit-frame`, `backup-wizard-frame`. (Item from 2.1.0 development log retroactively documented — the line was already in code but missing from CHANGELOG.)
+
+### Added — Sidebar tab "Save sidebar order" button in card head
+
+The Save button moved from inside the form body (where it sat above the description paragraph in a `sidebar-order-head` flex row) into the `data-card-head-actions` slot — clicking save no longer requires scrolling past the manual-reorder list to find it. Same right-aligned slot pattern used by the Locations card.
+
 ## [2.1.0] — 2026-05-17
 
 ### Added — Automated off-site backups (FTP / FTPS / SFTP / Dropbox)
