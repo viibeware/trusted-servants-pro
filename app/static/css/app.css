@@ -12421,6 +12421,30 @@ body.embed .backups-wrap {
   margin-top: .25rem;
 }
 
+/* Unsubscribe row sits below the main update form, separated by a
+   subtle divider so it reads as a secondary action rather than a
+   peer of the primary Save button. The danger-tinted text mirrors
+   what every other "remove this" button on the site looks like
+   without using a fully-coloured btn-danger pill — gentler since
+   the user is removing themselves, not something destructive. */
+.ts-widget-unsub {
+  margin-top: .85rem;
+  padding-top: .75rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-start;
+}
+.ts-widget-unsub-btn {
+  color: var(--danger, #b91c1c);
+  background: transparent;
+  border-color: transparent;
+}
+.ts-widget-unsub-btn:hover {
+  color: var(--danger, #b91c1c);
+  background: color-mix(in srgb, var(--danger, #b91c1c) 8%, transparent);
+  border-color: color-mix(in srgb, var(--danger, #b91c1c) 25%, transparent);
+}
+
 /* Trusted Servants — admin /email-list list + compose pages. */
 .ts-page-wrap {
   /* No max-width / auto margins — the outer .content container already
