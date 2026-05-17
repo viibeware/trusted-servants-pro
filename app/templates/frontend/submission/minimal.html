@@ -1,0 +1,36 @@
+{# Minimal — borderless, no card chrome. Serif heading on a thin rule,
+   the subheading + intro flow into the body, and the form fields sit
+   directly on the page. Maximum focus on the writing. #}
+{%- set _wmode = submission_width_mode or 'boxed' -%}
+{%- set _wmax  = submission_max_width or 720 -%}
+{%- set _wpad  = submission_padding_pct or 5 -%}
+{%- set _style = (tpl_style or '') -%}
+{%- if _wmode == 'full' -%}
+  {%- set _wrap_style = (_style ~ ' --fe-submission-pad: ' ~ _wpad ~ 'vw;') | trim -%}
+{%- else -%}
+  {%- set _wrap_style = (_style ~ ' --fe-submission-max: ' ~ _wmax ~ 'px;') | trim -%}
+{%- endif -%}
+<section class="fe-section fe-submission-section fe-submission-section--minimal fe-submission-w-{{ _wmode }}"{% if _wrap_style %} style="{{ _wrap_style }}"{% endif %}>
+  <div class="fe-container fe-submission-minimal-container">
+    <div class="fe-submission-minimal">
+      <header class="fe-submission-minimal-head">
+        <h1 class="fe-submission-minimal-title">{{ _heading }}</h1>
+        <hr class="fe-submission-minimal-rule" aria-hidden="true">
+        <p class="fe-submission-minimal-blurb">{{ _subheading }}</p>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+          <div class="fe-submission-flashes">
+            {% for cat, msg in messages %}<div class="flash flash-{{ cat }}">{{ msg }}</div>{% endfor %}
+          </div>
+          {% endif %}
+        {% endwith %}
+      </header>
+      {% if _intro %}
+      <div class="fe-submission-minimal-intro">{{ _intro|markdown }}</div>
+      {% endif %}
+      <div class="fe-submission-minimal-body">
+        {% include "frontend/_submission_form_body.html" %}
+      </div>
+    </div>
+  </div>
+</section>

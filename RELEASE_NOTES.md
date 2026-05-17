@@ -7,7 +7,29 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.1 — 2026-05-17 (latest) — Settings tabs unified, Locations + Sidebar buttons in card heads
+## 2.1.2 — 2026-05-17 (latest) — Templated submission form + primary-card alignment
+
+The public ``/submissionform`` page (the one visitors use to submit an event or announcement for admin review) is now templated like the rest of the public site — pick from three different layouts and tune background, fonts, and sizing per layout.
+
+### Three layouts to choose from
+
+Open **Web Frontend → Templates → Submission form (/submissionform)** and you'll see three picker cards:
+
+- **Classic** *(default — matches what the page looked like before this release)*. Centered single-column page with a heading, subheading, and a soft-shadowed card containing the form.
+- **Minimal**. Borderless, no card. Serif heading on a thin rule, intro flows into the body, fields sit directly on the page. Maximum focus on the writing.
+- **Split**. Two-column desktop layout: heading + subheading + intro stay sticky on the left as you scroll; the form card sits on the right. Collapses to one column on mobile.
+
+Each layout shows a thumbnail of its silhouette in the picker so you can compare at a glance before saving.
+
+### The same per-template controls every other page gets
+
+Each layout has its own customize panel — background colour with optional dark-mode pairing, dynamic background (gradient / overlay / palette), heading font, body font, heading-size override, body-size override. Boxed vs. full width, max-width, and side-padding controls match every other templated page.
+
+### Form card now follows your Primary-card design
+
+The form's card now uses the **Primary card** design tokens from Site → Design → Card styles. Whatever background, border colour, border width, shadow, and hover treatment you've set for primary cards site-wide (meetings list, events, fellowships, library items, etc.) the submission form's card now matches automatically — light mode and dark mode. Pre-2.1.2 the card was hard-coded to white with a brand-blue border; that's gone.
+
+## 2.1.1 — 2026-05-17 — Settings tabs unified, Locations + Sidebar buttons in card heads
 
 A polish release focused entirely on Settings. Seven tabs (**Appearance, Users, Global, Domain / Email, Timezone, Security, Sidebar**) now share the same card chrome the Data tab introduced: a brand-blue accent on the left edge, a soft drop shadow, an icon next to each section title, and a clean single-column stack instead of the previous mix of two-column grids and horizontal-rule dividers. The Settings modal now reads as one consistent visual language.
 

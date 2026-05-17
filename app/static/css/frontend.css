@@ -2660,12 +2660,16 @@ html[data-theme="dark"] .fe-meeting-card:hover { box-shadow: 0 10px 28px rgba(0,
    card. Solid (not alpha) so a page-level dynbg can't paint
    through and make the cards read as transparent. */
 html[data-theme="dark"] .fe-mlist-card,
-body.fe-frontend-force-dark .fe-mlist-card {
+html[data-theme="dark"] .fe-submission-card,
+body.fe-frontend-force-dark .fe-mlist-card,
+body.fe-frontend-force-dark .fe-submission-card {
   background: var(--fe-color-card-primary-bg-dark, #131a33);
   border-color: var(--fe-color-card-primary-border-dark, #1f2a44);
 }
 html[data-theme="dark"] .fe-mlist-card:hover,
-body.fe-frontend-force-dark .fe-mlist-card:hover {
+html[data-theme="dark"] .fe-submission-card:hover,
+body.fe-frontend-force-dark .fe-mlist-card:hover,
+body.fe-frontend-force-dark .fe-submission-card:hover {
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
 }
 /* Description inherits the `muted` utility class from the template,
@@ -8216,7 +8220,23 @@ body.fe-frontend-force-dark .fe-archive-page-gap {
   padding: 4rem 0;
   background: var(--fe-color-surface-alt, var(--fe-panel-soft, #f1f5f9));
 }
-.fe-submission-page { max-width: 720px; margin: 0 auto; }
+/* Boxed: page caps at --fe-submission-max (set inline by the variant
+   templates from the admin's max-width knob, fallback 720px so the
+   classic look is preserved on installs that haven't customized).
+   Full width: the section's container expands and the page takes
+   --fe-submission-pad on each side as vw gutters. */
+.fe-submission-page { max-width: var(--fe-submission-max, 720px); margin: 0 auto; }
+.fe-submission-w-full .fe-container {
+  max-width: none;
+  padding-left: var(--fe-submission-pad, 5vw);
+  padding-right: var(--fe-submission-pad, 5vw);
+}
+.fe-submission-w-full .fe-submission-page,
+.fe-submission-w-full .fe-submission-minimal,
+.fe-submission-w-full .fe-submission-split { max-width: none; }
+/* Background colour override from the customize panel — applies the
+   --fe-tpl-bg the panel writes onto the section's inline style. */
+.fe-submission-section[style*="--fe-tpl-bg"] { background: var(--fe-tpl-bg); }
 .fe-submission-page-head {
   text-align: center;
   margin: 0 0 2rem;
@@ -8236,22 +8256,20 @@ body.fe-frontend-force-dark .fe-archive-page-gap {
   margin-left: auto;
   margin-right: auto;
 }
-/* Form card mirrors the .fe-mlist-card recipe on /meetings:
-   solid 1px accent border, soft 1px shadow at rest, 1px translateY
-   lift + deeper shadow on hover. Border colour stays put on hover
-   so the card feels stable rather than visibly recolouring under
-   the cursor. */
+/* Form card opts into the Primary-card design tokens — same source of
+   truth as .fe-meeting-card / .fe-mlist-card / .fe-events-card / etc.
+   so the admin's Site → Design → Card styles → Primary card controls
+   re-tint this card uniformly with every other primary-card surface
+   across the public site. Background, border colour, and border width
+   pull straight from the tokens with safe light-mode fallbacks; the
+   shared shadow + transition + hover lift come from the token
+   aggregator block at the bottom of this file once .fe-submission-card
+   is listed there. */
 .fe-submission-card {
-  background: #ffffff;
-  border: 1px solid var(--fe-accent);
+  background: var(--fe-color-card-primary-bg, #fff);
+  border: var(--fe-card-primary-border-width, 1px) solid var(--fe-color-card-primary-border, var(--fe-accent));
   border-radius: 16px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   padding: 2rem 2rem 2.25rem;
-  transition: transform 160ms ease, box-shadow 160ms ease;
-}
-.fe-submission-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
 }
 .fe-submission-flashes { margin: 0 0 1.25rem; }
 .fe-submission-flashes .flash {
@@ -8623,6 +8641,123 @@ body.fe-frontend-force-dark .fe-submission-modal-body {
   /* Disable the light-mode scroll-edge shadow stack — its baked
      white stops would smear across the dark body. */
   background: var(--fe-dm-surface);
+}
+
+/* ── Submission form variants ─────────────────────────────────────── */
+/* Minimal — borderless single column. No card chrome, no shadow; just
+   a serif heading on a thin rule, intro text, and inline form fields. */
+.fe-submission-section--minimal {
+  background: var(--fe-tpl-bg, transparent);
+}
+.fe-submission-minimal {
+  max-width: var(--fe-submission-max, 720px);
+  margin: 0 auto;
+}
+.fe-submission-minimal-head { margin: 0 0 1.5rem; }
+.fe-submission-minimal-title {
+  margin: 0 0 .5rem;
+  font-family: var(--fe-tpl-heading-font, var(--fe-font-display, Georgia, serif));
+  font-size: var(--fe-tpl-heading-size, clamp(1.8rem, 1.5rem + 1.4vw, 2.6rem));
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  color: var(--fe-color-text, #0a0a0a);
+}
+.fe-submission-minimal-rule {
+  margin: 0 0 1.1rem;
+  border: 0;
+  border-top: 1px solid var(--fe-color-text, #0a0a0a);
+  opacity: .35;
+}
+.fe-submission-minimal-blurb {
+  margin: 0;
+  font-size: var(--fe-tpl-body-size, 1.0625rem);
+  color: var(--fe-color-text-muted, #475569);
+  line-height: 1.55;
+  max-width: 56ch;
+}
+.fe-submission-minimal-intro {
+  margin: 0 0 1.5rem;
+  font-size: var(--fe-tpl-body-size, 1rem);
+  line-height: 1.6;
+  color: var(--fe-color-text, #0a0a0a);
+}
+.fe-submission-minimal-body { padding: 0; }
+/* Drop the form's heavy frame so fields sit directly on the page. */
+.fe-submission-minimal-body .fe-submission-form { padding: 0; background: transparent; border: 0; box-shadow: none; }
+
+/* Split — sticky rail on the left, form card on the right. Collapses
+   to a single column under 880px so the rail still leads on mobile. */
+.fe-submission-section--split {
+  background: var(--fe-tpl-bg, var(--fe-color-surface-alt, var(--fe-panel-soft, #f1f5f9)));
+}
+.fe-submission-split {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 3rem;
+  max-width: var(--fe-submission-max, 1080px);
+  margin: 0 auto;
+  align-items: start;
+}
+.fe-submission-split-rail {
+  position: sticky;
+  top: 5rem;
+  padding-right: 1rem;
+}
+.fe-submission-split-title {
+  margin: 0 0 .75rem;
+  font-family: var(--fe-tpl-heading-font, var(--fe-font-display, inherit));
+  font-size: var(--fe-tpl-heading-size, clamp(1.8rem, 1.5rem + 1.4vw, 2.6rem));
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--fe-color-text, #0a0a0a);
+}
+.fe-submission-split-blurb {
+  margin: 0 0 1rem;
+  font-size: var(--fe-tpl-body-size, 1.05rem);
+  line-height: 1.55;
+  color: var(--fe-color-text-muted, #475569);
+}
+.fe-submission-split-intro {
+  font-size: var(--fe-tpl-body-size, 1rem);
+  line-height: 1.6;
+  color: var(--fe-color-text, #0a0a0a);
+}
+.fe-submission-split-intro :first-child { margin-top: 0; }
+.fe-submission-split-intro :last-child { margin-bottom: 0; }
+.fe-submission-split-main { min-width: 0; }
+@media (max-width: 880px) {
+  .fe-submission-split {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  .fe-submission-split-rail { position: static; padding-right: 0; }
+}
+
+/* Customize-panel size sliders. The template-customize panel writes
+   --fe-tpl-heading-size / --fe-tpl-body-size as inline styles on the
+   section. Classic also picks these up since it inherits the same
+   .fe-submission-card body styles — only the typography vars apply. */
+.fe-submission-section[style*="--fe-tpl-heading-font"] .fe-submission-page-title,
+.fe-submission-section[style*="--fe-tpl-heading-font"] .fe-submission-minimal-title,
+.fe-submission-section[style*="--fe-tpl-heading-font"] .fe-submission-split-title {
+  font-family: var(--fe-tpl-heading-font);
+}
+.fe-submission-section[style*="--fe-tpl-heading-size"] .fe-submission-page-title {
+  font-size: var(--fe-tpl-heading-size);
+}
+.fe-submission-section[style*="--fe-tpl-body-size"] .fe-submission-page-blurb,
+.fe-submission-section[style*="--fe-tpl-body-size"] .fe-submission-intro {
+  font-size: var(--fe-tpl-body-size);
+}
+.fe-submission-section[style*="--fe-tpl-body-font"] .fe-submission-page-blurb,
+.fe-submission-section[style*="--fe-tpl-body-font"] .fe-submission-intro,
+.fe-submission-section[style*="--fe-tpl-body-font"] .fe-submission-form label,
+.fe-submission-section[style*="--fe-tpl-body-font"] .fe-submission-minimal-blurb,
+.fe-submission-section[style*="--fe-tpl-body-font"] .fe-submission-minimal-intro,
+.fe-submission-section[style*="--fe-tpl-body-font"] .fe-submission-split-blurb,
+.fe-submission-section[style*="--fe-tpl-body-font"] .fe-submission-split-intro {
+  font-family: var(--fe-tpl-body-font);
 }
 
 /* ===== Content pages (Pages admin → /<slug>) ─ Showcase layout =====
@@ -10619,6 +10754,7 @@ html[data-theme="dark"] .fe-mlist-sort select option {
 .fe-announcements-card,
 .fe-fellowships-card,
 .fe-library-item,
+.fe-submission-card,
 .fe-card-primary {
   box-shadow: var(--fe-card-primary-shadow, none);
   transition:
@@ -10640,6 +10776,7 @@ html[data-theme="dark"] .fe-mlist-sort select option {
 .fe-announcements-card:hover,
 .fe-fellowships-card:hover,
 .fe-library-item:hover,
+.fe-submission-card:hover,
 .fe-card-primary:hover {
   box-shadow: var(--fe-card-primary-hover-shadow, 0 8px 28px rgba(15, 23, 42, 0.10));
   transform: var(--fe-card-primary-hover-transform, translateY(-2px));

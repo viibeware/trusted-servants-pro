@@ -1,0 +1,38 @@
+{# Split — two-column layout on desktop: heading + subheading + intro
+   sit on the left as a sticky rail; the form card stacks to the
+   right. Collapses to a single column on narrow viewports so mobile
+   visitors get the rail first, then the form. #}
+{%- set _wmode = submission_width_mode or 'boxed' -%}
+{%- set _wmax  = submission_max_width or 1080 -%}
+{%- set _wpad  = submission_padding_pct or 5 -%}
+{%- set _style = (tpl_style or '') -%}
+{%- if _wmode == 'full' -%}
+  {%- set _wrap_style = (_style ~ ' --fe-submission-pad: ' ~ _wpad ~ 'vw;') | trim -%}
+{%- else -%}
+  {%- set _wrap_style = (_style ~ ' --fe-submission-max: ' ~ _wmax ~ 'px;') | trim -%}
+{%- endif -%}
+<section class="fe-section fe-submission-section fe-submission-section--split fe-submission-w-{{ _wmode }}"{% if _wrap_style %} style="{{ _wrap_style }}"{% endif %}>
+  <div class="fe-container fe-submission-split-container">
+    <div class="fe-submission-split">
+      <aside class="fe-submission-split-rail">
+        <h1 class="fe-submission-split-title">{{ _heading }}</h1>
+        <p class="fe-submission-split-blurb">{{ _subheading }}</p>
+        {% if _intro %}
+        <div class="fe-submission-split-intro">{{ _intro|markdown }}</div>
+        {% endif %}
+      </aside>
+      <div class="fe-submission-split-main">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+          <div class="fe-submission-flashes">
+            {% for cat, msg in messages %}<div class="flash flash-{{ cat }}">{{ msg }}</div>{% endfor %}
+          </div>
+          {% endif %}
+        {% endwith %}
+        <div class="fe-submission-card">
+          {% include "frontend/_submission_form_body.html" %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1901,6 +1901,101 @@
   </form>
 </section>
 
+{# ── Submission form (/submissionform) ───────────────────────────── #}
+{%- set _sfmode = (site.frontend_submission_form_width_mode if site else 'boxed') -%}
+{%- set _sfpad  = (site.frontend_submission_form_padding_pct if site else 5) -%}
+{%- set _sfmax  = (site.frontend_submission_form_max_width   if site else 720) -%}
+{%- set _sfenabled = (site.submission_form_enabled if site else True) -%}
+<section class="card fe-tplgrid-section">
+  <div class="card-head">
+    <h2>Submission form (/submissionform)</h2>
+    <span class="muted smaller">Public form visitors use to submit an event or announcement for admin review. This card controls the public-page layout, container width, and per-template appearance overrides. Heading, subheading, intro copy, and form behaviour (allowed types, success message, submit label) are managed on the Forms admin.</span>
+  </div>
+  <form class="form fe-tplgrid-form" method="post"
+        action="{{ url_for('main.frontend_submission_form_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="fe-tplgrid">
+      {% for t in submission_form_templates %}
+      <label class="fe-tplgrid-card{% if submission_form_active_key == t.key %} active{% endif %}">
+        <input type="radio" name="frontend_submission_form_template" value="{{ t.key }}"
+               {% if submission_form_active_key == t.key %}checked{% endif %}>
+        <div class="fe-tplgrid-thumb fe-tplgrid-thumb-submission-form fe-tplgrid-thumb-submission-form-{{ t.key }}" aria-hidden="true">
+          {% if t.key == 'classic' %}
+            <span class="t-h"></span>
+            <span class="t-card">
+              <span class="t-row"></span><span class="t-row"></span><span class="t-row"></span>
+            </span>
+          {% elif t.key == 'minimal' %}
+            <span class="t-h"></span>
+            <span class="t-rule"></span>
+            <span class="t-row"></span><span class="t-row"></span>
+            <span class="t-row"></span><span class="t-row"></span>
+          {% elif t.key == 'split' %}
+            <span class="t-cols">
+              <span class="t-col-side"><span></span><span></span></span>
+              <span class="t-col-main">
+                <span class="t-row"></span><span class="t-row"></span><span class="t-row"></span>
+              </span>
+            </span>
+          {% endif %}
+        </div>
+        <div class="fe-tplgrid-info">
+          <div class="fe-tplgrid-name">
+            {{ t.name }}
+            <span class="fe-tplgrid-badge">Active</span>
+          </div>
+          <div class="fe-tplgrid-desc muted small">{{ t.description }}</div>
+        </div>
+      </label>
+      {% endfor %}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary">Save layout</button>
+    </div>
+  </form>
+
+  {{ tpl_customize_panel('submission_form', submission_form_active_key, submission_form_active_settings, ((submission_form_templates | selectattr('key', 'equalto', submission_form_active_key) | list | first).name if (submission_form_templates | selectattr('key', 'equalto', submission_form_active_key) | list | first) else ''), scope_label='submission form') }}
+
+  <form class="form" method="post"
+        action="{{ url_for('main.frontend_submission_form_template_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <fieldset class="fieldset fe-mlist-width-fieldset">
+      <legend>Container width</legend>
+      <div class="fe-mlist-width-row">
+        <label class="check">
+          <input type="radio" name="frontend_submission_form_width_mode" value="boxed"
+                 {% if _sfmode == 'boxed' %}checked{% endif %}>
+          <span><b>Boxed</b> — caps at the max-width below and centers in the viewport.</span>
+        </label>
+        <label class="check">
+          <input type="radio" name="frontend_submission_form_width_mode" value="full"
+                 {% if _sfmode == 'full' %}checked{% endif %}>
+          <span><b>Full width</b> — spans the entire viewport with the side padding below applied as <code>vw</code> gutters.</span>
+        </label>
+      </div>
+      <div class="fe-mlist-width-controls">
+        <label class="fe-mlist-width-pad">
+          <span>Max width (px, boxed only)</span>
+          <input type="number" name="frontend_submission_form_max_width"
+                 min="480" max="2400" step="10" value="{{ _sfmax }}">
+        </label>
+        <label class="fe-mlist-width-pad">
+          <span>Side padding (% of viewport, full-width only)</span>
+          <input type="number" name="frontend_submission_form_padding_pct"
+                 min="0" max="20" step="1" value="{{ _sfpad }}">
+        </label>
+      </div>
+    </fieldset>
+
+    <div class="form-actions">
+      {% if _sfenabled %}
+      <a class="btn" href="{{ url_for('frontend.submission_form') }}" target="_blank" rel="noopener">Preview /submissionform ↗</a>
+      {% endif %}
+      <button class="btn btn-primary">Save Submission form</button>
+    </div>
+  </form>
+</section>
+
   </div>
 </div>
 

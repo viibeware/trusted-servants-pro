@@ -6,6 +6,20 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.2] — 2026-05-17
+
+### Added — Submission form template system (Classic / Minimal / Split)
+
+The public ``/submissionform`` page is now templated. Three layouts ship at launch in a new ``SUBMISSION_FORM_TEMPLATES`` registry in ``app/frontend.py``: **Classic** (centered single-column card on a tinted surface — bit-for-bit identical to what previously rendered), **Minimal** (borderless, serif heading on a thin rule, intro flows into the body, no card chrome), and **Split** (sticky rail on the left with heading + subheading + intro markdown, form card on the right; collapses to one column below 880 px). The route picks the active variant via ``SiteSetting.frontend_submission_form_template`` and dispatches to a partial under ``app/templates/frontend/submission/<key>.html``; adding a future layout is one partial + one entry in the registry.
+
+The new admin surface lives under Web Frontend → Templates → **Submission form (/submissionform)**. Each variant gets a picker card with a rendered thumbnail silhouette (classic = card-with-rows, minimal = serif-title + rule + flat lines, split = two-column side/main grid) plus the full ``tpl_customize_panel`` macro the rest of the templated sections use — per-template background colour with dark-mode pairing, dynbg key + overlay + palette config, heading font, body font, heading-size override, body-size override, all routed through the shared ``frontend_template_settings_json`` JSON bucket keyed under ``submission_form``. A Boxed / Full width radio drives ``frontend_submission_form_width_mode`` with companion max-width (480–2400 px) and side-padding (0–20 %) knobs.
+
+New ``SiteSetting`` columns: ``frontend_submission_form_template`` (default ``"classic"``), ``frontend_submission_form_width_mode``, ``frontend_submission_form_max_width`` (default 720), ``frontend_submission_form_padding_pct`` (default 5), ``frontend_submission_form_bg_dynamic_key``, ``frontend_submission_form_bg_dynbg_config_json``. All six get matching ``_migrate_sqlite`` entries so existing installs pick up the columns additively. A new ``frontend_submission_form_template_save`` route persists the picker + layout knobs; ``submission_form`` was appended to ``_TEMPLATE_KINDS`` and the catalog-dispatch map in ``frontend_template_settings_save`` so the shared customize-panel POST endpoint also accepts the kind. Heading / subheading / intro copy and form behaviour (allowed types, submit label, success message) continue to live on the existing Forms admin surface — this release only adds the appearance dimension.
+
+### Changed — Submission form card opts into the Primary-card design tokens
+
+``.fe-submission-card`` no longer carries its own hard-coded ``#ffffff`` background, ``var(--fe-accent)`` border colour, custom 16 px shadow recipe, or 160 ms transition. It now pulls ``background: var(--fe-color-card-primary-bg)``, ``border: var(--fe-card-primary-border-width) solid var(--fe-color-card-primary-border)``, and inherits shadow / transition / hover lift / hover border colour from the shared Primary-card aggregator block at the bottom of ``frontend.css`` (``.fe-submission-card`` was added to both the shape-class list and the hover-class list). Dark-mode override added alongside ``.fe-mlist-card``'s rule so the card flips to ``--fe-color-card-primary-bg-dark`` / ``--fe-color-card-primary-border-dark`` in dark mode. Net effect: Site → Design → Card styles → Primary card now re-tints the submission form's card uniformly with every other primary card on the public site (meetings list, events list, fellowships, library items, etc.). Border radius stays at 16 px and padding stays at the 2 rem / 2.25 rem inset — those weren't tokenised at the site level so they remain on the card's own rule.
+
 ## [2.1.1] — 2026-05-17
 
 ### Changed — Settings modal tabs unified on a single data-card chrome

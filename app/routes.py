@@ -5849,6 +5849,7 @@ def frontend_templates():
                            BLOG_LIST_TEMPLATES, BLOG_POST_TEMPLATES,
                            LITERATURE_LIBRARY_TEMPLATES, SITE_INDEX_TEMPLATES,
                            FELLOWSHIPS_LIST_TEMPLATES,
+                           SUBMISSION_FORM_TEMPLATES,
                            template_settings, meetings_list_protips_resolved,
                            meetings_list_sidebar_links_resolved)
     from .fonts import all_fonts
@@ -5866,6 +5867,7 @@ def frontend_templates():
     literature_library_key = (s.frontend_literature_library_template if s else None) or "classic"
     site_index_key = (s.frontend_site_index_template if s else None) or "grouped"
     fellowships_list_key = (s.frontend_fellowships_list_template if s else None) or "sidebar"
+    submission_form_key = (s.frontend_submission_form_template if s else None) or "classic"
     # Render the cards alphabetised by display name so admins always
     # see them in a stable, predictable order regardless of how each
     # `*_TEMPLATES` catalog list happens to be declared. Sort is
@@ -5924,6 +5926,9 @@ def frontend_templates():
                            fellowships_list_templates=_by_name(FELLOWSHIPS_LIST_TEMPLATES),
                            fellowships_list_active_key=fellowships_list_key,
                            fellowships_list_active_settings=template_settings(s, "fellowships_list", fellowships_list_key),
+                           submission_form_templates=_by_name(SUBMISSION_FORM_TEMPLATES),
+                           submission_form_active_key=submission_form_key,
+                           submission_form_active_settings=template_settings(s, "submission_form", submission_form_key),
                            font_options=all_fonts())
 
 
@@ -5936,7 +5941,7 @@ _TEMPLATE_KINDS = ("meeting", "event", "story", "blog_post",
                    "announcements_list", "archive",
                    "stories_list", "blog_list",
                    "literature_library", "printlist", "contact",
-                   "site_index", "fellowships_list")
+                   "site_index", "fellowships_list", "submission_form")
 
 
 @bp.route("/frontend/template-settings/<kind>/<key>", methods=["POST"])
@@ -5954,7 +5959,7 @@ def frontend_template_settings_save(kind, key):
                             ANNOUNCEMENTS_LIST_TEMPLATES, ARCHIVE_TEMPLATES,
                             STORIES_LIST_TEMPLATES,
                             LITERATURE_LIBRARY_TEMPLATES, SITE_INDEX_TEMPLATES,
-                            FELLOWSHIPS_LIST_TEMPLATES)
+                            FELLOWSHIPS_LIST_TEMPLATES, SUBMISSION_FORM_TEMPLATES)
     from .fonts import font_by_key
     if kind not in _TEMPLATE_KINDS:
         abort(404)
@@ -5977,6 +5982,7 @@ def frontend_template_settings_save(kind, key):
         "literature_library": LITERATURE_LIBRARY_TEMPLATES,
         "site_index": SITE_INDEX_TEMPLATES,
         "fellowships_list": FELLOWSHIPS_LIST_TEMPLATES,
+        "submission_form": SUBMISSION_FORM_TEMPLATES,
     }
     if kind in catalog_map:
         if key not in {t["key"] for t in catalog_map[kind]}:
@@ -6625,6 +6631,46 @@ def frontend_fellowships_list_template_save():
             request.form, "frontend_fellowships_list_bg_dynbg_config_json")
     db.session.commit()
     flash("Fellowships list settings saved", "success")
+    return redirect(url_for("main.frontend_templates"))
+
+
+@bp.route("/frontend/submission-form-template", methods=["POST"])
+@admin_required
+def frontend_submission_form_template_save():
+    """Persist the /submissionform layout choice, container width,
+    and standalone dynbg config from the admin Templates page. Heading,
+    subheading, intro copy, and form behaviour (allowed types, success
+    message, submit label) are managed on Forms admin, not here — this
+    endpoint only owns the appearance dimensions."""
+    from .frontend import SUBMISSION_FORM_TEMPLATES
+    s = _get_site_setting()
+    if "frontend_submission_form_template" in request.form:
+        key = (request.form.get("frontend_submission_form_template") or "").strip()
+        if key in {t["key"] for t in SUBMISSION_FORM_TEMPLATES}:
+            s.frontend_submission_form_template = key
+    width = (request.form.get("frontend_submission_form_width_mode") or "").strip()
+    if width in ("boxed", "full"):
+        s.frontend_submission_form_width_mode = width
+    if "frontend_submission_form_max_width" in request.form:
+        try:
+            max_w = int(request.form.get("frontend_submission_form_max_width") or 720)
+        except ValueError:
+            max_w = 720
+        s.frontend_submission_form_max_width = max(480, min(2400, max_w))
+    if "frontend_submission_form_padding_pct" in request.form:
+        try:
+            pad = int(request.form.get("frontend_submission_form_padding_pct") or 5)
+        except ValueError:
+            pad = 5
+        s.frontend_submission_form_padding_pct = max(0, min(20, pad))
+    if "frontend_submission_form_bg_dynamic_key" in request.form:
+        from . import dynbg as _dynbg
+        s.frontend_submission_form_bg_dynamic_key = _dynbg.normalize(
+            request.form.get("frontend_submission_form_bg_dynamic_key"))
+        s.frontend_submission_form_bg_dynbg_config_json = _dynbg_config_from_form(
+            request.form, "frontend_submission_form_bg_dynbg_config_json")
+    db.session.commit()
+    flash("Submission form layout saved", "success")
     return redirect(url_for("main.frontend_templates"))
 
 

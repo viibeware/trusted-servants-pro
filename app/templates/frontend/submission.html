@@ -4,35 +4,24 @@
     or 'Fill out the form below and a ' ~ frontend_title ~ ' admin will review your submission before publishing it. Required fields are marked *.' -%}
 {%- set _intro = (site.submission_form_intro if site else None) -%}
 {% block title %}{{ _heading }} · {{ frontend_title }}{% endblock %}
+{# Dispatcher for the public /submissionform page. Every layout under
+   frontend/submission/<key>.html receives the same heading/subheading/
+   intro payload and includes the shared form body partial. Layout key
+   is picked on the admin Templates page
+   (SiteSetting.frontend_submission_form_template). #}
 {% block content %}
-{# Standalone /submissionform page. Same form body as the global modal,
-   wrapped in a centered single-column page layout that visually
-   matches the login-page Request Access form: card-shaped panel,
-   centered title, vertical stack of inputs. Heading / subheading /
-   intro come from SiteSetting (Forms admin) with baked fallbacks. #}
-<section class="fe-section fe-submission-section">
-  <div class="fe-container">
-    <div class="fe-submission-page">
-      <header class="fe-submission-page-head">
-        <h1 class="fe-submission-page-title">{{ _heading }}</h1>
-        <p class="fe-submission-page-blurb">{{ _subheading }}</p>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-          <div class="fe-submission-flashes">
-            {% for cat, msg in messages %}<div class="flash flash-{{ cat }}">{{ msg }}</div>{% endfor %}
-          </div>
-          {% endif %}
-        {% endwith %}
-      </header>
-      <div class="fe-submission-card">
-        {% if _intro %}
-        <div class="fe-submission-intro">{{ _intro|markdown }}</div>
-        {% endif %}
-        {% include "frontend/_submission_form_body.html" %}
-      </div>
-    </div>
-  </div>
-</section>
+{%- set _tpl = template_settings(site, 'submission_form', submission_template_key) if site else {} -%}
+{%- set _dynbg = _tpl.get('bg_dynamic_key') or (site.frontend_submission_form_bg_dynamic_key if site else None) -%}
+{%- set _dynbg_cfg_raw = {'overlay': _tpl.get('bg_dynbg_overlay'), 'colors': _tpl.get('bg_dynbg_colors') or [], 'overlay_scope': _tpl.get('bg_dynbg_overlay_scope'), 'overlay_size': _tpl.get('bg_dynbg_overlay_size'), 'overlay_intensity': _tpl.get('bg_dynbg_overlay_intensity'), 'randomize_colors': _tpl.get('bg_dynbg_randomize_colors'), 'randomize_positions': _tpl.get('bg_dynbg_randomize_positions'), 'animate': _tpl.get('bg_dynbg_animate', True), 'pastel_light': _tpl.get('bg_dynbg_pastel_light', False)} if _tpl.get('bg_dynamic_key') or _tpl.get('bg_dynbg_overlay') else (site.frontend_submission_form_bg_dynbg_config_json if site else None) -%}
+{%- set _dynbg_cfg = dynbg_decode(_dynbg_cfg_raw) -%}
+{%- set _dynbg_color_vars = dynbg_colors_css(dynbg_resolve_colors(_dynbg_cfg), _dynbg_cfg) -%}
+{%- set _dynbg_pos_vars = dynbg_resolve_positions(_dynbg_cfg, _dynbg) -%}
+{%- set _dynbg_inline = (_dynbg_color_vars ~ " " ~ _dynbg_pos_vars) | trim -%}
+{%- set _dynbg_active = _dynbg or _dynbg_cfg.overlay -%}
+<div class="fe-page-dynbg-host{% if _dynbg_active %} fe-dynbg-host{% endif %}"{% if _dynbg_active and _dynbg_inline %} style="{{ _dynbg_inline }}"{% endif %}>
+  {% if _dynbg_active %}{% with dynbg_key=_dynbg, dynbg_config=_dynbg_cfg_raw %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}
+  {% include submission_partial %}
+</div>
 
 {% if site and site.turnstile_enabled and site.turnstile_site_key %}
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>

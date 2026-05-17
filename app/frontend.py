@@ -576,6 +576,34 @@ FELLOWSHIPS_LIST_TEMPLATES = [
 ]
 
 
+# Layouts for the public /submissionform page (visitor-facing form that
+# captures event / announcement submissions for admin review). Every
+# variant shares the same shared form-body partial
+# `frontend/_submission_form_body.html` and reads the same heading /
+# subheading / intro strings off SiteSetting. Adding a new layout is one
+# partial + one entry in this list.
+SUBMISSION_FORM_TEMPLATES = [
+    {
+        "key": "classic",
+        "name": "Classic",
+        "description": "Centered single-column page with a heading, subheading, and a soft-shadowed card containing the form. Matches the look the submission form shipped with — safe default.",
+        "partial": "frontend/submission/classic.html",
+    },
+    {
+        "key": "minimal",
+        "name": "Minimal",
+        "description": "Borderless, no card chrome. Serif heading on a thin rule, the subheading + intro flow into the body, and the form fields sit directly on the page. Maximum focus on the writing.",
+        "partial": "frontend/submission/minimal.html",
+    },
+    {
+        "key": "split",
+        "name": "Split",
+        "description": "Two-column layout on desktop: the heading, subheading, and intro markdown sit on the left as a sticky rail; the form card stacks to the right. Collapses to a single column on narrow viewports.",
+        "partial": "frontend/submission/split.html",
+    },
+]
+
+
 EVENT_TEMPLATES = [
     {
         "key": "classic",
@@ -1704,6 +1732,12 @@ def submission_form():
     Honours the ``submission_form_enabled`` SiteSetting toggle: when
     off, the page returns a 404 (matches what other admin-controlled
     public surfaces do when their feature is disabled).
+
+    Layout is picked from ``SUBMISSION_FORM_TEMPLATES`` via the admin
+    Templates page (SiteSetting.frontend_submission_form_template).
+    Each variant receives the same heading/subheading/intro payload +
+    container width / padding knobs + per-template appearance overrides
+    (font, size, background, dynbg) the other templated pages get.
     """
     site = _site()
     gate = _frontend_gate(site)
@@ -1712,7 +1746,48 @@ def submission_form():
     if not site or not getattr(site, "submission_form_enabled", True):
         abort(404)
     ctx = _frontend_context(site)
-    return render_template("frontend/submission.html", **ctx)
+
+    tpl = _template_meta(SUBMISSION_FORM_TEMPLATES,
+                         (site.frontend_submission_form_template if site else None) or "classic")
+    _tpl_settings = template_settings(site, "submission_form", tpl["key"])
+    tpl_style = template_css_vars(_tpl_settings)
+    tpl_dynbg_key = _tpl_settings.get("bg_dynamic_key") \
+        or (site.frontend_submission_form_bg_dynamic_key if site else None)
+    tpl_dynbg_config = {
+        "overlay": _tpl_settings.get("bg_dynbg_overlay"),
+        "colors": _tpl_settings.get("bg_dynbg_colors") or [],
+        "overlay_scope": _tpl_settings.get("bg_dynbg_overlay_scope"),
+        "overlay_size": _tpl_settings.get("bg_dynbg_overlay_size"),
+        "overlay_intensity": _tpl_settings.get("bg_dynbg_overlay_intensity"),
+        "randomize_colors": _tpl_settings.get("bg_dynbg_randomize_colors", False),
+        "randomize_positions": _tpl_settings.get("bg_dynbg_randomize_positions", False),
+        "animate": _tpl_settings.get("bg_dynbg_animate", True),
+        "pastel_light": _tpl_settings.get("bg_dynbg_pastel_light", False),
+    }
+    width_mode = (site.frontend_submission_form_width_mode if site else None) or "boxed"
+    if width_mode not in ("boxed", "full"):
+        width_mode = "boxed"
+    try:
+        max_width = int(site.frontend_submission_form_max_width) if site else 720
+    except (TypeError, ValueError):
+        max_width = 720
+    max_width = max(480, min(2400, max_width))
+    try:
+        pad_pct = int(site.frontend_submission_form_padding_pct) if site else 5
+    except (TypeError, ValueError):
+        pad_pct = 5
+    pad_pct = max(0, min(20, pad_pct))
+
+    return render_template("frontend/submission.html",
+                           submission_partial=tpl["partial"],
+                           submission_template_key=tpl["key"],
+                           submission_width_mode=width_mode,
+                           submission_max_width=max_width,
+                           submission_padding_pct=pad_pct,
+                           tpl_style=tpl_style,
+                           tpl_dynbg_key=tpl_dynbg_key,
+                           tpl_dynbg_config=tpl_dynbg_config,
+                           **ctx)
 
 
 @bp.route("/submissionform/submit", methods=["POST"])

@@ -8431,6 +8431,68 @@ html[data-theme="dark"] #page-hero-edit-modal .hero-unified-actions {
 .fe-tplgrid-thumb-archive .t-mag-tile:nth-of-type(4) { left: 36%;  width: 28%; }
 .fe-tplgrid-thumb-archive .t-mag-tile:nth-of-type(5) { right: 8px; width: 30%; }
 
+/* Submission form thumbnails. Each variant gets a distinct silhouette
+   so the admin can pick at a glance — classic shows a card with rows
+   inside; minimal shows a serif title + thin rule + flat lines;
+   split shows a two-column side/main grid. */
+.fe-tplgrid-thumb-submission-form { background: #f8fafc; }
+.fe-tplgrid-thumb-submission-form .t-h {
+  left: 50%; transform: translateX(-50%);
+  top: 16px; width: 56%; height: 9px;
+  background: #1e293b; border-radius: 3px;
+}
+.fe-tplgrid-thumb-submission-form-classic .t-card {
+  position: absolute; left: 14px; right: 14px; top: 40px; bottom: 14px;
+  background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(15,23,42,.08);
+  padding: 12px; display: flex; flex-direction: column; gap: 7px;
+}
+.fe-tplgrid-thumb-submission-form-classic .t-card > .t-row {
+  position: relative; left: auto; right: auto; top: auto;
+  height: 8px; background: #e2e8f0; border-radius: 3px;
+}
+.fe-tplgrid-thumb-submission-form-classic .t-card > .t-row:nth-child(2) { width: 80%; }
+.fe-tplgrid-thumb-submission-form-classic .t-card > .t-row:nth-child(3) { width: 60%; }
+
+.fe-tplgrid-thumb-submission-form-minimal { background: #ffffff; }
+.fe-tplgrid-thumb-submission-form-minimal .t-h {
+  background: #0f172a; font-family: serif; top: 16px; width: 64%;
+}
+.fe-tplgrid-thumb-submission-form-minimal .t-rule {
+  left: 18%; right: 18%; top: 34px; height: 1px; background: #94a3b8;
+}
+.fe-tplgrid-thumb-submission-form-minimal .t-row {
+  position: absolute; left: 14px; right: 14px; height: 6px;
+  background: #cbd5e1; border-radius: 3px;
+}
+.fe-tplgrid-thumb-submission-form-minimal .t-row:nth-of-type(1) { top: 50px; }
+.fe-tplgrid-thumb-submission-form-minimal .t-row:nth-of-type(2) { top: 66px; width: 60%; }
+.fe-tplgrid-thumb-submission-form-minimal .t-row:nth-of-type(3) { top: 88px; }
+.fe-tplgrid-thumb-submission-form-minimal .t-row:nth-of-type(4) { top: 104px; }
+.fe-tplgrid-thumb-submission-form-minimal .t-row:nth-of-type(5) { top: 120px; width: 75%; }
+
+.fe-tplgrid-thumb-submission-form-split .t-h { display: none; }
+.fe-tplgrid-thumb-submission-form-split .t-cols {
+  top: 14px; bottom: 14px; left: 14px; right: 14px;
+  grid-template-columns: 1fr 1fr;
+}
+.fe-tplgrid-thumb-submission-form-split .t-col-side > span:nth-child(1) {
+  height: 10px; background: #1e293b; border-radius: 3px;
+}
+.fe-tplgrid-thumb-submission-form-split .t-col-side > span:nth-child(2) {
+  height: 5px; width: 80%; background: #94a3b8; border-radius: 2px;
+}
+.fe-tplgrid-thumb-submission-form-split .t-col-main {
+  background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px;
+  padding: 10px; gap: 6px;
+}
+.fe-tplgrid-thumb-submission-form-split .t-col-main > .t-row {
+  position: relative; left: auto; right: auto; top: auto;
+  height: 7px; background: #e2e8f0; border-radius: 3px;
+}
+.fe-tplgrid-thumb-submission-form-split .t-col-main > .t-row:nth-child(2) { width: 70%; }
+.fe-tplgrid-thumb-submission-form-split .t-col-main > .t-row:nth-child(3) { width: 55%; }
+
 .fe-mlist-width-fieldset {
   margin: 18px 0 4px;
   display: flex; flex-direction: column; gap: 10px;

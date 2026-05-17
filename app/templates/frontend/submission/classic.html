@@ -1,0 +1,36 @@
+{# Classic — centered single-column page with a heading, subheading,
+   and a soft-shadowed card containing the form. Matches the look the
+   submission form shipped with before SUBMISSION_FORM_TEMPLATES was
+   introduced; safe default. #}
+{%- set _wmode = submission_width_mode or 'boxed' -%}
+{%- set _wmax  = submission_max_width or 720 -%}
+{%- set _wpad  = submission_padding_pct or 5 -%}
+{%- set _style = (tpl_style or '') -%}
+{%- if _wmode == 'full' -%}
+  {%- set _wrap_style = (_style ~ ' --fe-submission-pad: ' ~ _wpad ~ 'vw;') | trim -%}
+{%- else -%}
+  {%- set _wrap_style = (_style ~ ' --fe-submission-max: ' ~ _wmax ~ 'px;') | trim -%}
+{%- endif -%}
+<section class="fe-section fe-submission-section fe-submission-section--classic fe-submission-w-{{ _wmode }}"{% if _wrap_style %} style="{{ _wrap_style }}"{% endif %}>
+  <div class="fe-container fe-submission-classic-container">
+    <div class="fe-submission-page">
+      <header class="fe-submission-page-head">
+        <h1 class="fe-submission-page-title">{{ _heading }}</h1>
+        <p class="fe-submission-page-blurb">{{ _subheading }}</p>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+          <div class="fe-submission-flashes">
+            {% for cat, msg in messages %}<div class="flash flash-{{ cat }}">{{ msg }}</div>{% endfor %}
+          </div>
+          {% endif %}
+        {% endwith %}
+      </header>
+      <div class="fe-submission-card">
+        {% if _intro %}
+        <div class="fe-submission-intro">{{ _intro|markdown }}</div>
+        {% endif %}
+        {% include "frontend/_submission_form_body.html" %}
+      </div>
+    </div>
+  </div>
+</section>

@@ -602,6 +602,17 @@ class SiteSetting(db.Model):
     # type and skips the picker.
     submission_form_allowed_types = db.Column(db.String(16), nullable=False, default="both")
     submission_form_submit_label = db.Column(db.String(100))
+    # Public /submissionform layout — picked from SUBMISSION_FORM_TEMPLATES
+    # in app.frontend. Mirrors the pattern other templated public pages
+    # use (template key + width / padding knobs + a standalone dynbg
+    # fallback). Per-template font / size / colour overrides live in the
+    # shared frontend_template_settings_json bucket under "submission_form".
+    frontend_submission_form_template = db.Column(db.String(64), nullable=False, default="classic")
+    frontend_submission_form_width_mode = db.Column(db.String(16), nullable=False, default="boxed")
+    frontend_submission_form_max_width = db.Column(db.Integer, nullable=False, default=720)
+    frontend_submission_form_padding_pct = db.Column(db.Integer, nullable=False, default=5)
+    frontend_submission_form_bg_dynamic_key = db.Column(db.String(64))
+    frontend_submission_form_bg_dynbg_config_json = db.Column(db.Text)
     login_particle_effect = db.Column(db.String(32), nullable=False, default="stars")
     login_bg_color = db.Column(db.String(32))  # legacy single color
     login_bg_colors = db.Column(db.Text)  # JSON array of hex codes, 1..4, overrides login_bg_color
