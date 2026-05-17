@@ -7,7 +7,13 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.3 — 2026-05-17 (latest) — Trusted Servants Email List, Watchtower quicknav, dashboard widget refresh
+## 2.1.4 — 2026-05-17 (latest) — Trusted Servants widget stays put
+
+Small follow-up to 2.1.3. The **Join the Trusted Servants list** widget on the dashboard no longer disappears once you've joined — it stays visible whenever the module is on and the dashboard toggle is checked. Once you're on the list, the widget switches to **Your Trusted Servants info**: name / email / phone are pre-filled with the values admins actually see on the roster, the button reads **Save changes** instead of Join, and a discreet **Remove me from the list** action appears below a thin divider for when you want to come off entirely.
+
+Why: a few users mentioned they wanted to see and tweak their listed contact info from the dashboard without digging through any admin surface. The previous self-retiring widget hid this option behind "you can't get back to it." Now the widget is the canonical edit point for your own row.
+
+## 2.1.3 — 2026-05-17 — Trusted Servants Email List, Watchtower quicknav, dashboard widget refresh
 
 Three substantial changes in one release.
 

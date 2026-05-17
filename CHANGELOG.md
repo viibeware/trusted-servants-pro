@@ -6,6 +6,17 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.4] — 2026-05-17
+
+### Changed — Trusted Servants dashboard widget always shows when enabled
+
+The widget no longer auto-hides itself after a user subscribes. The visibility gate in ``index.html`` dropped the ``and not trusted_servants_subscription`` condition; the widget now renders whenever ``trusted_servants_enabled`` is True and the user has ``dash_show_trusted_servants`` checked. Two render modes inside the widget body:
+
+- **Not yet subscribed** — title "Join the Trusted Servants list", fields pre-fill from the ``User`` account (username / email / phone), primary action **Join the list**.
+- **Already subscribed** — title "Your Trusted Servants info", fields pre-fill from the existing ``TrustedServantSubscriber`` row so the values shown match what admins see in the roster, primary action **Save changes**, plus a secondary **Remove me from the list** action below a thin divider. The secondary action POSTs to the existing ``/email-list/unsubscribe`` endpoint and is danger-tinted but transparent (text + hover background only — gentler than ``btn-danger`` since the user is removing themselves, not destroying data).
+
+The ``/email-list/subscribe`` endpoint was already upsert-shaped (creates a new row when the user has no subscription, updates the existing one otherwise) so the form action stays the same for both modes — no route change needed.
+
 ## [2.1.3] — 2026-05-17
 
 ### Added — Trusted Servants Email List module
