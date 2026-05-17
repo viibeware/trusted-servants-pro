@@ -61,20 +61,29 @@
         <div class="brand-sub">Pro</div>
       </div>
     </div>
-    {# Web Frontend quick-jump cluster — two pinned buttons that skip
-       the scroll to the Admin section of the nav. Same role-gate as
-       the canonical "Web Frontend" entry in the Admin nav (which
-       stays put): module enabled + frontend-editing rights. The live
-       dot on the admin button reflects `site.frontend_enabled` (the
-       public-access toggle) so admins see at a glance whether the
-       site is live to visitors or in editor-only preview mode. #}
-    {% if site and site.frontend_module_enabled and current_user.can_edit_frontend() %}
-    <div class="sidebar-quicknav" role="group" aria-label="Web Frontend quick links">
+    {# Sidebar quick-jump cluster — pinned buttons that replace their
+       regular sidebar links. Each button's gate matches the legacy
+       link's visibility predicate in app/sidebar.py so the user
+       always sees exactly one entry point for the corresponding
+       module / surface.
+
+       The Web Frontend pair (admin panel + public-site preview)
+       renders only when the module is on AND the user can edit; the
+       live dot reflects `site.frontend_enabled` (the public-access
+       toggle) so admins see at a glance whether the site is live.
+       The Watchtower button below renders for every admin, with two
+       attention chips (pending access requests + locked accounts)
+       so they don't have to open the page just to check counts. #}
+    {% set _has_quicknav = (site and site.frontend_module_enabled and current_user.can_edit_frontend())
+                            or current_user.is_admin() %}
+    {% if _has_quicknav %}
+    <div class="sidebar-quicknav" role="group" aria-label="Quick navigation">
+      {% if site and site.frontend_module_enabled and current_user.can_edit_frontend() %}
       <a class="sidebar-quicknav-btn{% if request.endpoint and request.endpoint.startswith('main.frontend_') %} is-active{% endif %}"
          href="{{ url_for('main.frontend_dashboard') }}"
          title="Open the Web Frontend admin panel">
         <span class="sidebar-quicknav-icon" aria-hidden="true">{{ icon('layout-grid') }}</span>
-        <span class="sidebar-quicknav-label">Web Frontend</span>
+        <span class="sidebar-quicknav-label">Web</span>
         <span class="sidebar-quicknav-status{% if site.frontend_enabled %} is-live{% endif %}"
               title="{{ 'Public site is LIVE — visible to everyone' if site.frontend_enabled else 'Public site is OFF — visible only to signed-in admins and frontend editors' }}"
               aria-label="{{ 'Live' if site.frontend_enabled else 'Off' }}"></span>
@@ -84,8 +93,28 @@
          target="_blank" rel="noopener"
          title="Open the public frontend in a new tab">
         <span class="sidebar-quicknav-icon" aria-hidden="true">{{ icon('external-link') }}</span>
-        <span class="sidebar-quicknav-label">View site</span>
+        <span class="sidebar-quicknav-label">View</span>
       </a>
+      {% endif %}
+      {% if current_user.is_admin() %}
+      {%- set _watchtower_total = (pending_access_count or 0) + (locked_accounts_count or 0) -%}
+      <a class="sidebar-quicknav-btn sidebar-quicknav-watchtower{% if request.endpoint and 'watchtower' in request.endpoint %} is-active{% endif %}"
+         href="{{ url_for('main.watchtower') }}"
+         title="Watchtower — security, access requests, deletions, and user activity">
+        <span class="sidebar-quicknav-icon" aria-hidden="true">{{ icon('shield') }}</span>
+        <span class="sidebar-quicknav-label">Watchtower</span>
+        {% if _watchtower_total %}
+        <span class="sidebar-quicknav-chips" aria-label="{{ _watchtower_total }} item{{ 's' if _watchtower_total != 1 else '' }} need attention">
+          {% if pending_access_count %}
+          <span class="nav-badge nav-badge-warn" title="{{ pending_access_count }} pending access request{{ 's' if pending_access_count != 1 else '' }}">{{ pending_access_count }}</span>
+          {% endif %}
+          {% if locked_accounts_count %}
+          <span class="nav-badge" title="{{ locked_accounts_count }} locked account{{ 's' if locked_accounts_count != 1 else '' }}">{{ locked_accounts_count }}</span>
+          {% endif %}
+        </span>
+        {% endif %}
+      </a>
+      {% endif %}
     </div>
     {% endif %}
 
@@ -912,6 +941,23 @@
                 <input type="checkbox" name="stories_enabled" value="1"
                        onchange="this.form.submit()"
                        {% if site and site.stories_enabled %}checked{% endif %}>
+                <span class="mode-track"><span class="mode-thumb"></span></span>
+              </label>
+              <noscript><button class="btn btn-sm btn-primary">Save</button></noscript>
+            </form>
+          </li>
+          <li class="special-page-row">
+            <div class="special-page-info">
+              <div class="u-name">Trusted Servants Email List</div>
+              <p class="muted small">Admin-managed contact roster + blast email surface. When on, a sign-up widget appears on every signed-in user's dashboard inviting them to add their name, phone, and email; admins manage the roster and send updates from <code>/email-list</code>. The role gate below decides who can see the roster and send blasts — every signed-in user can self-subscribe via the dashboard widget regardless.</p>
+            </div>
+            {{ module_role_picker('trusted_servants', site.trusted_servants_required_role if site else 'admin') }}
+            <form method="post" action="{{ url_for('main.trusted_servants_toggle') }}" class="special-page-toggle-form" data-refresh-sidebar="1">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <label class="mode-toggle" title="Enable Trusted Servants Email List">
+                <input type="checkbox" name="trusted_servants_enabled" value="1"
+                       onchange="this.form.submit()"
+                       {% if site and site.trusted_servants_enabled %}checked{% endif %}>
                 <span class="mode-track"><span class="mode-thumb"></span></span>
               </label>
               <noscript><button class="btn btn-sm btn-primary">Save</button></noscript>

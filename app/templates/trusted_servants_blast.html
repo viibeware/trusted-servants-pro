@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block heading %}Send an update to the Trusted Servants list{% endblock %}
+{% block heading_help %}{{ subscriber_count }} subscriber{% if subscriber_count != 1 %}s{% endif %} will receive this message individually — one SMTP send per recipient. Markdown is rendered to HTML; the plain-text version is the raw markdown source so recipients without HTML still see something readable.{% endblock %}
+{% block content %}
+
+<div class="ts-page-wrap">
+  <div class="ts-page-toolbar">
+    <a class="btn" href="{{ url_for('main.trusted_servants_list') }}">← Back to list</a>
+  </div>
+
+  <section class="card data-card">
+    <div class="data-card-head">
+      {{ icon('send') }}
+      <span>Compose update</span>
+    </div>
+    <p class="muted small data-card-lead">
+      Use <code>{name}</code> anywhere in the subject or body to drop in each recipient's name. Leave it out for a generic message.
+    </p>
+    <form class="form ts-blast-form" method="post"
+          action="{{ url_for('main.trusted_servants_blast_send') }}"
+          data-ts-blast-form>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Subject
+        <input type="text" name="subject" maxlength="500" required
+               placeholder="Quick update from the chair">
+      </label>
+      <label>Message body (Markdown)
+        <textarea name="body" rows="14" required
+                  placeholder="Hi {name},&#10;&#10;Heads up that this Thursday's business meeting moves to 7:30pm…"></textarea>
+        <span class="muted smaller">Supports headings (<code>#</code>), <b>bold</b>, <i>italic</i>, links <code>[text](url)</code>, and bullet lists.</span>
+      </label>
+      <div class="ts-blast-actions">
+        <button type="submit" class="btn btn-primary" data-ts-blast-submit>
+          {{ icon('send') }} Send to {{ subscriber_count }} recipient{% if subscriber_count != 1 %}s{% endif %}
+        </button>
+        <a class="btn" href="{{ url_for('main.trusted_servants_list') }}">Cancel</a>
+      </div>
+    </form>
+  </section>
+</div>
+
+{# Busy overlay — synchronous SMTP loop takes seconds per recipient,
+   so a small list (50 subscribers) can still take 30–60 seconds.
+   Block the page so the admin doesn't double-submit. #}
+<div class="backup-busy" data-ts-busy hidden>
+  <div class="backup-busy-card">
+    <div class="backup-busy-spinner" aria-hidden="true"></div>
+    <div class="backup-busy-text">
+      <strong>Sending updates…</strong>
+      <span class="muted small">Delivering one message at a time. This can take a minute or two — don't close this window.</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const form = document.querySelector('[data-ts-blast-form]');
+  const busy = document.querySelector('[data-ts-busy]');
+  const btn = document.querySelector('[data-ts-blast-submit]');
+  if (!form || !busy) return;
+  form.addEventListener('submit', () => {
+    busy.hidden = false;
+    if (btn) btn.disabled = true;
+  });
+})();
+</script>
+{% endblock %}

@@ -36,6 +36,7 @@ _MAIN_CATALOG = [
     {"key": "posts",          "label": "Announcements & Events", "endpoint": "main.posts",          "active_kind": "prefix:main.post"},
     {"key": "stories",        "label": "Stories",              "endpoint": "main.stories",        "active_kind": "prefix:main.story"},
     {"key": "blog",           "label": "Blog",                 "endpoint": "main.blog_index",     "active_kind": "prefix:main.blog_"},
+    {"key": "trusted_servants", "label": "Email List",         "endpoint": "main.trusted_servants_list", "active_kind": "prefix:main.trusted_servants"},
     {"key": "web_frontend",   "label": "Web Frontend",         "endpoint": "main.frontend_dashboard", "active_kind": "prefix:main.frontend_"},
 ]
 
@@ -63,12 +64,13 @@ _INTERGROUP_CATALOG = [
 # their required_role: admin → Admin section, otherwise → Main.
 # Maps item key → SiteSetting attribute that holds the required role.
 _DYNAMIC_SECTION_ITEMS = {
-    "intergroup":    "intergroup_required_role",
-    "zoom_tech":     "zoom_tech_required_role",
-    "posts":         "posts_required_role",
-    "stories":       "stories_required_role",
-    "blog":          "blog_required_role",
-    "web_frontend":  "frontend_module_required_role",
+    "intergroup":       "intergroup_required_role",
+    "zoom_tech":        "zoom_tech_required_role",
+    "posts":            "posts_required_role",
+    "stories":          "stories_required_role",
+    "blog":             "blog_required_role",
+    "trusted_servants": "trusted_servants_required_role",
+    "web_frontend":     "frontend_module_required_role",
 }
 
 # Keys that are always rendered first inside their section regardless of
@@ -118,16 +120,19 @@ def _is_visible(key, site, user):
     if key == "blog":
         return bool(site and getattr(site, "blog_enabled", False)
                     and user_meets_role(user, getattr(site, "blog_required_role", "admin")))
-    if key == "watchtower":      return bool(user.is_admin())
+    if key == "trusted_servants":
+        return bool(site and getattr(site, "trusted_servants_enabled", False)
+                    and user_meets_role(user, getattr(site, "trusted_servants_required_role", "admin")))
+    # Watchtower and Web Frontend both render as pinned sidebar-quicknav
+    # buttons above the search bar (see base.html). Hiding them from
+    # the regular catalog avoids two entry points for the same
+    # destination — admins get exactly one button for each, with the
+    # Watchtower one carrying attention chips for pending access
+    # requests + locked accounts so they don't have to open the page
+    # to see counts.
+    if key == "watchtower":      return False
     if key == "contact_form":    return bool(user.is_admin())
-    if key == "web_frontend":
-        # The Web Frontend's route gates resolve to admin-only via
-        # ``can_edit_frontend`` (the dedicated frontend_editor role
-        # was retired). The required-role dropdown can additionally
-        # tighten visibility but can't loosen it past the hard gate.
-        return bool(site and site.frontend_module_enabled
-                    and getattr(user, "can_edit_frontend", lambda: False)()
-                    and user_meets_role(user, site.frontend_module_required_role))
+    if key == "web_frontend":    return False
     return False
 
 

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Imported' if outcome == 'ok' else 'Cancelled' }} · Email List import{% endblock %}
+{% block heading %}{% if outcome == 'ok' %}Import complete{% else %}Import cancelled{% endif %}{% endblock %}
+{% block heading_help %}{% if outcome == 'ok' %}{{ added }} row{% if added != 1 %}s{% endif %} added to the email list. The modal closes automatically.{% else %}No rows were added.{% endif %}{% endblock %}
+{% block content %}
+{% include "_ts_import_wizard_header.html" %}
+
+<section class="card data-card ts-wizard-card">
+  <div class="data-card-head">
+    {% if outcome == 'ok' %}{{ icon('check-circle') }}<span>All set</span>
+    {% else %}{{ icon('x') }}<span>No changes saved</span>
+    {% endif %}
+  </div>
+  {% if outcome == 'ok' %}
+  <p>
+    Added <strong>{{ added }}</strong> contact{% if added != 1 %}s{% endif %} to the email list.
+  </p>
+  <ul class="muted small ts-done-stats">
+    {% if skipped_duplicate %}<li>{{ skipped_duplicate }} duplicate{% if skipped_duplicate != 1 %}s{% endif %} skipped (already on the list)</li>{% endif %}
+    {% if skipped_missing %}<li>{{ skipped_missing }} row{% if skipped_missing != 1 %}s{% endif %} skipped (missing name or usable email)</li>{% endif %}
+    {% if skipped_blank %}<li>{{ skipped_blank }} blank row{% if skipped_blank != 1 %}s{% endif %} skipped</li>{% endif %}
+  </ul>
+  {% else %}
+  <p class="muted">The import was cancelled before anything was written. No changes were made to the email list.</p>
+  {% endif %}
+  <div class="ts-wizard-actions">
+    <button type="button" class="btn btn-primary" data-ts-done>Done</button>
+  </div>
+</section>
+
+<script>
+  // Auto-close after a brief pause so the user sees the confirmation
+  // text before the modal collapses. `reload` only on success — we
+  // only need the parent list to refresh when rows actually landed.
+  (function () {
+    function close() {
+      try {
+        window.parent.postMessage({ type: 'ts-import-modal-close', reload: {{ 'true' if outcome == 'ok' else 'false' }} },
+                                  window.location.origin);
+      } catch (e) { /* parent may be cross-origin in dev; ignore */ }
+    }
+    document.querySelectorAll('[data-ts-done]').forEach(function (btn) {
+      btn.addEventListener('click', close);
+    });
+    setTimeout(close, {{ 1400 if outcome == 'ok' else 900 }});
+  })();
+</script>
+{% endblock %}

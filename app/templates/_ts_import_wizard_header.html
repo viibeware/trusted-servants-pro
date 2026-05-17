@@ -1,0 +1,18 @@
+{# Shared stepper for the CSV-import wizard. Caller sets ``active_step``
+   to one of 1..3. Same shape as ``_backups_wizard_header.html`` so the
+   visual language across wizards stays consistent — leans on the
+   shared ``.wp-wizard-stepper`` CSS the WordPress importer ships. #}
+<div class="wp-wizard-header">
+  {% set _labels = ['Upload', 'Map & preview', 'Done'] %}
+  <div class="wp-wizard-stepper">
+    <ol>
+      {% for i in range(1, 4) %}
+        {% set state = 'is-active' if active_step == i else ('is-done' if active_step > i else '') %}
+        <li class="{{ state }}">
+          <span class="wp-step-num">{% if active_step > i %}✓{% else %}{{ i }}{% endif %}</span>
+          <span class="wp-step-label">{{ _labels[i-1] }}</span>
+        </li>
+      {% endfor %}
+    </ol>
+  </div>
+</div>

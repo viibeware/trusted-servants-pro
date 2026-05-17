@@ -19,7 +19,8 @@ from .models import (db, User, Meeting, MeetingFile, MeetingSchedule, MeetingLib
                      FrontendNavItem, UrlRedirect, EntitySlugHistory, Page,
                      FrontendNavColumn, FrontendNavLink, FILE_CATEGORIES,
                      DAYS_OF_WEEK, INTERGROUP_LIBRARY_NAMES,
-                     BackupTarget, BackupRun, BACKUP_KINDS)
+                     BackupTarget, BackupRun, BACKUP_KINDS,
+                     TrustedServantSubscriber, TrustedServantBlast)
 
 INTERGROUP_DEFAULT_ACCOUNTS = [
     ('Chair', 'chair@dccma.com'),
@@ -259,15 +260,26 @@ def inject_globals():
         nav_links = []
     pending_access_count = 0
     unread_contact_count = 0
+    locked_accounts_count = 0
     try:
         if current_user.is_authenticated and current_user.is_admin():
             pending_access_count = AccessRequest.query.filter_by(
                 status="pending", is_archived=False).count()
             unread_contact_count = ContactSubmission.query.filter_by(
                 is_read=False, is_archived=False).count()
+            # Locked-accounts count drives the second chip on the
+            # Watchtower quicknav button. One query against
+            # LoginFailure aggregated by username — small table,
+            # cheap to compute per-request for admin viewers only.
+            try:
+                from .auth import currently_locked_usernames
+                locked_accounts_count = len(currently_locked_usernames())
+            except Exception:
+                locked_accounts_count = 0
     except Exception:
         pending_access_count = 0
         unread_contact_count = 0
+        locked_accounts_count = 0
     try:
         otp = _get_otp_email()
     except Exception:
@@ -275,10 +287,11 @@ def inject_globals():
     return {"CATEGORY_LABELS": CATEGORY_LABELS, "FILE_CATEGORIES": FILE_CATEGORIES,
             "DAYS_OF_WEEK": DAYS_OF_WEEK, "site": site, "nav_links": nav_links,
             "pending_access_count": pending_access_count,
-            "unread_contact_count": unread_contact_count, "otp": otp}
+            "unread_contact_count": unread_contact_count,
+            "locked_accounts_count": locked_accounts_count, "otp": otp}
 
 
-DASHBOARD_WIDGET_KEYS = ("server-metrics", "visitor-metrics", "currently-online", "backups", "meetings", "libraries", "files", "access-requests", "contact-form", "deletions")
+DASHBOARD_WIDGET_KEYS = ("server-metrics", "visitor-metrics", "currently-online", "backups", "trusted-servants", "meetings", "libraries", "files", "access-requests", "contact-form", "deletions")
 
 ONLINE_WINDOW = timedelta(minutes=5)
 LAST_SEEN_THROTTLE = timedelta(seconds=60)
@@ -437,6 +450,20 @@ def index():
     visitor_sparkline = []
     backup_summary = None
     backup_recent_runs = []
+    # Trusted Servants widget state — visible to every signed-in user
+    # (admin or not) until they've added themselves to the list. The
+    # template hides the card entirely once a subscription row exists,
+    # so the widget self-retires after the user has joined.
+    site = _get_site_setting()
+    trusted_servants_enabled = bool(site and getattr(site, "trusted_servants_enabled", False))
+    trusted_servants_subscription = None
+    if trusted_servants_enabled:
+        try:
+            trusted_servants_subscription = (TrustedServantSubscriber.query
+                                             .filter_by(user_id=current_user.id)
+                                             .first())
+        except Exception:  # noqa: BLE001
+            trusted_servants_subscription = None
     if current_user.is_admin():
         access_requests = (AccessRequest.query
                            .filter_by(status="pending", is_archived=False)
@@ -523,6 +550,8 @@ def index():
                            visitor_sparkline=visitor_sparkline,
                            backup_summary=backup_summary,
                            backup_recent_runs=backup_recent_runs,
+                           trusted_servants_enabled=trusted_servants_enabled,
+                           trusted_servants_subscription=trusted_servants_subscription,
                            dashboard_order=dashboard_order)
 
 
@@ -534,6 +563,7 @@ def dashboard_customize():
     current_user.dash_show_libraries = request.form.get("dash_show_libraries") == "1"
     current_user.dash_show_files = request.form.get("dash_show_files") == "1"
     current_user.dash_show_server_metrics = request.form.get("dash_show_server_metrics") == "1"
+    current_user.dash_show_trusted_servants = request.form.get("dash_show_trusted_servants") == "1"
     if current_user.is_admin():
         current_user.dash_show_access_requests = request.form.get("dash_show_access_requests") == "1"
         current_user.dash_show_contact_form = request.form.get("dash_show_contact_form") == "1"
@@ -2133,6 +2163,7 @@ def module_role_save():
         "stories":           "stories_required_role",
         "blog":              "blog_required_role",
         "frontend_module":   "frontend_module_required_role",
+        "trusted_servants":  "trusted_servants_required_role",
     }
     col = columns.get(module)
     if col and role in ROLE_TIER_KEYS:
@@ -2187,6 +2218,691 @@ def _require_stories_enabled():
         abort(404)
     if not user_meets_role(current_user, s.stories_required_role or "admin"):
         abort(404)
+
+
+@bp.route("/settings/trusted-servants-toggle", methods=["POST"])
+@admin_required
+def trusted_servants_toggle():
+    s = _get_site_setting()
+    s.trusted_servants_enabled = request.form.get("trusted_servants_enabled") == "1"
+    db.session.commit()
+    flash("Trusted Servants Email List " + ("enabled" if s.trusted_servants_enabled else "disabled"), "success")
+    return redirect(_safe_referrer() or url_for("main.index"))
+
+
+def _require_trusted_servants_admin():
+    """Gate the admin-facing Trusted Servants management surface. Module
+    must be enabled AND the user must clear the admin-tunable role gate
+    (defaults to ``admin``). The dashboard-widget user subscribe routes
+    don't go through this — every signed-in user can submit their own
+    contact info regardless of the role gate, since the gate only
+    governs who can SEE the roster + send blasts."""
+    from .permissions import user_meets_role
+    s = _get_site_setting()
+    if not s.trusted_servants_enabled:
+        abort(404)
+    if not user_meets_role(current_user, s.trusted_servants_required_role or "admin"):
+        abort(404)
+
+
+# ---------------------------------------------------------------------------
+# Trusted Servants Email List — admin management surface.
+# One row per signed-in user who self-subscribed via the dashboard
+# widget (or who an admin added manually). Admins manage the roster
+# here, send mass emails to the list, and review send history.
+# ---------------------------------------------------------------------------
+@bp.route("/email-list")
+@login_required
+def trusted_servants_list():
+    _require_trusted_servants_admin()
+    subs = (TrustedServantSubscriber.query
+            .order_by(TrustedServantSubscriber.name.asc())
+            .all())
+    blasts = (TrustedServantBlast.query
+              .order_by(TrustedServantBlast.started_at.desc())
+              .limit(25).all())
+    return render_template("trusted_servants_list.html",
+                           subscribers=subs, blasts=blasts)
+
+
+@bp.route("/email-list/<int:sid>/delete", methods=["POST"])
+@login_required
+def trusted_servants_delete(sid):
+    _require_trusted_servants_admin()
+    sub = db.session.get(TrustedServantSubscriber, sid) or abort(404)
+    name = sub.name
+    db.session.delete(sub)
+    db.session.commit()
+    flash(f"Removed {name} from the Trusted Servants list.", "info")
+    return redirect(url_for("main.trusted_servants_list"))
+
+
+@bp.route("/email-list/blast")
+@login_required
+def trusted_servants_blast_compose():
+    _require_trusted_servants_admin()
+    count = TrustedServantSubscriber.query.count()
+    return render_template("trusted_servants_blast.html", subscriber_count=count)
+
+
+@bp.route("/email-list/blast", methods=["POST"])
+@login_required
+def trusted_servants_blast_send():
+    """Send a one-message-per-recipient blast to every subscriber.
+
+    Synchronous so the admin sees ok/failed inline rather than having
+    to poll a background queue. Failures don't abort the loop — each
+    recipient is tried independently, and the resulting BlastRun row
+    records how many sent vs failed. Markdown body is rendered to HTML
+    via the existing ``markdown`` filter; the plain-text fallback is
+    the raw markdown source (readers without HTML still see something
+    usable).
+    """
+    from datetime import datetime as _dt
+    import markdown as _md_lib
+    from .mail import send_mail
+    _require_trusted_servants_admin()
+    s = _get_site_setting()
+    subject = (request.form.get("subject") or "").strip()
+    body_md = (request.form.get("body") or "").strip()
+    if not subject:
+        flash("Subject is required.", "danger")
+        return redirect(url_for("main.trusted_servants_blast_compose"))
+    if not body_md:
+        flash("Message body is required.", "danger")
+        return redirect(url_for("main.trusted_servants_blast_compose"))
+
+    subs = (TrustedServantSubscriber.query
+            .order_by(TrustedServantSubscriber.name.asc()).all())
+    if not subs:
+        flash("No subscribers on the list — add some before sending.", "danger")
+        return redirect(url_for("main.trusted_servants_list"))
+
+    blast = TrustedServantBlast(
+        sent_by_user_id=current_user.id,
+        subject=subject[:500],
+        body_md=body_md,
+        recipient_count=len(subs),
+        started_at=_dt.utcnow(),
+    )
+    db.session.add(blast)
+    db.session.commit()
+
+    sent = 0
+    failed = 0
+    body_html = _md_lib.markdown(body_md, extensions=["extra", "nl2br"])
+    for sub in subs:
+        # Personalize the first-line greeting if the body opens with a
+        # `{name}` token. Admins who don't use the token just get an
+        # un-replaced body — opt-in personalization, no surprises.
+        text_body = body_md.replace("{name}", sub.name)
+        html_body = body_html.replace("{name}", sub.name)
+        try:
+            ok, _err = send_mail(s, sub.email, subject, text_body, body_html=html_body)
+            if ok:
+                sent += 1
+            else:
+                failed += 1
+        except Exception:  # noqa: BLE001
+            current_app.logger.exception(
+                "trusted_servants_blast: send to %s failed", sub.email)
+            failed += 1
+
+    blast.sent_count = sent
+    blast.failed_count = failed
+    blast.finished_at = _dt.utcnow()
+    db.session.commit()
+
+    if sent and not failed:
+        flash(f"Sent the update to {sent} subscriber{'s' if sent != 1 else ''}.", "success")
+    elif sent and failed:
+        flash(f"Sent to {sent} of {sent + failed}. {failed} failed — check the server log.", "warning")
+    else:
+        flash(f"All {failed} sends failed. Check SMTP settings on the Domain / Email tab.", "danger")
+    return redirect(url_for("main.trusted_servants_list"))
+
+
+# ---------------------------------------------------------------------------
+# Trusted Servants Email List — self-service routes called from the
+# dashboard widget. Authenticated users only; no role gate (the
+# required-role setting only governs the admin side).
+# ---------------------------------------------------------------------------
+@bp.route("/email-list/subscribe", methods=["POST"])
+@login_required
+def trusted_servants_subscribe():
+    """Upsert the current user's subscription. Hit by the dashboard
+    widget's form; creates a new row if the user hasn't subscribed yet,
+    updates the existing row otherwise (one subscription per user is
+    enforced by the unique constraint on ``user_id``).
+    """
+    s = _get_site_setting()
+    if not s.trusted_servants_enabled:
+        abort(404)
+    name = (request.form.get("name") or "").strip()[:120]
+    phone = (request.form.get("phone") or "").strip()[:64]
+    email = (request.form.get("email") or "").strip()[:255]
+    if not name:
+        flash("Your name is required to join the list.", "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+    if not email:
+        flash("An email address is required to join the list.", "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+
+    sub = TrustedServantSubscriber.query.filter_by(user_id=current_user.id).first()
+    if sub is None:
+        sub = TrustedServantSubscriber(user_id=current_user.id)
+        db.session.add(sub)
+        action = "joined"
+    else:
+        action = "updated"
+    sub.name = name
+    sub.phone = phone or None
+    sub.email = email
+    db.session.commit()
+    flash("You've " + ("joined" if action == "joined" else "updated your details on")
+          + " the Trusted Servants Email List.", "success")
+    return redirect(_safe_referrer() or url_for("main.index"))
+
+
+@bp.route("/email-list/unsubscribe", methods=["POST"])
+@login_required
+def trusted_servants_unsubscribe():
+    """Remove the current user from the list. The admin keeps no
+    archived copy — once the user clicks unsubscribe, the row is gone."""
+    sub = TrustedServantSubscriber.query.filter_by(user_id=current_user.id).first()
+    if sub is not None:
+        db.session.delete(sub)
+        db.session.commit()
+    flash("You've been removed from the Trusted Servants Email List.", "info")
+    return redirect(_safe_referrer() or url_for("main.index"))
+
+
+@bp.route("/email-list/manual-add", methods=["POST"])
+@login_required
+def trusted_servants_manual_add():
+    """Admin-only path that adds an external contact to the list.
+
+    Unlike the self-subscribe route, the row created here has
+    ``user_id = NULL`` — the entry isn't tied to any portal account
+    and the only way to edit / remove it is via this admin surface.
+    Used for trusted servants who don't have (or don't want) a portal
+    login but still belong on the contact roster.
+    """
+    _require_trusted_servants_admin()
+    name = (request.form.get("name") or "").strip()[:120]
+    phone = (request.form.get("phone") or "").strip()[:64]
+    email = (request.form.get("email") or "").strip()[:255]
+    notes = (request.form.get("notes") or "").strip() or None
+    if not name:
+        flash("Name is required.", "danger")
+        return redirect(url_for("main.trusted_servants_list"))
+    if not email:
+        flash("Email is required.", "danger")
+        return redirect(url_for("main.trusted_servants_list"))
+    sub = TrustedServantSubscriber(
+        user_id=None,
+        name=name,
+        phone=phone or None,
+        email=email,
+        notes=notes,
+    )
+    db.session.add(sub)
+    db.session.commit()
+    flash(f"Added {name} to the email list.", "success")
+    return redirect(url_for("main.trusted_servants_list"))
+
+
+_TS_IMPORT_MAX_ROWS = 5000
+_TS_IMPORT_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+
+
+def _ts_import_stash_dir():
+    """Per-install temp folder for half-finished CSV imports. Mirrors
+    the wp_importer.stash pattern: a small JSON file per token, purged
+    after 24h."""
+    upload = current_app.config["UPLOAD_FOLDER"].rstrip("/")
+    data_dir = os.path.dirname(upload)
+    path = os.path.join(data_dir, "ts_import")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _ts_import_stash_save(token, payload):
+    p = os.path.join(_ts_import_stash_dir(), f"{token}.json")
+    with open(p, "w") as f:
+        json.dump(payload, f)
+
+
+def _ts_import_stash_load(token):
+    if not token or not _TS_IMPORT_TOKEN_RE.match(token):
+        return None
+    p = os.path.join(_ts_import_stash_dir(), f"{token}.json")
+    if not os.path.isfile(p):
+        return None
+    try:
+        with open(p) as f:
+            return json.load(f)
+    except (ValueError, OSError):
+        return None
+
+
+def _ts_import_stash_delete(token):
+    if not token or not _TS_IMPORT_TOKEN_RE.match(token):
+        return
+    p = os.path.join(_ts_import_stash_dir(), f"{token}.json")
+    if os.path.isfile(p):
+        try:
+            os.unlink(p)
+        except OSError:
+            pass
+
+
+def _ts_import_stash_purge_old(max_age_seconds=86400):
+    """Drop stash files older than 24h. Called opportunistically when
+    the import modal POSTs, so abandoned imports don't accumulate."""
+    d = _ts_import_stash_dir()
+    cutoff = time.time() - max_age_seconds
+    try:
+        for name in os.listdir(d):
+            if not name.endswith(".json"):
+                continue
+            full = os.path.join(d, name)
+            try:
+                if os.path.getmtime(full) < cutoff:
+                    os.unlink(full)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
+def _ts_norm_header(h):
+    """Header → lowercase-no-punct slug for fuzzy matching."""
+    return re.sub(r"[^a-z0-9]", "", (h or "").lower())
+
+
+_TS_NAME_ALIASES = {"name", "fullname", "displayname", "contactname", "subscribername"}
+_TS_FIRST_ALIASES = {"firstname", "givenname", "first"}
+_TS_LAST_ALIASES = {"lastname", "surname", "familyname", "last"}
+_TS_EMAIL_ALIASES = {"email", "emailaddress", "mail", "mailaddress", "contactemail", "emailid"}
+_TS_PHONE_ALIASES = {"phone", "phonenumber", "mobile", "mobilenumber", "cell", "cellnumber",
+                     "tel", "telephone", "contactphone", "phonenum"}
+
+
+def _ts_auto_map(headers):
+    """Build the auto-detected column mapping for a list of headers.
+
+    Returns a dict with keys ``name``, ``first``, ``last``, ``email``,
+    ``phone``; values are column indices (int) or None when no header
+    in the CSV looks like that field. The admin can override any of
+    these on the preview page before committing.
+    """
+    out = {"name": None, "first": None, "last": None, "email": None, "phone": None}
+    for idx, h in enumerate(headers):
+        key = _ts_norm_header(h)
+        if out["name"] is None and key in _TS_NAME_ALIASES:
+            out["name"] = idx
+        elif out["first"] is None and key in _TS_FIRST_ALIASES:
+            out["first"] = idx
+        elif out["last"] is None and key in _TS_LAST_ALIASES:
+            out["last"] = idx
+        elif out["email"] is None and key in _TS_EMAIL_ALIASES:
+            out["email"] = idx
+        elif out["phone"] is None and key in _TS_PHONE_ALIASES:
+            out["phone"] = idx
+    return out
+
+
+def _ts_apply_mapping(rows, mapping, existing_emails):
+    """Walk the parsed CSV rows under ``mapping`` and split them into
+    actionable buckets. Returns a dict with the same shape for both
+    preview and confirm:
+
+        {"valid": [(name, email, phone), …],
+         "skipped_blank": int,
+         "skipped_missing": int,
+         "skipped_duplicate": int}
+
+    Email duplicates are detected against ``existing_emails`` (set of
+    lowercased addresses already in the DB) and against earlier rows
+    in the same CSV.
+    """
+    valid = []
+    skipped_blank = 0
+    skipped_missing = 0
+    skipped_duplicate = 0
+    seen_in_csv = set()
+    name_col = mapping.get("name")
+    first_col = mapping.get("first")
+    last_col = mapping.get("last")
+    email_col = mapping.get("email")
+    phone_col = mapping.get("phone")
+    if email_col is None:
+        return {"valid": [], "skipped_blank": 0, "skipped_missing": len(rows),
+                "skipped_duplicate": 0}
+
+    def cell(row, idx):
+        return (row[idx].strip() if idx is not None and 0 <= idx < len(row) else "")
+
+    for row in rows:
+        if not row or not any((c or "").strip() for c in row):
+            skipped_blank += 1
+            continue
+        if name_col is not None:
+            name = cell(row, name_col)
+        else:
+            parts = [p for p in (cell(row, first_col), cell(row, last_col)) if p]
+            name = " ".join(parts)
+        email = cell(row, email_col)
+        phone = cell(row, phone_col)
+        if not name or not email:
+            skipped_missing += 1
+            continue
+        if "@" not in email or "." not in email.split("@", 1)[1]:
+            skipped_missing += 1
+            continue
+        el = email.lower()
+        if el in existing_emails or el in seen_in_csv:
+            skipped_duplicate += 1
+            continue
+        seen_in_csv.add(el)
+        valid.append((name[:120], email[:255], (phone[:64] or None)))
+    return {"valid": valid, "skipped_blank": skipped_blank,
+            "skipped_missing": skipped_missing,
+            "skipped_duplicate": skipped_duplicate}
+
+
+def _ts_import_embed():
+    """True when the import wizard is being rendered inside the modal
+    iframe (?embed=1 or embed=1 in the POST body). Each wizard step
+    threads this through every redirect / form-action / postMessage
+    so the modal stays open from upload all the way through done."""
+    return (request.args.get("embed") == "1"
+            or request.form.get("embed") == "1")
+
+
+def _ts_import_embed_kwargs():
+    """Spread into url_for(...) to preserve embed mode."""
+    return {"embed": 1} if _ts_import_embed() else {}
+
+
+@bp.route("/email-list/import", methods=["GET"])
+@login_required
+def trusted_servants_import_start():
+    """Step 1 — render the upload form. Always rendered inside the
+    iframe modal in embed mode; the non-embed path falls back to the
+    plain list page in case someone hits the URL directly."""
+    _require_trusted_servants_admin()
+    embed = _ts_import_embed()
+    if not embed:
+        return redirect(url_for("main.trusted_servants_list"))
+    return render_template("trusted_servants_import_start.html",
+                           embed=embed,
+                           active_step=1)
+
+
+@bp.route("/email-list/import", methods=["POST"])
+@login_required
+def trusted_servants_import():
+    """Step 1 POST — parse the upload, stash the rows, and redirect
+    to the preview step where the admin reviews the auto-detected
+    column mapping + a sample of what would be imported. Nothing is
+    written to the subscriber table on this step."""
+    import csv as _csv
+    import io as _io
+    import secrets as _secrets
+    _require_trusted_servants_admin()
+    _ts_import_stash_purge_old()
+    embed = _ts_import_embed()
+    def _bail(msg):
+        flash(msg, "danger")
+        if embed:
+            return redirect(url_for("main.trusted_servants_import_start", embed=1))
+        return redirect(url_for("main.trusted_servants_list"))
+
+    upload = request.files.get("csv")
+    if not upload or not upload.filename:
+        return _bail("Choose a CSV file to import.")
+
+    raw = upload.read()
+    if not raw:
+        return _bail("The CSV file is empty.")
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            text = raw.decode("utf-8", errors="replace")
+        except UnicodeDecodeError:
+            text = raw.decode("latin-1", errors="replace")
+
+    sample = text[:4096]
+    try:
+        dialect = _csv.Sniffer().sniff(sample, delimiters=",;\t|")
+    except _csv.Error:
+        class _Default(_csv.excel):
+            delimiter = ","
+        dialect = _Default
+
+    reader = _csv.reader(_io.StringIO(text), dialect=dialect)
+    all_rows = list(reader)
+    if not all_rows:
+        return _bail("The CSV file is empty.")
+    headers = [h.strip() for h in all_rows[0]]
+    data_rows = all_rows[1:_TS_IMPORT_MAX_ROWS + 1]
+    truncated = len(all_rows[1:]) > _TS_IMPORT_MAX_ROWS
+
+    token = _secrets.token_urlsafe(18)
+    _ts_import_stash_save(token, {
+        "filename": upload.filename,
+        "headers": headers,
+        "rows": data_rows,
+        "truncated": truncated,
+    })
+    return redirect(url_for("main.trusted_servants_import_preview",
+                            token=token, **_ts_import_embed_kwargs()))
+
+
+@bp.route("/email-list/import/preview")
+@login_required
+def trusted_servants_import_preview():
+    """Step 2 of the CSV import — render the dry-run preview. Shows
+    the auto-detected (or admin-overridden) column mapping, the count
+    of valid / skipped rows that mapping would produce, and the first
+    handful of valid rows so the admin can sanity-check before
+    committing.
+    """
+    _require_trusted_servants_admin()
+    embed = _ts_import_embed()
+    token = (request.args.get("token") or "").strip()
+    stash = _ts_import_stash_load(token)
+    if stash is None:
+        flash("Import session expired — re-upload the CSV.", "danger")
+        if embed:
+            return redirect(url_for("main.trusted_servants_import_start", embed=1))
+        return redirect(url_for("main.trusted_servants_list"))
+
+    headers = stash.get("headers") or []
+    rows = stash.get("rows") or []
+
+    # Form-driven mapping overrides win over auto-detection. Treat
+    # an empty / non-integer value as "(none)" so the admin can drop a
+    # column the auto-detector picked.
+    def _col_param(key):
+        raw = request.args.get(key)
+        if raw is None or raw == "" or raw == "-1":
+            return None
+        try:
+            v = int(raw)
+        except ValueError:
+            return None
+        if 0 <= v < len(headers):
+            return v
+        return None
+
+    auto = _ts_auto_map(headers)
+    has_override = any(request.args.get(k) is not None
+                       for k in ("name_col", "first_col", "last_col", "email_col", "phone_col"))
+    if has_override:
+        mapping = {
+            "name":  _col_param("name_col"),
+            "first": _col_param("first_col"),
+            "last":  _col_param("last_col"),
+            "email": _col_param("email_col"),
+            "phone": _col_param("phone_col"),
+        }
+    else:
+        mapping = auto
+
+    existing = {(e or "").strip().lower()
+                for (e,) in db.session.query(TrustedServantSubscriber.email).all()}
+    result = _ts_apply_mapping(rows, mapping, existing)
+
+    return render_template("trusted_servants_import_preview.html",
+                           token=token,
+                           filename=stash.get("filename") or "uploaded.csv",
+                           headers=headers,
+                           mapping=mapping,
+                           auto=auto,
+                           total_rows=len(rows),
+                           valid=result["valid"],
+                           skipped_blank=result["skipped_blank"],
+                           skipped_missing=result["skipped_missing"],
+                           skipped_duplicate=result["skipped_duplicate"],
+                           truncated=stash.get("truncated", False),
+                           embed=embed,
+                           active_step=2)
+
+
+@bp.route("/email-list/import/confirm", methods=["POST"])
+@login_required
+def trusted_servants_import_confirm():
+    """Step 3 — commit the rows the preview showed. The admin's chosen
+    mapping comes back as form data; we re-apply it to the stashed
+    rows server-side (never trust the preview's row list — recomputing
+    is the only way to be sure the user's mapping change actually
+    matches what we're about to write)."""
+    _require_trusted_servants_admin()
+    embed = _ts_import_embed()
+    token = (request.form.get("token") or "").strip()
+    stash = _ts_import_stash_load(token)
+    if stash is None:
+        flash("Import session expired — re-upload the CSV.", "danger")
+        if embed:
+            return redirect(url_for("main.trusted_servants_import_start", embed=1))
+        return redirect(url_for("main.trusted_servants_list"))
+
+    def _col_form(key):
+        raw = request.form.get(key)
+        if raw is None or raw == "" or raw == "-1":
+            return None
+        try:
+            v = int(raw)
+        except ValueError:
+            return None
+        return v if 0 <= v < len(stash.get("headers") or []) else None
+
+    mapping = {
+        "name":  _col_form("name_col"),
+        "first": _col_form("first_col"),
+        "last":  _col_form("last_col"),
+        "email": _col_form("email_col"),
+        "phone": _col_form("phone_col"),
+    }
+    if mapping["email"] is None:
+        flash("Pick an email column before importing.", "danger")
+        return redirect(url_for("main.trusted_servants_import_preview",
+                                token=token, **_ts_import_embed_kwargs()))
+    if mapping["name"] is None and mapping["first"] is None and mapping["last"] is None:
+        flash("Pick a name column (or a First Name + Last Name pair) before importing.", "danger")
+        return redirect(url_for("main.trusted_servants_import_preview",
+                                token=token, **_ts_import_embed_kwargs()))
+
+    existing = {(e or "").strip().lower()
+                for (e,) in db.session.query(TrustedServantSubscriber.email).all()}
+    result = _ts_apply_mapping(stash.get("rows") or [], mapping, existing)
+
+    for (name, email, phone) in result["valid"]:
+        db.session.add(TrustedServantSubscriber(
+            user_id=None,
+            name=name,
+            email=email,
+            phone=phone,
+        ))
+    db.session.commit()
+    _ts_import_stash_delete(token)
+
+    added = len(result["valid"])
+    if embed:
+        # Wizard finale — render the done template inside the iframe so
+        # the modal can show "X added" and postMessage the parent to
+        # close + reload. No redirect: the parent (the list page) is
+        # the one that reloads, not the iframe.
+        return render_template("trusted_servants_import_done.html",
+                               embed=True,
+                               active_step=3,
+                               outcome="ok",
+                               added=added,
+                               skipped_duplicate=result["skipped_duplicate"],
+                               skipped_missing=result["skipped_missing"],
+                               skipped_blank=result["skipped_blank"])
+    bits = [f"Imported {added}"]
+    if result["skipped_duplicate"]:
+        bits.append(f"skipped {result['skipped_duplicate']} duplicate{'s' if result['skipped_duplicate'] != 1 else ''}")
+    if result["skipped_missing"]:
+        bits.append(f"skipped {result['skipped_missing']} row{'s' if result['skipped_missing'] != 1 else ''} missing name or email")
+    if result["skipped_blank"]:
+        bits.append(f"skipped {result['skipped_blank']} blank row{'s' if result['skipped_blank'] != 1 else ''}")
+    flash(" — ".join(bits) + ".", "success" if added else "info")
+    return redirect(url_for("main.trusted_servants_list"))
+
+
+@bp.route("/email-list/import/cancel", methods=["POST"])
+@login_required
+def trusted_servants_import_cancel():
+    """Bin a stashed import without committing anything. Reachable
+    from the Cancel button on the preview page."""
+    _require_trusted_servants_admin()
+    embed = _ts_import_embed()
+    token = (request.form.get("token") or "").strip()
+    _ts_import_stash_delete(token)
+    if embed:
+        # Render the done template in cancel variant so the wizard's
+        # parent closes the modal cleanly. No flash — the parent didn't
+        # actually receive an action it needs surfaced.
+        return render_template("trusted_servants_import_done.html",
+                               embed=True,
+                               active_step=3,
+                               outcome="cancel",
+                               added=0,
+                               skipped_duplicate=0,
+                               skipped_missing=0,
+                               skipped_blank=0)
+    flash("Import cancelled — nothing was added.", "info")
+    return redirect(url_for("main.trusted_servants_list"))
+
+
+@bp.route("/email-list/<int:sid>/edit", methods=["POST"])
+@login_required
+def trusted_servants_edit(sid):
+    """Admin edit path — works for both user-linked rows (the user can
+    still self-edit via the dashboard widget) and manual entries. The
+    user-id binding is never touched here; only contact fields move."""
+    _require_trusted_servants_admin()
+    sub = db.session.get(TrustedServantSubscriber, sid) or abort(404)
+    name = (request.form.get("name") or "").strip()[:120]
+    phone = (request.form.get("phone") or "").strip()[:64]
+    email = (request.form.get("email") or "").strip()[:255]
+    notes = (request.form.get("notes") or "").strip() or None
+    if not name or not email:
+        flash("Name and email are required.", "danger")
+        return redirect(url_for("main.trusted_servants_list"))
+    sub.name = name
+    sub.phone = phone or None
+    sub.email = email
+    sub.notes = notes
+    db.session.commit()
+    flash(f"Updated {name}.", "success")
+    return redirect(url_for("main.trusted_servants_list"))
 
 
 @bp.route("/settings/blog-toggle", methods=["POST"])

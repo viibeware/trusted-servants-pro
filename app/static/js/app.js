@@ -232,7 +232,8 @@
     // the iframe per-trigger via data-modal-src, not via data-src.
     m.querySelectorAll("iframe").forEach(f => {
       if (f.id === "wp-import-frame" || f.id === "story-edit-frame"
-          || f.id === "backup-wizard-frame" || f.id === "backups-frame") {
+          || f.id === "backup-wizard-frame" || f.id === "backups-frame"
+          || f.id === "ts-import-frame") {
         f.src = "about:blank";
       }
     });
@@ -1058,6 +1059,21 @@
     if (!e.data || e.data.type !== "backups-admin-close") return;
     const m = document.getElementById("backups-modal");
     if (m && m.classList.contains("open")) closeModal(m);
+  });
+
+  // Trusted-Servants CSV-import wizard iframe → parent: close the
+  // wizard modal. When the import committed rows, reload the parent
+  // (the /email-list list) so the new entries appear without
+  // a manual refresh. Cancel sends reload=false so the list isn't
+  // disturbed for a no-op cancel.
+  window.addEventListener("message", (e) => {
+    if (e.origin !== window.location.origin) return;
+    if (!e.data || e.data.type !== "ts-import-modal-close") return;
+    const m = document.getElementById("ts-import-wizard-modal");
+    if (m && m.classList.contains("open")) closeModal(m);
+    if (e.data.reload) {
+      setTimeout(() => { window.location.reload(); }, 50);
+    }
   });
 
   // Story modal iframe → parent: close the new/edit story modal and

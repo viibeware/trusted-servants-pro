@@ -525,6 +525,7 @@ def create_app():
         _seed_homepage_page(app)
         _backfill_media(app)
         _migrate_unique_post_slugs(app)
+        _migrate_trusted_servant_user_id_nullable(app)
         # Boot-time recycle-bin sweep. The Delete Log page also runs
         # this lazily on every visit; the boot sweep covers installs
         # whose admin doesn't routinely open the page.
@@ -1042,6 +1043,63 @@ def _migrate_unique_post_slugs(app):
         app.logger.info(f"Disambiguated {renamed} post slug(s)")
 
 
+def _migrate_trusted_servant_user_id_nullable(app):
+    """Rebuild ``trusted_servant_subscriber`` if its ``user_id`` column
+    is still NOT NULL.
+
+    The table shipped in 2.1.2 with ``user_id NOT NULL UNIQUE`` so every
+    row was tied to a portal-user account. 2.1.3 lifts that constraint
+    so admins can manually add external trusted servants who don't have
+    accounts. SQLite's ALTER TABLE can't drop a NOT NULL constraint, so
+    we do the canonical table-rebuild dance — copy rows into a fresh
+    table with the relaxed schema, drop the old one, rename in place.
+
+    Idempotent: PRAGMA table_info reports the column's NOT NULL state;
+    when it's already nullable (fresh installs that picked up the
+    updated model from day one) the function is a no-op.
+    """
+    from sqlalchemy import text
+    with db.engine.begin() as conn:
+        cols = list(conn.execute(text("PRAGMA table_info(trusted_servant_subscriber)")))
+        if not cols:
+            return  # table doesn't exist yet — db.create_all() will build it correctly
+        user_id_col = next((c for c in cols if c[1] == "user_id"), None)
+        if user_id_col is None:
+            return
+        # PRAGMA table_info columns: cid, name, type, notnull, dflt_value, pk
+        if not user_id_col[3]:
+            return  # already nullable, nothing to do
+        app.logger.info("Rebuilding trusted_servant_subscriber to allow NULL user_id")
+        # Preserve any existing rows. The rebuild order has to drop the
+        # old table before renaming the new one, so we use a temp name
+        # and commit each statement individually via the same engine
+        # transaction (begin() above wraps them).
+        conn.execute(text("""
+            CREATE TABLE trusted_servant_subscriber__new (
+                id INTEGER NOT NULL,
+                user_id INTEGER,
+                name VARCHAR(120) NOT NULL,
+                phone VARCHAR(64),
+                email VARCHAR(255) NOT NULL,
+                notes TEXT,
+                created_at DATETIME,
+                updated_at DATETIME,
+                PRIMARY KEY (id),
+                FOREIGN KEY(user_id) REFERENCES "user" (id) ON DELETE CASCADE,
+                UNIQUE (user_id)
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO trusted_servant_subscriber__new
+                (id, user_id, name, phone, email, notes, created_at, updated_at)
+            SELECT id, user_id, name, phone, email, notes, created_at, updated_at
+              FROM trusted_servant_subscriber
+        """))
+        conn.execute(text("DROP TABLE trusted_servant_subscriber"))
+        conn.execute(text("ALTER TABLE trusted_servant_subscriber__new RENAME TO trusted_servant_subscriber"))
+        conn.execute(text("CREATE INDEX ix_trusted_servant_subscriber_user_id ON trusted_servant_subscriber (user_id)"))
+
+
 def _backfill_media(app):
     """Index any stored_filenames referenced by MeetingFile/LibraryItem into MediaItem."""
     upload_dir = app.config["UPLOAD_FOLDER"]
@@ -1323,6 +1381,8 @@ def _migrate_sqlite(app):
                          ("frontend_fellowships_list_bg_dynbg_config_json", "TEXT"),
                          ("stories_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
                          ("stories_required_role", "VARCHAR(32) NOT NULL DEFAULT 'admin'"),
+                         ("trusted_servants_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("trusted_servants_required_role", "VARCHAR(32) NOT NULL DEFAULT 'admin'"),
                          ("frontend_stories_list_template", "VARCHAR(64) NOT NULL DEFAULT 'paper-stack'"),
                          ("frontend_stories_list_width_mode", "VARCHAR(16) NOT NULL DEFAULT 'boxed'"),
                          ("frontend_stories_list_max_width", "INTEGER NOT NULL DEFAULT 1160"),
@@ -1455,6 +1515,7 @@ def _migrate_sqlite(app):
                          ("dash_show_currently_online", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_visitor_metrics", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_backups", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("dash_show_trusted_servants", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_order_json", "TEXT"),
                          ("last_seen_at", "DATETIME"),
                          ("phone", "VARCHAR(64)"),

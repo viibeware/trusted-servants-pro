@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}Map & preview · Email List import{% endblock %}
+{% block heading %}Map & preview{% endblock %}
+{% block heading_help %}Review the auto-detected column mapping and the rows that would be added. Adjust any field below if the auto-detector picked wrong — the dry run re-runs automatically. Nothing is written to the list until you click <b>Import</b>.{% endblock %}
+{% block content %}
+{% include "_ts_import_wizard_header.html" %}
+
+{# Helper macro for each mapping dropdown: lists every header in the
+   CSV with the matching column pre-selected, plus an explicit "(none)"
+   option so the admin can drop a column the auto-detector picked. #}
+{% macro column_picker(field_key, value) -%}
+  <select name="{{ field_key }}">
+    <option value="-1"{% if value is none %} selected{% endif %}>— none —</option>
+    {% for h in headers %}
+    <option value="{{ loop.index0 }}"{% if value == loop.index0 %} selected{% endif %}>
+      {{ h or '(unnamed column ' ~ loop.index0 ~ ')' }}
+    </option>
+    {% endfor %}
+  </select>
+{%- endmacro %}
+
+<div class="ts-wizard-meta muted small">
+  {{ icon('file-text') }} {{ filename }}
+  <span class="muted smaller">· {{ total_rows }} row{% if total_rows != 1 %}s{% endif %}</span>
+  {% if truncated %}<span class="ts-import-truncated">· truncated (cap 5000)</span>{% endif %}
+</div>
+
+<form method="post" action="{{ url_for('main.trusted_servants_import_confirm') }}"
+      class="form ts-import-form" data-ts-import-form>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="token" value="{{ token }}">
+  {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+
+  {# ── Column mapping ────────────────────────────────────────────── #}
+  <section class="card data-card ts-wizard-card">
+    <div class="data-card-head">
+      {{ icon('layout-grid') }}
+      <span>Column mapping</span>
+    </div>
+    <p class="muted small data-card-lead">
+      Each row in your CSV becomes one new entry on the list. Pick which column should fill each field — the importer's auto-detected matches are pre-selected.
+    </p>
+
+    <table class="tbl ts-import-map">
+      <thead>
+        <tr>
+          <th class="ts-map-field">Field</th>
+          <th>Column in your CSV</th>
+          <th class="ts-map-auto">Auto-detected</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>Name</b> <span class="muted smaller">— used when a single full-name column exists</span></td>
+          <td>{{ column_picker('name_col', mapping.name) }}</td>
+          <td class="ts-map-auto muted smaller">
+            {% if auto.name is not none %}{{ headers[auto.name] }}{% else %}—{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td>First name <span class="muted smaller">— combined with Last name when there's no full-name column</span></td>
+          <td>{{ column_picker('first_col', mapping.first) }}</td>
+          <td class="ts-map-auto muted smaller">
+            {% if auto.first is not none %}{{ headers[auto.first] }}{% else %}—{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td>Last name</td>
+          <td>{{ column_picker('last_col', mapping.last) }}</td>
+          <td class="ts-map-auto muted smaller">
+            {% if auto.last is not none %}{{ headers[auto.last] }}{% else %}—{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td><b>Email</b> <span class="ts-required smaller">(required)</span></td>
+          <td>{{ column_picker('email_col', mapping.email) }}</td>
+          <td class="ts-map-auto muted smaller">
+            {% if auto.email is not none %}{{ headers[auto.email] }}{% else %}—{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td>Phone <span class="muted smaller">(optional)</span></td>
+          <td>{{ column_picker('phone_col', mapping.phone) }}</td>
+          <td class="ts-map-auto muted smaller">
+            {% if auto.phone is not none %}{{ headers[auto.phone] }}{% else %}—{% endif %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  {# ── Dry-run summary ───────────────────────────────────────────── #}
+  <section class="card data-card ts-wizard-card">
+    <div class="data-card-head">
+      {{ icon('list') }}
+      <span>Dry run — what will happen</span>
+    </div>
+    <p class="muted small data-card-lead">
+      Based on the mapping above. Nothing is written until you click <b>Import</b>.
+    </p>
+    <div class="ts-import-tally">
+      <div class="ts-import-tally-item ts-import-tally-add">
+        <span class="ts-import-tally-num">{{ valid|length }}</span>
+        <span class="ts-import-tally-label">will be added</span>
+      </div>
+      <div class="ts-import-tally-item">
+        <span class="ts-import-tally-num">{{ skipped_duplicate }}</span>
+        <span class="ts-import-tally-label">duplicate{% if skipped_duplicate != 1 %}s{% endif %} skipped</span>
+      </div>
+      <div class="ts-import-tally-item">
+        <span class="ts-import-tally-num">{{ skipped_missing }}</span>
+        <span class="ts-import-tally-label">missing name or email</span>
+      </div>
+      <div class="ts-import-tally-item">
+        <span class="ts-import-tally-num">{{ skipped_blank }}</span>
+        <span class="ts-import-tally-label">blank row{% if skipped_blank != 1 %}s{% endif %}</span>
+      </div>
+    </div>
+
+    {% if valid %}
+    <div class="ts-import-sample-head muted small">
+      Showing the first {{ valid[:20]|length }} of {{ valid|length }} row{% if valid|length != 1 %}s{% endif %} that would be added:
+    </div>
+    <table class="tbl ts-import-sample">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Phone</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for (name, email, phone) in valid[:20] %}
+        <tr>
+          <td>{{ name }}</td>
+          <td>{{ email }}</td>
+          <td>{{ phone or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No rows would be added under this mapping. Adjust the column picks above.</p>
+    {% endif %}
+  </section>
+
+  {# Sticky footer — pinned to the bottom of the iframe viewport so
+     the Cancel / Back / Import buttons stay reachable while the
+     admin scrolls through a long sample-rows table or a deep mapping
+     list. Lives inside the form so the submit buttons still POST
+     the mapping selections. #}
+  <div class="ts-wizard-footer">
+    <button type="submit" class="btn"
+            formaction="{{ url_for('main.trusted_servants_import_cancel') }}">
+      Cancel
+    </button>
+    <a class="btn" href="{{ url_for('main.trusted_servants_import_start', embed=1 if embed else None) }}">← Back</a>
+    <button type="submit" class="btn btn-primary" {% if not valid %}disabled{% endif %}>
+      {{ icon('check') }} Import {{ valid|length }} row{% if valid|length != 1 %}s{% endif %}
+    </button>
+  </div>
+</form>
+
+<script>
+// Auto-re-run the preview when any mapping select changes. The GET
+// re-render is cheap — it just re-applies the mapping to the stashed
+// rows — so the tally + sample stay in sync without an explicit
+// "re-run" click. Embed mode preserves the iframe URL's query string,
+// so the wizard stepper, file name, and active step survive each
+// re-preview.
+(function () {
+  const form = document.querySelector('[data-ts-import-form]');
+  if (!form) return;
+  form.querySelectorAll('select').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const params = new URLSearchParams();
+      params.set('token', form.querySelector('[name="token"]').value);
+      {% if embed %}params.set('embed', '1');{% endif %}
+      form.querySelectorAll('select').forEach(s => {
+        params.set(s.name, s.value);
+      });
+      window.location.href = '{{ url_for("main.trusted_servants_import_preview") }}?' + params.toString();
+    });
+  });
+})();
+</script>
+{% endblock %}

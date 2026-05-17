@@ -7,11 +7,12 @@
 
    Designed to be safe to include twice on a page (defensive ID guard
    in the JS), but the existing pages each only include it once. #}
-<section class="card user-log-online" id="user-log-online"
+<section class="card data-card user-log-online" id="user-log-online"
          data-endpoint="{{ url_for('main.api_online_users') }}">
   <div class="card-head">
     <h2>
       <span class="online-pulse" aria-hidden="true"></span>
+      {{ icon('users') }}
       Currently online
       <span class="muted smaller online-count" id="online-count">…</span>
     </h2>

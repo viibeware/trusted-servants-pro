@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Import contacts · Email List{% endblock %}
+{% block heading %}Import contacts from CSV{% endblock %}
+{% block heading_help %}Upload a CSV from any spreadsheet tool. The next step shows the auto-detected column mapping so you can review and adjust before committing.{% endblock %}
+{% block content %}
+{% include "_ts_import_wizard_header.html" %}
+
+<section class="card data-card ts-wizard-card">
+  <div class="data-card-head">
+    {{ icon('cloud-upload') }}
+    <span>Upload a CSV file</span>
+  </div>
+  <p class="muted small data-card-lead">
+    Bring a CSV exported from Excel, Google Sheets, Numbers, or any other tool. The importer auto-detects which columns to map and ignores everything else — extra columns like status or role won't get in the way.
+  </p>
+  <form class="form" method="post" action="{{ url_for('main.trusted_servants_import') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+    <label>CSV file
+      <input type="file" name="csv" accept=".csv,text/csv" required>
+    </label>
+    <details class="ts-import-hints">
+      <summary>What headers does it recognize?</summary>
+      <ul class="ts-import-hint-list muted small">
+        <li><b>Name</b> — <code>Name</code>, <code>Full Name</code>, <code>Display Name</code>, or a pair of <code>First Name</code> + <code>Last Name</code>.</li>
+        <li><b>Email</b> <span class="ts-required">(required)</span> — <code>Email</code>, <code>Email Address</code>, <code>Mail</code>.</li>
+        <li><b>Phone</b> <span class="muted">(optional)</span> — <code>Phone</code>, <code>Phone Number</code>, <code>Mobile</code>, <code>Cell</code>, <code>Telephone</code>.</li>
+      </ul>
+      <p class="muted smaller" style="margin: .5rem 0 0;">
+        Rows missing a name or a usable email are skipped. Emails that already exist on the list are skipped — use the per-row Edit modal to update existing entries.
+      </p>
+    </details>
+    <div class="ts-wizard-actions">
+      <button type="button" class="btn" data-ts-import-close>Cancel</button>
+      <button type="submit" class="btn btn-primary">{{ icon('arrow-right') }} Continue to mapping</button>
+    </div>
+  </form>
+</section>
+
+{% if embed %}
+<script>
+  // Cancel button inside the wizard postMessages the parent to close
+  // the modal — no flash, no DB write, the upload never happened.
+  document.querySelectorAll('[data-ts-import-close]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      try { window.parent.postMessage({ type: 'ts-import-modal-close' }, window.location.origin); }
+      catch (e) { /* no-op */ }
+    });
+  });
+</script>
+{% endif %}
+{% endblock %}

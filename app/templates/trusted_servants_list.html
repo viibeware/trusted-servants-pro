@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block heading %}Trusted Servants Email List{% endblock %}
+{% block heading_help %}Roster of trusted servants who have opted into the contact list (plus any external contacts an admin has added manually), and a send-update surface for emailing the whole list at once.{% endblock %}
+{% block content %}
+
+<div class="ts-page-wrap">
+  <div class="ts-page-toolbar">
+    <button type="button" class="btn" data-open-modal="ts-add-modal">{{ icon('user-plus') }} Add manually</button>
+    <button type="button" class="btn" data-open-modal="ts-import-wizard-modal">{{ icon('cloud-upload') }} Import CSV</button>
+    <a class="btn btn-primary" href="{{ url_for('main.trusted_servants_blast_compose') }}">
+      {{ icon('send') }} Send an update
+    </a>
+  </div>
+
+  <section class="card data-card">
+    <div class="data-card-head">
+      {{ icon('users') }}
+      <span>Subscribers</span>
+      <div class="data-card-head-actions muted smaller">
+        {{ subscribers|length }} member{% if subscribers|length != 1 %}s{% endif %}
+      </div>
+    </div>
+    <p class="muted small data-card-lead">
+      Every signed-in user can add themselves via the dashboard widget. Admins can also add external contacts (people without portal accounts) and edit or remove any row here.
+    </p>
+    {% if subscribers %}
+    <table class="tbl ts-tbl">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Account</th>
+          <th>Joined</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in subscribers %}
+        <tr>
+          <td data-label="Name">{{ s.name }}</td>
+          <td data-label="Email"><a href="mailto:{{ s.email }}">{{ s.email }}</a></td>
+          <td data-label="Phone">{{ s.phone or '—' }}</td>
+          <td data-label="Account" class="muted smaller">
+            {% if s.user %}{{ s.user.username }}
+            {% else %}<span title="External contact — no portal account">manual</span>{% endif %}
+          </td>
+          <td data-label="Joined" class="muted smaller">{{ s.created_at.strftime('%b %-d, %Y') if s.created_at else '—' }}</td>
+          <td class="ts-row-actions">
+            <button type="button" class="btn btn-sm" data-open-modal="ts-edit-{{ s.id }}" title="Edit entry">{{ icon('pencil') }}</button>
+            <form method="post" action="{{ url_for('main.trusted_servants_delete', sid=s.id) }}"
+                  onsubmit="return confirm('Remove {{ s.name }} from the list?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-danger" title="Remove from list">{{ icon('trash') }}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No subscribers yet — the sign-up widget will appear on every signed-in user's dashboard, and you can add external contacts with the <b>Add manually</b> button above.</p>
+    {% endif %}
+  </section>
+
+  <section class="card data-card">
+    <div class="data-card-head">
+      {{ icon('clock') }}
+      <span>Send history</span>
+    </div>
+    <p class="muted small data-card-lead">
+      The last 25 update emails sent to the list. Each row shows who sent it, when, the subject line, and how many recipients received it.
+    </p>
+    {% if blasts %}
+    <ul class="ts-blast-list">
+      {% for b in blasts %}
+      <li class="ts-blast-row">
+        <div class="ts-blast-meta">
+          <div class="ts-blast-subject"><strong>{{ b.subject }}</strong></div>
+          <div class="ts-blast-stats muted smaller">
+            {{ b.started_at.strftime('%Y-%m-%d %H:%M') }} UTC
+            · sent by {{ b.sent_by.username if b.sent_by else '(deleted user)' }}
+            · {{ b.sent_count }} of {{ b.recipient_count }} delivered
+            {% if b.failed_count %}<span class="ts-blast-fail">· {{ b.failed_count }} failed</span>{% endif %}
+          </div>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted">No updates sent yet.</p>
+    {% endif %}
+  </section>
+</div>
+
+{# CSV import wizard — multi-step flow lives in an iframe so the upload
+   form, column-mapping preview, dry-run summary, and completion screen
+   all stay inside the same modal until commit. Same iframe-modal
+   pattern as the off-site backup wizard. Close on completion is
+   driven by a postMessage from inside the iframe (see app.js). #}
+<div class="modal modal-lg" id="ts-import-wizard-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2>Import contacts from CSV</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+    </div>
+    <iframe class="settings-frame" id="ts-import-frame"
+            data-src="{{ url_for('main.trusted_servants_import_start', embed=1) }}"
+            src="about:blank"></iframe>
+  </div>
+</div>
+
+{# Add manually — admin-only path that creates a TrustedServantSubscriber
+   row without a user_id, so external contacts (folks without portal
+   accounts) can land on the list too. #}
+<div class="modal" id="ts-add-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form method="post" action="{{ url_for('main.trusted_servants_manual_add') }}" class="form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-head">
+        <h2>Add to email list</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted small" style="margin: 0 0 1rem;">
+          Use this for external contacts who don't have a portal account. Signed-in users can also self-subscribe from their dashboard.
+        </p>
+        <label>Full name <span class="muted smaller">(required)</span>
+          <input type="text" name="name" required maxlength="120" placeholder="e.g. Jane D.">
+        </label>
+        <label>Email <span class="muted smaller">(required)</span>
+          <input type="email" name="email" required maxlength="255" placeholder="jane@example.com">
+        </label>
+        <label>Phone <span class="muted smaller">(optional)</span>
+          <input type="tel" name="phone" maxlength="64">
+        </label>
+        <label>Notes <span class="muted smaller">(optional, admin-only)</span>
+          <textarea name="notes" rows="2" placeholder="Anything you want to remember about this contact."></textarea>
+        </label>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Add to list</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# Per-row edit modals. One dialog per subscriber so each form's hidden
+   inputs carry the right id and pre-fill values. The same modal works
+   for user-linked rows and manual entries — only contact fields move;
+   the user_id binding is preserved server-side. #}
+{% for s in subscribers %}
+<div class="modal" id="ts-edit-{{ s.id }}" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form method="post" action="{{ url_for('main.trusted_servants_edit', sid=s.id) }}" class="form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-head">
+        <h2>Edit {{ s.name }}</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+      </div>
+      <div class="modal-body">
+        {% if s.user %}
+        <p class="muted small" style="margin: 0 0 1rem;">
+          Linked to portal account <b>{{ s.user.username }}</b>. Edits you make here override what the user submitted from their dashboard; they can still re-edit via the widget.
+        </p>
+        {% else %}
+        <p class="muted small" style="margin: 0 0 1rem;">
+          External contact (no portal account). This row is admin-managed only.
+        </p>
+        {% endif %}
+        <label>Full name
+          <input type="text" name="name" required maxlength="120" value="{{ s.name }}">
+        </label>
+        <label>Email
+          <input type="email" name="email" required maxlength="255" value="{{ s.email }}">
+        </label>
+        <label>Phone
+          <input type="tel" name="phone" maxlength="64" value="{{ s.phone or '' }}">
+        </label>
+        <label>Notes <span class="muted smaller">(admin-only)</span>
+          <textarea name="notes" rows="2">{{ s.notes or '' }}</textarea>
+        </label>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Save changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

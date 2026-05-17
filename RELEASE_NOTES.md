@@ -7,7 +7,37 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.2 — 2026-05-17 (latest) — Templated submission form + primary-card alignment
+## 2.1.3 — 2026-05-17 (latest) — Trusted Servants Email List, Watchtower quicknav, dashboard widget refresh
+
+Three substantial changes in one release.
+
+### New: Trusted Servants Email List module
+
+A complete contact roster + mass-email surface for fellowship-business updates, available at the new public URL **/email-list** once an admin turns it on in **Settings → Modules → Trusted Servants Email List**.
+
+- **Dashboard widget**: every signed-in user (admin or not) sees a "Join the Trusted Servants list" widget on their dashboard until they've submitted their info. Name pre-fills from username, email + phone pre-fill from the user's account. Click join — the widget self-retires until they want to update their entry.
+- **Admin manage page** at /email-list: full subscriber table with per-row edit / delete, **Add manually** modal for adding external contacts who don't have portal accounts, **Import CSV** wizard (see below), **Send an update** button.
+- **Send-an-update flow**: type a subject, write a Markdown body. Use `{name}` in either to personalize per recipient. Submit fires one SMTP message per recipient (no BCC pile-ups), records what was sent, surfaces sent / failed counts in the history card at the bottom of the manage page. Spinner overlay while it runs.
+- **CSV import wizard** (multi-step modal): upload a spreadsheet, the importer auto-detects which columns are name / email / phone, you review the mapping + a dry-run preview of what will be added (and why anything is being skipped — duplicates, missing fields, blank rows), then commit. Columns you don't care about are ignored automatically. Encoding + delimiter are auto-detected; the same CSV from Excel, Google Sheets, or Numbers all work without futzing.
+
+### Watchtower button on the sidebar, with notification chips
+
+The Watchtower link moved out of the Admin section into its own pinned button above the sidebar search bar (under the Web Frontend pair). The button uses a shield icon and carries up to two **attention chips** so you can see what needs eyes without opening the page:
+
+- An **amber chip** for pending access requests
+- A **brand-blue chip** for currently-locked accounts
+
+When neither count is above zero, the button is clean with no decoration. The Web Frontend pair also got a label-fit fix: previously the labels truncated to "We..." in the narrow grid cells — now they read **Web** (admin panel) and **View** (public site, new tab).
+
+### Dashboard widgets visual refresh
+
+Every dashboard widget now uses the icon-led card style introduced for the Settings panes — same drop shadow, same soft border, but with a **leading icon next to each widget's title** so they're easier to scan at a glance. The drag handle moved into the title row as an inline chip (it's still in the top-left, just no longer floating absolutely on top of the title — so widget titles never have to be padded to avoid it).
+
+Specifically: Recent Meetings has a calendar icon, Libraries has a book, Recent Files has a document icon, Visitor Metrics has a bar chart, Off-site Backups has a cloud, Recent Deletions has a trash icon, Contact Form has a mail icon, the Trusted Servants sign-up has a user-plus icon, Currently Online has a users icon, Access Requests has a user-plus icon, and the Server / Your Role widget keeps its existing layout.
+
+The brand-blue left accent that other data-cards have was deliberately left off in the dashboard context — it read as visual noise next to the masonry layout. Everywhere else (Settings panes, the backup admin modal, the email-list import wizard) the accent stays.
+
+## 2.1.2 — 2026-05-17 — Templated submission form + primary-card alignment
 
 The public ``/submissionform`` page (the one visitors use to submit an event or announcement for admin review) is now templated like the rest of the public site — pick from three different layouts and tune background, fonts, and sizing per layout.
 

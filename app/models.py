@@ -84,6 +84,7 @@ class User(UserMixin, db.Model):
     dash_show_currently_online = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_visitor_metrics = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_backups = db.Column(db.Boolean, nullable=False, default=True)
+    dash_show_trusted_servants = db.Column(db.Boolean, nullable=False, default=True)
     dash_order_json = db.Column(db.Text)
     last_seen_at = db.Column(db.DateTime)
     # Current navigation location for the live "who's online" widget.
@@ -809,6 +810,13 @@ class SiteSetting(db.Model):
     # edit them. List + detail templates pick the public layout.
     stories_enabled = db.Column(db.Boolean, nullable=False, default=False)
     stories_required_role = db.Column(db.String(32), nullable=False, default="admin")
+    # Trusted Servants Email List — admin-managed contact roster + blast
+    # email surface. The dashboard widget invites signed-in users to add
+    # themselves; admins manage the roster and send updates from the
+    # /email-list page. Disabled by default so existing installs
+    # don't surface a new sidebar entry without an admin opting in.
+    trusted_servants_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    trusted_servants_required_role = db.Column(db.String(32), nullable=False, default="admin")
     frontend_stories_list_template = db.Column(db.String(64), nullable=False, default="paper-stack")
     frontend_stories_list_width_mode = db.Column(db.String(16), nullable=False, default="boxed")
     frontend_stories_list_max_width = db.Column(db.Integer, nullable=False, default=1160)
@@ -2283,3 +2291,56 @@ class BackupRun(db.Model):
     bytes_uploaded = db.Column(db.BigInteger)
     error_message = db.Column(db.Text)
     triggered_by = db.Column(db.String(16), default="schedule")  # schedule|manual
+
+
+class TrustedServantSubscriber(db.Model):
+    """One row per entry on the Trusted Servants email list. Two paths
+    create rows:
+
+      1. A signed-in user clicks "Join the list" on the dashboard
+         widget — ``user_id`` is set and the user can edit/remove their
+         own entry via the widget on subsequent visits.
+      2. An admin uses the manual-entry modal on /email-list to
+         add an external contact who doesn't have a portal account —
+         ``user_id`` is NULL; the row is admin-managed only.
+
+    ``user_id`` is unique when set so a single user can't accumulate
+    duplicate subscriptions, but multiple NULL rows are allowed (SQLite
+    treats NULLs as distinct under UNIQUE). Contact details are stored
+    separately from User.email / User.phone so a trusted servant can
+    list a different preferred phone or email for fellowship-business
+    contact than the one tied to their portal login."""
+    __tablename__ = "trusted_servant_subscriber"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"),
+                        nullable=True, unique=True, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    phone = db.Column(db.String(64))
+    email = db.Column(db.String(255), nullable=False)
+    notes = db.Column(db.Text)  # admin-only annotations
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship("User", backref=db.backref("trusted_servant_subscription",
+                                                       uselist=False,
+                                                       cascade="all, delete-orphan"))
+
+
+class TrustedServantBlast(db.Model):
+    """One row per mass email sent to the Trusted Servants list. Records
+    who sent, what was sent, how many recipients it went to, and how
+    many failed. Failures don't roll back the row — partial sends are
+    surfaced via ``failed_count`` so an admin can see the outcome in the
+    history list."""
+    __tablename__ = "trusted_servant_blast"
+    id = db.Column(db.Integer, primary_key=True)
+    sent_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"))
+    subject = db.Column(db.String(500), nullable=False)
+    body_md = db.Column(db.Text, nullable=False)
+    recipient_count = db.Column(db.Integer, nullable=False, default=0)
+    sent_count = db.Column(db.Integer, nullable=False, default=0)
+    failed_count = db.Column(db.Integer, nullable=False, default=0)
+    started_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    finished_at = db.Column(db.DateTime)
+
+    sent_by = db.relationship("User")

@@ -3504,6 +3504,32 @@ button.chip { font-family: inherit; }
   .sidebar-quicknav-status.is-live { animation: none; }
 }
 
+/* Watchtower quicknav button — full-width row beneath the Web Frontend
+   pair so the shield icon + attention chips have room to breathe. The
+   button keeps the same chrome as the other quicknav buttons; only the
+   grid column-span and the chip slot are extra. When the module is on
+   but no items need attention, the chips slot collapses to zero width
+   so the button reads cleanly as "Watchtower" with no decoration. */
+.sidebar-quicknav-watchtower { grid-column: 1 / -1; }
+.sidebar-quicknav-chips {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.sidebar-quicknav-chips .nav-badge {
+  /* The default .nav-badge has a 4px vertical / 8px horizontal padding
+     plus a 0.78rem font-size that reads too tall inside an already-
+     compact quicknav button. Re-tune for this context — smaller, with
+     a tighter pill — without touching the shared rule. */
+  padding: 1px 7px;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  min-width: 18px;
+  text-align: center;
+}
+
 /* Sidebar Search button — sits between the brand block and the nav.
    Wide pill that visually lives in the same space as the nav links;
    the kbd hint slides off on narrow viewports where the sidebar is
@@ -3976,6 +4002,13 @@ form.hide-zoom .zoom-only, form.hide-zoom .zoom-only-field { display: none; }
    settings overlay. */
 #backups-modal .modal-panel { height: calc(100vh - 10vh); max-width: 1180px; }
 #backups-frame { flex: 1 1 auto; width: 100%; height: 100%; min-height: 0; border: 0; background: var(--panel); }
+
+/* Email-list CSV-import wizard modal — same full-height treatment so
+   the multi-step wizard inside the iframe has room for the upload
+   form, the column-mapping table, the dry-run sample, and the done
+   screen without clipping. */
+#ts-import-wizard-modal .modal-panel { height: calc(100vh - 10vh); max-width: 1180px; }
+#ts-import-frame { flex: 1 1 auto; width: 100%; height: 100%; min-height: 0; border: 0; background: var(--panel); }
 #settings-modal .settings-body { flex: 1 1 auto; height: auto; min-height: 0; }
 .user-chip-name { flex: 1; min-width: 0; }
 .icon-btn-inline { width: 40px; height: 40px; flex: 0 0 auto; font-size: 1.35rem; }
@@ -5910,8 +5943,13 @@ h5.block-heading { font-size: 0.875rem; font-weight: 600; margin: 12px 0 4px; }
 
 /* Inset the card header so the absolutely-positioned handle doesn't
    bump into the title text. Scoped to .dash-widget so it only applies
-   inside dashboard widget cards, not every .card-head on the site. */
+   inside dashboard widget cards, not every .card-head on the site.
+   Macro-driven widgets (which use the new .dash-widget-head flex row
+   with an inline handle) opt out via the more-specific override
+   further down — for them the handle takes its own column width and
+   no extra padding is needed. */
 .dash-widget .card-head { padding-left: 38px; }
+.dash-widget .dash-widget-head { padding-left: 0; }
 /* Two widgets have no .card-head and put their primary title as a
    plain heading inside the card — push those titles right so the
    handle chip clears them visually. */
@@ -5922,6 +5960,61 @@ h5.block-heading { font-size: 0.875rem; font-weight: 600; margin: 12px 0 4px; }
    isn't covered. Only nudges the left column; the right (server stats)
    column stays at its natural top. */
 .dash-widget .server-metrics .role-panel { padding-top: 18px; }
+
+/* Macro-driven widgets put the drag handle inline inside the
+   .data-card-head flex row (followed by the title icon and label).
+   Override the global absolute positioning so it lives in the flow
+   with the rest of the head and the row's existing gap handles
+   spacing. The chip's hover styling continues to come from
+   .dash-drag-handle:hover above. */
+.dash-widget-head .dash-drag-handle {
+  position: static;
+  flex: 0 0 auto;
+}
+.dash-widget-head .dash-widget-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.dash-widget-head .dash-widget-viewall {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-weight: 500;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+.dash-widget-head .dash-widget-viewall .icon {
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+}
+/* Title-icon next to the widget name. Inherits the brand-blue tint
+   from the .data-card-head .icon rule already declared earlier in
+   the file; the size override here brings the icon down to a more
+   widget-friendly 18px (the default 22px reads too large next to
+   the dashboard card's tighter type). */
+.dash-widget-head .data-card-head-icon {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  color: var(--brand);
+}
+.dash-widget-head .data-card-head-icon .icon {
+  width: 18px;
+  height: 18px;
+}
+/* Widget cards sit inside .dash-grid (no outer settings pane
+   padding), so tighten the .data-card's natural 2rem inset and 16px
+   bottom margin so widgets don't feel oversized in the grid. The
+   brand-blue left-edge accent that .data-card adds elsewhere reads
+   as visual noise next to the dashboard's tight masonry — restore
+   the standard 1px border on the left so each widget reads as a
+   uniform tile without the accent stripe. Settings panes, iframes,
+   and every other place that uses .data-card keep the accent. */
+.dash-grid .card.data-card {
+  padding: 1.25rem 1.25rem 1.1rem;
+  margin-bottom: 0;
+  border-left: 1px solid var(--border);
+}
 
 @media (max-width: 720px) {
   .dash-grid { grid-template-columns: 1fr; grid-auto-rows: auto;
@@ -12281,6 +12374,392 @@ body.embed .backups-wrap {
   display: flex;
   justify-content: flex-start;
 }
+
+/* Trusted Servants — dashboard sign-up widget. Compact form that
+   hides once the user has subscribed; lives inside the standard
+   dash_widget chrome. */
+.ts-widget-blurb { margin: 0 0 .85rem; line-height: 1.5; }
+.ts-widget-form {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  margin: 0;
+}
+.ts-widget-form label {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.ts-widget-form input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: .9rem;
+  font-weight: 400;
+}
+.ts-widget-form input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+.ts-widget-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .75rem;
+}
+@media (max-width: 480px) {
+  .ts-widget-row { grid-template-columns: 1fr; }
+}
+.ts-widget-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: .25rem;
+}
+
+/* Trusted Servants — admin /email-list list + compose pages. */
+.ts-page-wrap {
+  /* No max-width / auto margins — the outer .content container already
+     caps page width at 1400px and pads the gutters. A second narrower
+     centering layer on top of that produces a visibly oversized left
+     margin compared to every other admin page (meetings list, library
+     list, etc.) which sit flush inside .content. Keep just the flex
+     column + gap so the cards stack with consistent breathing room. */
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.ts-page-toolbar {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ts-page-toolbar .btn-primary { margin-left: auto; }
+.ts-tbl td { vertical-align: middle; }
+.ts-tbl .ts-row-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+.ts-tbl .ts-row-actions form { display: inline; }
+
+.ts-blast-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .55rem;
+}
+.ts-blast-row {
+  padding: .65rem .85rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.ts-blast-meta { display: flex; flex-direction: column; gap: .15rem; }
+.ts-blast-subject { font-size: .95rem; }
+.ts-blast-stats { font-variant-numeric: tabular-nums; }
+.ts-blast-fail { color: var(--danger, #b91c1c); }
+
+.ts-blast-form { display: flex; flex-direction: column; gap: 1rem; }
+.ts-blast-form label {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.ts-blast-form input,
+.ts-blast-form textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+}
+.ts-blast-form textarea {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: .9rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 280px;
+}
+.ts-blast-form input:focus,
+.ts-blast-form textarea:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+.ts-blast-actions {
+  display: flex;
+  gap: .5rem;
+  margin-top: .25rem;
+}
+
+/* Trusted Servants add/edit modals — label + input stack, with a
+   compact gap between fields. The modal panel reuses the generic
+   .modal chrome from elsewhere in the file; only the form bits
+   inside the body need scoped styles. */
+#ts-add-modal .modal-body label,
+[id^="ts-edit-"] .modal-body label {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: .85rem;
+}
+#ts-add-modal .modal-body input,
+#ts-add-modal .modal-body textarea,
+[id^="ts-edit-"] .modal-body input,
+[id^="ts-edit-"] .modal-body textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: .9rem;
+  font-weight: 400;
+  font-family: inherit;
+}
+#ts-add-modal .modal-body textarea,
+[id^="ts-edit-"] .modal-body textarea {
+  resize: vertical;
+  min-height: 56px;
+}
+#ts-add-modal .modal-body input:focus,
+#ts-add-modal .modal-body textarea:focus,
+[id^="ts-edit-"] .modal-body input:focus,
+[id^="ts-edit-"] .modal-body textarea:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+.ts-row-actions {
+  display: flex;
+  gap: .35rem;
+  justify-content: flex-end;
+  align-items: center;
+}
+.ts-row-actions form { margin: 0; }
+
+/* CSV import modal — collapsible "what headers does it recognize?"
+   hint block that admins can expand without leaving the upload screen. */
+.ts-import-hints {
+  margin-top: .75rem;
+  padding: .65rem .85rem;
+  background: var(--panel-muted, rgba(0, 0, 0, .03));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.ts-import-hints summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: .85rem;
+  color: var(--text);
+  list-style: none;
+}
+.ts-import-hints summary::-webkit-details-marker { display: none; }
+.ts-import-hints summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: .35rem;
+  transition: transform .12s ease;
+  font-size: .75em;
+}
+.ts-import-hints[open] summary::before { transform: rotate(90deg); }
+.ts-import-hint-list {
+  list-style: disc;
+  padding-left: 1.25rem;
+  margin: .5rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+.ts-import-hints .ts-required { color: var(--danger, #b91c1c); font-weight: 600; }
+[data-theme="dark"] .ts-import-hints {
+  background: rgba(255, 255, 255, .03);
+}
+
+/* CSV import preview page — column-mapping table + dry-run tally
+   tiles + sample-rows table. The mapping selects drive an auto
+   re-preview on change (see the inline script in the template),
+   so the dry-run summary stays in sync without an explicit re-run
+   click. */
+.ts-import-filename {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+}
+.ts-import-truncated {
+  color: var(--danger, #b91c1c);
+  font-weight: 600;
+  margin-left: .35rem;
+}
+.ts-import-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.ts-import-map { width: 100%; }
+.ts-import-map td,
+.ts-import-map th {
+  vertical-align: middle;
+  padding: .55rem .65rem;
+}
+.ts-import-map .ts-map-field { width: 30%; min-width: 200px; }
+.ts-import-map .ts-map-auto { width: 28%; }
+.ts-import-map select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+}
+.ts-import-map select:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+.ts-import-rerun {
+  margin-top: .85rem;
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+
+.ts-import-tally {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: .65rem;
+  margin: .25rem 0 1rem;
+}
+@media (max-width: 720px) {
+  .ts-import-tally { grid-template-columns: repeat(2, 1fr); }
+}
+.ts-import-tally-item {
+  padding: .85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-muted, rgba(0, 0, 0, .02));
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+}
+.ts-import-tally-num {
+  font-size: 1.6rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  color: var(--muted, #64748b);
+}
+.ts-import-tally-label {
+  font-size: .8rem;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--muted, #64748b);
+}
+.ts-import-tally-add {
+  background: #dcfce7;
+  border-color: #86efac;
+}
+.ts-import-tally-add .ts-import-tally-num { color: #166534; }
+.ts-import-tally-add .ts-import-tally-label { color: #166534; }
+[data-theme="dark"] .ts-import-tally-add {
+  background: #052e16;
+  border-color: #166534;
+}
+[data-theme="dark"] .ts-import-tally-add .ts-import-tally-num,
+[data-theme="dark"] .ts-import-tally-add .ts-import-tally-label {
+  color: #bbf7d0;
+}
+
+.ts-import-sample-head {
+  margin-bottom: .35rem;
+}
+.ts-import-sample {
+  width: 100%;
+  margin-bottom: 1rem;
+}
+.ts-import-actions {
+  display: flex;
+  gap: .5rem;
+  margin-top: .5rem;
+  flex-wrap: wrap;
+}
+
+/* Wizard chrome inside the iframe — bottom action row on each step,
+   plus a small meta line at the top of the preview step showing the
+   uploaded file name + row count. The .wp-wizard-stepper itself is
+   reused from the WordPress importer wizard. */
+.ts-wizard-card {
+  margin-bottom: 1rem;
+}
+.ts-wizard-card:last-of-type {
+  margin-bottom: 1.5rem;
+}
+.ts-wizard-meta {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  margin: 0 0 1rem;
+}
+.ts-wizard-actions {
+  display: flex;
+  gap: .5rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+.ts-wizard-actions .btn-primary { margin-left: auto; }
+
+/* Sticky footer for the CSV-import wizard's preview step. Pins to
+   the bottom of the iframe viewport so the primary action stays
+   reachable as the admin scrolls through a long mapping or a wide
+   sample-rows table. Lives inside the <form> so the buttons still
+   submit the mapping. Background matches the iframe surface so the
+   content scrolling under it doesn't bleed through; the soft shadow
+   above the border separates it from the last row of the table. */
+.ts-wizard-footer {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: .85rem 0;
+  margin: 0 -20px -20px;  /* extends to the iframe edges past .embed-content padding */
+  padding-left: 20px;
+  padding-right: 20px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -6px 14px rgba(15, 23, 42, 0.06);
+}
+.ts-wizard-footer .btn-primary { margin-left: auto; }
+[data-theme="dark"] .ts-wizard-footer {
+  box-shadow: 0 -6px 14px rgba(0, 0, 0, 0.4);
+}
+.ts-done-stats {
+  margin: .5rem 0 1rem 1.2rem;
+  padding: 0;
+}
+.ts-done-stats li { margin: .15rem 0; }
 
 /* Busy-during-backup overlay. Mounted inside the embedded list and
    the wizard's step 5 — when [hidden] is removed it covers the iframe

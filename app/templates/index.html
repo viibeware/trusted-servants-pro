@@ -25,7 +25,7 @@
        role panel without the server metrics column. The right column
        (CPU / memory / disk / network) is reserved for the operator
        roles whose ``_has_server`` flag is set at the top of this file. #}
-    <section class="card server-metrics{% if not _has_server %} server-metrics-role-only{% endif %}" id="server-metrics-widget" data-endpoint="{{ url_for('main.api_server_metrics') }}">
+    <section class="card data-card server-metrics{% if not _has_server %} server-metrics-role-only{% endif %}" id="server-metrics-widget" data-endpoint="{{ url_for('main.api_server_metrics') }}">
       <div class="server-metrics-body">
         <div class="role-panel">
           <div class="role-panel-label">Your role</div>
@@ -110,6 +110,7 @@
 
   {% if widget_key == 'meetings' and current_user.dash_show_meetings %}
     {% call dash_widget(key='meetings', title='Recent Meetings',
+                         head_icon='calendar',
                          view_all_url=url_for('main.meetings')) %}
       {% if meetings %}
       <ul class="list">
@@ -123,6 +124,7 @@
 
   {% if widget_key == 'libraries' and current_user.dash_show_libraries %}
     {% call dash_widget(key='libraries', title='Libraries',
+                         head_icon='book-open',
                          view_all_url=url_for('main.libraries')) %}
       {% if libraries %}
       <ul class="list">
@@ -136,6 +138,7 @@
 
   {% if widget_key == 'files' and current_user.dash_show_files %}
     {% call dash_widget(key='files', title='Recent Files',
+                         head_icon='file-text',
                          view_all_url=url_for('main.media_list')) %}
       {% if recent_files %}
       <ul class="list">
@@ -156,6 +159,7 @@
 
   {% if widget_key == 'visitor-metrics' and current_user.is_admin() and current_user.dash_show_visitor_metrics %}
     {% call dash_widget(key='visitor-metrics', title='Frontend Visitor Metrics',
+                         head_icon='bar-chart',
                          view_all_url=url_for('main.visitor_metrics_page'),
                          view_all_label='Open metrics') %}
       <div class="vm-widget-card">
@@ -214,9 +218,50 @@
     {% endcall %}
   {% endif %}
 
+  {# Trusted Servants Email List sign-up — visible to every signed-in
+     user (admin or otherwise) until they've submitted their info. The
+     widget hides itself once a TrustedServantSubscriber row exists for
+     this user, so it self-retires after sign-up. Admins manage the
+     full roster from /email-list. #}
+  {% if widget_key == 'trusted-servants' and trusted_servants_enabled
+        and not trusted_servants_subscription
+        and current_user.dash_show_trusted_servants %}
+    {% call dash_widget(key='trusted-servants',
+                         title='Join the Trusted Servants list',
+                         head_icon='user-plus') %}
+      <p class="muted small ts-widget-blurb">
+        Add your name, phone, and preferred email so admins can reach you with quick fellowship-business updates.
+        We'll only contact you with announcements that go to the whole list.
+      </p>
+      <form class="form ts-widget-form" method="post"
+            action="{{ url_for('main.trusted_servants_subscribe') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label>Full name
+          <input type="text" name="name" maxlength="120" required
+                 value="{{ current_user.username }}"
+                 placeholder="e.g. Jane D.">
+        </label>
+        <div class="ts-widget-row">
+          <label>Email
+            <input type="email" name="email" maxlength="255" required
+                   value="{{ current_user.email or '' }}">
+          </label>
+          <label>Phone <span class="muted smaller">(optional)</span>
+            <input type="tel" name="phone" maxlength="64"
+                   value="{{ current_user.phone or '' }}">
+          </label>
+        </div>
+        <div class="ts-widget-actions">
+          <button type="submit" class="btn btn-primary btn-sm">{{ icon('user-plus') }} Join the list</button>
+        </div>
+      </form>
+    {% endcall %}
+  {% endif %}
+
   {% if widget_key == 'backups' and current_user.is_admin() and current_user.dash_show_backups %}
     {% set _has_failed = backup_summary and backup_summary.failed > 0 %}
     {% call dash_widget(key='backups', title='Off-site Backups',
+                         head_icon='cloud-upload',
                          badge_count=(backup_summary.failed if _has_failed else 0),
                          badge_title='Targets currently failing') %}
       {% if not backup_summary or backup_summary.total == 0 %}
@@ -287,6 +332,7 @@
 
   {% if widget_key == 'deletions' and current_user.is_admin() and current_user.dash_show_deletions %}
     {% call dash_widget(key='deletions', title='Recent Deletions',
+                         head_icon='trash-2',
                          view_all_url=url_for('main.watchtower_deletes'),
                          view_all_label='Open Watchtower · Deletes') %}
       {% if recent_deletions %}
@@ -309,6 +355,7 @@
 
   {% if widget_key == 'contact-form' and current_user.is_admin() and current_user.dash_show_contact_form %}
     {% call dash_widget(key='contact-form', title='Contact Form',
+                         head_icon='mail',
                          view_all_url=url_for('main.contact_form'),
                          view_all_label='View inbox',
                          badge_count=unread_contact_count,
@@ -326,9 +373,9 @@
   {% if widget_key == 'access-requests' and current_user.is_admin() and current_user.dash_show_access_requests %}
   <div class="dash-widget" data-widget-key="access-requests" {% if can_reorder %}draggable="true"{% endif %}>
     {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
-    <section class="card access-requests-card">
+    <section class="card data-card access-requests-card">
       <div class="access-requests-block">
-        <h2 class="ar-title">Access Requests
+        <h2 class="ar-title">{{ icon('user-plus') }} Access Requests
           {% if pending_access_count %}<span class="nav-badge">{{ pending_access_count }}</span>{% endif %}
         </h2>
         {% if access_requests %}
@@ -389,6 +436,8 @@
             ('dash_show_files', 'Recent Files', 'Most recently uploaded files from the file browser.'),
             ('dash_show_server_metrics', 'Your Role' + (' and Server Stats' if _has_server else ''),
               'Your account role and capabilities' + (' alongside CPU, memory, load average, uptime, and host OS.' if _has_server else '.')),
+            ('dash_show_trusted_servants', 'Trusted Servants sign-up',
+              'Sign-up form for the trusted-servants contact list. Hides itself automatically once you have joined the list — uncheck here to hide it earlier.'),
           ] %}
           <li class="special-page-row">
             <div class="special-page-info">

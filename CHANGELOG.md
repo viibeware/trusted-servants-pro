@@ -6,6 +6,55 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.3] — 2026-05-17
+
+### Added — Trusted Servants Email List module
+
+A self-contained admin-managed contact roster + mass-email surface, scoped to the public-facing URL ``/email-list``. Two new tables back it — ``TrustedServantSubscriber`` (one row per entry; ``user_id`` FK is nullable + unique so portal-user self-subscriptions and admin-added external contacts share the same table without duplicate constraints) and ``TrustedServantBlast`` (per-send history with subject + markdown body + recipient / sent / failed counts + started/finished timestamps + sender FK). Two new ``SiteSetting`` columns — ``trusted_servants_enabled`` / ``trusted_servants_required_role`` — drive the Modules-tab toggle and the role gate; a new ``dash_show_trusted_servants`` column on ``User`` controls the dashboard widget. All four schema additions ship with matching ``_migrate_sqlite`` ALTER entries.
+
+Three entry points:
+
+- **Dashboard sign-up widget** (``index.html`` widget block keyed ``trusted-servants``) — visible to every signed-in user until they've added themselves. Form pre-fills name from the user's username, email from ``User.email``, phone from ``User.phone``; submits to ``/email-list/subscribe`` which upserts the subscription. The widget auto-retires once the user is on the list. Dashboard's Customize modal carries a matching toggle row.
+- **Admin manage page** at ``/email-list`` — table of subscribers with per-row Edit / Delete actions, an "Add manually" modal for external contacts (creates rows with ``user_id = NULL``), an "Import CSV" wizard (see below), a "Send an update" CTA, and a send-history card showing the last 25 blasts.
+- **Mass-email compose** at ``/email-list/blast`` — subject + Markdown body. Submit fires one SMTP send per recipient (via the existing ``mail.send_mail``) so the body can be personalized with a ``{name}`` token; failures don't abort the loop — each recipient is tried independently and the ``BlastRun`` row records sent vs failed counts. A full-screen busy overlay blocks the page while the synchronous loop runs.
+
+### Added — CSV import wizard (multi-step iframe modal) for the email list
+
+``/email-list/import`` is now a three-step wizard that lives inside an iframe modal (same pattern as the off-site backup wizard). Step 1 takes the upload; step 2 renders the auto-detected column mapping + a live dry-run summary + the first 20 sample rows; step 3 commits and auto-closes. The whole flow stays inside the same modal until completion — no full-page redirects.
+
+Column auto-detection normalizes each header to lowercase-no-punct and matches against alias sets:
+
+- **Name** — ``Name``, ``Full Name``, ``Display Name``, ``Contact Name``, ``Subscriber Name``, or a ``First Name`` + ``Last Name`` pair concatenated at write time.
+- **Email** *(required)* — ``Email``, ``Email Address``, ``Mail``, ``Mail Address``, ``Contact Email``, ``Email ID``.
+- **Phone** *(optional)* — ``Phone``, ``Phone Number``, ``Mobile``, ``Cell``, ``Tel``, ``Telephone``, ``Contact Phone``.
+
+Any column whose header doesn't match (Status, Role, Notes, internal IDs, etc.) is dropped — extra columns can't break the import. Encoding auto-detect: UTF-8 with BOM stripping → UTF-8 with replacement → latin-1 fallback. Delimiter detection: ``csv.Sniffer`` probes for comma / semicolon / tab / pipe with comma as the default. The parsed CSV is stashed on disk as JSON under ``<DATA_DIR>/ts_import/<token>.json`` so the file uploads once and the mapping form can re-preview without re-uploading; a 24h sweep runs on every upload to purge abandoned imports.
+
+Each mapping ``<select>`` lists every header in the CSV plus an explicit "— none —" option. Changing any dropdown auto-re-renders the preview via a GET that preserves the token + embed flag + every other select's value, so the dry-run tally + sample table stay in sync without an explicit "re-run" click. Sticky footer pinned to the iframe viewport bottom keeps **Cancel / ← Back / Import N rows** reachable while the admin scrolls through a long mapping or sample.
+
+Row filtering: blank rows skipped, rows missing name or email skipped, rows with malformed email (no ``@`` or no dot in the domain) skipped, duplicate emails (case-insensitive, against existing rows + earlier rows in the same CSV) skipped. 5000-row cap per upload so a misclicked huge file can't hang the request.
+
+### Added — Watchtower quicknav button + Web Frontend "Web" / "View" relabel
+
+A new pinned button cluster sits above the sidebar search bar and below the brand block. Row 1 carries **Web** (admin panel, with the live/off status dot) and **View** (public site, opens in a new tab) — both labels were shortened from "Web Frontend" / "View site" so they fit the half-width quicknav grid cells without ellipsis truncation. Row 2 (every admin) is a full-width **Watchtower** button with a ``shield`` icon and up to two right-aligned attention chips: an amber ``nav-badge-warn`` for pending access requests (``pending_access_count``, already in the context processor), and a brand-blue chip for currently-locked accounts (``locked_accounts_count``, added to ``inject_globals`` — one query against ``LoginFailure`` only for admin viewers). When neither count is > 0 the chip slot collapses so the button reads as a clean "Watchtower" with no decoration.
+
+Both ``watchtower`` and ``web_frontend`` entries are now hidden from the Admin-section catalog in ``app/sidebar.py`` (``_is_visible`` returns False) — exactly one entry point per surface. ``contact_form`` stays in the catalog since it isn't part of Watchtower.
+
+### Changed — Dashboard widgets adopt data-card chrome (without the brand left accent)
+
+Every dashboard widget — both the seven macro-driven ones (Recent Meetings, Libraries, Recent Files, Visitor Metrics, Off-site Backups, Recent Deletions, Contact Form, Trusted Servants sign-up) and the three structurally-unique ones (Server Metrics, Currently Online, Access Requests) — now renders inside a ``.card.data-card`` section. The macro head row is now a ``.data-card-head`` flex line: **[≡ drag handle (inline)] [icon] [Title] [optional badge] [View all →]**. Each call site passes a ``head_icon`` Lucide key (``calendar`` for Meetings, ``book-open`` for Libraries, ``file-text`` for Files, ``bar-chart`` for Visitor Metrics, ``cloud-upload`` for Backups, ``trash-2`` for Deletions, ``mail`` for Contact Form, ``user-plus`` for Trusted Servants / Access Requests, ``users`` for Currently Online).
+
+Two specific behaviors:
+
+- **Drag handle inlined in the head row**. Previously absolutely positioned at ``top: 10px; left: 10px`` with a ``.dash-widget .card-head { padding-left: 38px }`` rule clearing space for it. The new macro structure embeds the handle inside ``.data-card-head`` directly, so it lives in the flex flow and the ``.data-card-head { gap: .6rem }`` spacing handles separation. ``.dash-widget-head .dash-drag-handle { position: static }`` overrides the global absolute placement; the chip's hover styling continues to come from ``.dash-drag-handle:hover``.
+- **Brand-blue left accent suppressed in the dashboard context**. The standard ``.data-card { border-left: 4px solid var(--brand) }`` reads as visual noise next to the dashboard's tight masonry, so a scoped ``.dash-grid .card.data-card { border-left: 1px solid var(--border) }`` rule restores a uniform 1 px edge inside ``.dash-grid``. Settings panes, embed-mode admin iframes (backups admin, email-list import wizard), and every other consumer of ``.data-card`` keep the accent.
+
+The macro's ``icon`` parameter was renamed to ``head_icon`` so it doesn't shadow the global ``icon()`` Jinja helper used to render the SVG inside the macro body.
+
+### Changed — Public URL renamed from ``/trusted-servants`` to ``/email-list``
+
+All 13 public paths under the module moved from ``/trusted-servants…`` to ``/email-list…``. Endpoint function names (``trusted_servants_list``, ``trusted_servants_import_confirm``, etc.) and the SQLAlchemy table names (``trusted_servant_subscriber``, ``trusted_servant_blast``) stayed put so every ``url_for("main.trusted_servants_*")`` reference + the sidebar's ``active_kind="prefix:main.trusted_servants"`` keep matching. The admin toggle at ``/settings/trusted-servants-toggle`` is a different path prefix and was deliberately left alone. The page heading was set to "Trusted Servants Email List" (the full module name) while the sidebar link stays as the shorter "Email List". The page wrap dropped its ``max-width: 1080px; margin: 0 auto`` since the outer ``main.content`` already caps width at 1400 px — the old wrap centered the page inside a narrower band and produced a visibly oversized left margin compared to every other admin page.
+
 ## [2.1.2] — 2026-05-17
 
 ### Added — Submission form template system (Classic / Minimal / Split)

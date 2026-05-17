@@ -38,20 +38,29 @@
    block. The macro is dashboard-only and every dashboard widget is
    meant to be reorderable, so the draggable attribute and the handle
    render unconditionally. #}
-{% macro dash_widget(key, title, view_all_url=None, view_all_label='View all',
+{# The drag handle now sits inline inside the data-card-head, to the
+   left of the leading title icon. The whole row uses the standard
+   .data-card-head chrome so widgets read in the same visual language
+   as Data / Appearance / Email-list cards. `head_icon` is the Lucide
+   key for the icon shown next to the title; the parameter is renamed
+   from `icon` so it doesn't shadow the global `icon()` Jinja helper
+   used inside the macro to render it. #}
+{% macro dash_widget(key, title, head_icon=None,
+                     view_all_url=None, view_all_label='View all',
                      badge_count=0, badge_title='', wide=False) %}
 <div class="dash-widget{% if wide %} dash-widget-wide{% endif %}"
      data-widget-key="{{ key }}"
      draggable="true">
-  <span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>
-  <section class="card">
-    <div class="card-head">
-      <h2>
+  <section class="card data-card">
+    <div class="data-card-head dash-widget-head">
+      <span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>
+      {% if head_icon %}<span class="data-card-head-icon" aria-hidden="true">{{ icon(head_icon) }}</span>{% endif %}
+      <span class="dash-widget-title">
         {{ title }}
         {%- if badge_count %} <span class="nav-badge nav-badge-warn"{% if badge_title %} title="{{ badge_title }}"{% endif %}>{{ badge_count }}</span>{% endif -%}
-      </h2>
+      </span>
       {% if view_all_url %}
-      <a href="{{ view_all_url }}" class="link">{{ view_all_label }} {{ icon('arrow-right') }}</a>
+      <a href="{{ view_all_url }}" class="link dash-widget-viewall">{{ view_all_label }} {{ icon('arrow-right') }}</a>
       {% endif %}
     </div>
     {{ caller() }}
