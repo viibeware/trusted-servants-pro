@@ -7,7 +7,13 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.16 — 2026-05-18 (latest) — Local-time backups, idle Currently-Online rows, instant post-login appearance
+## 2.1.17 — 2026-05-18 (latest) — Custom forms now support Cloudflare Turnstile
+
+If you have **Cloudflare Turnstile** turned on in **Settings → Security**, custom forms now show the Turnstile widget right above the Submit button — same as the events-submission form and the contact form already do. Visitors complete the challenge as part of filling out the form; the server verifies the token before storing the submission. If the challenge fails, the page re-renders with a red banner above the form explaining what happened, with everything the visitor typed still in place so they don't have to start over.
+
+No action needed beyond keeping Turnstile enabled — every existing custom form picks up the protection automatically.
+
+## 2.1.16 — 2026-05-18 — Local-time backups, idle Currently-Online rows, instant post-login appearance
 
 Three admin-experience polishes around dates, the dashboard widget, and login UX.
 

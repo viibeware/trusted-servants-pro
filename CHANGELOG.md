@@ -6,6 +6,18 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.17] — 2026-05-18
+
+### Added — Custom forms support Cloudflare Turnstile
+
+The events-submission form, the contact form, and the admin login all already gate POST through Cloudflare Turnstile when ``SiteSetting.turnstile_enabled`` is on. Custom forms were the only public POST surface left without the same protection — bots could (theoretically) target an admin-authored form's URL directly.
+
+- **``frontend/_custom_form_body.html``** renders the standard ``<div class="cf-turnstile">`` widget (same chrome the contact + submission forms use) when ``site.turnstile_enabled && site.turnstile_site_key``. Picks up the Turnstile script for free — the wrapping ``frontend/submission.html`` dispatcher already loads it conditionally; no extra JS hop on the custom-form path.
+- **``frontend.py::custom_form_submit``** runs ``_verify_turnstile`` against ``cf-turnstile-response`` before any storage / email work when ``turnstile_enabled``. Failed verification builds a replay dict from the incoming form (proper checkbox multi-value handling so multi-select state survives) and re-renders the form with a new ``__turnstile__`` form-level error + HTTP 400. The visitor doesn't lose their typing.
+- **Form-level error banner** in ``_custom_form_body.html`` — keyed on ``cform_errors['__turnstile__']`` so the rejection copy sits above the fields rather than associating with any single input. New ``.fe-custom-form-banner`` / ``.fe-custom-form-banner--error`` CSS (light + dark mode variants).
+
+Verified end-to-end with Cloudflare's always-passes test sitekey + a no-token POST against a custom form: widget renders, JS loaded, server rejects untokened POST with HTTP 400 + banner shown + typed values preserved.
+
 ## [2.1.16] — 2026-05-18
 
 ### Changed — Off-site backup datetimes now render in the site's configured timezone

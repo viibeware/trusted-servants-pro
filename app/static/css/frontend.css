@@ -11271,6 +11271,20 @@ html:not([data-theme="dark"]) [style*="--fe-dynbg-c3-light"] {
   border-radius: 12px;
   font-size: 1.05rem;
 }
+.fe-custom-form-banner {
+  padding: .75rem 1rem;
+  border: 1px solid var(--fe-color-border, #cbd5e1);
+  border-radius: 8px;
+  font-size: .95rem;
+}
+.fe-custom-form-banner--error {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+[data-theme="dark"] .fe-custom-form-banner--error {
+  background: #3a0e10; color: #fecaca; border-color: #7f1d1d;
+}
 [data-theme="dark"] .fe-custom-form-success {
   background: #052e16; color: #bbf7d0; border-color: #14532d;
 }

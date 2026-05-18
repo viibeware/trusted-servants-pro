@@ -3689,6 +3689,36 @@ def custom_form_submit(slug):
     if not isinstance(blocks, list):
         blocks = []
 
+    # Cloudflare Turnstile — gated by the same SiteSetting toggle the
+    # auth login / contact form / events-submission form check. Verify
+    # before doing any storage / email work so a failed challenge
+    # short-circuits cheaply, and surface the result as a form-level
+    # ``__turnstile__`` error so the template re-renders with the
+    # banner above the form (rather than associated with any single
+    # field). Posted field values still echo back so the visitor
+    # doesn't lose their typing.
+    if site and getattr(site, "turnstile_enabled", False):
+        from .auth import _verify_turnstile
+        token = request.form.get("cf-turnstile-response", "")
+        ok, ts_err = _verify_turnstile(site, token, request.remote_addr)
+        if not ok:
+            # Collect just the user-facing string values so they re-
+            # populate the form on re-render. Walk the form once;
+            # checkboxes get multi-value handling.
+            replay = {}
+            for block in blocks:
+                if not isinstance(block, dict): continue
+                nm = block.get("name")
+                if not nm: continue
+                if block.get("type") == "checkboxes":
+                    replay[nm] = request.form.getlist(nm)
+                else:
+                    replay[nm] = request.form.get(nm) or ""
+            return _render_custom_form(
+                cf, ctx=_frontend_context(site),
+                errors={"__turnstile__": ts_err or "Security check failed — please try again."},
+                values=replay), 400
+
     # Build the validated payload + capture form-level errors.
     payload = {}
     file_attachments = {}

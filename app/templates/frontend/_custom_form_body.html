@@ -23,6 +23,17 @@
   {# Flask-WTF CSRF protection is on app-wide; every POST needs a token.
      Same shape as the events-submission and contact public forms. #}
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  {# Form-level error banner — currently used for Turnstile rejects.
+     Keyed by ``__turnstile__`` in cform_errors so it doesn't bind to
+     any single field. Renders above the fields where a visitor will
+     see it before they retry. #}
+  {% if cform_errors.get('__turnstile__') %}
+  <div class="fe-custom-form-banner fe-custom-form-banner--error">
+    {{ cform_errors['__turnstile__'] }}
+  </div>
+  {% endif %}
+
   {% for block in cform_blocks %}
     {% set err = cform_errors.get(block.name) %}
     {% set val = cform_values.get(block.name, '') %}
@@ -98,6 +109,19 @@
   {% else %}
     <p class="muted">This form has no fields configured yet.</p>
   {% endfor %}
+
+  {# Cloudflare Turnstile widget — gated on the same SiteSetting the
+     contact + submission forms use. The token rides in the
+     ``cf-turnstile-response`` form field, verified server-side in
+     ``custom_form_submit``. Turnstile JS itself is loaded once by the
+     wrapping ``submission.html`` dispatcher when ``turnstile_enabled``,
+     so we don't need to load it again here. #}
+  {% if site and site.turnstile_enabled and site.turnstile_site_key %}
+  <div class="cf-turnstile fe-submission-turnstile"
+       data-sitekey="{{ site.turnstile_site_key }}"
+       data-theme="auto"
+       data-size="flexible"></div>
+  {% endif %}
 
   {% if cform_blocks %}
   <div class="fe-custom-form-actions">
