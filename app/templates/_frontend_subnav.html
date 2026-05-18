@@ -70,10 +70,6 @@
                 {% if request.endpoint in ('main.frontend_forms', 'main.frontend_form_submission', 'main.frontend_custom_form_edit') %}selected{% endif %}>
           Forms
         </option>
-        <option value="{{ url_for('main.frontend_form_submissions') }}"
-                {% if request.endpoint in ('main.frontend_form_submissions', 'main.frontend_form_submission_detail') %}selected{% endif %}>
-          Form Submissions
-        </option>
         <option value="{{ url_for('main.frontend_404') }}"
                 {% if request.endpoint == 'main.frontend_404' %}selected{% endif %}>
           404 page
@@ -155,10 +151,6 @@
       <a href="{{ url_for('main.frontend_forms') }}"
          class="fe-subnav-link {% if request.endpoint in ('main.frontend_forms', 'main.frontend_form_submission', 'main.frontend_custom_form_edit') %}active{% endif %}">
         {{ icon('send') }}<span>Forms</span>
-      </a>
-      <a href="{{ url_for('main.frontend_form_submissions') }}"
-         class="fe-subnav-link {% if request.endpoint in ('main.frontend_form_submissions', 'main.frontend_form_submission_detail') %}active{% endif %}">
-        {{ icon('inbox') }}<span>Form Submissions</span>
       </a>
       <a href="{{ url_for('main.frontend_404') }}"
          class="fe-subnav-link {% if request.endpoint == 'main.frontend_404' %}active{% endif %}">

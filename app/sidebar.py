@@ -49,6 +49,8 @@ _ADMIN_CATALOG = [
     # Watchtower as the canonical entry point.
     {"key": "watchtower",      "label": "Watchtower",             "endpoint": "main.watchtower",       "active_kind": "contains:watchtower"},
     {"key": "contact_form",    "label": "Contact Form",           "endpoint": "main.contact_form",     "active_kind": "contains:contact_form"},
+    {"key": "form_submissions", "label": "Form Submissions",      "endpoint": "main.frontend_form_submissions",
+     "active_kind": "prefix:main.frontend_form_submission"},
 ]
 
 # Static (non-library) items that live inside the "Intergroup" sidebar
@@ -132,6 +134,7 @@ def _is_visible(key, site, user):
     # to see counts.
     if key == "watchtower":      return False
     if key == "contact_form":    return bool(user.is_admin())
+    if key == "form_submissions": return bool(user.is_admin())
     if key == "web_frontend":    return False
     return False
 

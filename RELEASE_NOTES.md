@@ -7,7 +7,13 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.14 — 2026-05-18 (latest) — Fix: custom form submit 500'd while sending recipient email
+## 2.1.15 — 2026-05-18 (latest) — Form Submissions now lives in the main app sidebar
+
+The **Form Submissions** inbox is no longer buried inside the Web Frontend admin's sidebar — it's promoted to a first-class entry in the main app sidebar's **Admin** section, right next to **Contact Form**. Visible only to admins. One click from anywhere in the portal opens the submissions list.
+
+Cleared the duplicate entry out of the **Web Frontend → Structure** subnav. The submissions list and detail pages also picked up a small cleanup: they render as standalone admin pages now, without the Web Frontend admin's two-column subnav chrome.
+
+## 2.1.14 — 2026-05-18 — Fix: custom form submit 500'd while sending recipient email
 
 After the CSRF fix shipped in 2.1.13, posting a valid submission to a custom form returned an Internal Server Error. The handler tried to read a column on SiteSetting that doesn't exist (`frontend_site_name` instead of `frontend_title`) while building the email subject. Fixed; submissions now go through cleanly. If you saw this error in 2.1.13, update to 2.1.14 and retry — nothing on your forms or stored submissions changes.
 

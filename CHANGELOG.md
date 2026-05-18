@@ -6,6 +6,28 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.15] — 2026-05-18
+
+### Changed — Form Submissions moved out of the Web Frontend admin into the main app sidebar
+
+The Form Submissions admin used to live as a Web Frontend subnav entry under **Structure**, alongside the form builder. Reaching the inbox from anywhere outside the Web Frontend admin meant clicking into the FE area first — an awkward extra step for a destination admins consult independently of the FE editing surface. Promoted it to a first-class sidebar entry in the **Admin** section of the main app sidebar.
+
+**Sidebar (``app/sidebar.py``):**
+
+- New ``form_submissions`` entry in ``_ADMIN_CATALOG`` with ``endpoint="main.frontend_form_submissions"`` and an ``active_kind="prefix:main.frontend_form_submission"`` so the link lights up both on the list and on the per-submission detail page.
+- ``_is_visible`` returns ``True`` only for admins (``user.is_admin()``) — the link never enters the rendered HTML for non-admin sessions.
+- Picks up the existing ``admin_reorder_catalog`` walk automatically, so the item appears in **Settings → Sidebar** drag-reorder UI without further code changes.
+
+**Removed from Web Frontend admin (``_frontend_subnav.html``):**
+
+- Subnav link under Structure is gone (both the desktop nav `<a>` and the mobile picker `<option>`).
+
+**Submissions admin pages now render standalone:**
+
+- ``frontend_form_submissions.html`` + ``frontend_form_submission_detail.html`` dropped their ``.fe-admin-layout`` wrapper and ``_frontend_subnav.html`` include. They now render as plain admin pages (extending ``base.html`` directly), matching the layout pattern of ``contact_form.html``.
+- Submissions-list page's old "← Back to forms" top_actions link removed (the sidebar is now the canonical entry point).
+- Detail page keeps its "← Back to submissions" top_actions link — that's natural list↔detail navigation, not Web-Frontend-specific chrome.
+
 ## [2.1.14] — 2026-05-18
 
 ### Fixed — Custom form submit 500'd when building the recipient-email subject

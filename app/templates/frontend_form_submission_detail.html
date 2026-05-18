@@ -5,55 +5,48 @@
 <a class="btn" href="{{ url_for('main.frontend_form_submissions', form=cf.id if cf else None) }}">← Back to submissions</a>
 {% endblock %}
 {% block content %}
-<div class="fe-admin-layout">
-  {% include "_frontend_subnav.html" %}
-  <div class="fe-admin-main">
-
-    <section class="card">
-      <div class="card-head"><h2>Submitted values</h2></div>
-      {% set _fvals = payload.get('fields') or {} %}
-      {% set _files = payload.get('files') or {} %}
-      {% if _fvals or _files %}
-      <dl class="fe-submission-dl">
-        {% for f in fields %}
-          {% set name = f.name %}
-          {% set v = _fvals.get(name) %}
-          {% if v is not none and v != '' %}
-          <dt>{{ f.label }}</dt>
-          <dd>
-            {% if f.type == 'checkboxes' and v is iterable and v is not string %}
-              {{ v|join(', ') }}
-            {% elif f.type == 'file' %}
-              {% set info = _files.get(name) %}
-              {% if info %}
-                <a href="{{ url_for('public.public_file', filename=info.stored) }}" target="_blank" rel="noopener">
-                  {{ info.original }}
-                </a>
-                <span class="muted smaller">· stored as <code>{{ info.stored }}</code></span>
-              {% else %}<span class="muted">{{ v }}</span>{% endif %}
-            {% else %}
-              {{ v }}
-            {% endif %}
-          </dd>
-          {% endif %}
-        {% endfor %}
-        {% if fields|length == 0 %}
-        <p class="muted">The form behind this submission has been deleted — raw payload below.</p>
-        <pre class="fe-submission-raw"><code>{{ payload|tojson(indent=2) }}</code></pre>
+<section class="card">
+  <div class="card-head"><h2>Submitted values</h2></div>
+  {% set _fvals = payload.get('fields') or {} %}
+  {% set _files = payload.get('files') or {} %}
+  {% if _fvals or _files %}
+  <dl class="fe-submission-dl">
+    {% for f in fields %}
+      {% set name = f.name %}
+      {% set v = _fvals.get(name) %}
+      {% if v is not none and v != '' %}
+      <dt>{{ f.label }}</dt>
+      <dd>
+        {% if f.type == 'checkboxes' and v is iterable and v is not string %}
+          {{ v|join(', ') }}
+        {% elif f.type == 'file' %}
+          {% set info = _files.get(name) %}
+          {% if info %}
+            <a href="{{ url_for('public.public_file', filename=info.stored) }}" target="_blank" rel="noopener">
+              {{ info.original }}
+            </a>
+            <span class="muted smaller">· stored as <code>{{ info.stored }}</code></span>
+          {% else %}<span class="muted">{{ v }}</span>{% endif %}
+        {% else %}
+          {{ v }}
         {% endif %}
-      </dl>
-      {% else %}
-      <p class="muted">Submission contains no field values.</p>
+      </dd>
       {% endif %}
+    {% endfor %}
+    {% if fields|length == 0 %}
+    <p class="muted">The form behind this submission has been deleted — raw payload below.</p>
+    <pre class="fe-submission-raw"><code>{{ payload|tojson(indent=2) }}</code></pre>
+    {% endif %}
+  </dl>
+  {% else %}
+  <p class="muted">Submission contains no field values.</p>
+  {% endif %}
 
-      <form method="post" action="{{ url_for('main.frontend_form_submission_delete', sub_id=sub.id) }}"
-            onsubmit="return confirm('Delete this submission permanently?');"
-            style="margin-top: 1.5rem;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-sm btn-danger">{{ icon('trash') }} Delete this submission</button>
-      </form>
-    </section>
-
-  </div>
-</div>
+  <form method="post" action="{{ url_for('main.frontend_form_submission_delete', sub_id=sub.id) }}"
+        onsubmit="return confirm('Delete this submission permanently?');"
+        style="margin-top: 1.5rem;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-sm btn-danger">{{ icon('trash') }} Delete this submission</button>
+  </form>
+</section>
 {% endblock %}
