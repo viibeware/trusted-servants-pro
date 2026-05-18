@@ -7,7 +7,11 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.12 — 2026-05-18 (latest) — Build your own forms, link them from the stories page
+## 2.1.13 — 2026-05-18 (latest) — Fix: custom form submissions blocked with "CSRF token is missing"
+
+Submitting a custom form on the public site returned **Bad Request — The CSRF token is missing**. The form's hidden CSRF input was omitted from the template — fixed. If you saw this error in 2.1.12, update to 2.1.13 and retry; nothing on your forms or their submissions changes.
+
+## 2.1.12 — 2026-05-18 — Build your own forms, link them from the stories page
 
 Two big additions that finally close the loop on letting visitors submit things to your site without writing code.
 

@@ -6,6 +6,12 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.13] — 2026-05-18
+
+### Fixed — Custom form submit returned "CSRF token is missing"
+
+Every public CustomForm POST was rejected with HTTP 400 ``The CSRF token is missing.`` because the form body partial omitted the hidden CSRF input. Flask-WTF's app-wide ``CSRFProtect`` requires a token on every POST; the legacy events-submission and contact public forms both include one. Added ``<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">`` to ``frontend/_custom_form_body.html``, matching the shape the other two public forms use.
+
 ## [2.1.12] — 2026-05-18
 
 ### Added — Custom forms with a drag-and-drop field builder
