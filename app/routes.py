@@ -3175,6 +3175,35 @@ def data_import():
         LoginFailure.query.delete()
         db.session.commit()
 
+        # Gunicorn worker recycle. We just swapped the SQLite file under
+        # the running process — `db.engine.dispose()` cleared THIS worker's
+        # pool, but sibling sync workers still hold connection handles to
+        # the pre-restore file (Linux keeps the moved file readable through
+        # the open fd), so requests routed to them after this point serve
+        # stale rows / 404 on uploaded media intermittently depending on
+        # which worker gunicorn picks. SIGHUP to the master triggers a
+        # graceful recycle — new workers spawn against the restored file
+        # before the old ones exit, and the current worker finishes
+        # serving the redirect below before honouring the shutdown signal.
+        # Guarded by a parent-cmdline check so this is a no-op under
+        # `python run.py` (debug, single process) — sending SIGHUP to bash
+        # would close the terminal.
+        try:
+            import signal as _signal
+            ppid = os.getppid()
+            if ppid > 1:
+                with open(f"/proc/{ppid}/cmdline", "rb") as _f:
+                    _ppid_cmd = _f.read().decode("utf-8", errors="ignore")
+            else:
+                # PID-1 is the gunicorn master itself (the Docker case).
+                with open("/proc/1/cmdline", "rb") as _f:
+                    _ppid_cmd = _f.read().decode("utf-8", errors="ignore")
+                ppid = 1
+            if "gunicorn" in _ppid_cmd:
+                os.kill(ppid, _signal.SIGHUP)
+        except (OSError, FileNotFoundError):
+            pass
+
         flash(f"Import complete. Previous data backed up to {os.path.basename(backup_dir)}/ in the data directory. You will be signed out.", "success")
         return redirect(url_for("auth.logout"))
     finally:

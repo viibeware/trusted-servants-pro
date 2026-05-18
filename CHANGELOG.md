@@ -6,6 +6,14 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.8] — 2026-05-18
+
+### Fixed — Bundle restore: recycle gunicorn workers so sibling workers see the new DB
+
+After a full-portal import, only the worker that ran the restore disposes its SQLAlchemy engine — sibling sync workers continue serving from connection-pool handles to the **pre-restore** SQLite file. Linux keeps the moved file readable through the open fd even after ``shutil.move``, so the symptom is intermittent: subsequent requests pick a worker round-robin, and the ones that land on the stale pool render the pre-restore DB (missing rows, 404s on uploaded media that the new DB does reference, occasional CSRF mismatches). Misdiagnosed as a cookie-collision issue on same-host dev/test pairs — the per-secret SESSION_COOKIE_NAME suffix already handles that cleanly.
+
+``data_import`` now signals ``SIGHUP`` to the gunicorn master after the file swap. Gunicorn's HUP handler spawns fresh workers, waits until they're ready, then gracefully shuts down the old ones — the current worker finishes serving its redirect-to-logout before honouring the shutdown, so the user's response still ships. Guarded by a parent-cmdline check so it's a no-op under ``python run.py`` (debug, single process) — sending SIGHUP to bash would close the terminal.
+
 ## [2.1.7] — 2026-05-18
 
 ### Fixed — Bundle restore: auto-disable Turnstile on host change + clear login lockouts
