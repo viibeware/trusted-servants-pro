@@ -3140,6 +3140,41 @@ def data_import():
         _migrate_sqlite(current_app)
         _backfill_media(current_app)
 
+        # Domain-bound state safety sweep. Turnstile sitekey/secret are
+        # registered against the source's hostname at Cloudflare; carrying
+        # them into a different host locks the admin out — the widget fails
+        # to issue a token and ``_verify_turnstile`` rejects every login
+        # attempt BEFORE password check. Disable when the destination's host
+        # differs from the manifest's source_host (or when either side is
+        # unknown). Pre-format_version-2 bundles have no source_host hint,
+        # so default to scrubbing — same-host re-imports cost the admin one
+        # toggle flip; cross-host imports are unlocked. Sitekey + secret are
+        # preserved so a same-host operator can flip the toggle back without
+        # re-entering credentials.
+        from .models import SiteSetting, LoginFailure
+        src_host = manifest.get("source_host") if isinstance(manifest, dict) else None
+        dst_host = request.host if request else None
+        host_changed = (not src_host) or (not dst_host) or (src_host != dst_host)
+        ss = SiteSetting.query.first()
+        if ss and ss.turnstile_enabled and host_changed:
+            ss.turnstile_enabled = False
+            db.session.commit()
+            flash(
+                f"Turnstile was enabled at the source"
+                f"{f' ({src_host})' if src_host else ''} but disabled here "
+                f"to prevent a login lockout — the sitekey is bound to the "
+                f"source's domain. Re-enable from Settings → Security after "
+                f"verifying the sitekey matches this host"
+                f"{f' ({dst_host})' if dst_host else ''}.",
+                "warning",
+            )
+
+        # Wipe any rate-limit lockouts the admin may have accumulated
+        # bouncing off Turnstile (or other pre-restore login churn) so
+        # they can sign back in immediately on the new install.
+        LoginFailure.query.delete()
+        db.session.commit()
+
         flash(f"Import complete. Previous data backed up to {os.path.basename(backup_dir)}/ in the data directory. You will be signed out.", "success")
         return redirect(url_for("auth.logout"))
     finally:

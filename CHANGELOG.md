@@ -6,6 +6,17 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.7] — 2026-05-18
+
+### Fixed — Bundle restore: auto-disable Turnstile on host change + clear login lockouts
+
+Restoring a prod bundle with Turnstile enabled into an install on a different host (e.g. local dev / test VM) was a silent lockout: the Cloudflare sitekey is domain-bound, the widget either fails to render or fails to issue a token at the new host, and ``_verify_turnstile`` (which runs **before** the password check in ``app/auth.py``) rejects every attempt with "Security check failed" — easy to misread as bad credentials, and each attempt counts toward the per-IP / per-username rate-limit lockout.
+
+Two-sided fix so both the source and destination cooperate:
+
+- **Export (``app/backup.py``)** bumps manifest ``format_version`` to ``2`` and adds two context fields: ``source_host`` (the request host the export was triggered from, best-effort — scheduled background snapshots can't see one and write ``null``) and ``turnstile_enabled_at_export`` (so the importer doesn't need to peek at the restored DB to know whether to bother). The note in the manifest now also calls out the auto-disable behaviour.
+- **Import (``data_import`` in ``app/routes.py``)** reads ``source_host`` from the bundle's manifest, compares to the current request host, and if they differ — or either is missing (pre-v2 bundles default to scrub) — flips ``site_setting.turnstile_enabled`` off and flashes a clear warning that names both hosts and points the admin at Settings → Security to re-enable once the sitekey matches the new host. Sitekey + encrypted secret are preserved on the row so a same-host re-import only costs one toggle flip. The importer also wipes ``login_failure`` so any lockout the admin accumulated bouncing off Turnstile mid-restore doesn't wedge them out on the new install.
+
 ## [2.1.6] — 2026-05-17
 
 ### Added — Restore bundle: busy spinner while the upload is in flight

@@ -149,10 +149,31 @@ def build_export_archive(app):
     tmp_zip = tempfile.NamedTemporaryFile(prefix="tsp-export-", suffix=".zip", delete=False)
     tmp_zip.close()
 
+    # Capture context the importer uses to decide whether to scrub
+    # domain-bound settings (currently Turnstile) post-restore. ``source_host``
+    # is best-effort: only available when the export runs inside a request
+    # (manual export from the Data tab); scheduled background exports leave
+    # it None and the importer treats missing as "host unknown → scrub".
+    src_host = None
+    try:
+        from flask import request as _req, has_request_context
+        if has_request_context():
+            src_host = _req.host
+    except Exception:  # noqa: BLE001 — manifest field is best-effort context
+        src_host = None
+    try:
+        from .models import SiteSetting as _SS
+        _ss = _SS.query.first()
+        _turnstile_was_on = bool(_ss and _ss.turnstile_enabled)
+    except Exception:  # noqa: BLE001 — same; missing manifest hint is fine
+        _turnstile_was_on = False
+
     manifest = {
         "app": "trusted-servants-pro",
-        "format_version": 1,
+        "format_version": 2,
         "exported_at": datetime.utcnow().isoformat() + "Z",
+        "source_host": src_host,
+        "turnstile_enabled_at_export": _turnstile_was_on,
         "db_filename": "tsp.db",
         "uploads_dir": "uploads/",
         "fernet_key_filename": "zoom.key",
@@ -160,7 +181,9 @@ def build_export_archive(app):
             "Restore by importing through the Data tab, or extract into "
             "the target's data directory (replacing tsp.db, uploads/, and "
             "zoom.key) before first boot. zoom.key is required to decrypt "
-            "Zoom credentials."
+            "Zoom credentials. On import to a different host, Turnstile is "
+            "auto-disabled — the sitekey is domain-bound and would lock the "
+            "admin out at login."
         ),
     }
     zoom_key_path = os.path.join(data_dir, "zoom.key")
