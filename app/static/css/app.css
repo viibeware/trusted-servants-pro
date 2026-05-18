@@ -13011,3 +13011,25 @@ body.embed .backups-wrap {
   border-color: #1f2937;
 }
 
+/* Chunked-upload progress bar inside the import busy overlay. Sits
+   under the headline + sub-line, fills as chunks land. The card stretches
+   a bit wider than the spinner-only variant so the bar has breathing
+   room. The bar itself uses the same brand colour as the spinner ring. */
+.import-busy-card { max-width: 560px; }
+.import-progress-track {
+  margin-top: .6rem;
+  height: 8px;
+  background: var(--border, #cbd5e1);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.import-progress-bar {
+  height: 100%;
+  background: var(--brand, #0B5CFF);
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+[data-theme="dark"] .import-progress-track {
+  background: #1f2937;
+}
+

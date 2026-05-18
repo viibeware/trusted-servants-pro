@@ -6,6 +6,24 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.9] — 2026-05-18
+
+### Added — Chunked bundle restore so imports work behind a 100 MiB proxy cap (Cloudflare Free)
+
+Cloudflare's Free plan caps proxied request bodies at 100 MiB, so any non-trivial restore bundle (DB + uploads dir in one zip) hit a 413 at the edge before the request even reached the app — no spinner, no flash, the user just got a Cloudflare error page. The Import form now slices the chosen archive into ~90 MiB pieces in the browser and uploads them as separate requests, then triggers the restore once every chunk has landed. No proxy config change, no operator paperwork — pick the file, type REPLACE, click Import, watch the progress bar.
+
+**Server (``app/routes.py``):**
+
+- New ``POST /settings/import/chunk`` — accepts one chunk keyed by a per-upload UUID (``upload_id``), ``chunk_index``, and ``total_chunks``. Saves the chunk to ``<data_dir>/import-chunks/<upload_id>/<chunk_index:08d>.bin``. Admin-only, validates the upload_id against a strict UUID regex (no path traversal), runs an idempotent sweep that removes abandoned chunk dirs older than 24 h on every chunk POST.
+- New ``POST /settings/import/finalize`` — concatenates the chunks in order into a single ``tsp-import-chunked-*.zip`` in the data dir, then hands the assembled path to the shared ``_perform_data_import`` helper that the direct-upload route already uses. Re-checks the REPLACE confirmation, verifies the chunk count matches the browser's ``expected_chunks`` (bails with a clear flash on mismatch + cleans the staging dir), cleans up after itself on both success and failure paths.
+- Extracted the existing ``/settings/import`` body into ``_perform_data_import(zip_path) -> (ok, redirect_url)`` so both the direct-upload (no-JS fallback) and the chunked-upload finalize call the exact same import logic. The direct route stays in place for clients that don't run JS or scripted callers that want a single-shot upload.
+
+**Browser (``base.html`` + ``app.css``):**
+
+- Form's submit handler intercepts on browsers with ``fetch`` + ``File.prototype.slice`` + ``crypto.randomUUID`` (with a v4 polyfill fallback for older Safari). Slices the selected file at the 90 MiB boundary (under the 100 MiB cap with envelope room), POSTs each chunk via ``fetch``, then synthesises a hidden form POST to ``/finalize`` so the browser follows the server's redirect-to-logout natively (preserving the flashed status). On feature-test miss, the native form POST stays in place — the no-JS path still works for bundles small enough to pass the proxy.
+- New progress overlay (reuses the existing ``.backup-busy`` chrome) shows a brand-coloured progress bar with "Uploading bundle… — Chunk N of M — 270 MB of 1.2 GB", flips to "Reassembling and restoring…" once the final chunk lands, and surfaces an inline error message on a failed chunk so the operator knows to retry rather than being left staring at a hung spinner.
+- Card now carries a one-liner above the form explaining the 90 MB chunking behaviour, so operators behind a proxy understand why it works without them having to read the changelog.
+
 ## [2.1.8] — 2026-05-18
 
 ### Fixed — Bundle restore: recycle gunicorn workers so sibling workers see the new DB

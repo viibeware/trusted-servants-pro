@@ -1235,23 +1235,38 @@
                 data directory before the import is applied. You will be signed out
                 when the import completes. Type <code>REPLACE</code> to confirm.
               </p>
-              <form class="form" method="post" action="{{ url_for('main.data_import') }}" enctype="multipart/form-data" data-no-ajax="1" data-import-bundle-form>
+              <p class="muted small">
+                Large bundles are sliced into ~90 MB chunks in the browser, so
+                this works behind proxies that cap request bodies at 100 MB
+                (e.g. Cloudflare Free).
+              </p>
+              <form class="form" method="post"
+                    action="{{ url_for('main.data_import') }}"
+                    enctype="multipart/form-data"
+                    data-no-ajax="1"
+                    data-import-bundle-form
+                    data-chunk-action="{{ url_for('main.data_import_chunk') }}"
+                    data-finalize-action="{{ url_for('main.data_import_finalize') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <label>Export archive (.zip)<input type="file" name="archive" accept=".zip,application/zip" required></label>
                 <label>Type <code>REPLACE</code> to confirm<input type="text" name="confirm" placeholder="REPLACE" autocomplete="off" required></label>
                 <div class="form-actions"><button class="btn btn-danger" data-import-bundle-submit>Import &amp; Replace All Data</button></div>
               </form>
-              {# Busy overlay shown on submit so the operator sees the upload
-                 is in flight. Full-bundle restores can take a while (multi-
-                 hundred-MB POST + DB swap + uploads copy on the server), so
-                 the previous silent button-click looked like the page had
-                 hung. Reuses the existing .backup-busy styles. #}
+              {# Progress overlay. While the browser is slicing + POSTing
+                 90 MiB chunks, the bar fills and the sub-line counts
+                 chunks; after the last chunk we switch to spinner mode
+                 and the server-side reassemble + restore runs (which
+                 redirects to /logout on success). Reuses the .backup-busy
+                 chrome the backup wizard already styles. #}
               <div class="backup-busy" data-import-bundle-busy hidden role="status" aria-live="polite">
-                <div class="backup-busy-card">
-                  <div class="backup-busy-spinner" aria-hidden="true"></div>
-                  <div class="backup-busy-text">
-                    <strong>Restoring bundle…</strong>
-                    <span class="muted small">Uploading the archive and replacing data. Don't close this tab.</span>
+                <div class="backup-busy-card import-busy-card">
+                  <div class="backup-busy-spinner" aria-hidden="true" data-busy-spinner></div>
+                  <div class="backup-busy-text" style="flex:1; min-width:0;">
+                    <strong data-busy-headline>Preparing upload…</strong>
+                    <span class="muted small" data-busy-sub>Reading the selected bundle.</span>
+                    <div class="import-progress-track" aria-hidden="true">
+                      <div class="import-progress-bar" data-busy-progress-bar style="width:0%"></div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1259,15 +1274,138 @@
               (function () {
                 var form = document.querySelector('[data-import-bundle-form]');
                 if (!form) return;
-                var busy = document.querySelector('[data-import-bundle-busy]');
-                var btn  = form.querySelector('[data-import-bundle-submit]');
-                form.addEventListener('submit', function () {
-                  // Browser still applies HTML5 ``required`` validation
-                  // before firing submit; if we're here, the form passed.
+                // Feature-test for the browser APIs we need to slice +
+                // upload chunks. If anything's missing, leave the native
+                // form POST in place — the no-JS direct route still works
+                // for bundles small enough to fit through the proxy.
+                if (!(window.fetch && window.FormData && window.Blob && File.prototype.slice)) return;
+
+                var busy   = document.querySelector('[data-import-bundle-busy]');
+                var btn    = form.querySelector('[data-import-bundle-submit]');
+                var spinEl = busy && busy.querySelector('[data-busy-spinner]');
+                // 90 MiB — under the 100 MiB request-body cap that
+                // Cloudflare's Free plan enforces, with room for the
+                // multipart envelope.
+                var CHUNK_SIZE = 90 * 1024 * 1024;
+
+                function setStatus(head, sub) {
+                  if (!busy) return;
+                  var h = busy.querySelector('[data-busy-headline]');
+                  var s = busy.querySelector('[data-busy-sub]');
+                  if (h) h.textContent = head;
+                  if (s) s.textContent = sub || '';
+                }
+                function setProgress(pct) {
+                  if (!busy) return;
+                  var bar = busy.querySelector('[data-busy-progress-bar]');
+                  if (bar) bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+                }
+                function fmtBytes(n) {
+                  if (n < 1024) return n + ' B';
+                  var units = ['KB','MB','GB','TB'];
+                  for (var i = 0; i < units.length; i++) {
+                    n = n / 1024;
+                    if (n < 1024 || i === units.length - 1) {
+                      return (n >= 100 ? n.toFixed(0) : n.toFixed(1)) + ' ' + units[i];
+                    }
+                  }
+                  return n + ' B';
+                }
+                function newUploadId() {
+                  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+                  // Fallback v4 generator for older Safari.
+                  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+                    var r = (Math.random() * 16) | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                  });
+                }
+
+                async function uploadChunked(file, csrfToken) {
+                  var uploadId = newUploadId();
+                  var total = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+                  var action = form.getAttribute('data-chunk-action');
+                  for (var i = 0; i < total; i++) {
+                    var start = i * CHUNK_SIZE;
+                    var end   = Math.min(start + CHUNK_SIZE, file.size);
+                    var blob  = file.slice(start, end);
+                    var fd    = new FormData();
+                    fd.append('csrf_token', csrfToken);
+                    fd.append('upload_id', uploadId);
+                    fd.append('chunk_index', String(i));
+                    fd.append('total_chunks', String(total));
+                    fd.append('chunk', blob, 'chunk-' + i + '.bin');
+                    setStatus(
+                      'Uploading bundle…',
+                      'Chunk ' + (i + 1) + ' of ' + total + ' — ' +
+                      fmtBytes(end) + ' of ' + fmtBytes(file.size)
+                    );
+                    setProgress((start / file.size) * 100);
+                    var r = await fetch(action, {
+                      method: 'POST', credentials: 'same-origin', body: fd,
+                    });
+                    if (!r.ok) {
+                      var msg = 'Chunk ' + (i + 1) + ' failed (HTTP ' + r.status + ')';
+                      try {
+                        var j = await r.json();
+                        if (j && j.error) msg += ': ' + j.error;
+                      } catch (_) {}
+                      throw new Error(msg);
+                    }
+                    setProgress((end / file.size) * 100);
+                  }
+                  return { uploadId: uploadId, totalChunks: total };
+                }
+
+                function finalize(uploadId, totalChunks, confirmValue, csrfToken) {
+                  // Hand off to a synthetic form POST so the browser
+                  // follows the server's redirect-to-logout natively
+                  // (carrying the flashed status message).
+                  setStatus('Reassembling and restoring…',
+                    'This can take a minute on large bundles. Do not close this tab.');
+                  setProgress(100);
+                  var hf = document.createElement('form');
+                  hf.method = 'POST';
+                  hf.action = form.getAttribute('data-finalize-action');
+                  hf.style.display = 'none';
+                  var fields = {
+                    csrf_token: csrfToken,
+                    upload_id: uploadId,
+                    expected_chunks: String(totalChunks),
+                    confirm: confirmValue,
+                  };
+                  Object.keys(fields).forEach(function (k) {
+                    var input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = k;
+                    input.value = fields[k];
+                    hf.appendChild(input);
+                  });
+                  document.body.appendChild(hf);
+                  hf.submit();
+                }
+
+                form.addEventListener('submit', async function (e) {
+                  var fileInput    = form.querySelector('input[type="file"]');
+                  var confirmInput = form.querySelector('input[name="confirm"]');
+                  var csrfInput    = form.querySelector('input[name="csrf_token"]');
+                  if (!fileInput || !fileInput.files || !fileInput.files[0]) return;
+                  if (!confirmInput || confirmInput.value !== 'REPLACE') return;
+
+                  e.preventDefault();
                   if (busy) busy.hidden = false;
-                  if (btn) {
-                    btn.disabled = true;
-                    btn.textContent = 'Restoring…';
+                  if (btn)  { btn.disabled = true; btn.textContent = 'Uploading…'; }
+                  setStatus('Starting upload…', 'Preparing first chunk.');
+                  setProgress(0);
+
+                  try {
+                    var info = await uploadChunked(fileInput.files[0], csrfInput ? csrfInput.value : '');
+                    finalize(info.uploadId, info.totalChunks, confirmInput.value,
+                             csrfInput ? csrfInput.value : '');
+                  } catch (err) {
+                    if (btn) { btn.disabled = false; btn.textContent = 'Import & Replace All Data'; }
+                    setStatus('Upload failed',
+                      (err && err.message) ? err.message : 'Unknown error — please retry.');
+                    if (spinEl) spinEl.style.display = 'none';
                   }
                 });
               })();

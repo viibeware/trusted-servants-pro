@@ -3049,19 +3049,56 @@ def data_export():
     return response
 
 
-@bp.route("/settings/import", methods=["POST"])
-@admin_required
-def data_import():
+# Chunked-upload support for restore bundles larger than the proxy in
+# front of us is willing to forward in a single request (Cloudflare's
+# free plan caps request bodies at 100 MiB). The browser slices the file
+# into ~90 MiB chunks, POSTs each to ``/settings/import/chunk``, then
+# POSTs ``/settings/import/finalize`` to trigger the actual import. The
+# direct-upload ``/settings/import`` route is kept as a no-JS fallback.
+import re as _re
+_UPLOAD_ID_RE = _re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+
+def _safe_upload_id(s):
+    return bool(s and _UPLOAD_ID_RE.match(s))
+
+
+def _chunk_staging_root():
+    upload_dir = current_app.config["UPLOAD_FOLDER"]
+    data_dir = os.path.dirname(upload_dir.rstrip("/"))
+    root = os.path.join(data_dir, "import-chunks")
+    os.makedirs(root, exist_ok=True)
+    return root
+
+
+def _cleanup_stale_chunk_dirs(max_age_seconds=24 * 60 * 60):
+    """Remove abandoned chunk-staging dirs (browser closed mid-upload,
+    user navigated away, etc.) so they don't accumulate on disk."""
+    import shutil as _shutil
+    import time as _time
+    cutoff = _time.time() - max_age_seconds
+    root = _chunk_staging_root()
+    try:
+        for name in os.listdir(root):
+            d = os.path.join(root, name)
+            try:
+                if os.path.getmtime(d) < cutoff:
+                    _shutil.rmtree(d, ignore_errors=True)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
+def _perform_data_import(zip_path):
+    """Apply a full-portal import from a zip already saved on disk.
+    Returns ``(ok: bool, redirect_url: str)``. Used by both the
+    direct-upload ``data_import`` route and the chunked-upload
+    ``data_import_finalize`` route so the import logic stays single-
+    sourced. Flashes status messages; caller just follows the redirect.
+    """
     import json, shutil, tempfile, zipfile
     from datetime import datetime
-
-    f = request.files.get("archive")
-    if not f or not f.filename:
-        flash("Choose an export archive (.zip) to import", "danger")
-        return redirect(_safe_referrer() or url_for("main.index"))
-    if request.form.get("confirm") != "REPLACE":
-        flash('Type REPLACE in the confirmation box to proceed — import overwrites all data', "danger")
-        return redirect(_safe_referrer() or url_for("main.index"))
 
     upload_dir = current_app.config["UPLOAD_FOLDER"]
     data_dir = os.path.dirname(upload_dir.rstrip("/"))
@@ -3069,32 +3106,30 @@ def data_import():
 
     staging = tempfile.mkdtemp(prefix="tsp-import-", dir=data_dir)
     try:
-        zip_path = os.path.join(staging, "in.zip")
-        f.save(zip_path)
         try:
             with zipfile.ZipFile(zip_path) as z:
                 names = z.namelist()
                 if "tsp.db" not in names or "manifest.json" not in names:
                     flash("Archive is missing tsp.db or manifest.json — not a valid export", "danger")
-                    return redirect(_safe_referrer() or url_for("main.index"))
+                    return False, _safe_referrer() or url_for("main.index")
                 for n in names:
                     if n.startswith("/") or ".." in n.split("/"):
                         flash(f"Archive contains unsafe path: {n}", "danger")
-                        return redirect(_safe_referrer() or url_for("main.index"))
+                        return False, _safe_referrer() or url_for("main.index")
                 try:
                     manifest = json.loads(z.read("manifest.json").decode("utf-8"))
                     if manifest.get("app") not in ("trusted-servants-pro", "trusted-servants-portal"):
                         flash("Archive manifest does not identify a Trusted Servants Pro export", "danger")
-                        return redirect(_safe_referrer() or url_for("main.index"))
+                        return False, _safe_referrer() or url_for("main.index")
                 except (ValueError, UnicodeDecodeError):
                     flash("Archive manifest.json is invalid", "danger")
-                    return redirect(_safe_referrer() or url_for("main.index"))
+                    return False, _safe_referrer() or url_for("main.index")
                 extract_dir = os.path.join(staging, "extracted")
                 os.makedirs(extract_dir, exist_ok=True)
                 z.extractall(extract_dir)
         except zipfile.BadZipFile:
             flash("File is not a valid zip archive", "danger")
-            return redirect(_safe_referrer() or url_for("main.index"))
+            return False, _safe_referrer() or url_for("main.index")
 
         new_db = os.path.join(extract_dir, "tsp.db")
         new_uploads = os.path.join(extract_dir, "uploads")
@@ -3205,8 +3240,127 @@ def data_import():
             pass
 
         flash(f"Import complete. Previous data backed up to {os.path.basename(backup_dir)}/ in the data directory. You will be signed out.", "success")
-        return redirect(url_for("auth.logout"))
+        return True, url_for("auth.logout")
     finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
+@bp.route("/settings/import", methods=["POST"])
+@admin_required
+def data_import():
+    """Direct single-POST upload — no-JS fallback. Subject to the proxy's
+    request-body cap (Cloudflare free = 100 MiB) and our own
+    ``MAX_CONTENT_LENGTH``. The browser-side JS in base.html intercepts
+    the form and uses the chunked-upload pair below instead so this
+    route only handles the no-JS case or scripted clients."""
+    import tempfile
+    f = request.files.get("archive")
+    if not f or not f.filename:
+        flash("Choose an export archive (.zip) to import", "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+    if request.form.get("confirm") != "REPLACE":
+        flash('Type REPLACE in the confirmation box to proceed — import overwrites all data', "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+
+    upload_dir = current_app.config["UPLOAD_FOLDER"]
+    data_dir = os.path.dirname(upload_dir.rstrip("/"))
+    tmp_zip = tempfile.NamedTemporaryFile(
+        prefix="tsp-import-direct-", suffix=".zip", delete=False, dir=data_dir)
+    tmp_zip.close()
+    try:
+        f.save(tmp_zip.name)
+        _ok, target = _perform_data_import(tmp_zip.name)
+        return redirect(target)
+    finally:
+        try: os.unlink(tmp_zip.name)
+        except OSError: pass
+
+
+@bp.route("/settings/import/chunk", methods=["POST"])
+@admin_required
+def data_import_chunk():
+    """Receive one chunk of a multi-part bundle upload. The browser
+    slices the .zip into ~90 MiB chunks (under Cloudflare's 100 MiB cap)
+    and POSTs each here keyed by a per-upload UUID. Chunks land at
+    ``<data_dir>/import-chunks/<upload_id>/<chunk_index:08d>.bin`` so
+    finalize can concat them in order."""
+    upload_id = (request.form.get("upload_id") or "").strip().lower()
+    if not _safe_upload_id(upload_id):
+        return jsonify(error="invalid upload_id"), 400
+    try:
+        chunk_index = int(request.form.get("chunk_index", ""))
+        total_chunks = int(request.form.get("total_chunks", ""))
+    except ValueError:
+        return jsonify(error="bad chunk metadata"), 400
+    if chunk_index < 0 or total_chunks < 1 or chunk_index >= total_chunks:
+        return jsonify(error="chunk index out of range"), 400
+    chunk = request.files.get("chunk")
+    if not chunk:
+        return jsonify(error="no chunk file"), 400
+
+    _cleanup_stale_chunk_dirs()
+    staging = os.path.join(_chunk_staging_root(), upload_id)
+    os.makedirs(staging, exist_ok=True)
+    chunk_path = os.path.join(staging, f"{chunk_index:08d}.bin")
+    chunk.save(chunk_path)
+    return jsonify(ok=True, chunk_index=chunk_index, total_chunks=total_chunks)
+
+
+@bp.route("/settings/import/finalize", methods=["POST"])
+@admin_required
+def data_import_finalize():
+    """Assemble the chunks deposited under the given ``upload_id`` into
+    a single .zip on disk and hand it to ``_perform_data_import``. Same
+    REPLACE confirmation gate as the direct route; same redirect to
+    ``auth.logout`` on success (post-import flash + worker recycle live
+    in the shared helper)."""
+    import shutil, tempfile
+    upload_id = (request.form.get("upload_id") or "").strip().lower()
+    if not _safe_upload_id(upload_id):
+        flash("Invalid upload session — please retry the upload", "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+    if request.form.get("confirm") != "REPLACE":
+        flash('Type REPLACE in the confirmation box to proceed — import overwrites all data', "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+
+    staging = os.path.join(_chunk_staging_root(), upload_id)
+    if not os.path.isdir(staging):
+        flash("Upload session not found — please retry the upload", "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+
+    chunks = sorted(n for n in os.listdir(staging) if n.endswith(".bin"))
+    try:
+        expected = int(request.form.get("expected_chunks", "0"))
+    except ValueError:
+        expected = 0
+    if expected and len(chunks) != expected:
+        shutil.rmtree(staging, ignore_errors=True)
+        flash(
+            f"Upload incomplete — expected {expected} chunks but only "
+            f"{len(chunks)} arrived. Please retry.", "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+
+    upload_dir = current_app.config["UPLOAD_FOLDER"]
+    data_dir = os.path.dirname(upload_dir.rstrip("/"))
+    tmp_zip = tempfile.NamedTemporaryFile(
+        prefix="tsp-import-chunked-", suffix=".zip", delete=False, dir=data_dir)
+    try:
+        for name in chunks:
+            with open(os.path.join(staging, name), "rb") as src:
+                while True:
+                    block = src.read(8 * 1024 * 1024)
+                    if not block:
+                        break
+                    tmp_zip.write(block)
+    finally:
+        tmp_zip.close()
+
+    try:
+        _ok, target = _perform_data_import(tmp_zip.name)
+        return redirect(target)
+    finally:
+        try: os.unlink(tmp_zip.name)
+        except OSError: pass
         shutil.rmtree(staging, ignore_errors=True)
 
 
