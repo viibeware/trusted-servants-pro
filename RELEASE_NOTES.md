@@ -7,7 +7,11 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.13 — 2026-05-18 (latest) — Fix: custom form submissions blocked with "CSRF token is missing"
+## 2.1.14 — 2026-05-18 (latest) — Fix: custom form submit 500'd while sending recipient email
+
+After the CSRF fix shipped in 2.1.13, posting a valid submission to a custom form returned an Internal Server Error. The handler tried to read a column on SiteSetting that doesn't exist (`frontend_site_name` instead of `frontend_title`) while building the email subject. Fixed; submissions now go through cleanly. If you saw this error in 2.1.13, update to 2.1.14 and retry — nothing on your forms or stored submissions changes.
+
+## 2.1.13 — 2026-05-18 — Fix: custom form submissions blocked with "CSRF token is missing"
 
 Submitting a custom form on the public site returned **Bad Request — The CSRF token is missing**. The form's hidden CSRF input was omitted from the template — fixed. If you saw this error in 2.1.12, update to 2.1.13 and retry; nothing on your forms or their submissions changes.
 

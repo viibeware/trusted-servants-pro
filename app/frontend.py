@@ -3782,7 +3782,7 @@ def custom_form_submit(slug):
                     body_lines.append(f"  {n}: {info['original']} (stored as {info['stored']})")
             body_lines.append("")
             body_lines.append(f"IP: {sub.ip}  ·  Submitted at: {sub.created_at:%Y-%m-%d %H:%M} UTC")
-            subject = f"[{site.frontend_site_name or 'Site'}] {cf.title} submission"
+            subject = f"[{(site.frontend_title if site else None) or 'Site'}] {cf.title} submission"
             # Use the submission's email field (if any) as Reply-To so
             # the operator can reply directly from their mail client.
             reply_to = None

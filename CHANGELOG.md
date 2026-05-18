@@ -6,6 +6,12 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.14] — 2026-05-18
+
+### Fixed — Custom form submit 500'd when building the recipient-email subject
+
+After the CSRF fix in 2.1.13, posting a valid CustomForm submission hit ``AttributeError: 'SiteSetting' object has no attribute 'frontend_site_name'`` while building the recipient-email subject line. The brand-name column is ``frontend_title``, not ``frontend_site_name`` — I'd guessed at the column name from memory rather than grepping the model. Fixed in ``frontend.py::custom_form_submit``; also added the standard ``if site else None`` guard so a never-configured install doesn't trip on the attribute access either.
+
 ## [2.1.13] — 2026-05-18
 
 ### Fixed — Custom form submit returned "CSRF token is missing"
