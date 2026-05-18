@@ -15,6 +15,12 @@
 {%- set _dynbg_active = _dynbg or _dynbg_cfg.overlay -%}
 <div class="fe-page-dynbg-host{% if _dynbg_active %} fe-dynbg-host{% endif %}"{% if _dynbg_active and _dynbg_inline %} style="{{ _dynbg_inline }}"{% endif %}>
   {% if _dynbg_active %}{% with dynbg_key=_dynbg, dynbg_config=_dynbg_cfg_raw %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}{% endif %}
+  {# Variants own the layout — they include the "Submit a story" CTA
+     partial themselves, right after their heading + subheading area,
+     so the button sits at the top of the page rather than under the
+     story list. Operator's form pick and label arrive via the
+     ``submit_url`` / ``submit_label`` context vars, set by the route
+     handler in frontend.py::stories_list. #}
   {% include list_partial %}
 </div>
 {% endblock %}

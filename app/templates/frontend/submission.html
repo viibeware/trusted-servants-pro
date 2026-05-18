@@ -1,8 +1,23 @@
 {% extends "frontend/base.html" %}
-{%- set _heading = (site.submission_form_heading if site else None) or 'Submit an event or announcement' -%}
-{%- set _subheading = (site.submission_form_subheading if site else None)
-    or 'Fill out the form below and a ' ~ frontend_title ~ ' admin will review your submission before publishing it. Required fields are marked *.' -%}
-{%- set _intro = (site.submission_form_intro if site else None) -%}
+{# This template is the shared "Forms" chrome — the events/announcements
+   Submission Form AND every CustomForm render through here. The route
+   passes ``submission_partial`` (the variant — classic/minimal/split)
+   + optional overrides so CustomForms can supply their own heading /
+   subheading / intro + their own form-body partial without forking
+   the whole template tree. SiteSetting.submission_form_* values are
+   the fallback when the overrides aren't provided. #}
+{%- set _heading = heading_override or (site.submission_form_heading if site else None) or 'Submit an event or announcement' -%}
+{# subheading_override='' is the "explicitly suppress" signal — CustomForms
+   set it so the events-specific default doesn't bleed into a custom-form
+   page. ``is defined`` distinguishes "operator typed empty" from
+   "renderer didn't pass it at all". #}
+{%- if subheading_override is defined and subheading_override is not none -%}
+  {%- set _subheading = subheading_override -%}
+{%- else -%}
+  {%- set _subheading = (site.submission_form_subheading if site else None)
+      or 'Fill out the form below and a ' ~ frontend_title ~ ' admin will review your submission before publishing it. Required fields are marked *.' -%}
+{%- endif -%}
+{%- set _intro = intro_override or (site.submission_form_intro if site else None) -%}
 {% block title %}{{ _heading }} · {{ frontend_title }}{% endblock %}
 {# Dispatcher for the public /submissionform page. Every layout under
    frontend/submission/<key>.html receives the same heading/subheading/

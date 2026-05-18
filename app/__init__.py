@@ -1526,7 +1526,12 @@ def _migrate_sqlite(app):
                          ("utility_bar_left_json", "TEXT"),
                          ("utility_bar_right_json", "TEXT"),
                          ("utility_bar_live_meetings", "BOOLEAN NOT NULL DEFAULT 0"),
-                         ("utility_bar_mobile_default", "VARCHAR(32)")):
+                         ("utility_bar_mobile_default", "VARCHAR(32)"),
+                         # Stories-list "Submit a story" CTA. Holds a
+                         # form identifier (registry key or
+                         # ``custom:<id>``) + the button label text.
+                         ("frontend_stories_list_submit_form", "VARCHAR(64)"),
+                         ("frontend_stories_list_submit_label", "VARCHAR(100)")):
             add("site_setting", col, ddl)
         for col, ddl in (("url", "VARCHAR(1000)"),
                          ("stored_filename", "VARCHAR(500)"),

@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+{% block heading %}{{ form.title }}{% endblock %}
+{% block heading_help %}Configure this custom form. Phase 2 adds a drag-and-drop field builder below the settings card — for now you can set title, URL, recipients, and what happens after submit.{% endblock %}
+{% block top_actions %}
+<a class="btn" href="{{ url_for('main.frontend_forms') }}">← Back to forms</a>
+{% endblock %}
+{% block content %}
+<div class="fe-admin-layout">
+  {% include "_frontend_subnav.html" %}
+  <div class="fe-admin-main">
+
+    <form class="form" method="post"
+          action="{{ url_for('main.frontend_custom_form_edit', form_id=form.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Settings</h2>
+          <span class="muted smaller">Public URL is built from the slug — visitors reach this form at
+            <code>/{{ form.slug }}</code>.</span>
+        </div>
+
+        {# Freshly-created stubs land here with a placeholder title +
+           slug ("Untitled form" / "untitled-form…"). Autofocus the
+           title and pre-select its text so the operator's first
+           keystroke replaces the placeholder instead of appending to
+           it. Existing forms (anyone editing a saved form) skip the
+           autofocus so the cursor doesn't steal away from whatever
+           the operator scrolled down to. #}
+        {% set _is_placeholder = (form.title or '').startswith('Untitled form') %}
+        <div class="form-row">
+          <label>Title
+            <input type="text" name="title" value="{{ form.title }}" required maxlength="200"
+                   {% if _is_placeholder %}autofocus data-select-on-focus{% endif %}>
+          </label>
+          <label>URL slug
+            <input type="text" name="slug" value="{{ form.slug }}"
+                   pattern="[a-z0-9-]*" maxlength="120" required>
+            <span class="muted smaller">Lowercase letters, numbers, and hyphens only.</span>
+          </label>
+        </div>
+        {% if _is_placeholder %}
+        <script>
+          // Autofocus + select-all so first keystroke replaces the
+          // placeholder rather than appending after it.
+          (function () {
+            var el = document.querySelector('[data-select-on-focus]');
+            if (el) { try { el.select(); } catch (_) {} }
+          })();
+        </script>
+        {% endif %}
+
+        <label>Description <span class="muted smaller">— Markdown supported. Shown above the form fields.</span>
+          <textarea name="description" rows="4"
+                    placeholder="Optional intro text — **bold**, *italic*, [links](https://example.com), - lists, etc.">{{ form.description or '' }}</textarea>
+        </label>
+
+        <label>Recipient emails
+          <input type="text" name="recipients_csv" value="{{ form.recipients_csv or '' }}"
+                 placeholder="alice@example.com, bob@example.com">
+          <span class="muted smaller">Comma-separated. Each address receives one email per submission.</span>
+        </label>
+
+        <fieldset class="fieldset">
+          <legend>On successful submit</legend>
+          <p class="muted small">
+            If <b>Redirect URL</b> is set, visitors are redirected there after submitting.
+            Otherwise we show <b>Thank-you message</b> inline on the same page.
+          </p>
+          <label>Redirect URL <span class="muted smaller">(optional)</span>
+            <input type="url" name="redirect_url" value="{{ form.redirect_url or '' }}"
+                   placeholder="https://example.com/thanks">
+          </label>
+          <label>Thank-you message
+            <textarea name="thank_you_message" rows="3"
+                      placeholder="Thanks for your submission — we'll be in touch.">{{ form.thank_you_message or '' }}</textarea>
+          </label>
+        </fieldset>
+
+        <label class="mode-toggle">
+          <input type="checkbox" name="enabled" value="1" {% if form.enabled %}checked{% endif %}>
+          <span class="mode-track"><span class="mode-thumb"></span></span>
+          <span>Enabled — visitors can submit to <code>/{{ form.slug }}</code></span>
+        </label>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Save settings</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Fields</h2>
+          <span class="muted smaller">Drag fields by their handle to reorder. Click <b>Edit</b> on a card to change its label, options, and required state. <b>Add field</b> drops a new card at the bottom — pick the type from the dropdown.</span>
+        </div>
+
+        {# Hidden input the JS keeps in sync with the visual order. The
+           server reads `field_order` to know which `field_<idx>_*`
+           sub-inputs to keep, in what sequence. #}
+        <input type="hidden" name="field_order" value="" data-field-order>
+
+        <div class="fe-form-builder" data-form-builder>
+          {% for f in fields %}
+          {% set idx = loop.index0 %}
+          <div class="fe-form-field-card" data-field-card data-field-idx="{{ idx }}" draggable="false">
+            <input type="hidden" name="field_{{ idx }}_type" value="{{ f.type }}">
+            <div class="fe-form-field-head">
+              <span class="fe-form-field-drag" aria-hidden="true" title="Drag to reorder">{{ icon('grip-vertical') }}</span>
+              <span class="fe-form-field-type-pill">{{ f.type }}</span>
+              <span class="fe-form-field-title">{{ f.label }}{% if f.required %} <span class="muted smaller">· required</span>{% endif %}</span>
+              <button type="button" class="btn btn-sm" data-field-edit>Edit</button>
+              <button type="button" class="btn btn-sm btn-danger" data-field-delete title="Delete field">{{ icon('trash') }}</button>
+            </div>
+            <div class="fe-form-field-body" hidden>
+              <div class="form-row">
+                <label>Label
+                  <input type="text" name="field_{{ idx }}_label" value="{{ f.label }}" maxlength="200" required>
+                </label>
+                <label>Name <span class="muted smaller">(form key, optional)</span>
+                  <input type="text" name="field_{{ idx }}_name" value="{{ f.name }}" maxlength="80"
+                         pattern="[a-z0-9_]*" placeholder="auto-from-label">
+                </label>
+              </div>
+              <label>Placeholder
+                <input type="text" name="field_{{ idx }}_placeholder" value="{{ f.get('placeholder', '') }}" maxlength="200">
+              </label>
+              {% if f.type == 'checkboxes' %}
+              <label data-field-help-wrap>Help text <span class="muted smaller">— Markdown supported. Shown below the checkboxes.</span>
+                <textarea name="field_{{ idx }}_help" rows="4" maxlength="2000"
+                          placeholder="Add longer instructions here — **bold**, *italic*, [links](https://example.com), - lists, etc.">{{ f.get('help', '') }}</textarea>
+              </label>
+              {% else %}
+              <label data-field-help-wrap>Help text <span class="muted smaller">(shown below the input)</span>
+                <input type="text" name="field_{{ idx }}_help" value="{{ f.get('help', '') }}" maxlength="500">
+              </label>
+              {% endif %}
+              {% if f.type in ('select', 'radio', 'checkboxes') %}
+              <label>Options <span class="muted smaller">(one per line)</span>
+                <textarea name="field_{{ idx }}_options" rows="4" placeholder="Option 1&#10;Option 2">{{ (f.get('options') or [])|join('\n') }}</textarea>
+              </label>
+              {% endif %}
+              <label class="check">
+                <input type="checkbox" name="field_{{ idx }}_required" value="1" {% if f.required %}checked{% endif %}>
+                Required
+              </label>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+        {# Hidden template — JS clones this when "Add field" is clicked,
+           substituting __IDX__ with a fresh index + __TYPE__ with the
+           picker selection. Options textarea is conditionally shown by
+           JS based on type. #}
+        <template data-field-template>
+          <div class="fe-form-field-card" data-field-card data-field-idx="__IDX__" draggable="false">
+            <input type="hidden" name="field___IDX___type" value="__TYPE__">
+            <div class="fe-form-field-head">
+              <span class="fe-form-field-drag" aria-hidden="true" title="Drag to reorder">{{ icon('grip-vertical') }}</span>
+              <span class="fe-form-field-type-pill">__TYPE__</span>
+              <span class="fe-form-field-title">New field</span>
+              <button type="button" class="btn btn-sm" data-field-edit>Edit</button>
+              <button type="button" class="btn btn-sm btn-danger" data-field-delete title="Delete field">{{ icon('trash') }}</button>
+            </div>
+            <div class="fe-form-field-body">
+              <div class="form-row">
+                <label>Label
+                  <input type="text" name="field___IDX___label" value="" maxlength="200" required>
+                </label>
+                <label>Name <span class="muted smaller">(form key, optional)</span>
+                  <input type="text" name="field___IDX___name" value="" maxlength="80"
+                         pattern="[a-z0-9_]*" placeholder="auto-from-label">
+                </label>
+              </div>
+              <label>Placeholder
+                <input type="text" name="field___IDX___placeholder" value="" maxlength="200">
+              </label>
+              <label data-field-help-wrap>Help text <span class="muted smaller">(shown below the input)</span>
+                <input type="text" name="field___IDX___help" value="" maxlength="500">
+              </label>
+              <label data-field-options-wrap hidden>Options <span class="muted smaller">(one per line)</span>
+                <textarea name="field___IDX___options" rows="4" placeholder="Option 1&#10;Option 2"></textarea>
+              </label>
+              <label class="check">
+                <input type="checkbox" name="field___IDX___required" value="1">
+                Required
+              </label>
+            </div>
+          </div>
+        </template>
+
+        <div class="fe-form-builder-toolbar">
+          <select data-field-type-picker>
+            {% for ft in field_types %}<option value="{{ ft }}">{{ ft }}</option>{% endfor %}
+          </select>
+          <button type="button" class="btn" data-field-add>{{ icon('plus') }} Add field</button>
+        </div>
+      </section>
+    </form>
+
+    <script>
+    (function () {
+      var builder = document.querySelector('[data-form-builder]');
+      if (!builder) return;
+      var tpl       = document.querySelector('[data-field-template]');
+      var picker    = document.querySelector('[data-field-type-picker]');
+      var addBtn    = document.querySelector('[data-field-add]');
+      var orderIn   = document.querySelector('[data-field-order]');
+      var form      = builder.closest('form');
+      var OPTION_TYPES = {'select': 1, 'radio': 1, 'checkboxes': 1};
+
+      // Next available card index — used for new-card name suffixes.
+      // Lives outside the DOM ordering so deleting card #2 and adding a
+      // new one yields index 3, not a re-used 2 (which would let two
+      // cards share a name space in a hand-crafted POST).
+      var nextIdx = (function () {
+        var max = -1;
+        builder.querySelectorAll('[data-field-card]').forEach(function (c) {
+          var n = parseInt(c.dataset.fieldIdx, 10);
+          if (!isNaN(n) && n > max) max = n;
+        });
+        return max + 1;
+      })();
+
+      // Update the visible label and required-pill from the live form
+      // inputs inside the body. Called after every edit-input change so
+      // collapsing the card back shows the latest values.
+      function syncHead(card) {
+        var labelIn = card.querySelector('input[name$="_label"]');
+        var reqIn   = card.querySelector('input[name$="_required"]');
+        var titleEl = card.querySelector('.fe-form-field-title');
+        if (titleEl && labelIn) {
+          var t = (labelIn.value || '').trim() || 'New field';
+          titleEl.textContent = t;
+          if (reqIn && reqIn.checked) {
+            var s = document.createElement('span');
+            s.className = 'muted smaller';
+            s.textContent = ' · required';
+            titleEl.appendChild(s);
+          }
+        }
+      }
+
+      function showOptionsIfNeeded(card) {
+        var type = (card.querySelector('input[name$="_type"]') || {}).value;
+        var wrap = card.querySelector('[data-field-options-wrap]');
+        if (!wrap) return;
+        wrap.hidden = !OPTION_TYPES[type];
+      }
+
+      function swapHelpInputForCheckboxes(card) {
+        // Newly-added "checkboxes" cards get a multi-line help textarea
+        // with a Markdown-supported hint. Existing cards already render
+        // the right variant server-side via the per-type Jinja branch
+        // (see the {{ '{%' }} if f.type == 'checkboxes' {{ '%}' }} block
+        // above) — this JS only catches the Add-field path.
+        var type = (card.querySelector('input[name$="_type"]') || {}).value;
+        if (type !== 'checkboxes') return;
+        var wrap = card.querySelector('[data-field-help-wrap]');
+        if (!wrap) return;
+        var existing = wrap.querySelector('input[name$="_help"]');
+        if (!existing) return;  // already a textarea (existing card path)
+        // Pull the index out of the existing input's name so the textarea
+        // we drop in keeps the same field_<idx>_help binding.
+        var name = existing.getAttribute('name');
+        var val  = existing.value || '';
+        // Rebuild the inner HTML — hint copy stays in sync with the
+        // server-side checkboxes branch in the template.
+        wrap.innerHTML =
+          'Help text <span class="muted smaller">— Markdown supported. Shown below the checkboxes.</span>' +
+          '<textarea name="' + name + '" rows="4" maxlength="2000" ' +
+          'placeholder="Add longer instructions here — **bold**, *italic*, [links](https://example.com), - lists, etc.">' +
+          val + '</textarea>';
+      }
+
+      function wireCard(card) {
+        // Toggle the body open/closed on Edit click.
+        var editBtn = card.querySelector('[data-field-edit]');
+        var body    = card.querySelector('.fe-form-field-body');
+        if (editBtn && body) {
+          editBtn.addEventListener('click', function () { body.hidden = !body.hidden; });
+        }
+        // Delete card.
+        var delBtn = card.querySelector('[data-field-delete]');
+        if (delBtn) {
+          delBtn.addEventListener('click', function () {
+            if (!confirm('Delete this field?')) return;
+            card.remove();
+            syncOrder();
+          });
+        }
+        // Live head sync on label / required changes.
+        card.querySelectorAll('input[name$="_label"], input[name$="_required"]').forEach(function (el) {
+          el.addEventListener('input', function () { syncHead(card); });
+          el.addEventListener('change', function () { syncHead(card); });
+        });
+        // Options visibility on initial wire-up.
+        showOptionsIfNeeded(card);
+
+        // Drag & drop reorder. Card starts with draggable="false" so
+        // text selection inside the textareas/inputs works normally —
+        // the browser doesn't try to initiate a drag when the user
+        // mousedown-drags to highlight text. The handle's mousedown
+        // flips draggable=true just for the duration of an actual
+        // drag operation; mouseup or dragend turns it back off.
+        var handleEl = card.querySelector('.fe-form-field-drag');
+        if (handleEl) {
+          handleEl.addEventListener('mousedown', function () {
+            card.draggable = true;
+          });
+        }
+        function clearDraggable() { card.draggable = false; }
+        // Use 'mouseup' on the window so we catch the release even if
+        // it happens outside the card (e.g. user mousedowns on handle,
+        // changes mind, releases over empty page area).
+        window.addEventListener('mouseup', clearDraggable);
+
+        card.addEventListener('dragstart', function (e) {
+          card.classList.add('dragging');
+          try { e.dataTransfer.setData('text/plain', card.dataset.fieldIdx || ''); } catch (_) {}
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        card.addEventListener('dragend', function () {
+          card.classList.remove('dragging');
+          builder.querySelectorAll('[data-field-card].drag-over').forEach(function (c) {
+            c.classList.remove('drag-over');
+          });
+          card.draggable = false;
+          syncOrder();
+        });
+        card.addEventListener('dragover', function (e) {
+          var dragging = builder.querySelector('[data-field-card].dragging');
+          if (!dragging || dragging === card) return;
+          e.preventDefault();
+          var rect = card.getBoundingClientRect();
+          var after = (e.clientY - rect.top) > rect.height / 2;
+          card.classList.add('drag-over');
+          if (after) builder.insertBefore(dragging, card.nextSibling);
+          else builder.insertBefore(dragging, card);
+        });
+        card.addEventListener('dragleave', function () { card.classList.remove('drag-over'); });
+        card.addEventListener('drop', function (e) { e.preventDefault(); card.classList.remove('drag-over'); });
+      }
+
+      function syncOrder() {
+        var ids = [];
+        builder.querySelectorAll('[data-field-card]').forEach(function (c) {
+          ids.push(c.dataset.fieldIdx);
+        });
+        if (orderIn) orderIn.value = ids.join(',');
+      }
+
+      builder.querySelectorAll('[data-field-card]').forEach(wireCard);
+      syncOrder();
+
+      if (addBtn && picker && tpl) {
+        addBtn.addEventListener('click', function () {
+          var type = picker.value || 'text';
+          var idx = nextIdx++;
+          var html = tpl.innerHTML.replace(/__IDX__/g, String(idx)).replace(/__TYPE__/g, type);
+          var wrap = document.createElement('div');
+          wrap.innerHTML = html.trim();
+          var card = wrap.firstElementChild;
+          builder.appendChild(card);
+          // Swap the help <input> for a markdown textarea on checkboxes
+          // BEFORE wireCard runs, so listeners attach to the final
+          // element rather than the discarded input.
+          swapHelpInputForCheckboxes(card);
+          wireCard(card);
+          // Open the new card's body so the operator can type a label.
+          var body = card.querySelector('.fe-form-field-body');
+          if (body) body.hidden = false;
+          showOptionsIfNeeded(card);
+          var firstInput = card.querySelector('input[name$="_label"]');
+          if (firstInput) firstInput.focus();
+          syncOrder();
+        });
+      }
+
+      // Sync the hidden order input one more time right before submit,
+      // catching any reorder that happened after the last dragend.
+      if (form) form.addEventListener('submit', syncOrder);
+    })();
+    </script>
+
+  </div>
+</div>
+{% endblock %}

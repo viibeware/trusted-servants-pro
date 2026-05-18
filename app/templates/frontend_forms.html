@@ -56,6 +56,60 @@
 
     <section class="card">
       <div class="card-head">
+        <h2>Custom forms</h2>
+        <span class="muted smaller">Build your own forms with drag-and-drop fields. Each form gets its own public URL (<code>/&lt;slug&gt;</code>) and submissions land in <b>Form Submissions</b>.</span>
+      </div>
+
+      {% if custom_forms %}
+      <ul class="fe-forms-list">
+        {% for cf in custom_forms %}
+        <li class="fe-forms-row">
+          <span class="fe-forms-row-icon" aria-hidden="true">{{ icon('send') }}</span>
+          <div class="fe-forms-row-text">
+            <div class="fe-forms-row-name">{{ cf.title }}{% if not cf.enabled %} <span class="muted smaller">· disabled</span>{% endif %}</div>
+            {% if cf.description %}<p class="fe-forms-row-desc muted small">{{ cf.description }}</p>{% endif %}
+            <p class="fe-forms-row-meta muted smaller">
+              <code>/{{ cf.slug }}</code>
+              <span class="fe-forms-row-meta-sep">·</span>
+              {{ cf.submissions|length }} submission{{ '' if cf.submissions|length == 1 else 's' }}
+            </p>
+          </div>
+          <div class="fe-forms-row-actions">
+            <a class="btn btn-sm" href="{{ url_for('main.frontend_custom_form_edit', form_id=cf.id) }}">Edit</a>
+            <form method="post" action="{{ url_for('main.frontend_custom_form_delete', form_id=cf.id) }}"
+                  style="display:inline" onsubmit="return confirm('Delete this form? Existing submissions will also be removed.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-danger" title="Delete form">{{ icon('trash') }}</button>
+            </form>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No custom forms yet.</p>
+      {% endif %}
+
+      {# The "+ Add form" button is a trigger, not a save — it creates
+         a stub row + redirects to the edit page. ``data-fe-skip-save-
+         bar`` opts the form out of the FE save-bar tracker so the
+         global ``body.has-fe-save-bar .form-actions { display: none }``
+         rule doesn't swallow the button. Wrapping the button directly
+         (no ``.form-actions``) belt-and-braces the visibility. #}
+      {# Bare <form> (no ``.form`` class) — ``.form`` is a column-flex
+         container that would stretch the single child button to fill
+         the row. ``data-fe-skip-save-bar`` opts out of the FE save-bar
+         tracker so the global rule that hides .form-actions doesn't
+         touch us; the button sits at its natural content width. #}
+      <form method="post" class="fe-new-form-row"
+            action="{{ url_for('main.frontend_custom_form_new') }}"
+            data-fe-skip-save-bar>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-primary">{{ icon('plus') }} Add form</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
         <h2>Triggering a form from a nav link</h2>
         <span class="muted smaller">Pop a form modal from anywhere on the public site without writing code.</span>
       </div>

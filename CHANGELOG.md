@@ -6,6 +6,35 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.12] — 2026-05-18
+
+### Added — Custom forms with a drag-and-drop field builder
+
+A whole new admin-authored forms system: build any form from the Web Frontend admin, give it its own URL, collect submissions in a unified admin inbox. Lives alongside the existing events/announcements Submission Form and the dedicated Contact Form — those keep their specialised business logic untouched.
+
+**Models** (new tables, auto-created via ``db.create_all()`` on boot, no ``_migrate_sqlite`` needed):
+
+- ``CustomForm`` — ``slug`` (unique-indexed, drives the public URL), ``title``, ``description`` (markdown-supported intro), ``blocks_json`` (the ordered field set), ``recipients_csv``, ``redirect_url`` / ``thank_you_message`` (one wins on submit), ``enabled``, ``created_at`` / ``updated_at``.
+- ``FormSubmission`` — ``form_id`` FK (cascade delete), ``payload_json`` (``{"fields": {…}, "files": {name → {stored, original}}}``), ``ip``, ``created_at``.
+
+**Admin index (``Web Frontend → Forms``)** — same page as the registry-form list, with a new **Custom forms** section. Single **+ Add form** button creates a disabled-by-default stub (``Untitled form`` / ``untitled-form[-N]``) and drops the operator onto the edit page with the title input autofocused + selected.
+
+**Edit page (``/tspro/frontend/forms/custom/<id>/edit``)** — settings card on top (title, slug with reserved-route + Page-slug + CustomForm collision guards, description, recipients CSV, redirect URL / thank-you message, enabled toggle), field builder below. Eight field types: ``text``, ``email``, ``phone``, ``textarea``, ``select``, ``radio``, ``checkboxes``, ``file``. Per-field config: label, name (auto-snake-case from label, unique-suffixed on collision), required toggle, placeholder, help text, options (one-per-line for select/radio/checkboxes). HTML5 drag & drop reorder via the ``⋮⋮`` handle on each card; cards start ``draggable="false"`` so cursor placement + drag-highlight in the field's textareas work normally — the handle's ``mousedown`` flips the card draggable for the duration of the gesture, ``dragend`` / window-``mouseup`` resets.
+
+**Public render** routes through the shared "Forms" template — the same ``frontend/submission.html`` dispatcher the events/announcements submission form uses, with the operator's currently-selected template variant (Classic / Minimal / Split), dynamic background, width mode, and padding. CustomForm-specific overrides (``heading_override`` = title, ``intro_override`` = description piped through ``|markdown_block``) sit in place of the SiteSetting defaults; a new ``form_body_partial`` parameter on each variant swaps the events form body for ``frontend/_custom_form_body.html``. Contact form unchanged — kept on its own template per product spec. The ``- list`` markdown shape works without the operator needing a blank line above (``markdown_block`` auto-inserts it).
+
+**Submit handler** validates fields against the form's blocks (``required``, basic email format), stores a ``FormSubmission`` row, optionally emails recipients (one address per submission with Reply-To set to the submitter's email field when one exists), then either redirects to ``redirect_url`` or renders the thank-you message inline. File uploads land under ``UPLOAD_FOLDER`` with UUID-prefixed filenames; payload JSON stores the filename + the operator-uploaded original. Validation failures re-render with field-level errors AND previously-typed values so the visitor doesn't lose their typing.
+
+**Form Submissions admin** — new sidebar entry under **Structure** in the Web Frontend subnav. List page at ``/tspro/frontend/forms/submissions`` shows the 200 most recent submissions across all custom forms, filterable by form via a dropdown. Per-submission detail at ``/forms/submissions/<id>`` pairs each value with its field label (from the form's blocks_json), surfaces file attachments as download links, handles deleted-form edge case by falling back to a raw JSON payload view. Delete action with confirm.
+
+**Checkboxes help — multi-line + markdown.** The help-text input under a ``checkboxes`` field is a 4-row ``<textarea>`` with a 2000-char ceiling and a "Markdown supported" hint. Renders publicly through ``|markdown_block`` inside a block-level ``<div>`` so multi-paragraph help, lists, links, emphasis all work. Other field types keep their existing single-line ``<input>`` + plain-text render.
+
+**Markdown description.** The form's ``description`` field on the edit page now advertises "Markdown supported" and renders through ``|markdown_block`` on the public page, sitting in place of the variant's intro slot.
+
+### Added — Stories list "Submit a story" call-to-action
+
+The public ``/stories`` page can now carry an opt-in CTA button under its title + subheading that links to any form on the site. Two new SiteSetting columns (``frontend_stories_list_submit_form``, ``frontend_stories_list_submit_label``) drive it. Admin Templates page picks the target form from a single grouped dropdown — **Built-in forms** optgroup for the registry entries, **Custom forms** optgroup for every CustomForm row (disabled forms show ``(disabled)`` next to their name). Identifier is stored as a registry-key (``submission`` / ``contact``) or ``custom:<id>``, resolved to a URL at render time so a CustomForm slug rename or deletion doesn't leave a dangling link. Empty / invalid / deleted-form identifiers cleanly hide the button. New shared partial ``frontend/_stories_submit_cta.html`` included from each of the six variants (paper-stack, ledger, manuscript, broadsheet, minimal-serif, magazine) right after their heading area so the CTA sits at the top of the page where visitors look first.
+
 ## [2.1.11] — 2026-05-18
 
 ### Fixed — Dropbox backup target no longer expires every 4 hours

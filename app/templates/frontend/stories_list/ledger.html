@@ -14,6 +14,7 @@
           <span class="fe-stories-ledger-vol">Volume I</span>
           <h1 class="fe-stories-ledger-title">{{ list_heading or 'Stories' }}</h1>
           <p class="fe-stories-ledger-sub">{{ list_subheading or 'A ledger of recovery, kept in the open. Read in any order.' }}</p>
+          {% include "frontend/_stories_submit_cta.html" %}
         </header>
 
         {% if not all_stories %}

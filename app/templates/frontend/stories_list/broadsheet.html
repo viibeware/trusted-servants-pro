@@ -19,6 +19,7 @@
         </div>
         <h1 class="fe-stories-bs-masthead-title">{{ list_heading or 'The Stories' }}</h1>
         <div class="fe-stories-bs-masthead-rule"></div>
+        {% include "frontend/_stories_submit_cta.html" %}
       </header>
 
       {% if not all_stories %}

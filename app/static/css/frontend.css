@@ -11225,3 +11225,66 @@ html:not([data-theme="dark"]) [style*="--fe-dynbg-c2-light"] {
 html:not([data-theme="dark"]) [style*="--fe-dynbg-c3-light"] {
   --fe-dynbg-c3: var(--fe-dynbg-c3-light) !important;
 }
+
+/* CustomForm public render. Minimal styling that inherits the
+   frontend chrome's container/section spacing — each field is a
+   stacked label/control pair with red-tinted error text below
+   when the field failed validation. Reused by every admin-authored
+   form (Submission Form + Contact Form keep their own templates). */
+.fe-custom-form-wrap {
+  padding: var(--fe-space-lg, 32px) 0;
+  max-width: 640px;
+}
+.fe-custom-form-head h1 { margin: 0 0 .5rem; }
+.fe-custom-form-desc { margin: 0 0 1.25rem; color: var(--fe-color-text-soft, #475569); }
+.fe-custom-form { display: flex; flex-direction: column; gap: 1rem; }
+.fe-custom-form-field { display: flex; flex-direction: column; gap: .3rem; }
+.fe-custom-form-label { font-weight: 600; }
+.fe-custom-form-field input[type="text"],
+.fe-custom-form-field input[type="email"],
+.fe-custom-form-field input[type="tel"],
+.fe-custom-form-field textarea,
+.fe-custom-form-field select {
+  padding: 9px 12px;
+  border: 1px solid var(--fe-color-border, #cbd5e1);
+  border-radius: 8px;
+  background: var(--fe-color-surface, #fff);
+  color: var(--fe-color-text, #0f172a);
+  font-size: 1rem;
+}
+.fe-custom-form-field textarea { resize: vertical; min-height: 96px; }
+.fe-custom-form-field--error input,
+.fe-custom-form-field--error textarea,
+.fe-custom-form-field--error select { border-color: #dc2626; }
+.fe-custom-form-err { color: #dc2626; font-size: .85rem; }
+.fe-custom-form-help { font-size: .85rem; }
+.fe-custom-form-radios,
+.fe-custom-form-checks { display: flex; flex-direction: column; gap: .35rem; }
+.fe-custom-form-radio,
+.fe-custom-form-check { display: flex; align-items: center; gap: .5rem; }
+.fe-custom-form-actions { margin-top: .5rem; }
+.fe-custom-form-success {
+  padding: 1.25rem 1.5rem;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #14532d;
+  border-radius: 12px;
+  font-size: 1.05rem;
+}
+[data-theme="dark"] .fe-custom-form-success {
+  background: #052e16; color: #bbf7d0; border-color: #14532d;
+}
+
+/* "Submit a story" CTA — included by each stories-list variant right
+   after its heading / subheading area, so it sits visually at the top
+   of the page rather than under the story list. Centred inside
+   whichever container the variant is using; width / padding are owned
+   by the variant so this rule stays minimal. */
+.fe-stories-submit-wrap {
+  display: flex;
+  justify-content: center;
+  margin: var(--fe-space-md, 16px) 0 var(--fe-space-lg, 32px);
+}
+.fe-stories-submit-btn {
+  font-size: 1.05rem;
+}

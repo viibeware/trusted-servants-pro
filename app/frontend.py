@@ -7,6 +7,7 @@ screen. When the toggle is off, the root URL redirects to the admin login.
 
 Admin pages remain at /tspro/* and the authenticated dashboard is at /tspro/.
 """
+import os
 from flask import Blueprint, render_template, redirect, url_for, abort, request, current_app
 from flask_login import current_user
 from .models import SiteSetting, Meeting, FrontendNavItem, Post, Story, BlogPost, BlogCategory, BlogTag
@@ -2786,6 +2787,43 @@ def announcements_archive():
     return redirect(url_for("frontend.archive"), code=301)
 
 
+def _resolve_form_link(identifier):
+    """Turn a stored form identifier into a public ``(url, label_default)``
+    pair. ``identifier`` is the canonical string the admin dropdown
+    writes: registry key (``submission`` / ``contact``) for built-in
+    forms, ``custom:<id>`` for an admin-authored CustomForm. Returns
+    ``(None, None)`` when the identifier is empty / unrecognised /
+    points at a deleted form so the caller can hide the CTA without
+    crashing the page. ``label_default`` is the form's own title —
+    used when the operator hasn't typed a custom button label."""
+    if not identifier:
+        return None, None
+    from .forms_registry import form_by_key
+    from .models import CustomForm as _CF
+    if identifier.startswith("custom:"):
+        try:
+            cf_id = int(identifier.split(":", 1)[1])
+        except (ValueError, IndexError):
+            return None, None
+        cf = _CF.query.filter_by(id=cf_id, enabled=True).first()
+        if cf is None:
+            return None, None
+        # ``custom_form_submit`` is POST-only; the public GET URL is the
+        # catch-all ``page_detail`` route which falls through to
+        # CustomForm when no Page matches the slug.
+        return url_for("frontend.page_detail", slug=cf.slug), cf.title
+    entry = form_by_key(identifier)
+    if entry is None:
+        return None, None
+    endpoint = entry.get("public_url_endpoint")
+    if not endpoint:
+        return None, None
+    try:
+        return url_for(endpoint), entry.get("name") or "Submit"
+    except Exception:  # noqa: BLE001 — endpoint missing / module disabled
+        return None, None
+
+
 @bp.route("/stories")
 @public_section("Stories", gate=lambda s: bool(getattr(s, "stories_enabled", False)))
 def stories_list():
@@ -2823,6 +2861,13 @@ def stories_list():
     pad_pct = max(0, min(20, pad_pct))
     list_heading = (site.frontend_stories_list_heading if site else None) or ""
     list_subheading = (site.frontend_stories_list_subheading if site else None) or ""
+    # Optional "Submit a story" CTA. Resolver returns (None, None) for
+    # empty / deleted / disabled targets so the template can hide the
+    # button cleanly. Operator's custom label wins; falls back to the
+    # form's own title when blank.
+    submit_url, default_label = _resolve_form_link(
+        site.frontend_stories_list_submit_form if site else None)
+    submit_label = (site.frontend_stories_list_submit_label if site else None) or default_label
     return render_template("frontend/stories_list.html",
                            list_partial=tpl["partial"],
                            list_template_key=tpl["key"],
@@ -2831,6 +2876,8 @@ def stories_list():
                            list_padding_pct=pad_pct,
                            list_heading=list_heading,
                            list_subheading=list_subheading,
+                           submit_url=submit_url,
+                           submit_label=submit_label,
                            all_stories=rows,
                            **ctx)
 
@@ -3523,6 +3570,238 @@ def contact_submit():
     return redirect(url_for("frontend.contact"))
 
 
+def _render_custom_form(cf, ctx, errors=None, values=None, success_message=None):
+    """Render a CustomForm through the shared "Forms" template chrome —
+    the same dispatcher (``frontend/submission.html``) the events /
+    announcements submission form uses. Heading / subheading / intro
+    come from the CustomForm row; the rest of the templated chrome
+    (variant choice, dynamic background, width mode, padding) reads
+    from the same SiteSetting columns the submission form is tuned by,
+    so flipping the site-wide template choice on the Templates admin
+    page swaps EVERY form's look in step.
+
+    ``errors`` is an optional ``{field_name: message}`` dict from a
+    failed POST; ``values`` is the previously-typed payload so the
+    page re-renders without losing the operator's input.
+    ``success_message`` non-None means we're on the post-submit
+    thank-you path (form body suppressed; thank-you copy rendered
+    where the form would have sat)."""
+    import json as _json
+    blocks = []
+    if cf.blocks_json:
+        try:
+            blocks = _json.loads(cf.blocks_json)
+        except (ValueError, TypeError):
+            blocks = []
+    if not isinstance(blocks, list):
+        blocks = []
+
+    # Pull the submission-form template settings off SiteSetting so the
+    # CustomForm renders with the operator's chosen variant + dynbg +
+    # width / padding. Mirrors what main.submission_form() builds in
+    # routes.py — kept here so the public form path doesn't depend on
+    # the admin-side helper.
+    site = ctx.get("site")
+    tpl = _template_meta(SUBMISSION_FORM_TEMPLATES,
+                         (site.frontend_submission_form_template if site else None) or "classic")
+    tpl_settings_dict = template_settings(site, "submission_form", tpl["key"]) if site else {}
+    tpl_style = template_css_vars(tpl_settings_dict)
+    tpl_dynbg_key = tpl_settings_dict.get("bg_dynamic_key") \
+        or (site.frontend_submission_form_bg_dynamic_key if site else None)
+    width_mode = (site.frontend_submission_form_width_mode if site else None) or "boxed"
+    if width_mode not in ("boxed", "full"):
+        width_mode = "boxed"
+    try:
+        max_width = int(site.frontend_submission_form_max_width) if site else 720
+    except (TypeError, ValueError):
+        max_width = 720
+    max_width = max(480, min(2400, max_width))
+    try:
+        pad_pct = int(site.frontend_submission_form_padding_pct) if site else 5
+    except (TypeError, ValueError):
+        pad_pct = 5
+    pad_pct = max(0, min(20, pad_pct))
+
+    return render_template(
+        "frontend/submission.html",
+        # Variant + dynbg + width settings — same names the submission
+        # form route passes, so the dispatcher's existing logic kicks
+        # in unchanged.
+        submission_partial=tpl["partial"],
+        submission_template_key=tpl["key"],
+        submission_width_mode=width_mode,
+        submission_max_width=max_width,
+        submission_padding_pct=pad_pct,
+        tpl_style=tpl_style,
+        tpl_dynbg_key=tpl_dynbg_key,
+        # CustomForm-specific overrides: dispatcher reads these in
+        # place of the SiteSetting fallbacks, and the form-body partial
+        # swap replaces the events/announcements form body with our
+        # blocks-driven custom-form body.
+        # Description renders through the variant's INTRO slot, which
+        # already pipes through |markdown so the operator can use **bold**,
+        # links, lists, etc. Subheading is forced empty so the events-
+        # submission default ("Fill out the form below…") doesn't appear
+        # under a CustomForm's title — empty string is the "explicitly
+        # blank" signal the dispatcher checks for via `is defined`.
+        heading_override=cf.title,
+        subheading_override="",
+        intro_override=cf.description,
+        form_body_partial="frontend/_custom_form_body.html",
+        # Body-partial context.
+        cform=cf,
+        cform_blocks=blocks,
+        cform_errors=errors or {},
+        cform_values=values or {},
+        cform_success=success_message,
+        **ctx,
+    )
+
+
+@bp.route("/<slug>", methods=["POST"])
+def custom_form_submit(slug):
+    """Public submission handler for CustomForm rows. Validates the
+    fields declared in ``cf.blocks_json``, persists a ``FormSubmission``
+    row, sends one email per recipient, and either redirects to
+    ``cf.redirect_url`` or renders the thank-you message inline.
+
+    A failed validation re-renders the form with field-level errors and
+    the operator's previously-typed values so they don't have to retype
+    everything."""
+    import json as _json
+    import uuid as _uuid
+    from .models import CustomForm as _CF, FormSubmission as _FS, db as _db
+
+    site = _site()
+    gate = _frontend_gate(site)
+    if gate is not None:
+        return gate
+    cf = _CF.query.filter_by(slug=slug, enabled=True).first()
+    if cf is None:
+        abort(404)
+
+    blocks = []
+    if cf.blocks_json:
+        try:
+            blocks = _json.loads(cf.blocks_json)
+        except (ValueError, TypeError):
+            blocks = []
+    if not isinstance(blocks, list):
+        blocks = []
+
+    # Build the validated payload + capture form-level errors.
+    payload = {}
+    file_attachments = {}
+    errors = {}
+    posted_values = {}  # echoed back to the template on validation failure
+    upload_dir = current_app.config["UPLOAD_FOLDER"]
+
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        name = block.get("name")
+        if not name:
+            continue
+        ftype = block.get("type") or "text"
+        required = bool(block.get("required"))
+        if ftype == "checkboxes":
+            vals = request.form.getlist(name)
+            posted_values[name] = vals
+            if required and not vals:
+                errors[name] = "Please select at least one option."
+                continue
+            payload[name] = vals
+        elif ftype == "file":
+            f = request.files.get(name)
+            if f and f.filename:
+                # UUID-prefix the filename to match the rest of the
+                # uploads dir's convention. Storing only the filename
+                # in payload (not the full path) keeps the FormSubmission
+                # JSON small and references existing assets the
+                # operator can already browse via the media admin.
+                from werkzeug.utils import secure_filename
+                safe = secure_filename(f.filename) or "upload.bin"
+                stored = f"{_uuid.uuid4().hex}_{safe}"
+                f.save(os.path.join(upload_dir, stored))
+                file_attachments[name] = {
+                    "stored": stored,
+                    "original": f.filename,
+                }
+                payload[name] = stored
+            elif required:
+                errors[name] = "Please upload a file."
+        else:
+            raw = (request.form.get(name) or "").strip()
+            posted_values[name] = raw
+            if required and not raw:
+                errors[name] = "This field is required."
+                continue
+            if ftype == "email" and raw and "@" not in raw:
+                errors[name] = "Please enter a valid email address."
+                continue
+            payload[name] = raw
+
+    if errors:
+        return _render_custom_form(cf, ctx=_frontend_context(site),
+                                   errors=errors, values=posted_values), 400
+
+    # Persist the submission. The IP comes from ProxyFix-aware
+    # request.remote_addr — same source the rest of the app uses for
+    # client-side IP capture so logs stay consistent.
+    sub = _FS(
+        form_id=cf.id,
+        payload_json=_json.dumps({"fields": payload, "files": file_attachments}),
+        ip=request.remote_addr or "unknown",
+    )
+    _db.session.add(sub)
+    _db.session.commit()
+
+    # Email recipients (best-effort — a failed send doesn't lose the row).
+    if cf.recipients_csv:
+        rcpts = []
+        seen = set()
+        for r in cf.recipients_csv.split(","):
+            r = r.strip().lower()
+            if r and r not in seen:
+                seen.add(r); rcpts.append(r)
+        if rcpts:
+            body_lines = [f"New submission to '{cf.title}' at {request.host}/{cf.slug}", ""]
+            for block in blocks:
+                if not isinstance(block, dict): continue
+                name = block.get("name")
+                if not name or name not in payload: continue
+                label = block.get("label") or name
+                val = payload[name]
+                if isinstance(val, list):
+                    val = ", ".join(val)
+                body_lines.append(f"{label}: {val}")
+            if file_attachments:
+                body_lines.append("")
+                body_lines.append("Attachments:")
+                for n, info in file_attachments.items():
+                    body_lines.append(f"  {n}: {info['original']} (stored as {info['stored']})")
+            body_lines.append("")
+            body_lines.append(f"IP: {sub.ip}  ·  Submitted at: {sub.created_at:%Y-%m-%d %H:%M} UTC")
+            subject = f"[{site.frontend_site_name or 'Site'}] {cf.title} submission"
+            # Use the submission's email field (if any) as Reply-To so
+            # the operator can reply directly from their mail client.
+            reply_to = None
+            for block in blocks:
+                if isinstance(block, dict) and block.get("type") == "email":
+                    nm = block.get("name")
+                    if nm and payload.get(nm):
+                        reply_to = payload[nm]; break
+            _send_with_reply_to(site, rcpts, subject, "\n".join(body_lines),
+                                reply_to=reply_to)
+
+    # Success handoff: redirect if configured, otherwise render the form
+    # template again with a success message inline.
+    if cf.redirect_url:
+        return redirect(cf.redirect_url)
+    msg = cf.thank_you_message or "Thanks — your submission was received."
+    return _render_custom_form(cf, ctx=_frontend_context(site), success_message=msg)
+
+
 def _send_with_reply_to(site, recipients, subject, body_text,
                         reply_to=None, reply_to_name=None):
     """Lightweight twin of mail.send_mail that lets us set Reply-To.
@@ -3818,6 +4097,15 @@ def page_detail(slug):
         q = q.filter_by(is_private=False)
     page = q.first()
     if page is None:
+        # Fall through to admin-authored custom forms. The form-builder
+        # admin already rejects slugs that collide with existing Page
+        # slugs (and the reserved-routes set), so this two-tier lookup
+        # is unambiguous: either a Page owns the slug or a CustomForm
+        # does, never both.
+        from .models import CustomForm as _CF
+        cf = _CF.query.filter_by(slug=slug, enabled=True).first()
+        if cf is not None:
+            return _render_custom_form(cf, ctx=_frontend_context(site))
         abort(404)
     sections = []
     if page.blocks_json:

@@ -11,6 +11,7 @@
       <h1 class="fe-stories-min-title">{{ list_heading or 'Stories' }}</h1>
       <p class="fe-stories-min-sub">{{ list_subheading or 'First-person accounts from members of the fellowship.' }}</p>
       <div class="fe-stories-min-rule" aria-hidden="true"></div>
+      {% include "frontend/_stories_submit_cta.html" %}
     </header>
 
     {% if not all_stories %}

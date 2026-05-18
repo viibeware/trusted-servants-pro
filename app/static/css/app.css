@@ -2074,15 +2074,37 @@ body.has-fe-save-bar .fe-admin-main .form-actions { display: none; }
 }
 .fe-subnav-link.active > .icon { color: var(--text); }
 
+/* Mobile section picker. The full link list still renders into the DOM
+   (so the desktop nav recipe stays untouched) — at ≤900px we swap it
+   for a native <select> grouped via <optgroup>. Native picker is one
+   tap on a phone vs. scanning a wrap-flex of 14 pills, and the group
+   labels stay meaningful (Setup / Structure / Content). */
+.fe-subnav-select-wrap { display: none; }
 @media (max-width: 900px) {
   .fe-admin-layout { grid-template-columns: 1fr; gap: 18px; }
   .fe-subnav { position: static; }
   .fe-subnav-head { padding-bottom: 10px; margin-bottom: 8px; }
-  .fe-subnav-nav { flex-direction: row; flex-wrap: wrap; gap: 4px; }
-  .fe-subnav-group { margin-top: 0; display: contents; }
-  .fe-subnav-group-label { display: none; }
-  .fe-subnav-link { flex: 0 0 auto; padding: 6px 10px; }
-  .fe-subnav-link.active::before { display: none; }
+  .fe-subnav-nav { display: none; }
+  .fe-subnav-select-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .fe-subnav-select-wrap > span { flex: 0 0 auto; }
+  .fe-subnav-select {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    appearance: auto;
+  }
+  .fe-subnav-select:focus { outline: 2px solid var(--brand, #0B5CFF); outline-offset: 1px; }
 }
 .intergroup-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; align-items: start; }
 @media (max-width: 800px) { .intergroup-grid { grid-template-columns: 1fr; } }
@@ -5999,6 +6021,19 @@ body.fe-admin-autohide .menu-btn { display: grid; place-items: center; }
   font-weight: 500;
   font-size: 0.875rem;
   white-space: nowrap;
+}
+/* The head row is a flex row with [handle][icon][title][viewall].
+   When the widget is narrow (2-column dashboard on a tablet, single-
+   column on a phone) a long viewall label like "Open Watchtower ·
+   Deletes →" can crash into the title. Wrap the row so the viewall
+   drops onto its own line below the title in that case; ``margin-left:
+   auto`` on the viewall keeps it right-aligned on the new line, so on
+   wide widgets nothing visually changes (everything still fits on one
+   line). ``row-gap`` is the only gap that applies when items wrap onto
+   a new line — column-gap stays at the existing flex gap. */
+.dash-widget-head {
+  flex-wrap: wrap;
+  row-gap: 4px;
 }
 .dash-widget-head .dash-widget-viewall .icon {
   width: 14px;
@@ -12353,6 +12388,21 @@ body.embed .backups-wrap {
 }
 .dash-backups-when-row strong { font-variant-numeric: tabular-nums; }
 
+/* On narrow widgets (single-column dashboard on tablets / phones) the
+   "Last successful backup" label + timestamp pair was rendering as
+   ``[label]              [value]`` with the value pushed to the right
+   edge by ``space-between``. At narrow widths the timestamp drifts
+   visually away from its label and the row looks unbalanced. Stack
+   them vertically below 720px so each label/value pair reads as one
+   block, left-aligned, with the value directly under its label. */
+@media (max-width: 720px) {
+  .dash-backups-when-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+}
+
 .dash-backups-recent-label { margin-bottom: .35rem; }
 .dash-backups-recent-list {
   list-style: none;
@@ -13009,6 +13059,110 @@ body.embed .backups-wrap {
 [data-theme="dark"] .backup-busy-card {
   background: #0f172a;
   border-color: #1f2937;
+}
+
+/* Form Submissions admin — list + detail. */
+.fe-submissions-filter { margin-bottom: 1rem; }
+.fe-submissions-list { list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: .35rem; }
+.fe-submission-row { border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel); transition: border-color 120ms ease, background 120ms ease; }
+.fe-submission-row:hover { border-color: var(--brand, #0B5CFF); background: var(--panel-2); }
+.fe-submission-row-link { display: flex; flex-direction: column; gap: .25rem;
+  padding: .7rem .85rem; text-decoration: none; color: inherit; }
+.fe-submission-row-head { display: flex; align-items: baseline;
+  justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+.fe-submission-row-meta { font-size: .85rem; }
+.fe-submission-dl { display: grid; grid-template-columns: minmax(140px, 1fr) 3fr; gap: .5rem 1rem; }
+.fe-submission-dl dt { font-weight: 600; }
+.fe-submission-dl dd { margin: 0; word-break: break-word; }
+@media (max-width: 600px) {
+  .fe-submission-dl { grid-template-columns: 1fr; gap: .2rem .5rem; }
+  .fe-submission-dl dt { margin-top: .5rem; }
+}
+.fe-submission-raw { background: var(--panel-2); padding: .75rem;
+  border-radius: 8px; overflow-x: auto; font-size: .8rem; }
+
+/* Custom-form field builder. Each field is a card with a head row
+   (drag handle + type pill + title + edit/delete buttons) and a
+   collapsed body. Card drag-and-drop reorder mirrors the dashboard-
+   widget recipe — same .dragging / .drag-over classes for visual
+   feedback. The toolbar row at the bottom carries the type picker
+   and the Add button. */
+.fe-form-builder {
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  margin: .5rem 0;
+}
+.fe-form-field-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 0;
+  transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+.fe-form-field-card.dragging {
+  opacity: 0.6;
+  border-color: var(--brand, #0B5CFF);
+}
+.fe-form-field-card.drag-over {
+  box-shadow: 0 0 0 2px var(--brand, #0B5CFF) inset;
+}
+.fe-form-field-head {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .55rem .65rem;
+}
+.fe-form-field-drag {
+  cursor: grab;
+  display: inline-flex;
+  color: var(--muted);
+  padding: 2px;
+  border-radius: 6px;
+}
+.fe-form-field-drag:hover { background: var(--panel-2); color: var(--text); }
+.fe-form-field-type-pill {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+.fe-form-field-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fe-form-field-body {
+  padding: .5rem .75rem .75rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+.fe-form-field-body[hidden] { display: none; }
+.fe-form-builder-toolbar {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-top: .25rem;
+}
+.fe-form-builder-toolbar select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  text-transform: capitalize;
 }
 
 /* Chunked-upload progress bar inside the import busy overlay. Sits

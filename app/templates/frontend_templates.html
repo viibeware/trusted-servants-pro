@@ -1288,6 +1288,8 @@
     {%- set _swmax  = (site.frontend_stories_list_max_width   if site else 1160) -%}
     {%- set _swhead = (site.frontend_stories_list_heading     if site else '') or '' -%}
     {%- set _swsub  = (site.frontend_stories_list_subheading  if site else '') or '' -%}
+    {%- set _ssform  = (site.frontend_stories_list_submit_form if site else '') or '' -%}
+    {%- set _sslabel = (site.frontend_stories_list_submit_label if site else '') or '' -%}
     <fieldset class="fieldset fe-mlist-copy-fieldset">
       <legend>Page heading</legend>
       <p class="muted small" style="margin: 0 0 8px;">Override the title and subheading the public /stories page shows above the layout. Leave blank to use the chosen layout's built-in copy.</p>
@@ -1300,6 +1302,39 @@
         <textarea name="frontend_stories_list_subheading"
                   rows="2" maxlength="500"
                   placeholder="First-person accounts from members of the fellowship.">{{ _swsub }}</textarea>
+      </label>
+    </fieldset>
+    <fieldset class="fieldset fe-mlist-copy-fieldset">
+      <legend>"Submit a story" button</legend>
+      <p class="muted small" style="margin: 0 0 8px;">Adds a call-to-action button under the stories list that links to a form. Visitors can submit their own stories from there. Leave the form set to "— None —" to hide the button.</p>
+      <label>Form to link to
+        <select name="frontend_stories_list_submit_form">
+          <option value="" {% if not _ssform %}selected{% endif %}>— None (hide button) —</option>
+          {# Group registry vs. custom forms via <optgroup> so the
+             dropdown reads cleanly when there are several of each. #}
+          {%- set _builtin = form_picker_options|selectattr('group', 'equalto', 'Built-in')|list -%}
+          {%- set _custom  = form_picker_options|selectattr('group', 'equalto', 'Custom')|list -%}
+          {% if _builtin %}
+          <optgroup label="Built-in forms">
+            {% for opt in _builtin %}
+            <option value="{{ opt.value }}" {% if _ssform == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endif %}
+          {% if _custom %}
+          <optgroup label="Custom forms">
+            {% for opt in _custom %}
+            <option value="{{ opt.value }}" {% if _ssform == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endif %}
+        </select>
+      </label>
+      <label>Button label <span class="muted smaller">(optional)</span>
+        <input type="text" name="frontend_stories_list_submit_label"
+               maxlength="100" value="{{ _sslabel }}"
+               placeholder="Share your story">
+        <span class="muted smaller">Leave blank to use the linked form's own title.</span>
       </label>
     </fieldset>
     <fieldset class="fieldset fe-mlist-width-fieldset">

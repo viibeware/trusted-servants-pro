@@ -854,6 +854,17 @@ class SiteSetting(db.Model):
     frontend_stories_list_padding_pct = db.Column(db.Integer, nullable=False, default=5)
     frontend_stories_list_heading = db.Column(db.String(200))
     frontend_stories_list_subheading = db.Column(db.String(500))
+    # Optional "Submit a story" CTA on the public stories-list page.
+    # ``_form`` is an identifier resolved to a URL at render time:
+    #   "" / NULL     → no button shown (default)
+    #   "submission"  → registry form, /submissionform
+    #   "contact"     → registry form, /contact
+    #   "custom:<id>" → CustomForm row, URL is /<slug> resolved live
+    # Stored as id (not URL) so slug renames on the CustomForm don't
+    # silently break the link. ``_label`` is the visible button text;
+    # defaults to "Share your story" in the public render when null.
+    frontend_stories_list_submit_form = db.Column(db.String(64))
+    frontend_stories_list_submit_label = db.Column(db.String(100))
     frontend_story_template = db.Column(db.String(64), nullable=False, default="paper")
     # Blog module — long-form editorial posts at /blog and /blog/<slug>.
     # Same module-toggle + required-role plumbing as Stories. List +
@@ -2388,3 +2399,62 @@ class TrustedServantBlast(db.Model):
     finished_at = db.Column(db.DateTime)
 
     sent_by = db.relationship("User")
+
+
+class CustomForm(db.Model):
+    """Admin-authored public form. Schema is the same shape as Page:
+    an admin-visible ``title`` for the form list + a public-facing
+    ``slug`` that turns into the form's URL on the public site
+    (``/<slug>``). The field set lives in ``blocks_json`` as an ordered
+    list of typed field blocks rendered by the Phase 2 builder; before
+    Phase 2 ships the column is just empty / NULL.
+
+    Submission flow: a public POST to the form's URL deposits a row in
+    ``FormSubmission`` and emails the addresses in ``recipients_csv``;
+    the operator sees the result in the Form Submissions admin page.
+
+    The legacy events/announcements submission form and the dedicated
+    contact form keep their own settings columns on ``SiteSetting`` —
+    they pre-date CustomForm and have specialized backend behaviour
+    (events-submission creates draft rows, contact-form persists in
+    ``ContactSubmission``). CustomForm is for everything new.
+    """
+    __tablename__ = "custom_form"
+    id = db.Column(db.Integer, primary_key=True)
+    slug = db.Column(db.String(120), unique=True, nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    blocks_json = db.Column(db.Text)
+    # Comma-separated recipient list. Each address gets one email per
+    # submission; addresses are de-duped (lowercased) at send time.
+    recipients_csv = db.Column(db.String(2000))
+    # Two success behaviours, only one applies. ``redirect_url`` wins
+    # when set; otherwise we render ``thank_you_message`` inline.
+    redirect_url = db.Column(db.String(500))
+    thank_you_message = db.Column(db.Text)
+    enabled = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    submissions = db.relationship(
+        "FormSubmission",
+        backref="form",
+        cascade="all, delete-orphan",
+        order_by="FormSubmission.created_at.desc()",
+    )
+
+
+class FormSubmission(db.Model):
+    """One row per public submission to a ``CustomForm``. Payload is a
+    JSON blob of ``{field_name: value}`` keyed by the field's ``name``
+    in the form's ``blocks_json``. File-typed fields store the saved
+    filename (UUID-prefixed under ``UPLOAD_FOLDER``) rather than the
+    binary content. ``ip`` is captured for spam triage (the same
+    ProxyFix-aware request.remote_addr the rest of the app uses)."""
+    __tablename__ = "form_submission"
+    id = db.Column(db.Integer, primary_key=True)
+    form_id = db.Column(db.Integer, db.ForeignKey("custom_form.id", ondelete="CASCADE"),
+                        nullable=False, index=True)
+    payload_json = db.Column(db.Text)
+    ip = db.Column(db.String(45))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)

@@ -7,7 +7,41 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.11 — 2026-05-18 (latest) — Dropbox backups stop expiring every 4 hours
+## 2.1.12 — 2026-05-18 (latest) — Build your own forms, link them from the stories page
+
+Two big additions that finally close the loop on letting visitors submit things to your site without writing code.
+
+### Build any form you want, drag-and-drop
+
+There's a new **Custom forms** section under **Web Frontend → Forms**. Click **+ Add form** to create one. The edit page is split in two:
+
+- **Settings** — title, the URL slug (visitors reach the form at `/<slug>`), an optional description rendered above the form (Markdown supported — `**bold**`, `*italic*`, `[links](https://example.com)`, `-` lists), comma-separated recipient emails, and what happens after submit (redirect to a URL **or** show a thank-you message inline).
+- **Fields** — drag-and-drop builder. Pick a type from the dropdown, click **+ Add field**, fill in the label. Eight field types: text, email, phone, textarea, select, radio, checkboxes, file. Each field has a label, optional placeholder + help text, required toggle, and (for select / radio / checkboxes) a one-per-line list of options. Drag the **⋮⋮** handle to reorder; click **Edit** to open a card's body; click the red trash button to delete with confirm.
+
+The public form uses the same template chrome (Classic / Minimal / Split) as the Submission Form — pick once in **Web Frontend → Structure → Templates**, every custom form picks up the same look. On submit, each visitor's answers land in a new admin page, and each address you listed in recipients gets an email with the full field values. File uploads work and arrive as proper links in the admin detail view.
+
+**Checkboxes** get a special treatment: their help text is a multi-line box that supports Markdown so you can write longer instructions, embed links, use `-` lists, etc.
+
+### Form Submissions inbox
+
+New **Form Submissions** entry in the Web Frontend admin's sidebar (under Structure). Lists every submission across every custom form, newest first, filterable by which form it came in on. Click any row for the detail view — field labels + values + file attachments. Delete button on the detail page (with confirm) if you want to clear something out.
+
+### "Share your story" button on the stories page
+
+The **Stories list** template on **Web Frontend → Structure → Templates** has two new fields under a **"Submit a story" button** section:
+
+- **Form to link to** — a single dropdown with two groups: **Built-in forms** (Submission Form, Contact Form) and **Custom forms** (every custom form you've built; disabled ones show *(disabled)*). Pick one to surface a button on `/stories` that visitors can click to submit their own stories. Leave it set to *— None —* to hide the button entirely.
+- **Button label** — optional. If blank, the button uses the linked form's own title (e.g. *Share Your Story*).
+
+The button sits right under the page heading + subheading on whichever stories-list variant you've picked (paper-stack, ledger, manuscript, broadsheet, minimal-serif, magazine) — so it's where visitors expect to find a call to action.
+
+### A few small touches
+
+- A grumpy 500 error when opening a custom form's edit page is gone (a stray Jinja-syntax token sat inside a JavaScript comment).
+- Drag-highlighting text inside a field card's textareas works again — previously the parent's `draggable="true"` hijacked the cursor; now the card only goes draggable while you're holding the **⋮⋮** handle.
+- The **+ Add form** button on the forms index sits at its natural width (was stretching across the card on the first cut).
+
+## 2.1.11 — 2026-05-18 — Dropbox backups stop expiring every 4 hours
 
 If you were using Dropbox as an off-site backup destination, the access token Dropbox's "Generate access token" button gives you is only valid for **4 hours** — so the scheduler worked once the day you set it up, then failed every subsequent morning with `expired_access_token` and you had to keep generating new tokens. (Dev mode wasn't the cause — the token lifetime is the same on dev and published apps.)
 

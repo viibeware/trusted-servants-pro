@@ -11,6 +11,7 @@
       <span class="fe-stories-paper-eyebrow">— Stories of recovery —</span>
       <h1 class="fe-stories-paper-title">{{ list_heading or 'Stories' }}</h1>
       <p class="fe-stories-paper-sub">{{ list_subheading or 'First-person accounts from members of the fellowship. Read at your own pace.' }}</p>
+      {% include "frontend/_stories_submit_cta.html" %}
     </header>
 
     {% if not all_stories %}

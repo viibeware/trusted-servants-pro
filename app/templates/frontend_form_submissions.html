@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block heading %}Form Submissions{% endblock %}
+{% block heading_help %}Everything visitors have submitted through your custom forms. Filter by form using the dropdown; click any row for the full detail view. Most recent 200 shown.{% endblock %}
+{% block top_actions %}
+<a class="btn" href="{{ url_for('main.frontend_forms') }}">← Back to forms</a>
+{% endblock %}
+{% block content %}
+<div class="fe-admin-layout">
+  {% include "_frontend_subnav.html" %}
+  <div class="fe-admin-main">
+
+    <section class="card">
+      <div class="card-head">
+        <h2>All submissions</h2>
+        <span class="muted smaller">
+          {{ submissions|length }} row{{ '' if submissions|length == 1 else 's' }} shown
+        </span>
+      </div>
+
+      <form method="get" class="form fe-submissions-filter">
+        <label>Filter by form
+          <select name="form" onchange="this.form.submit()">
+            <option value="" {% if not selected_form_id %}selected{% endif %}>— All forms —</option>
+            {% for f in forms %}
+            <option value="{{ f.id }}" {% if selected_form_id == f.id %}selected{% endif %}>{{ f.title }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {% if selected_form_id %}
+        <a class="btn btn-sm" href="{{ url_for('main.frontend_form_submissions') }}">Clear filter</a>
+        {% endif %}
+      </form>
+
+      {% if submissions %}
+      <ul class="fe-submissions-list">
+        {% for sub in submissions %}
+        {% set payload = sub.payload_json|safe_html if false else None %}
+        <li class="fe-submission-row">
+          <a class="fe-submission-row-link" href="{{ url_for('main.frontend_form_submission_detail', sub_id=sub.id) }}">
+            <div class="fe-submission-row-head">
+              <strong>{{ sub.form.title if sub.form else '(deleted form)' }}</strong>
+              <span class="muted smaller">{{ sub.created_at.strftime('%Y-%m-%d %H:%M') }} UTC</span>
+            </div>
+            <div class="fe-submission-row-meta muted smaller">
+              IP <code>{{ sub.ip or 'unknown' }}</code>
+              · <span>{{ icon('arrow-right') }} View details</span>
+            </div>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No submissions yet{% if selected_form_id %} for this form{% endif %}.</p>
+      {% endif %}
+    </section>
+
+  </div>
+</div>
+{% endblock %}

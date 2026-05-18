@@ -1,0 +1,19 @@
+{# Stories-list "Submit a story" call-to-action. Included from each
+   variant template right after the page heading + subheading so the
+   button sits at the top of the page where visitors expect it.
+
+   Renders nothing when ``submit_url`` is empty — the resolver in
+   ``frontend.py::_resolve_form_link`` returns None for unset / deleted
+   / disabled targets, so the CTA cleanly hides without each variant
+   needing its own guard.
+
+   Centred on the page; no width / padding inputs here — variants own
+   their layout and just plant this partial inline with their own
+   heading area, picking up whatever vertical rhythm they apply. #}
+{% if submit_url %}
+<div class="fe-stories-submit-wrap">
+  <a class="fe-btn fe-btn-primary fe-stories-submit-btn" href="{{ submit_url }}">
+    {{ submit_label or 'Share your story' }}
+  </a>
+</div>
+{% endif %}

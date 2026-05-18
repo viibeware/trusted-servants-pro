@@ -12,6 +12,91 @@
     </div>
   </div>
 
+  {# Mobile section picker. The full link list below is fine on desktop
+     but at ≤900px wraps into 4–5 rows of grouping-less pills (the
+     "jumbled mess" the operator was hitting). CSS hides this select
+     above the breakpoint and hides the .fe-subnav-nav below it, so we
+     get a one-tap native picker on phones without losing the rich nav
+     on desktop. Active page resolved via the same `request.endpoint`
+     checks the link list uses; <optgroup> labels mirror the desktop
+     section headers (Setup / Structure / Content). #}
+  <label class="fe-subnav-select-wrap">
+    <span class="muted smaller">Jump to:</span>
+    <select class="fe-subnav-select" data-fe-subnav-select>
+      <option value="{{ url_for('main.frontend_dashboard') }}"
+              {% if request.endpoint == 'main.frontend_dashboard' %}selected{% endif %}>
+        Overview
+      </option>
+      <option value="{{ url_for('main.visitor_metrics_page') }}"
+              {% if request.endpoint == 'main.visitor_metrics_page' %}selected{% endif %}>
+        Visitor Metrics
+      </option>
+      <option value="{{ url_for('main.frontend_redirects') }}"
+              {% if request.endpoint == 'main.frontend_redirects' %}selected{% endif %}>
+        Redirects
+      </option>
+      <optgroup label="Setup">
+        <option value="{{ url_for('main.frontend_branding') }}"
+                {% if request.endpoint == 'main.frontend_branding' %}selected{% endif %}>
+          Branding &amp; SEO
+        </option>
+        <option value="{{ url_for('main.frontend_fonts_icons') }}"
+                {% if request.endpoint == 'main.frontend_fonts_icons' %}selected{% endif %}>
+          Fonts &amp; Icons
+        </option>
+        <option value="{{ url_for('main.frontend_design') }}"
+                {% if request.endpoint == 'main.frontend_design' %}selected{% endif %}>
+          Design
+        </option>
+      </optgroup>
+      <optgroup label="Structure">
+        <option value="{{ url_for('main.frontend_header') }}"
+                {% if request.endpoint == 'main.frontend_header' %}selected{% endif %}>
+          Header
+        </option>
+        <option value="{{ url_for('main.frontend_footer') }}"
+                {% if request.endpoint == 'main.frontend_footer' %}selected{% endif %}>
+          Footer
+        </option>
+        <option value="{{ url_for('main.frontend_navigation') }}"
+                {% if request.endpoint in ('main.frontend_navigation', 'main.frontend_nav_megamenu') %}selected{% endif %}>
+          Navigation
+        </option>
+        <option value="{{ url_for('main.frontend_templates') }}"
+                {% if request.endpoint == 'main.frontend_templates' %}selected{% endif %}>
+          Templates
+        </option>
+        <option value="{{ url_for('main.frontend_forms') }}"
+                {% if request.endpoint in ('main.frontend_forms', 'main.frontend_form_submission', 'main.frontend_custom_form_edit') %}selected{% endif %}>
+          Forms
+        </option>
+        <option value="{{ url_for('main.frontend_form_submissions') }}"
+                {% if request.endpoint in ('main.frontend_form_submissions', 'main.frontend_form_submission_detail') %}selected{% endif %}>
+          Form Submissions
+        </option>
+        <option value="{{ url_for('main.frontend_404') }}"
+                {% if request.endpoint == 'main.frontend_404' %}selected{% endif %}>
+          404 page
+        </option>
+      </optgroup>
+      <optgroup label="Content">
+        {%- set _hp_id = site.homepage_page_id if site else None -%}
+        {%- set _hp_href = url_for('main.frontend_page_edit', page_id=_hp_id) if _hp_id else url_for('main.frontend_pages') -%}
+        {%- set _on_hp_edit = (request.endpoint == 'main.frontend_page_edit'
+                                and request.view_args
+                                and request.view_args.get('page_id') == _hp_id) -%}
+        <option value="{{ _hp_href }}" {% if _on_hp_edit %}selected{% endif %}>
+          Homepage
+        </option>
+        <option value="{{ url_for('main.frontend_pages') }}"
+                {% if request.endpoint == 'main.frontend_pages'
+                    or (request.endpoint == 'main.frontend_page_edit' and not _on_hp_edit) %}selected{% endif %}>
+          Pages
+        </option>
+      </optgroup>
+    </select>
+  </label>
+
   <nav class="fe-subnav-nav">
     <a href="{{ url_for('main.frontend_dashboard') }}"
        class="fe-subnav-link {% if request.endpoint == 'main.frontend_dashboard' %}active{% endif %}">
@@ -68,8 +153,12 @@
          form's individual settings page so the Forms entry stays
          visually selected while editing one. #}
       <a href="{{ url_for('main.frontend_forms') }}"
-         class="fe-subnav-link {% if request.endpoint in ('main.frontend_forms', 'main.frontend_form_submission') %}active{% endif %}">
+         class="fe-subnav-link {% if request.endpoint in ('main.frontend_forms', 'main.frontend_form_submission', 'main.frontend_custom_form_edit') %}active{% endif %}">
         {{ icon('send') }}<span>Forms</span>
+      </a>
+      <a href="{{ url_for('main.frontend_form_submissions') }}"
+         class="fe-subnav-link {% if request.endpoint in ('main.frontend_form_submissions', 'main.frontend_form_submission_detail') %}active{% endif %}">
+        {{ icon('inbox') }}<span>Form Submissions</span>
       </a>
       <a href="{{ url_for('main.frontend_404') }}"
          class="fe-subnav-link {% if request.endpoint == 'main.frontend_404' %}active{% endif %}">
@@ -100,6 +189,19 @@
     </div>
   </nav>
 </aside>
+
+{# Navigate-on-change for the mobile section picker. Native <select>
+   onChange is one tap on a phone vs. opening a hamburger + scanning
+   a list, which is exactly the UX the wrap-flex pill row was missing. #}
+<script>
+(function () {
+  var sel = document.querySelector('[data-fe-subnav-select]');
+  if (!sel) return;
+  sel.addEventListener('change', function () {
+    if (sel.value) window.location.assign(sel.value);
+  });
+})();
+</script>
 
 {# Sticky save bar — JS shows it (bouncing) whenever any tracked form
    inside .fe-admin-main becomes dirty. Fixed at the bottom of the

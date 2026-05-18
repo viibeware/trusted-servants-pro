@@ -1,0 +1,108 @@
+{% extends "frontend/base.html" %}
+{# Public-facing render for an admin-authored CustomForm. Walks
+   ``cform_blocks`` (the parsed blocks_json from CustomForm) and emits
+   the right input shape for each field type. Validation errors from a
+   failed POST come in via ``cform_errors`` (keyed by field name) and
+   the previously-typed payload via ``cform_values`` so the operator
+   doesn't lose their typing on a re-render. ``cform_success``, when
+   set, swaps the form body for a thank-you message (no fields shown).
+
+   This is the generic "Forms" template — every CustomForm uses it.
+   The legacy /submissionform (events/announcements) and /contact
+   keep their own dedicated templates per the original product spec. #}
+{% block title %}{{ cform.title }} · {{ site.frontend_site_name or '' }}{% endblock %}
+{% block content %}
+<section class="fe-section">
+  <div class="fe-container fe-custom-form-wrap">
+    <header class="fe-custom-form-head">
+      <h1>{{ cform.title }}</h1>
+      {% if cform.description %}<p class="fe-custom-form-desc">{{ cform.description }}</p>{% endif %}
+    </header>
+
+    {% if cform_success %}
+    <div class="fe-custom-form-success">
+      {{ cform_success|safe }}
+    </div>
+    {% else %}
+    <form class="form fe-custom-form" method="post"
+          action="{{ url_for('frontend.custom_form_submit', slug=cform.slug) }}"
+          enctype="multipart/form-data" novalidate>
+      {% for block in cform_blocks %}
+        {% set err = cform_errors.get(block.name) %}
+        {% set val = cform_values.get(block.name, '') %}
+        <label class="fe-custom-form-field fe-custom-form-field--{{ block.type }}
+                     {% if err %} fe-custom-form-field--error{% endif %}">
+          <span class="fe-custom-form-label">
+            {{ block.label }}{% if block.required %} <span class="muted smaller">*</span>{% endif %}
+          </span>
+
+          {% if block.type == 'text' %}
+            <input type="text" name="{{ block.name }}" value="{{ val }}"
+                   placeholder="{{ block.get('placeholder', '') }}"
+                   {% if block.required %}required{% endif %}>
+          {% elif block.type == 'email' %}
+            <input type="email" name="{{ block.name }}" value="{{ val }}"
+                   placeholder="{{ block.get('placeholder', '') }}"
+                   {% if block.required %}required{% endif %}>
+          {% elif block.type == 'phone' %}
+            <input type="tel" name="{{ block.name }}" value="{{ val }}"
+                   placeholder="{{ block.get('placeholder', '') }}"
+                   {% if block.required %}required{% endif %}>
+          {% elif block.type == 'textarea' %}
+            <textarea name="{{ block.name }}" rows="4"
+                      placeholder="{{ block.get('placeholder', '') }}"
+                      {% if block.required %}required{% endif %}>{{ val }}</textarea>
+          {% elif block.type == 'select' %}
+            <select name="{{ block.name }}"
+                    {% if block.required %}required{% endif %}>
+              <option value="">— pick one —</option>
+              {% for opt in block.get('options') or [] %}
+              <option value="{{ opt }}" {% if val == opt %}selected{% endif %}>{{ opt }}</option>
+              {% endfor %}
+            </select>
+          {% elif block.type == 'radio' %}
+            <span class="fe-custom-form-radios">
+              {% for opt in block.get('options') or [] %}
+              <label class="fe-custom-form-radio">
+                <input type="radio" name="{{ block.name }}" value="{{ opt }}"
+                       {% if val == opt %}checked{% endif %}
+                       {% if block.required %}required{% endif %}>
+                <span>{{ opt }}</span>
+              </label>
+              {% endfor %}
+            </span>
+          {% elif block.type == 'checkboxes' %}
+            <span class="fe-custom-form-checks">
+              {% for opt in block.get('options') or [] %}
+              <label class="fe-custom-form-check">
+                <input type="checkbox" name="{{ block.name }}" value="{{ opt }}"
+                       {% if val and opt in val %}checked{% endif %}>
+                <span>{{ opt }}</span>
+              </label>
+              {% endfor %}
+            </span>
+          {% elif block.type == 'file' %}
+            <input type="file" name="{{ block.name }}"
+                   {% if block.required %}required{% endif %}>
+          {% endif %}
+
+          {% if err %}
+          <span class="fe-custom-form-err">{{ err }}</span>
+          {% elif block.get('help') %}
+          <span class="fe-custom-form-help muted small">{{ block.help }}</span>
+          {% endif %}
+        </label>
+      {% else %}
+      <p class="muted">This form has no fields configured yet.</p>
+      {% endfor %}
+
+      {% if cform_blocks %}
+      <div class="fe-custom-form-actions">
+        <button type="submit" class="fe-btn fe-btn-primary">Submit</button>
+      </div>
+      {% endif %}
+    </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

@@ -12,6 +12,7 @@
     <header class="fe-stories-mag-head">
       <h1 class="fe-stories-mag-title">{{ list_heading or 'Stories' }}</h1>
       {% if list_subheading %}<p class="fe-stories-mag-sub">{{ list_subheading }}</p>{% endif %}
+      {% include "frontend/_stories_submit_cta.html" %}
     </header>
 
     {% if not all_stories %}

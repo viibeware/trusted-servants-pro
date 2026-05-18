@@ -20,7 +20,8 @@ from .models import (db, User, Meeting, MeetingFile, MeetingSchedule, MeetingLib
                      FrontendNavColumn, FrontendNavLink, FILE_CATEGORIES,
                      DAYS_OF_WEEK, INTERGROUP_LIBRARY_NAMES,
                      BackupTarget, BackupRun, BACKUP_KINDS,
-                     TrustedServantSubscriber, TrustedServantBlast)
+                     TrustedServantSubscriber, TrustedServantBlast,
+                     CustomForm, FormSubmission)
 
 INTERGROUP_DEFAULT_ACCOUNTS = [
     ('Chair', 'chair@dccma.com'),
@@ -6643,11 +6644,17 @@ def frontend_fonts_icons():
 @bp.route("/frontend/forms")
 @admin_required
 def frontend_forms():
-    """Forms index — lists every registered public form. The list is
-    populated from ``app/forms_registry.py``; future forms join the
-    list automatically by adding an entry there. Each registry entry
-    declares an ``enabled_setting`` column; the index reads its
-    current value off SiteSetting and exposes an inline toggle."""
+    """Forms index — two lists.
+
+    The first lists the **built-in** forms from ``forms_registry`` (the
+    legacy events/announcements Submission Form and the standalone
+    Contact Form). Each registry entry declares an ``enabled_setting``
+    column; the index reads its current value off SiteSetting and
+    exposes an inline toggle.
+
+    The second lists **custom forms** authored from the admin UI —
+    rows in the ``custom_form`` table. Each custom form has its own
+    builder page (Phase 2) and its own public URL ``/<slug>``."""
     from .forms_registry import all_forms
     s = _get_site_setting()
     forms = []
@@ -6657,7 +6664,310 @@ def frontend_forms():
         if col:
             enabled = bool(getattr(s, col, True))
         forms.append({**f, "enabled": enabled})
-    return render_template("frontend_forms.html", site=s, forms=forms)
+    custom_forms = CustomForm.query.order_by(CustomForm.created_at.desc()).all()
+    return render_template("frontend_forms.html",
+                           site=s, forms=forms, custom_forms=custom_forms)
+
+
+# Routes/slugs we refuse to let a CustomForm claim. Mirrors the same
+# set Page.slug uniqueness already protects against — adding a new
+# top-level public route should also update this list (cheap to keep
+# in sync, since the page builder already references the same names).
+_RESERVED_FORM_SLUGS = {
+    "tspro", "static", "auth", "login", "logout", "pub", "site-branding",
+    "request-access", "contact", "siteindex", "submissionform",
+    "meetings", "events", "library", "stories", "blog", "announcements",
+    "page-og-image", "page-content", "frontend",
+}
+
+# Field types the form builder allows. Anything else in incoming blocks
+# JSON gets coerced to "text" so a poked-with-curl payload can't store
+# a renderer the public template doesn't know about.
+_FORM_FIELD_TYPES = {"text", "email", "phone", "textarea",
+                     "select", "radio", "checkboxes", "file"}
+_FORM_FIELD_TYPES_WITH_OPTIONS = {"select", "radio", "checkboxes"}
+
+
+def _name_from_label(label, existing_names=()):
+    """snake_case slug from a label, used as the form-field name.
+    Reserved characters and runs of underscores collapsed; appends
+    ``_2``, ``_3``, … on collision against ``existing_names`` so two
+    fields with identical labels don't clobber each other on submit."""
+    out = []
+    for ch in (label or "").lower():
+        if ch.isalnum():
+            out.append(ch)
+        elif ch in (" ", "-", "_", "."):
+            out.append("_")
+    base = "".join(out).strip("_")
+    while "__" in base:
+        base = base.replace("__", "_")
+    base = base[:60] or "field"
+    if base not in existing_names:
+        return base
+    n = 2
+    while f"{base}_{n}" in existing_names:
+        n += 1
+    return f"{base}_{n}"
+
+
+def _parse_form_fields(form):
+    """Pull the field-builder's submitted shape out of a Flask form
+    object and produce the canonical blocks_json payload — a list of
+    field dicts. The builder serializes its state via parallel-array
+    inputs keyed by ``field_<idx>_<attr>``; this helper walks the
+    indices in submission order so reorders survive the round-trip.
+
+    Returns a Python list (caller json.dumps it onto the model).
+    """
+    import json as _json
+    fields = []
+    used_names = set()
+    # The builder also posts a hidden ordering input "field_order" with
+    # comma-separated indices so client-side reorders persist; fall back
+    # to numeric ordering of the field_<idx>_type keys if that's absent.
+    order_raw = (form.get("field_order") or "").strip()
+    if order_raw:
+        indices = []
+        for tok in order_raw.split(","):
+            tok = tok.strip()
+            if tok.isdigit():
+                indices.append(int(tok))
+    else:
+        indices = []
+        for key in form.keys():
+            if key.startswith("field_") and key.endswith("_type"):
+                try:
+                    indices.append(int(key.split("_", 2)[1]))
+                except (IndexError, ValueError):
+                    continue
+        indices.sort()
+
+    for idx in indices:
+        ftype = (form.get(f"field_{idx}_type") or "").strip().lower()
+        if ftype not in _FORM_FIELD_TYPES:
+            ftype = "text"
+        label = (form.get(f"field_{idx}_label") or "").strip()[:200]
+        if not label:
+            continue
+        # Name: prefer the user-supplied value, fall back to derived
+        # from label, fall back to ``field_<idx>`` so we never lose
+        # the column on submit.
+        manual_name = (form.get(f"field_{idx}_name") or "").strip()[:80]
+        if manual_name:
+            name = manual_name.lower().replace(" ", "_")
+            # Ensure uniqueness even when the operator manually typed
+            # a colliding name — quietly suffix.
+            if name in used_names:
+                n = 2
+                while f"{name}_{n}" in used_names:
+                    n += 1
+                name = f"{name}_{n}"
+        else:
+            name = _name_from_label(label, used_names)
+        used_names.add(name)
+        placeholder = (form.get(f"field_{idx}_placeholder") or "").strip()[:200]
+        # Help-text ceiling is generous (2000 chars) so the checkboxes
+        # variant's markdown body has room. Non-checkbox inputs cap at
+        # maxlength=500 client-side; this server cap kicks in only for
+        # the multi-line checkboxes variant and as a hard upper bound
+        # against curl-crafted payloads.
+        helptext = (form.get(f"field_{idx}_help") or "").strip()[:2000]
+        required = (form.get(f"field_{idx}_required") == "1")
+        block = {
+            "id": f"f-{idx}",
+            "type": ftype,
+            "name": name,
+            "label": label,
+            "required": required,
+        }
+        if placeholder:
+            block["placeholder"] = placeholder
+        if helptext:
+            block["help"] = helptext
+        if ftype in _FORM_FIELD_TYPES_WITH_OPTIONS:
+            opts_raw = form.get(f"field_{idx}_options") or ""
+            opts = [o.strip()[:200] for o in opts_raw.splitlines() if o.strip()]
+            block["options"] = opts[:50]  # hard ceiling per field
+        fields.append(block)
+
+    return fields
+
+
+def _load_form_fields(cf):
+    """Decode CustomForm.blocks_json into a list of field dicts (or
+    empty list when unset / malformed). Trust nothing — strip any
+    field whose ``type`` isn't in the allowlist, in case a downgrade
+    rolled the schema back through this row."""
+    import json as _json
+    raw = cf.blocks_json or ""
+    if not raw:
+        return []
+    try:
+        data = _json.loads(raw)
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(data, list):
+        return []
+    out = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("type") not in _FORM_FIELD_TYPES:
+            continue
+        out.append(entry)
+    return out
+
+
+def _slugify_form_title(title):
+    """Lowercase + hyphen-separated slug from a title. Strips characters
+    outside ``[a-z0-9-]`` and collapses runs of dashes. Mirrors the
+    slug derivation Pages already uses so the two namespaces feel
+    consistent — this is the slug an operator gets if they leave the
+    slug field blank on create."""
+    out = []
+    for ch in (title or "").lower():
+        if ch.isalnum():
+            out.append(ch)
+        elif ch in (" ", "-", "_"):
+            out.append("-")
+    s = "".join(out).strip("-")
+    while "--" in s:
+        s = s.replace("--", "-")
+    return s[:120] or "form"
+
+
+@bp.route("/frontend/forms/custom/new", methods=["POST"])
+@admin_required
+def frontend_custom_form_new():
+    """Create a CustomForm stub with placeholder title + slug and drop
+    the operator straight onto its edit page. The previous variant
+    asked for title + slug inline on the index — the new flow gives
+    the builder a single zero-input "+ Add form" button and treats
+    naming + URL as the first thing to do on the edit page, alongside
+    field building.
+
+    The stub starts disabled so the placeholder URL doesn't get
+    surfaced to the public before the operator has filled in fields.
+    Slug is auto-suffixed (``untitled-form``, ``untitled-form-2``, …)
+    so two quick clicks don't collide on the slug uniqueness index."""
+    base_slug = "untitled-form"
+    slug = base_slug
+    suffix = 2
+    while CustomForm.query.filter_by(slug=slug).first():
+        slug = f"{base_slug}-{suffix}"
+        suffix += 1
+    title = "Untitled form" if slug == base_slug else f"Untitled form {suffix - 1}"
+    cf = CustomForm(slug=slug, title=title, enabled=False)
+    db.session.add(cf)
+    db.session.commit()
+    return redirect(url_for("main.frontend_custom_form_edit", form_id=cf.id))
+
+
+@bp.route("/frontend/forms/custom/<int:form_id>/edit", methods=["GET", "POST"])
+@admin_required
+def frontend_custom_form_edit(form_id):
+    """Phase 1 stub for the custom-form edit page. Round-trips title,
+    slug, recipients, thank-you message, and redirect URL so the
+    operator can verify the row exists and basic settings persist.
+    Phase 2 layers the drag-and-drop field builder on top of this same
+    page."""
+    cf = db.session.get(CustomForm, form_id) or abort(404)
+    if request.method == "POST":
+        cf.title = (request.form.get("title") or cf.title).strip()
+        new_slug = _slugify_form_title((request.form.get("slug") or cf.slug).strip().lower())
+        if new_slug != cf.slug:
+            # Re-run conflict guard on slug change.
+            if (new_slug in _RESERVED_FORM_SLUGS
+                    or Page.query.filter_by(slug=new_slug).first()
+                    or CustomForm.query.filter(CustomForm.slug == new_slug,
+                                                CustomForm.id != cf.id).first()):
+                flash(f"'{new_slug}' is taken or reserved — slug unchanged.", "danger")
+            else:
+                cf.slug = new_slug
+        cf.description = (request.form.get("description") or "").strip() or None
+        cf.recipients_csv = (request.form.get("recipients_csv") or "").strip() or None
+        cf.redirect_url = (request.form.get("redirect_url") or "").strip() or None
+        cf.thank_you_message = (request.form.get("thank_you_message") or "").strip() or None
+        cf.enabled = request.form.get("enabled") == "1"
+        # Field builder payload — the page's JS serialises into
+        # ``field_<idx>_<attr>`` inputs + a ``field_order`` index list.
+        # We always rebuild blocks_json from the incoming form so an
+        # empty builder cleanly clears the previous fields.
+        import json as _json
+        fields = _parse_form_fields(request.form)
+        cf.blocks_json = _json.dumps(fields) if fields else None
+        db.session.commit()
+        flash("Form settings saved.", "success")
+        return redirect(url_for("main.frontend_custom_form_edit", form_id=cf.id))
+    return render_template("frontend_custom_form_edit.html",
+                           form=cf,
+                           fields=_load_form_fields(cf),
+                           field_types=sorted(_FORM_FIELD_TYPES))
+
+
+@bp.route("/frontend/forms/submissions")
+@admin_required
+def frontend_form_submissions():
+    """List of every FormSubmission across every CustomForm, newest
+    first. Filterable by form via ``?form=<id>``. Per-submission row
+    shows the form name, submitted-at time, the IP, and a short
+    summary of the field values inline; clicking through opens the
+    full detail view."""
+    form_id_raw = (request.args.get("form") or "").strip()
+    form_id = int(form_id_raw) if form_id_raw.isdigit() else None
+    q = FormSubmission.query
+    if form_id is not None:
+        q = q.filter_by(form_id=form_id)
+    submissions = q.order_by(FormSubmission.created_at.desc()).limit(200).all()
+    forms = CustomForm.query.order_by(CustomForm.title).all()
+    return render_template("frontend_form_submissions.html",
+                           submissions=submissions,
+                           forms=forms,
+                           selected_form_id=form_id)
+
+
+@bp.route("/frontend/forms/submissions/<int:sub_id>")
+@admin_required
+def frontend_form_submission_detail(sub_id):
+    """Per-submission detail view. Pairs each value in the submission's
+    payload with the field label from the form's blocks_json (since
+    submitter never saw the raw field names — labels are what the
+    operator authored)."""
+    import json as _json
+    sub = db.session.get(FormSubmission, sub_id) or abort(404)
+    cf = sub.form
+    fields = _load_form_fields(cf) if cf else []
+    label_for = {f["name"]: f["label"] for f in fields if isinstance(f, dict) and "name" in f}
+    try:
+        payload = _json.loads(sub.payload_json or "{}")
+    except (ValueError, TypeError):
+        payload = {}
+    return render_template("frontend_form_submission_detail.html",
+                           sub=sub, cf=cf, fields=fields,
+                           payload=payload, label_for=label_for)
+
+
+@bp.route("/frontend/forms/submissions/<int:sub_id>/delete", methods=["POST"])
+@admin_required
+def frontend_form_submission_delete(sub_id):
+    sub = db.session.get(FormSubmission, sub_id) or abort(404)
+    form_id = sub.form_id
+    db.session.delete(sub)
+    db.session.commit()
+    flash("Submission deleted.", "success")
+    return redirect(url_for("main.frontend_form_submissions", form=form_id))
+
+
+@bp.route("/frontend/forms/custom/<int:form_id>/delete", methods=["POST"])
+@admin_required
+def frontend_custom_form_delete(form_id):
+    cf = db.session.get(CustomForm, form_id) or abort(404)
+    title = cf.title
+    db.session.delete(cf)
+    db.session.commit()
+    flash(f"Form '{title}' deleted.", "success")
+    return redirect(url_for("main.frontend_forms"))
 
 
 @bp.route("/frontend/forms/<key>/toggle", methods=["POST"])
@@ -7391,7 +7701,36 @@ def frontend_templates():
                            submission_form_templates=_by_name(SUBMISSION_FORM_TEMPLATES),
                            submission_form_active_key=submission_form_key,
                            submission_form_active_settings=template_settings(s, "submission_form", submission_form_key),
+                           # Form picker for the stories-list "Submit a story"
+                           # CTA. Combines registry forms (events
+                           # submission, contact) with admin-authored
+                           # CustomForm rows so the operator picks from a
+                           # single dropdown. Each entry has ``value`` (the
+                           # identifier stored on SiteSetting) and
+                           # ``label`` (visible name in the dropdown).
+                           form_picker_options=_form_picker_options(),
                            font_options=all_fonts())
+
+
+def _form_picker_options():
+    """Combined list of every form an admin can link to from the public
+    site. Used by the stories-list submit-CTA dropdown today; future
+    surfaces (events list, etc.) can reuse the same shape."""
+    from .forms_registry import all_forms as _all_forms
+    out = []
+    for f in _all_forms():
+        out.append({
+            "value": f["key"],
+            "label": f["name"],
+            "group": "Built-in",
+        })
+    for cf in CustomForm.query.order_by(CustomForm.title).all():
+        out.append({
+            "value": f"custom:{cf.id}",
+            "label": cf.title + (" (disabled)" if not cf.enabled else ""),
+            "group": "Custom",
+        })
+    return out
 
 
 # Every kind that frontend_template_settings_save accepts. Each must
@@ -7718,6 +8057,28 @@ def frontend_stories_list_template_save():
     if "frontend_stories_list_subheading" in request.form:
         subheading = (request.form.get("frontend_stories_list_subheading") or "").strip()
         s.frontend_stories_list_subheading = subheading[:500] or None
+    if "frontend_stories_list_submit_form" in request.form:
+        # Identifier validation: registry key OR ``custom:<id>`` where
+        # the id matches an existing CustomForm row. Anything else (an
+        # operator-edited curl payload, a stale dropdown value pointing
+        # at a deleted form) is normalised back to NULL so the renderer
+        # hides the button cleanly.
+        from .forms_registry import form_by_key as _form_by_key
+        raw = (request.form.get("frontend_stories_list_submit_form") or "").strip()
+        valid = None
+        if raw.startswith("custom:"):
+            try:
+                cf_id = int(raw.split(":", 1)[1])
+                if CustomForm.query.get(cf_id):
+                    valid = f"custom:{cf_id}"
+            except (ValueError, IndexError):
+                valid = None
+        elif raw and _form_by_key(raw):
+            valid = raw
+        s.frontend_stories_list_submit_form = valid
+    if "frontend_stories_list_submit_label" in request.form:
+        label = (request.form.get("frontend_stories_list_submit_label") or "").strip()
+        s.frontend_stories_list_submit_label = label[:100] or None
     if "frontend_stories_list_bg_dynamic_key" in request.form:
         from . import dynbg as _dynbg
         s.frontend_stories_list_bg_dynamic_key = _dynbg.normalize(

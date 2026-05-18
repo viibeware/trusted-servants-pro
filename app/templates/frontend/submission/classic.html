@@ -16,7 +16,7 @@
     <div class="fe-submission-page">
       <header class="fe-submission-page-head">
         <h1 class="fe-submission-page-title">{{ _heading }}</h1>
-        <p class="fe-submission-page-blurb">{{ _subheading }}</p>
+        {% if _subheading %}<p class="fe-submission-page-blurb">{{ _subheading }}</p>{% endif %}
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
           <div class="fe-submission-flashes">
@@ -27,9 +27,9 @@
       </header>
       <div class="fe-submission-card">
         {% if _intro %}
-        <div class="fe-submission-intro">{{ _intro|markdown }}</div>
+        <div class="fe-submission-intro">{{ _intro|markdown_block }}</div>
         {% endif %}
-        {% include "frontend/_submission_form_body.html" %}
+        {% include form_body_partial or "frontend/_submission_form_body.html" %}
       </div>
     </div>
   </div>

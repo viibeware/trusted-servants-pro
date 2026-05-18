@@ -16,9 +16,9 @@
     <div class="fe-submission-split">
       <aside class="fe-submission-split-rail">
         <h1 class="fe-submission-split-title">{{ _heading }}</h1>
-        <p class="fe-submission-split-blurb">{{ _subheading }}</p>
+        {% if _subheading %}<p class="fe-submission-split-blurb">{{ _subheading }}</p>{% endif %}
         {% if _intro %}
-        <div class="fe-submission-split-intro">{{ _intro|markdown }}</div>
+        <div class="fe-submission-split-intro">{{ _intro|markdown_block }}</div>
         {% endif %}
       </aside>
       <div class="fe-submission-split-main">
@@ -30,7 +30,7 @@
           {% endif %}
         {% endwith %}
         <div class="fe-submission-card">
-          {% include "frontend/_submission_form_body.html" %}
+          {% include form_body_partial or "frontend/_submission_form_body.html" %}
         </div>
       </div>
     </div>
