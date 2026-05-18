@@ -7,7 +7,63 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.5 — 2026-05-17 (latest) — Email-list audience controls + Web Frontend sidebar auto-hide
+## 2.1.9 — 2026-05-18 (latest) — Restore bundles work behind Cloudflare's 100 MB upload cap
+
+Restoring a full-portal bundle now works even when your app sits behind Cloudflare (Free plan caps proxied uploads at 100 MB) or another tight-upload proxy. No config change, no operator workaround — pick the file, type **REPLACE**, watch the progress bar.
+
+### What you'll see
+
+The **Settings → Data → Import** form now opens with a one-line note explaining the chunking behaviour. After you click **Import & Replace All Data**:
+
+- A progress overlay appears immediately with a brand-coloured bar.
+- The sub-line counts chunks as they upload: *"Uploading bundle… — Chunk 3 of 12 — 270 MB of 1.2 GB"*.
+- Once the final chunk lands, the overlay flips to *"Reassembling and restoring…"* with the spinner while the server stitches the pieces back together and runs the restore.
+- On success you're signed out (same as before) and land on the login page with your restored data.
+
+### How it works (you don't need to do anything)
+
+The browser slices the bundle into ~90 MB pieces (under Cloudflare's 100 MB cap with envelope room) and uploads them as separate POSTs to a new chunk endpoint. A finalize call then assembles them on disk and runs the existing import flow. If your browser somehow can't slice files (very old versions), the form falls back to a single direct POST — same behaviour as before.
+
+If you close the tab mid-upload, the partial chunks auto-clean themselves up on the server after 24 hours so nothing accumulates.
+
+## 2.1.8 — 2026-05-18 — Restore reliability: images load correctly right after a restore
+
+Fixed an intermittent "some images load on this reload, others don't" problem that could appear right after restoring a bundle on a multi-worker deployment. The server now gracefully recycles its workers after the import so every worker reads from the restored database — no more flaky-images / occasional 404s while you're verifying the import.
+
+You shouldn't notice anything other than the restored portal "just working" immediately after sign-in.
+
+## 2.1.7 — 2026-05-18 — Restore safety: Turnstile auto-disables when the host changes
+
+Cloudflare Turnstile sitekeys are bound to the domain you registered them under. Restoring a prod bundle (with Turnstile enabled) onto a different host — a local dev VM, a staging machine, anything — would otherwise lock you out at login: the widget can't issue a valid token for the new domain, so every sign-in attempt fails the security check before the password is even checked.
+
+The Import now detects this and:
+
+- **Auto-disables Turnstile** on the destination when the source's host doesn't match where you imported (and flashes a clear warning naming both hosts so you know why).
+- **Keeps your sitekey and secret** on the row — once you've verified the sitekey is valid for the new domain, one toggle in **Settings → Security** turns Turnstile back on.
+- **Clears any login lockouts** the importer admin may have racked up bouncing off Turnstile, so you can sign back in cleanly.
+
+If you're restoring back to the same host (disaster-recovery scenario), Turnstile stays on.
+
+## 2.1.6 — 2026-05-17 — Bundle restore upload reliability + meeting-modal post-save refresh
+
+A trio of polish fixes around the Data tab and the meeting edit modal.
+
+### Full-portal Import: bigger upload ceiling + a friendly error when you hit it
+
+The Import form was silently failing on prod bundles bigger than 256 MB — the server returned a tiny error response that the browser rendered as a blank page, and back-button left you with no data imported and no flash explaining what happened. Two fixes:
+
+- The default upload cap is now **4 GiB** (configurable via `TSP_MAX_UPLOAD_MB` if you need it tighter). Whole-portal bundles with non-trivial uploads dirs go through cleanly without surprises.
+- If you ever do exceed the cap, the page no longer goes blank — a clear red flash names the limit and points at the env var, and the form is right there waiting when you back-button.
+
+### A spinner during the upload so you know it's working
+
+Multi-hundred-MB bundles can take tens of seconds to upload before the server even starts the restore. The Import button now flips to **"Restoring…"** and a full-viewport overlay with a spinner appears immediately on click, so you don't sit staring at a hung page wondering if you double-clicked.
+
+### Meeting edit modal: page behind refreshes after a save
+
+Saving an edit from the meeting modal updates the database but didn't refresh the page behind it — the title, description, schedule etc. underneath kept showing the old values until you reloaded. Now, when you close the modal after a successful save (Cancel, X, Esc, or backdrop click), the page automatically reloads to show your edits. Saving twice before closing still results in one reload, not two.
+
+## 2.1.5 — 2026-05-17 — Email-list audience controls + Web Frontend sidebar auto-hide
 
 A few focused additions to the Trusted Servants module and the Web Frontend admin.
 
