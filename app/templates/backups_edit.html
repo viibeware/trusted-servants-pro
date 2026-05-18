@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ t.name }} · Trusted Servants Pro{% endblock %}
+{% block heading %}Edit {{ t.name }}{% endblock %}
+{% block heading_help %}Change credentials, schedule, or encryption for this off-site backup target without re-running the setup wizard. The backend kind ({{ t.kind|upper }}) is fixed once a target is created — make a new target if you need to switch backends.{% endblock %}
+{% block content %}
+<div class="backups-wrap">
+  <div class="backups-toolbar">
+    {% if embed %}
+    <a class="btn" href="{{ url_for('main.backups_list', embed=1) }}">← Back to backups</a>
+    {% else %}
+    <a class="btn" href="{{ url_for('main.backups_list') }}">← Back to backups</a>
+    {% endif %}
+  </div>
+
+  <form class="form" method="post"
+        action="{{ url_for('main.backups_edit_post', target_id=t.id) }}"
+        enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+
+    {# ── Connection — same fields as wizard step 2 ────────────────── #}
+    <section class="card backup-step-card">
+      <div class="card-head">
+        <h2>{{ icon('key') }} Connection</h2>
+        <span class="muted smaller">{{ t.kind|upper }}{% if t.kind == 'ftp' and t.use_tls %} · FTPS{% endif %}</span>
+      </div>
+
+      <label>Target name
+        <input type="text" name="name" value="{{ t.name }}" required maxlength="128">
+      </label>
+
+      {% if t.kind in ('ftp', 'sftp') %}
+      <div class="form-row">
+        <label>Host
+          <input type="text" name="host" value="{{ t.host or '' }}" required placeholder="backup.example.com">
+        </label>
+        <label>Port
+          <input type="number" name="port" value="{{ t.port or (21 if t.kind == 'ftp' else 22) }}" min="1" max="65535">
+        </label>
+      </div>
+      <div class="form-row">
+        <label>Username
+          <input type="text" name="username" value="{{ t.username or '' }}" autocomplete="off">
+        </label>
+        <label>Password{% if t.kind == 'sftp' %} (or use a key below){% endif %}
+          <input type="password" name="password" autocomplete="new-password"
+                 placeholder="{% if t.password_enc %}(leave blank to keep current){% endif %}">
+        </label>
+      </div>
+      <label>Remote path
+        <input type="text" name="remote_path" value="{{ t.remote_path or '/' }}" placeholder="/backups/tsp">
+        <span class="muted smaller">Folder on the remote server. Created automatically if missing.</span>
+      </label>
+      {% if t.kind == 'ftp' %}
+      <label class="check">
+        <input type="checkbox" name="use_tls" value="1" {% if t.use_tls %}checked{% endif %}>
+        Use FTPS (encrypted connection). Strongly recommended — only turn this off if your server doesn't support TLS.
+      </label>
+      {% endif %}
+      {% if t.kind == 'sftp' %}
+      <details class="backup-keyblock"{% if t.private_key_enc %} open{% endif %}>
+        <summary>Use a private key instead of (or in addition to) a password</summary>
+        <label>Upload private key file
+          <input type="file" name="private_key" accept=".pem,.key,text/plain">
+        </label>
+        <label>… or paste the key text here
+          <textarea name="private_key_text" rows="6" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..."></textarea>
+        </label>
+        <p class="muted smaller">
+          Accepted formats: Ed25519, ECDSA, RSA, DSA. Stored encrypted on disk.
+          {% if t.private_key_enc %}A key is already stored — leave both fields blank to keep it.{% endif %}
+        </p>
+      </details>
+      {% endif %}
+      {% else %}
+      {# Dropbox #}
+      <label>Access token
+        <input type="text" name="oauth_token" autocomplete="off"
+               placeholder="{% if t.oauth_token_enc %}(leave blank to keep current){% else %}sl.B1AbCdEf...{% endif %}">
+      </label>
+      <label>Remote path
+        <input type="text" name="remote_path" value="{{ t.remote_path or '/' }}" placeholder="/">
+        <span class="muted smaller">Relative to the app folder. Use "/" to put backups directly in the app folder.</span>
+      </label>
+      {% endif %}
+
+      <div class="backup-test-row">
+        <button type="button" class="btn" data-backup-test data-target-id="{{ t.id }}">
+          {{ icon('check-circle') }} Test connection
+        </button>
+        <span class="backup-test-result muted small" data-backup-test-result></span>
+      </div>
+    </section>
+
+    {# ── Schedule — same fields as wizard step 3 ──────────────────── #}
+    <section class="card backup-step-card">
+      <div class="card-head"><h2>{{ icon('clock') }} Schedule</h2></div>
+
+      <div class="backup-preset-grid" role="radiogroup">
+        {% set _matched_preset = namespace(found=false) %}
+        {% for key, (cron, label) in presets.items() %}
+          {% if t.schedule_cron == cron %}{% set _matched_preset.found = true %}{% endif %}
+        <label class="backup-preset-card">
+          <input type="radio" name="schedule_preset" value="{{ key }}" {% if t.schedule_cron == cron %}checked{% endif %}>
+          <span>
+            <strong>{{ label }}</strong>
+            <span class="muted smaller"><code>{{ cron }}</code></span>
+          </span>
+        </label>
+        {% endfor %}
+        <label class="backup-preset-card backup-preset-custom">
+          <input type="radio" name="schedule_preset" value="" {% if not _matched_preset.found %}checked{% endif %}>
+          <span>
+            <strong>Custom cron expression</strong>
+            <input type="text" name="schedule_cron" value="{{ t.schedule_cron }}" placeholder="0 3 * * *">
+            <span class="muted smaller">Standard 5-field cron in UTC (min · hr · day · mo · dow).</span>
+          </span>
+        </label>
+      </div>
+
+      <label>Retention — keep the last
+        <input type="number" name="retain_count" value="{{ t.retain_count or 14 }}" min="1" max="365" style="width:6rem">
+        archives on the remote
+      </label>
+      <p class="muted smaller">Older archives are deleted from the remote after a successful upload.</p>
+    </section>
+
+    {# ── Encryption — same fields as wizard step 4 ────────────────── #}
+    <section class="card backup-step-card">
+      <div class="card-head"><h2>{{ icon('lock') }} Encryption at rest</h2></div>
+
+      <label class="check">
+        <input type="checkbox" name="encrypt_archive" value="1" data-encrypt-toggle {% if t.encrypt_archive %}checked{% endif %}>
+        <span>
+          <strong>Encrypt every archive before upload</strong>
+          <span class="muted small">Uses your passphrase + PBKDF2 + Fernet. Files on the remote are <code>.zip.enc</code>; only your passphrase can decrypt them.</span>
+        </span>
+      </label>
+
+      <div class="backup-encrypt-fields" data-encrypt-fields {% if not t.encrypt_archive %}hidden{% endif %}>
+        <div class="form-row">
+          <label>Passphrase
+            <input type="password" name="passphrase" autocomplete="new-password" minlength="8"
+                   placeholder="{% if t.archive_passphrase_enc %}(leave blank to keep current){% else %}(at least 8 characters){% endif %}">
+          </label>
+          <label>Confirm
+            <input type="password" name="passphrase_confirm" autocomplete="new-password" minlength="8"
+                   placeholder="{% if t.archive_passphrase_enc %}(leave blank to keep current){% endif %}">
+          </label>
+        </div>
+        <p class="warning small">
+          {{ icon('alert-triangle') }} <strong>This passphrase can't be recovered.</strong>
+          If you lose it, the encrypted archives are unrecoverable too. Save it
+          in your password manager <em>before</em> you save changes.
+        </p>
+        <label class="check">
+          <input type="checkbox" name="ack_saved" value="1">
+          I've stored the passphrase somewhere I can find it again.
+          {% if t.archive_passphrase_enc %}<span class="muted smaller">(only required when setting a new passphrase)</span>{% endif %}
+        </label>
+      </div>
+    </section>
+
+    <div class="form-actions">
+      {% if embed %}
+      <a class="btn" href="{{ url_for('main.backups_list', embed=1) }}">Cancel</a>
+      {% else %}
+      <a class="btn" href="{{ url_for('main.backups_list') }}">Cancel</a>
+      {% endif %}
+      <button type="submit" class="btn btn-primary">{{ icon('check') }} Save changes</button>
+    </div>
+  </form>
+</div>
+
+<script>
+(function () {
+  // Encryption toggle reveals / hides the passphrase fields — same as wizard step 4.
+  var encT = document.querySelector('[data-encrypt-toggle]');
+  var encF = document.querySelector('[data-encrypt-fields]');
+  if (encT && encF) {
+    encT.addEventListener('change', function () { encF.hidden = !encT.checked; });
+  }
+
+  // Test connection — save the *connection-only* fields via the wizard's
+  // step-2 endpoint (which doesn't validate encryption, so a half-typed
+  // passphrase doesn't block the test), then call /backups/<id>/test.
+  var testBtn = document.querySelector('[data-backup-test]');
+  var testOut = document.querySelector('[data-backup-test-result]');
+  if (testBtn) {
+    testBtn.addEventListener('click', async function () {
+      testBtn.disabled = true;
+      testOut.textContent = 'Saving credentials and testing…';
+      testOut.className = 'backup-test-result muted small';
+      var form = testBtn.closest('form');
+      // Build a FormData containing just the connection fields — skip
+      // schedule + encryption inputs entirely so the step-2 handler
+      // sees a clean request.
+      var connNames = ['csrf_token', 'embed', 'name',
+                       'host', 'port', 'username', 'password',
+                       'remote_path', 'use_tls',
+                       'private_key', 'private_key_text', 'oauth_token'];
+      var data = new FormData();
+      connNames.forEach(function (n) {
+        form.querySelectorAll('[name="' + n + '"]').forEach(function (el) {
+          if (el.type === 'file') {
+            if (el.files && el.files[0]) data.append(n, el.files[0]);
+          } else if (el.type === 'checkbox') {
+            if (el.checked) data.append(n, el.value || 'on');
+          } else {
+            data.append(n, el.value);
+          }
+        });
+      });
+      try {
+        var saveUrl = '{{ url_for("main.backups_wizard_step2_post", target_id=t.id) }}';
+        var saveRes = await fetch(saveUrl, { method: 'POST', body: data });
+        if (!saveRes.ok) throw new Error('save failed (' + saveRes.status + ')');
+        var testRes = await fetch('{{ url_for("main.backups_test", target_id=t.id) }}', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': '{{ csrf_token() }}' },
+        });
+        var j = await testRes.json();
+        testOut.textContent = j.message || (j.ok ? 'ok' : 'failed');
+        testOut.className = 'backup-test-result small ' + (j.ok ? 'backup-test-ok' : 'backup-test-fail');
+      } catch (e) {
+        testOut.textContent = String(e);
+        testOut.className = 'backup-test-result small backup-test-fail';
+      } finally {
+        testBtn.disabled = false;
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

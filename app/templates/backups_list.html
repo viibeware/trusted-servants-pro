@@ -73,6 +73,7 @@
             {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
             <button type="submit" class="btn btn-sm" title="Run a backup right now">{{ icon('refresh-cw') }} Run now</button>
           </form>
+          <a class="btn btn-sm" href="{{ url_for('main.backups_edit', target_id=t.id, embed=1 if embed else None) }}" title="Edit credentials, schedule, or encryption">{{ icon('edit-3') }} Edit</a>
           <a class="btn btn-sm" href="{{ url_for('main.backups_runs', target_id=t.id, embed=1 if embed else None) }}" title="See run history">{{ icon('list') }} History</a>
           <a class="btn btn-sm" href="{{ url_for('main.backups_restore', target_id=t.id, embed=1 if embed else None) }}" title="Restore from this target">{{ icon('download') }} Restore</a>
           <form method="post" action="{{ url_for('main.backups_toggle', target_id=t.id) }}" style="display:inline">

@@ -102,6 +102,21 @@ class User(UserMixin, db.Model):
     # spec ("let the user access it when needed").
     fe_admin_autohide_sidebar = db.Column(db.Boolean, nullable=False, default=True)
     dash_order_json = db.Column(db.Text)
+
+    # Web Frontend overview widget toggles + order. Mirrors the main
+    # dashboard's dash_show_* / dash_order_json pair so the overview tab
+    # at /tspro/frontend/ has the same per-user customise + drag-reorder
+    # UX as the home dashboard.
+    fe_dash_show_status = db.Column(db.Boolean, nullable=False, default=True)
+    fe_dash_show_visitor_metrics = db.Column(db.Boolean, nullable=False, default=True)
+    fe_dash_show_pages = db.Column(db.Boolean, nullable=False, default=True)
+    fe_dash_show_redirects = db.Column(db.Boolean, nullable=False, default=True)
+    fe_dash_show_navigation = db.Column(db.Boolean, nullable=False, default=True)
+    fe_dash_show_forms = db.Column(db.Boolean, nullable=False, default=True)
+    fe_dash_show_branding = db.Column(db.Boolean, nullable=False, default=True)
+    fe_dash_show_header_footer = db.Column(db.Boolean, nullable=False, default=True)
+    fe_dash_order_json = db.Column(db.Text)
+
     last_seen_at = db.Column(db.DateTime)
     # Current navigation location for the live "who's online" widget.
     # Updated by the same throttled before_request hook that maintains

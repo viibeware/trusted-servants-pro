@@ -10809,6 +10809,69 @@ html[data-theme="dark"] .fe-mlist-sort select option {
                     var(--fe-accent, var(--fe-border)));
 }
 
+/* Dark-mode card shadows. The design tokens emit a separate pair of
+   shadow vars (-shadow-dark / -hover-shadow-dark) carrying the
+   operator's dark-mode shadow_color, with the same offset+blur as
+   the light pair and alpha preserved from the chosen shadow scale.
+   These rules redirect every primary / secondary card consumer to
+   the dark pair under html[data-theme="dark"]; each var() falls
+   back to its light sibling so an install that hasn't customised
+   the dark colour renders identically across modes. Listed at the
+   bottom of the file so this rule wins over the earlier light-mode
+   declarations regardless of selector specificity. */
+html[data-theme="dark"] .fe-meeting-card,
+html[data-theme="dark"] .fe-meeting-detail-card,
+html[data-theme="dark"] .fe-meeting-extended-card,
+html[data-theme="dark"] .fe-recovery-threeup-card,
+html[data-theme="dark"] .fe-event-detail-card,
+html[data-theme="dark"] .fe-event-row,
+html[data-theme="dark"] .fe-meeting-resources,
+html[data-theme="dark"] .fe-mlist-card,
+html[data-theme="dark"] .fe-events-card,
+html[data-theme="dark"] .fe-events-mag-hero,
+html[data-theme="dark"] .fe-announcements-card,
+html[data-theme="dark"] .fe-fellowships-card,
+html[data-theme="dark"] .fe-library-item,
+html[data-theme="dark"] .fe-submission-card,
+html[data-theme="dark"] .fe-card-primary {
+  box-shadow: var(--fe-card-primary-shadow-dark, var(--fe-card-primary-shadow, none));
+}
+html[data-theme="dark"] .fe-meeting-card:hover,
+html[data-theme="dark"] .fe-meeting-detail-card:hover,
+html[data-theme="dark"] .fe-meeting-extended-card:hover,
+html[data-theme="dark"] .fe-recovery-threeup-card:hover,
+html[data-theme="dark"] .fe-event-detail-card:hover,
+html[data-theme="dark"] .fe-event-row:hover,
+html[data-theme="dark"] .fe-meeting-resources:hover,
+html[data-theme="dark"] .fe-mlist-card:hover,
+html[data-theme="dark"] .fe-events-card:hover,
+html[data-theme="dark"] .fe-events-mag-hero:hover,
+html[data-theme="dark"] .fe-announcements-card:hover,
+html[data-theme="dark"] .fe-fellowships-card:hover,
+html[data-theme="dark"] .fe-library-item:hover,
+html[data-theme="dark"] .fe-submission-card:hover,
+html[data-theme="dark"] .fe-card-primary:hover {
+  box-shadow: var(--fe-card-primary-hover-shadow-dark,
+                  var(--fe-card-primary-hover-shadow, 0 8px 28px rgba(15, 23, 42, 0.10)));
+}
+html[data-theme="dark"] .fe-feature-card,
+html[data-theme="dark"] .fe-quick-card,
+html[data-theme="dark"] .fe-faq-item,
+html[data-theme="dark"] .fe-inclusion-card,
+html[data-theme="dark"] .fe-meeting-mag-side-card,
+html[data-theme="dark"] .fe-card-secondary {
+  box-shadow: var(--fe-card-secondary-shadow-dark, var(--fe-card-secondary-shadow, none));
+}
+html[data-theme="dark"] .fe-feature-card:hover,
+html[data-theme="dark"] .fe-quick-card:hover,
+html[data-theme="dark"] .fe-faq-item:hover,
+html[data-theme="dark"] .fe-inclusion-card:hover,
+html[data-theme="dark"] .fe-meeting-mag-side-card:hover,
+html[data-theme="dark"] .fe-card-secondary:hover {
+  box-shadow: var(--fe-card-secondary-hover-shadow-dark,
+                  var(--fe-card-secondary-hover-shadow, 0 10px 32px rgba(15, 23, 42, 0.08)));
+}
+
 /* Opt-in classes that turn any container into a primary / secondary
    card surface — colour tokens for bg + border come along too so the
    block reads like a meeting / feature card without further styling.

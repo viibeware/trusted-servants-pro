@@ -293,6 +293,17 @@ def inject_globals():
 
 DASHBOARD_WIDGET_KEYS = ("server-metrics", "visitor-metrics", "currently-online", "backups", "trusted-servants", "meetings", "libraries", "files", "access-requests", "contact-form", "deletions")
 
+# Web Frontend overview tab widget keys. Same shape as the main
+# dashboard — kebab-case slugs that map to ``fe_dash_show_<snake>``
+# columns on User and feed the per-user draggable widget grid on
+# /tspro/frontend/. Default order is the order an operator would
+# scan the overview top-down: status pill, visitor numbers, then
+# section shortcuts in roughly the order they appear in the FE
+# subnav.
+FE_DASHBOARD_WIDGET_KEYS = ("fe-status", "fe-visitor-metrics", "fe-pages",
+                            "fe-redirects", "fe-navigation", "fe-forms",
+                            "fe-branding", "fe-header-footer")
+
 ONLINE_WINDOW = timedelta(minutes=5)
 LAST_SEEN_THROTTLE = timedelta(seconds=60)
 
@@ -428,6 +439,26 @@ def _dashboard_order(user):
             saved = []
     seen = set(saved)
     return saved + [k for k in DASHBOARD_WIDGET_KEYS if k not in seen]
+
+
+def _fe_dashboard_order(user):
+    """Per-user order of widgets on the Web Frontend overview tab.
+    Same shape as ``_dashboard_order`` — saved keys (from
+    ``fe_dash_order_json``) first, then any widgets the user hasn't
+    explicitly placed yet (newly-added widgets, or first-visit users)
+    appended in the default order so they show up rather than
+    silently being hidden."""
+    import json
+    saved = []
+    if user and user.fe_dash_order_json:
+        try:
+            parsed = json.loads(user.fe_dash_order_json)
+            if isinstance(parsed, list):
+                saved = [k for k in parsed if k in FE_DASHBOARD_WIDGET_KEYS]
+        except (ValueError, TypeError):
+            saved = []
+    seen = set(saved)
+    return saved + [k for k in FE_DASHBOARD_WIDGET_KEYS if k not in seen]
 
 
 @bp.route("/")
@@ -3033,18 +3064,47 @@ def _require_module_role(site_attr_role, site_attr_enabled=None):
         abort(404)
 
 
-@bp.route("/settings/export")
+@bp.route("/settings/export", methods=["GET", "POST"])
 @admin_required
 def data_export():
+    """Full-portal export.
+
+    GET serves a plain ``.zip`` (legacy path / scripted callers). POST
+    accepts an optional ``passphrase`` field; when non-empty the bundle
+    is stream-encrypted with AES-256-GCM (key derived via PBKDF2-HMAC-
+    SHA256 from the passphrase) and the download is ``.zip.enc``. The
+    passphrase rides in the POST body, never the URL, so it can't leak
+    via referrer / server logs / browser history. The encrypted format
+    is documented in ``app/bundle_crypto.py``.
+    """
     from flask import send_file
     from .backup import build_export_archive
+    from .bundle_crypto import encrypt_file, EXT as _ENC_EXT
+
+    passphrase = (request.form.get("passphrase") or "").strip() if request.method == "POST" else ""
 
     zip_path, archive_name, _size = build_export_archive(current_app._get_current_object())
-    response = send_file(zip_path, mimetype="application/zip",
-                         as_attachment=True, download_name=archive_name)
-    @response.call_on_close
-    def _cleanup():
+
+    if not passphrase:
+        response = send_file(zip_path, mimetype="application/zip",
+                             as_attachment=True, download_name=archive_name)
+        @response.call_on_close
+        def _cleanup():
+            try: os.unlink(zip_path)
+            except OSError: pass
+        return response
+
+    enc_path = zip_path + _ENC_EXT
+    try:
+        encrypt_file(zip_path, enc_path, passphrase)
+    finally:
         try: os.unlink(zip_path)
+        except OSError: pass
+    response = send_file(enc_path, mimetype="application/octet-stream",
+                         as_attachment=True, download_name=archive_name + _ENC_EXT)
+    @response.call_on_close
+    def _cleanup_enc():
+        try: os.unlink(enc_path)
         except OSError: pass
     return response
 
@@ -3088,6 +3148,43 @@ def _cleanup_stale_chunk_dirs(max_age_seconds=24 * 60 * 60):
                 pass
     except OSError:
         pass
+
+
+def _decrypt_if_encrypted(zip_path, passphrase):
+    """If ``zip_path`` looks like a tsp-encrypted bundle, decrypt it
+    under ``passphrase`` to a new tempfile and return the new path.
+    Otherwise return ``zip_path`` unchanged. Caller is responsible for
+    unlinking the returned path (which may equal ``zip_path``).
+
+    Returns ``(path, decrypted: bool, error_msg: str | None)``. On
+    decrypt failure ``path`` is None and ``error_msg`` carries a
+    user-friendly explanation the caller flashes + redirects on.
+    """
+    import tempfile
+    from .bundle_crypto import is_encrypted, decrypt_file, BundleDecryptError
+
+    if not is_encrypted(zip_path):
+        if passphrase:
+            # Operator typed a passphrase but the bundle isn't encrypted
+            # — proceeding anyway is safe, but warn so they catch
+            # mismatched bundles before they overwrite the destination.
+            flash("Passphrase ignored — uploaded bundle is not encrypted.", "warning")
+        return zip_path, False, None
+    if not passphrase:
+        return None, False, ("This bundle is encrypted — supply the decryption "
+                             "passphrase in the Import form and retry.")
+    upload_dir = current_app.config["UPLOAD_FOLDER"]
+    data_dir = os.path.dirname(upload_dir.rstrip("/"))
+    decrypted = tempfile.NamedTemporaryFile(
+        prefix="tsp-import-decrypted-", suffix=".zip", delete=False, dir=data_dir)
+    decrypted.close()
+    try:
+        decrypt_file(zip_path, decrypted.name, passphrase)
+    except BundleDecryptError as exc:
+        try: os.unlink(decrypted.name)
+        except OSError: pass
+        return None, False, str(exc)
+    return decrypted.name, True, None
 
 
 def _perform_data_import(zip_path):
@@ -3262,18 +3359,30 @@ def data_import():
         flash('Type REPLACE in the confirmation box to proceed — import overwrites all data', "danger")
         return redirect(_safe_referrer() or url_for("main.index"))
 
+    passphrase = (request.form.get("passphrase") or "").strip()
+
     upload_dir = current_app.config["UPLOAD_FOLDER"]
     data_dir = os.path.dirname(upload_dir.rstrip("/"))
     tmp_zip = tempfile.NamedTemporaryFile(
         prefix="tsp-import-direct-", suffix=".zip", delete=False, dir=data_dir)
     tmp_zip.close()
+    decrypted_path = None
     try:
         f.save(tmp_zip.name)
-        _ok, target = _perform_data_import(tmp_zip.name)
+        import_path, was_decrypted, err = _decrypt_if_encrypted(tmp_zip.name, passphrase)
+        if err:
+            flash(err, "danger")
+            return redirect(_safe_referrer() or url_for("main.index"))
+        if was_decrypted:
+            decrypted_path = import_path
+        _ok, target = _perform_data_import(import_path)
         return redirect(target)
     finally:
         try: os.unlink(tmp_zip.name)
         except OSError: pass
+        if decrypted_path:
+            try: os.unlink(decrypted_path)
+            except OSError: pass
 
 
 @bp.route("/settings/import/chunk", methods=["POST"])
@@ -3340,6 +3449,8 @@ def data_import_finalize():
             f"{len(chunks)} arrived. Please retry.", "danger")
         return redirect(_safe_referrer() or url_for("main.index"))
 
+    passphrase = (request.form.get("passphrase") or "").strip()
+
     upload_dir = current_app.config["UPLOAD_FOLDER"]
     data_dir = os.path.dirname(upload_dir.rstrip("/"))
     tmp_zip = tempfile.NamedTemporaryFile(
@@ -3355,12 +3466,22 @@ def data_import_finalize():
     finally:
         tmp_zip.close()
 
+    decrypted_path = None
     try:
-        _ok, target = _perform_data_import(tmp_zip.name)
+        import_path, was_decrypted, err = _decrypt_if_encrypted(tmp_zip.name, passphrase)
+        if err:
+            flash(err, "danger")
+            return redirect(_safe_referrer() or url_for("main.index"))
+        if was_decrypted:
+            decrypted_path = import_path
+        _ok, target = _perform_data_import(import_path)
         return redirect(target)
     finally:
         try: os.unlink(tmp_zip.name)
         except OSError: pass
+        if decrypted_path:
+            try: os.unlink(decrypted_path)
+            except OSError: pass
         shutil.rmtree(staging, ignore_errors=True)
 
 
@@ -4040,6 +4161,128 @@ def backups_wizard_step5_post(target_id):
                                t=t, success=success, detail=detail, embed=True)
     flash(detail, "success" if success else "danger")
     return redirect(url_for("main.backups_list"))
+
+
+@bp.route("/settings/backups/<int:target_id>/edit", methods=["GET"])
+@admin_required
+def backups_edit(target_id):
+    """Single-page edit for an already-configured target. Combines the
+    three editable wizard panels (connection, schedule, encryption) on
+    one form so the admin doesn't have to walk through the whole
+    add-target chain to flip one field. ``kind`` is read-only — switching
+    backends mid-life would orphan the existing remote archives."""
+    t = db.session.get(BackupTarget, target_id) or abort(404)
+    return render_template("backups_edit.html", t=t,
+                           presets=SCHEDULE_PRESETS,
+                           embed=_backup_embed())
+
+
+@bp.route("/settings/backups/<int:target_id>/edit", methods=["POST"])
+@admin_required
+def backups_edit_post(target_id):
+    """Consolidated save for the edit page. Mirrors the step 2/3/4 POST
+    handlers but stays on the same row + redirects back to the list
+    (no run-now, no enable-flip, no wizard chain). Schedule changes
+    re-seed ``next_run_at`` if the target is currently enabled so the
+    new cron takes effect on the next scheduler tick rather than the
+    next save / restart."""
+    from .backup_scheduler import compute_next_run
+    t = db.session.get(BackupTarget, target_id) or abort(404)
+
+    # ── Connection (same field-write pattern as step 2) ──
+    t.name = (request.form.get("name") or t.name).strip()
+    t.host = (request.form.get("host") or "").strip() or None
+    port_raw = (request.form.get("port") or "").strip()
+    t.port = int(port_raw) if port_raw.isdigit() else None
+    t.username = (request.form.get("username") or "").strip() or None
+    t.remote_path = (request.form.get("remote_path") or "/").strip() or "/"
+
+    if t.kind == "ftp":
+        t.use_tls = (request.form.get("use_tls") == "1")
+        password = request.form.get("password") or ""
+        if password:
+            t.password_enc = encrypt(password)
+    elif t.kind == "sftp":
+        password = request.form.get("password") or ""
+        if password:
+            t.password_enc = encrypt(password)
+        key_file = request.files.get("private_key")
+        key_text = (request.form.get("private_key_text") or "").strip()
+        if key_file and key_file.filename:
+            try:
+                key_text = key_file.read().decode("utf-8", errors="replace")
+            except Exception:
+                key_text = ""
+        if key_text:
+            t.private_key_enc = encrypt(key_text)
+    elif t.kind == "dropbox":
+        token = (request.form.get("oauth_token") or "").strip()
+        if token:
+            t.oauth_token_enc = encrypt(token)
+
+    # ── Schedule (same as step 3) ──
+    preset = request.form.get("schedule_preset") or ""
+    custom = (request.form.get("schedule_cron") or "").strip()
+    if preset in SCHEDULE_PRESETS:
+        t.schedule_cron = SCHEDULE_PRESETS[preset][0]
+    elif custom:
+        err = _validate_cron(custom)
+        if err:
+            flash(err, "danger")
+            return redirect(url_for("main.backups_edit", target_id=t.id,
+                                    **_backup_embed_kwargs()))
+        t.schedule_cron = custom
+    retain_raw = (request.form.get("retain_count") or "14").strip()
+    try:
+        t.retain_count = max(1, min(365, int(retain_raw)))
+    except ValueError:
+        t.retain_count = 14
+
+    # ── Encryption (same as step 4) ──
+    # Three meaningful submit shapes: leave-as-is (encrypt_archive
+    # unchanged, no passphrase typed), rotate-passphrase (encrypt_archive
+    # already on + new passphrase typed), enable-or-disable. The
+    # wizard's step-4 ack_saved gate only kicks in when a new passphrase
+    # is being set — toggling an already-stored passphrase off doesn't
+    # need re-acknowledgement.
+    want_encrypt = (request.form.get("encrypt_archive") == "1")
+    new_passphrase = request.form.get("passphrase") or ""
+    confirm = request.form.get("passphrase_confirm") or ""
+    if want_encrypt:
+        # Setting encryption ON (or rotating an existing passphrase).
+        # Allow leaving the passphrase blank to keep the current one
+        # when encryption is already on; require it on first turn-on.
+        if new_passphrase or not t.archive_passphrase_enc:
+            if not new_passphrase or len(new_passphrase) < 8:
+                flash("Passphrase must be at least 8 characters.", "danger")
+                return redirect(url_for("main.backups_edit", target_id=t.id,
+                                        **_backup_embed_kwargs()))
+            if new_passphrase != confirm:
+                flash("Passphrases don't match.", "danger")
+                return redirect(url_for("main.backups_edit", target_id=t.id,
+                                        **_backup_embed_kwargs()))
+            if not request.form.get("ack_saved"):
+                flash("Please confirm you've saved the passphrase — there's no recovery.", "danger")
+                return redirect(url_for("main.backups_edit", target_id=t.id,
+                                        **_backup_embed_kwargs()))
+            t.archive_passphrase_enc = encrypt(new_passphrase)
+        t.encrypt_archive = True
+    else:
+        # Turning encryption OFF — drop the stored passphrase too so we
+        # don't keep an unused secret on disk.
+        t.encrypt_archive = False
+        t.archive_passphrase_enc = None
+
+    # Re-seed next_run_at when the schedule has changed AND the target is
+    # currently enabled — otherwise the new cron only takes effect on the
+    # next scheduler restart / first natural tick that crosses the saved
+    # next_run_at. Cheap to always recompute.
+    if t.enabled:
+        t.next_run_at = compute_next_run(t.schedule_cron)
+
+    db.session.commit()
+    flash(f"Updated '{t.name}'.", "success")
+    return redirect(url_for("main.backups_list", **_backup_embed_kwargs()))
 
 
 @bp.route("/settings/backups/<int:target_id>/test", methods=["POST"])
@@ -6200,8 +6443,86 @@ def site_custom_font_asset(asset):
 @bp.route("/frontend/")
 @admin_required
 def frontend_dashboard():
+    """Web Frontend overview tab. Same dashboard-widget pattern as the
+    home dashboard: a draggable grid of section widgets, each gated by
+    a ``fe_dash_show_<slug>`` user pref. Per-user order persisted in
+    ``fe_dash_order_json`` and drained back into ``_fe_dashboard_order``.
+    Visitor-metrics widget reuses the summary aggregator that backs the
+    full /tspro/frontend/metrics page so the numbers match."""
+    from . import visitor_metrics as _vm
+    from .forms_registry import all_forms as _all_forms
+
     s = _get_site_setting()
-    return render_template("frontend_dashboard.html", site=s)
+    fe_order = _fe_dashboard_order(current_user)
+
+    # Visitor metrics — same 30-day window the dedicated metrics page
+    # defaults to, so the operator who's used to those numbers doesn't
+    # see a different scale here. Wrap in try/except so an empty
+    # VisitorEvent table or a transient DB hiccup doesn't 500 the
+    # overview page.
+    vm_window = 30
+    try:
+        vm_summary = _vm.summary(days=vm_window)
+        vm_daily = _vm.daily_series(days=vm_window)
+    except Exception:  # noqa: BLE001 — widget data is best-effort
+        vm_summary = None
+        vm_daily = []
+
+    # Section data — kept thin so the overview render stays fast.
+    recent_pages = (Page.query.order_by(Page.updated_at.desc()).limit(6).all())
+    pages_count = Page.query.count()
+    redirects_count = UrlRedirect.query.count()
+    recent_redirects = (UrlRedirect.query
+                        .order_by(UrlRedirect.created_at.desc()).limit(5).all())
+    nav_count = FrontendNavItem.query.count()
+    fe_forms = _all_forms()
+
+    return render_template("frontend_dashboard.html",
+                           site=s,
+                           fe_dashboard_order=fe_order,
+                           fe_widget_keys=FE_DASHBOARD_WIDGET_KEYS,
+                           vm_window=vm_window,
+                           vm_summary=vm_summary,
+                           vm_daily=vm_daily,
+                           recent_pages=recent_pages,
+                           pages_count=pages_count,
+                           redirects_count=redirects_count,
+                           recent_redirects=recent_redirects,
+                           nav_count=nav_count,
+                           fe_forms=fe_forms)
+
+
+@bp.route("/frontend/customize", methods=["POST"])
+@admin_required
+def fe_dashboard_customize():
+    """Save the per-user Web Frontend widget visibility toggles. Same
+    shape as ``dashboard_customize`` — each checkbox value=1 → True,
+    missing → False."""
+    for slug in FE_DASHBOARD_WIDGET_KEYS:
+        col = "fe_dash_show_" + slug.replace("fe-", "").replace("-", "_")
+        setattr(current_user, col, request.form.get(col) == "1")
+    db.session.commit()
+    flash("Web Frontend overview updated", "success")
+    return redirect(url_for("main.frontend_dashboard"))
+
+
+@bp.route("/frontend/order", methods=["POST"])
+@admin_required
+def fe_dashboard_order_save():
+    """JSON POST from the drag-reorder JS — same protocol as
+    ``dashboard_order_save``: ``{"order": ["fe-status", …]}``. Unknown
+    keys filtered, duplicates dropped; the result is stored as a JSON
+    array on ``User.fe_dash_order_json``."""
+    import json
+    payload = request.get_json(silent=True) or {}
+    order = payload.get("order") or []
+    cleaned, seen = [], set()
+    for key in order:
+        if isinstance(key, str) and key in FE_DASHBOARD_WIDGET_KEYS and key not in seen:
+            cleaned.append(key); seen.add(key)
+    current_user.fe_dash_order_json = json.dumps(cleaned)
+    db.session.commit()
+    return jsonify(ok=True, order=cleaned)
 
 
 @bp.route("/frontend/branding")

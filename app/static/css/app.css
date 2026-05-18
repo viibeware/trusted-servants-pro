@@ -13033,3 +13033,27 @@ body.embed .backups-wrap {
   background: #1f2937;
 }
 
+/* Passphrase row in the Data → Export form. Input + inline Show/Hide
+   button on one line; Generate + Copy buttons on the row below. The
+   warning banner (.passphrase-warn) is just .flash.flash-warning with
+   a touch more breathing room since it sits between form fields. */
+.passphrase-row {
+  display: flex;
+  gap: .5rem;
+  align-items: stretch;
+}
+.passphrase-row > input {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.passphrase-tools {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-top: .4rem;
+}
+.passphrase-warn {
+  margin: .75rem 0;
+}
+

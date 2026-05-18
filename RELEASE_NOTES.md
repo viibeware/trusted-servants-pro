@@ -7,7 +7,37 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.9 — 2026-05-18 (latest) — Restore bundles work behind Cloudflare's 100 MB upload cap
+## 2.1.10 — 2026-05-18 (latest) — Bundle encryption, Frontend overview, edit-in-place backups, card shadow colour
+
+A grab-bag release focused on making the admin surface easier to live in and locking down the things that travel off-machine.
+
+### Encrypt your full-portal export with a passphrase
+
+The **Settings → Data → Export** card now offers an optional encryption passphrase. Leave it blank for a plain ``.zip`` like before; type one and the download becomes ``tsp-export-…-zip.enc`` — AES-256-GCM ciphertext that only your passphrase can decrypt. The Import side has a matching field and auto-detects encrypted bundles, so a destination install just needs the same passphrase to restore.
+
+Don't want to invent a passphrase? Click **Generate strong passphrase** — the browser produces a 24-character one in the format ``Xk9p-Mw2N-jVqL-3Hbt-uR5z-PnAc``, drawn from an alphabet that excludes the visually-ambiguous ``I l O 0 1`` so it can be transcribed from a printed page without second-guessing. A yellow banner reminds you to save it (no recovery exists), and inline **Show** / **Copy** buttons keep the field usable.
+
+Why bother? When the bundle travels through Cloudflare or any other reverse proxy, the edge sees plaintext during the upload. Encrypting client-side hands the edge ciphertext instead.
+
+### Web Frontend Overview tab is now a customisable widget grid
+
+The Overview tab at **/tspro/frontend/** used to be two toggles + a "Pick a section on the left" placeholder. It's now a draggable grid of widgets that mirrors the home dashboard:
+
+- **Status** — the existing public on/off and sidebar auto-hide toggles, kept as a widget so they can be hidden or reordered.
+- **Visitor metrics** — the full five-tile traffic overview (Views / Unique visitors / Today / Yesterday / Last 7 days) lifted from the Visitor Metrics page so you don't have to click into a second page to see the numbers.
+- **Pages**, **Redirects**, **Navigation**, **Forms**, **Branding & theme**, **Header & Footer** — section-specific cards with counts and one-click access.
+
+Drag any widget to reorder it; preferences are saved per-user. Click **Customize** in the top actions to hide widgets you don't care about. Same recipe as the home dashboard — same drag-handle, same Customize modal, same persistence.
+
+### Edit an off-site backup target without removing + recreating
+
+Off-site backup targets used to be create-only — once a target was through the setup wizard, the only way to change credentials, schedule, or encryption was to remove it (which loses the run history) and add a new one from scratch. Each row on **Settings → Off-site Backups** now has an **Edit** button that opens a single page with connection / schedule / encryption all in one form. One Save button, one round-trip, and the next scheduler tick picks up your new cron immediately. The backend kind (FTP / SFTP / Dropbox) stays read-only — switching backends mid-life would orphan the existing remote archives.
+
+### Custom shadow colour for primary and secondary cards (light + dark mode)
+
+Two new colour pickers per card style on **Web Frontend → Design**: a shadow colour for light mode and one for dark mode. Pick a brand-tinted glow for hero cards, warm amber on feature cards, or a cool cyan that only shows in dark mode. The size (shadow scale) still drives the offset and blur; the colour just supplies the tint, with alpha preserved from the scale so a saturated brand colour still reads as a soft glow rather than an opaque block. Defaults match the historic charcoal in every theme — existing installs render byte-identical until you opt in.
+
+## 2.1.9 — 2026-05-18 — Restore bundles work behind Cloudflare's 100 MB upload cap
 
 Restoring a full-portal bundle now works even when your app sits behind Cloudflare (Free plan caps proxied uploads at 100 MB) or another tight-upload proxy. No config change, no operator workaround — pick the file, type **REPLACE**, watch the progress bar.
 

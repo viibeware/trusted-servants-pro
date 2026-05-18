@@ -6,6 +6,75 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.10] — 2026-05-18
+
+### Added — Edit an off-site backup target after it's been added
+
+Off-site backup targets were create-only — once a target was through the 5-step wizard, the only ways to change anything were Remove + recreate (loses run history) or hand-edit the row. New per-row **Edit** action on the backups list opens a single consolidated page with connection, schedule, and encryption sections stacked on one form. One Save button writes all three groups in one POST and redirects back to the list.
+
+- **New routes:** ``GET /settings/backups/<id>/edit`` (renders the edit page) and ``POST /settings/backups/<id>/edit`` (consolidated save). Field-write logic mirrors the wizard's step 2 / 3 / 4 POST handlers exactly so a future refactor can lift them into one helper.
+- **Schedule re-seeds ``next_run_at``** when the target is currently enabled so a cron change takes effect on the next scheduler tick, not the next restart.
+- **Encryption gating** preserves leave-blank-to-keep-current for the passphrase and only requires the "I've saved it" acknowledgment on first turn-on or rotation — toggling an already-stored passphrase off doesn't re-prompt.
+- **Test connection** posts connection-only fields to the wizard's step-2 endpoint (which skips encryption validation) so a half-typed passphrase doesn't block the network test.
+- **Read-only:** ``kind`` (FTP / SFTP / Dropbox). Switching backends mid-life would orphan the existing remote archives — make a new target instead.
+
+### Added — Admin-tunable shadow colour for primary + secondary card styles (light + dark mode)
+
+Four new ``Card styles`` design fields on the Web Frontend Design page — **Primary card — shadow color**, **Primary card — shadow color (dark mode)**, **Secondary card — shadow color**, **Secondary card — shadow color (dark mode)** — let admins recolour the box-shadow under their primary and secondary card surfaces from the historic neutral charcoal to anything (brand-tinted glow on hero cards, warm amber on feature cards, a cool cyan glow that only shows in dark mode, etc.).
+
+**How it works**
+
+A new ``SHADOW_SCALE_COMPONENTS`` table in ``app/design.py`` mirrors ``SHADOW_SCALE`` but splits each preset into ``(offset+blur, alpha)``. The new helper ``shadow_with_color(scale_key, hex_color)`` composes a fresh ``box-shadow`` value by combining the chosen size scale's offset+blur with rgba derived from the operator's hex (alpha preserved from the scale). ``design_css_vars`` now uses the helper to emit **two pairs** of vars per card style — light (``--fe-card-primary-shadow`` / ``--fe-card-primary-hover-shadow``) and dark (``-shadow-dark`` / ``-hover-shadow-dark``). Each card style's resting and hover shadow share the same tint within a mode so the surface stays visually coherent. Invalid hex inputs gracefully fall back to the canonical ``SHADOW_SCALE`` string so a bad override never silently drops the shadow.
+
+**Dark-mode handoff** is done in ``frontend.css`` via ``html[data-theme="dark"]`` selector rules that redirect every primary / secondary card consumer (``.fe-card-primary``, ``.fe-meeting-card``, ``.fe-feature-card``, …) to the ``-dark`` variant, with ``var(…, var(…))`` fallback to the light value so an install that hasn't customised the dark colour renders identically across modes.
+
+**Defaults**
+
+All four fields default to ``#0f172a`` (rgba 15, 23, 42) in every theme — the exact charcoal the old hardcoded ``SHADOW_SCALE`` baked in — so existing installs render byte-identical until an admin opts in.
+
+**Admin UX**
+
+Picks up the existing ``kind="color"`` rendering automatically — color picker + hex chip + override toggle + reset button — and slots into the existing "Card styles" two-column layout (Primary card column on the left, Secondary card column on the right) right after the resting and hover shadow scale dropdowns.
+
+### Changed — Web Frontend Overview tab refactored to a draggable widget grid
+
+The Web Frontend Overview tab (``/tspro/frontend/``) was just two toggles + a "Pick a section on the left to edit" placeholder list. Replaced with a customisable widget grid that mirrors the home dashboard's recipe end-to-end — same ``.dash-grid`` + ``[data-dashboard-reorder]`` chrome, same ``_dash_widget.html`` macro, same drag-to-reorder JS, same Customize-modal pattern. Operators can hide widgets they don't care about and reorder the rest; preferences persist per-user.
+
+**New widgets** (default order):
+
+- **fe-status** — public-frontend on/off toggle + the per-user sidebar auto-hide pref (the two existing toggles, kept as a widget so they can be reordered / hidden).
+- **fe-visitor-metrics** — wide widget that lifts the five-tile overview bar straight out of ``visitor_metrics.html`` (Views · 30d / Unique visitors / Today / Yesterday / Last 7 days), backed by the same ``visitor_metrics.summary`` + ``daily_series`` aggregators the full metrics page uses. Header links through to ``/tspro/frontend/metrics``.
+- **fe-pages** — last 6 updated content pages with a badge showing total page count.
+- **fe-redirects** — total redirect count + the 5 most recent ``source → target`` pairs.
+- **fe-navigation** — header nav-item count + one-click into the navigation editor.
+- **fe-forms** — every entry in ``forms_registry.all_forms()`` (Submission, Contact) with its live/off state.
+- **fe-branding** — active theme name + logo-present indicator + shortcut to branding settings.
+- **fe-header-footer** — pair of quick links to the Header and Footer editors.
+
+**Persistence:** new ``User.fe_dash_show_*`` boolean columns (one per widget, defaults True) + ``User.fe_dash_order_json`` text column for the per-user order. Matching ``_migrate_sqlite`` entries so existing installs pick them up additively.
+
+**Routes:** new ``POST /tspro/frontend/customize`` (toggles) and ``POST /tspro/frontend/order`` (JSON drag-reorder) mirror ``dashboard_customize`` / ``dashboard_order_save`` exactly — same shape, same auth, same payload contract — so the existing dashboard-reorder JS in ``app.js`` works on either grid unchanged (selector matches ``[data-dashboard-reorder]`` on whichever page is rendered).
+
+**Removed:** the "Pick a section on the left to edit" copy + the bulleted Header / Footer / Homepage / Pages list. Those links now live in the Header & Footer widget, the Pages widget, and the subnav.
+
+### Added — Optional passphrase encryption for full-portal bundles (AES-256-GCM)
+
+Bundles contain the entire SQLite DB + every upload + ``zoom.key`` (the Fernet seed that decrypts stored Zoom / OTP / Turnstile credentials). When transmitted through a TLS-terminating proxy like Cloudflare, the edge sees the bundle in plaintext during the upload — same exposure as any other HTTPS upload through CF, but it's worth options. Operators can now encrypt the bundle with a passphrase so only ciphertext ever leaves the source host.
+
+**New module ``app/bundle_crypto.py``:** streaming AES-256-GCM with a 32-byte key derived from the passphrase via PBKDF2-HMAC-SHA256 (600 000 iterations) and a fresh 16-byte random salt per export. Binary format is ``[magic 'TSPENC01' 8B][salt 16B][nonce 12B][ciphertext …][tag 16B]``. Encrypt and decrypt both walk the input in 1 MiB blocks via ``cryptography``'s low-level ``Cipher.update / finalize`` API so multi-GB bundles cost O(1) memory. GCM auth tag covers the entire ciphertext — wrong passphrase or any byte tampering raises ``BundleDecryptError`` at finalize time.
+
+**Export (``data_export`` → POST):** the form on Settings → Data → Export is now a POST form with an optional **Encryption passphrase** field. Empty → plain ``.zip`` (legacy GET path still works for scripted callers); non-empty → server stream-encrypts after building the bundle and serves ``tsp-export-…-zip.enc`` with ``application/octet-stream``. Passphrase rides in the POST body, never the URL, so it can't leak via Referer / server logs / browser history.
+
+**Import (``data_import`` direct + ``data_import_finalize``):** both routes now accept an optional ``passphrase`` form field. New helper ``_decrypt_if_encrypted(zip_path, passphrase)`` runs after the file is assembled on disk: detects the ``TSPENC01`` magic, decrypts to a fresh tempfile under the supplied passphrase, hands the decrypted path to the shared ``_perform_data_import`` helper. Bundles without the magic skip decryption (passphrase is ignored with a "warning" flash so the operator catches a mismatched bundle before it overwrites the destination). Wrong passphrase / corrupted ciphertext → red flash with a clear explanation; no partial import. Cleanup unlinks the decrypted tempfile in the finally even when the import errors.
+
+**Browser (``base.html``):** the Import form has a new password field — placeholder "Required only for encrypted bundles", autofill suppressed via ``autocomplete="off"``. The chunked-upload JS reads the field and includes it in the synthetic finalize POST so the existing 90 MiB chunk flow works for ``.zip.enc`` bundles unchanged — chunks are just ciphertext bytes on the wire, Cloudflare's edge sees nothing recognizable. File picker now accepts ``.enc`` alongside ``.zip``.
+
+**Passphrase generator on the export form.** Operators don't have to invent a strong passphrase: a **Generate strong passphrase** button (visible by default) produces a 24-character passphrase formatted as 6 groups of 4 (e.g. ``Xk9p-Mw2N-jVqL-3Hbt-uR5z-PnAc``) drawn from a 54-character alphabet that excludes the visually-ambiguous ``I l O 0 1`` so it can be transcribed from a printed page without second-guessing. ~138 bits of entropy. Inline **Show/Hide** toggle + **Copy to clipboard** button appear once the field has a value (clipboard falls back to a "Press Ctrl+C" selection state on older browsers / non-secure contexts where ``navigator.clipboard`` isn't available). Generated client-side via ``crypto.getRandomValues()`` so the server never sees the passphrase until the encrypted bundle download is requested.
+
+**Save-this-passphrase warning.** A yellow ``.flash.flash-warning`` banner appears the moment the passphrase field has any value (typed or generated): *"Save this passphrase before exporting. Store it somewhere safe — a password manager, encrypted notes app, or a printed page in a vault. Without it the encrypted bundle cannot be decrypted."* No recovery channel exists; if the operator loses the passphrase the bundle is permanently undecryptable.
+
+**Settings save-bar opt-out.** The export form carries ``data-no-ajax="1"`` so the Settings modal's save-bar tracker doesn't hide the primary submit button (the tracker normally hides ``.btn-primary`` so the floating yellow Save bar owns the commit path — the right behaviour for "save these settings" forms, wrong for "trigger this download" forms).
+
 ## [2.1.9] — 2026-05-18
 
 ### Added — Chunked bundle restore so imports work behind a 100 MiB proxy cap (Cloudflare Free)

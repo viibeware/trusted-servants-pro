@@ -48,6 +48,60 @@ SHADOW_SCALE = {
 }
 SHADOW_KEYS = list(SHADOW_SCALE.keys())
 
+# Parallel decomposition of SHADOW_SCALE: same offset+blur as the
+# canonical shadow values above, but with the colour split out so a
+# per-card shadow_color override can substitute the RGB while keeping
+# the scale's alpha. Keys must mirror SHADOW_SCALE; alpha values must
+# match the alpha baked into each SHADOW_SCALE entry. Used by the
+# card-shadow emission below — operators tune the colour from the
+# Design page, the size still resolves through the scale dropdown.
+SHADOW_SCALE_COMPONENTS = {
+    "none": None,
+    "sm":   ("0 1px 2px",   0.06),
+    "md":   ("0 4px 12px",  0.10),
+    "lg":   ("0 12px 28px", 0.14),
+    "xl":   ("0 12px 32px", 0.18),
+}
+
+
+def _hex_to_rgb_triplet(hex_str):
+    """Return ``(r, g, b)`` 0-255 ints from a 3/6/8-char ``#`` hex, or
+    None if the input doesn't parse. Strips any alpha byte from an
+    8-char hex — alpha is supplied separately by the shadow scale."""
+    if not isinstance(hex_str, str) or not _HEX_RE.match(hex_str):
+        return None
+    h = hex_str.lstrip("#")
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
+    if len(h) == 8:
+        h = h[:6]
+    try:
+        return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    except ValueError:
+        return None
+
+
+def shadow_with_color(scale_key, hex_color):
+    """Compose a ``box-shadow`` value combining the SHADOW_SCALE
+    preset's offset+blur with rgba derived from ``hex_color`` + the
+    preset's alpha. Falls back to the canonical SHADOW_SCALE value
+    when the colour can't be parsed, so an invalid override never
+    drops the shadow entirely.
+
+    ``scale_key`` must be a SHADOW_SCALE key. ``hex_color`` is a 3, 6,
+    or 8 char hex with leading ``#``. The same colour value works in
+    both light and dark mode — alpha is low enough that a neutral
+    tint stays visually correct on either background."""
+    components = SHADOW_SCALE_COMPONENTS.get(scale_key)
+    if components is None:
+        return "none"
+    offsets, alpha = components
+    rgb = _hex_to_rgb_triplet(hex_color)
+    if rgb is None:
+        return SHADOW_SCALE.get(scale_key, "none")
+    r, g, b = rgb
+    return f"{offsets} rgba({r}, {g}, {b}, {alpha})"
+
 # Card-style scales — small dedicated vocabularies for the card-token
 # group's structural knobs. Concrete pixel / millisecond / transform
 # values keep these usable straight from the CSS `var(...)` reads in
@@ -148,12 +202,23 @@ THEME_DEFAULTS = {
         "card_primary_border_width":     "1",
         "card_primary_shadow":           "none",
         "card_primary_hover_shadow":     "md",
+        # Shadow tint per mode. ``shadow_color`` drives the light-mode
+        # box-shadow; ``shadow_color_dark`` drives the dark-mode one.
+        # Same RGB → same colour in both modes (the historic look); set
+        # the dark variant to a different hex when the brand-tinted
+        # glow you picked for light surfaces washes out on dark ones.
+        # Alpha is always supplied by the chosen shadow scale so a
+        # saturated brand colour still reads as a soft glow.
+        "card_primary_shadow_color":      "#0f172a",
+        "card_primary_shadow_color_dark": "#0f172a",
         "card_primary_transition":       "normal",
         "card_primary_hover_transform":  "lift-md",
 
         "card_secondary_border_width":    "1",
         "card_secondary_shadow":          "none",
         "card_secondary_hover_shadow":    "md",
+        "card_secondary_shadow_color":      "#0f172a",
+        "card_secondary_shadow_color_dark": "#0f172a",
         "card_secondary_transition":      "normal",
         "card_secondary_hover_transform": "lift-md",
 
@@ -242,12 +307,16 @@ THEME_DEFAULTS = {
         "card_primary_border_width":     "1",
         "card_primary_shadow":           "none",
         "card_primary_hover_shadow":     "md",
+        "card_primary_shadow_color":      "#0f172a",
+        "card_primary_shadow_color_dark": "#0f172a",
         "card_primary_transition":       "normal",
         "card_primary_hover_transform":  "lift-md",
 
         "card_secondary_border_width":    "1",
         "card_secondary_shadow":          "none",
         "card_secondary_hover_shadow":    "md",
+        "card_secondary_shadow_color":      "#0f172a",
+        "card_secondary_shadow_color_dark": "#0f172a",
         "card_secondary_transition":      "normal",
         "card_secondary_hover_transform": "lift-md",
 
@@ -442,6 +511,14 @@ DESIGN_FIELDS = [
      "group": "Card styles", "label": "Primary card — shadow"},
     {"key": "card_primary_hover_shadow",    "kind": "scale", "scale": "shadow",
      "group": "Card styles", "label": "Primary card — hover shadow"},
+    # Single shadow tint per card style — applies to both the resting
+    # and the hover shadow on this card kind, and identically in light
+    # and dark mode. Alpha comes from whichever shadow scale is
+    # currently selected; this colour just supplies the RGB.
+    {"key": "card_primary_shadow_color",    "kind": "color",
+     "group": "Card styles", "label": "Primary card — shadow color"},
+    {"key": "card_primary_shadow_color_dark", "kind": "color",
+     "group": "Card styles", "label": "Primary card — shadow color (dark mode)"},
     {"key": "card_primary_transition",      "kind": "scale", "scale": "transition",
      "group": "Card styles", "label": "Primary card — transition"},
     {"key": "card_primary_hover_transform", "kind": "scale", "scale": "transform",
@@ -453,6 +530,10 @@ DESIGN_FIELDS = [
      "group": "Card styles", "label": "Secondary card — shadow"},
     {"key": "card_secondary_hover_shadow",    "kind": "scale", "scale": "shadow",
      "group": "Card styles", "label": "Secondary card — hover shadow"},
+    {"key": "card_secondary_shadow_color",    "kind": "color",
+     "group": "Card styles", "label": "Secondary card — shadow color"},
+    {"key": "card_secondary_shadow_color_dark", "kind": "color",
+     "group": "Card styles", "label": "Secondary card — shadow color (dark mode)"},
     {"key": "card_secondary_transition",      "kind": "scale", "scale": "transition",
      "group": "Card styles", "label": "Secondary card — transition"},
     {"key": "card_secondary_hover_transform", "kind": "scale", "scale": "transform",
@@ -681,13 +762,35 @@ def design_css_vars(site):
             f"--fe-card-{which}-border-width: "
             f"var(--fe-bw-{chosen['card_' + which + '_border_width']});"
         )
+        # Card shadows compose the scale's offset+blur with rgba derived
+        # from the admin's shadow_color choice. Two parallel pairs of
+        # vars are emitted — light (``-shadow`` / ``-hover-shadow``) and
+        # dark (``-shadow-dark`` / ``-hover-shadow-dark``). The
+        # ``html[data-theme="dark"]`` rules in frontend.css read the
+        # dark pair on every consumer of ``.fe-card-primary`` /
+        # ``.fe-card-secondary`` so the operator's dark-mode shadow
+        # tint kicks in without affecting the light-mode value.
+        # ``shadow_with_color`` preserves the scale's alpha so a
+        # saturated brand colour still reads as a soft glow rather
+        # than an opaque block, and falls back to the canonical
+        # SHADOW_SCALE value if the colour can't be parsed.
+        _shadow_color_light = chosen.get('card_' + which + '_shadow_color', '#0f172a')
+        _shadow_color_dark  = chosen.get('card_' + which + '_shadow_color_dark', _shadow_color_light)
         parts.append(
             f"--fe-card-{which}-shadow: "
-            f"var(--fe-shadow-{chosen['card_' + which + '_shadow']});"
+            f"{shadow_with_color(chosen['card_' + which + '_shadow'], _shadow_color_light)};"
         )
         parts.append(
             f"--fe-card-{which}-hover-shadow: "
-            f"var(--fe-shadow-{chosen['card_' + which + '_hover_shadow']});"
+            f"{shadow_with_color(chosen['card_' + which + '_hover_shadow'], _shadow_color_light)};"
+        )
+        parts.append(
+            f"--fe-card-{which}-shadow-dark: "
+            f"{shadow_with_color(chosen['card_' + which + '_shadow'], _shadow_color_dark)};"
+        )
+        parts.append(
+            f"--fe-card-{which}-hover-shadow-dark: "
+            f"{shadow_with_color(chosen['card_' + which + '_hover_shadow'], _shadow_color_dark)};"
         )
         parts.append(
             f"--fe-card-{which}-transition: "

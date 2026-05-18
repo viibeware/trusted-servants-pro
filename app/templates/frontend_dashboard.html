@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_frontend_template_picker.html" import template_picker %}
+{% from "_dash_widget.html" import dash_widget with context %}
 {% set _active_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
 {% block heading %}Web Frontend{% endblock %}
 {% block heading_help %}Manage the public-facing website served at the root URL. The admin portal lives at <code>/tspro</code>.{% endblock %}
@@ -8,79 +9,302 @@
                     "frontend_theme",
                     url_for('main.frontend_theme_save'),
                     "site-theme-modal", "homepage", "Site theme", label="Theme") }}
+<button type="button" class="btn" data-open-modal="fe-overview-customize-modal">Customize</button>
 <a class="btn" href="{{ url_for('frontend.index') }}" target="_blank" rel="noopener">View frontend ↗</a>
 {% endblock %}
 {% block content %}
 <div class="fe-admin-layout">
   {% include "_frontend_subnav.html" %}
   <div class="fe-admin-main">
-    <section class="card">
-      <div class="card-head"><h2>Overview</h2></div>
-      <li class="special-page-row fe-status-row">
-        <div class="special-page-info">
-          <div class="u-name">Public web frontend
-            {% if site and site.frontend_enabled %}
-              <span class="fe-status-pill on">● Live</span>
-            {% else %}
-              <span class="fe-status-pill off">● Off</span>
-            {% endif %}
-          </div>
+
+    <div class="dash-grid"
+         data-dashboard-reorder
+         data-order-url="{{ url_for('main.fe_dashboard_order_save') }}">
+    {% for widget_key in fe_dashboard_order %}
+
+      {# ── Status: public toggle + the per-user sidebar auto-hide pref.
+         Kept as a widget so it can be reordered / hidden, but defaults
+         on so first-visit admins still see the on/off toggle. #}
+      {% if widget_key == 'fe-status' and current_user.fe_dash_show_status %}
+        {% call dash_widget(key='fe-status', title='Status',
+                             head_icon='power') %}
+          <ul class="list fe-status-list">
+            <li class="special-page-row fe-status-row">
+              <div class="special-page-info">
+                <div class="u-name">Public web frontend
+                  {% if site and site.frontend_enabled %}
+                    <span class="fe-status-pill on">● Live</span>
+                  {% else %}
+                    <span class="fe-status-pill off">● Off</span>
+                  {% endif %}
+                </div>
+                <p class="muted small">
+                  {% if site and site.frontend_enabled %}
+                    Visible to everyone at the root URL. Flip off to hide it from the public — admins and frontend editors can still preview.
+                  {% else %}
+                    Hidden from the public. You and other signed-in admins and frontend editors can still preview and keep building.
+                  {% endif %}
+                </p>
+              </div>
+              <form method="post" action="{{ url_for('main.frontend_toggle') }}" class="special-page-toggle-form" data-fe-auto-submit>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label class="mode-toggle" title="Toggle public web frontend">
+                  <input type="checkbox" name="frontend_enabled" value="1"
+                         onchange="this.form.submit()"
+                         {% if site and site.frontend_enabled %}checked{% endif %}>
+                  <span class="mode-track"><span class="mode-thumb"></span></span>
+                </label>
+                <noscript><button class="btn btn-sm btn-primary">Save</button></noscript>
+              </form>
+            </li>
+            <li class="special-page-row fe-status-row">
+              <div class="special-page-info">
+                <div class="u-name">Auto-hide app sidebar in Web Frontend</div>
+                <p class="muted small">
+                  When on, the main app sidebar collapses to a hamburger menu while you're inside the Web Frontend admin so the content area gets the full viewport width. Tap the menu icon (top-left of the page) to slide it open.
+                </p>
+              </div>
+              <form method="post" action="{{ url_for('main.frontend_autohide_sidebar_save') }}" class="special-page-toggle-form" data-fe-auto-submit>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label class="mode-toggle" title="Auto-hide app sidebar in Web Frontend">
+                  <input type="checkbox" name="fe_admin_autohide_sidebar" value="1"
+                         onchange="this.form.submit()"
+                         {% if current_user.fe_admin_autohide_sidebar %}checked{% endif %}>
+                  <span class="mode-track"><span class="mode-thumb"></span></span>
+                </label>
+                <noscript><button class="btn btn-sm btn-primary">Save</button></noscript>
+              </form>
+            </li>
+          </ul>
+        {% endcall %}
+      {% endif %}
+
+      {# ── Visitor metrics overview bar lifted verbatim from
+         visitor_metrics.html — same vm-tiles markup so the same CSS
+         renders it. Wide variant so it spans the row. #}
+      {% if widget_key == 'fe-visitor-metrics' and current_user.fe_dash_show_visitor_metrics %}
+        {% call dash_widget(key='fe-visitor-metrics', title='Visitor metrics — last ' ~ vm_window ~ ' days',
+                             head_icon='bar-chart',
+                             view_all_url=url_for('main.visitor_metrics_page'),
+                             view_all_label='Full metrics',
+                             wide=True) %}
+          {% if vm_summary %}
+            <div class="vm-tiles">
+              <div class="vm-tile vm-tile-accent">
+                <div class="vm-tile-label">Views · last {{ vm_window }}d</div>
+                <div class="vm-tile-value">{{ '{:,}'.format(vm_summary.views_window) }}</div>
+                <div class="vm-tile-sub muted smaller">
+                  <span class="vm-spark-inline" data-points="{% for d in vm_daily %}{{ d.views }}{% if not loop.last %},{% endif %}{% endfor %}" aria-hidden="true"></span>
+                </div>
+              </div>
+              <div class="vm-tile">
+                <div class="vm-tile-label">Unique visitors · {{ vm_window }}d</div>
+                <div class="vm-tile-value">{{ '{:,}'.format(vm_summary.uniques_window) }}</div>
+                <div class="vm-tile-sub muted smaller">
+                  {% if vm_summary.uniques_window and vm_summary.views_window %}
+                    {{ '%.1f'|format(vm_summary.views_window / vm_summary.uniques_window) }} views per visitor
+                  {% else %}—{% endif %}
+                </div>
+              </div>
+              <div class="vm-tile">
+                <div class="vm-tile-label">Today</div>
+                <div class="vm-tile-value">{{ '{:,}'.format(vm_summary.views_today) }}</div>
+                <div class="vm-tile-sub muted smaller">
+                  {% set diff = vm_summary.views_today - vm_summary.views_yesterday %}
+                  {% if vm_summary.views_yesterday == 0 and vm_summary.views_today == 0 %}—
+                  {% elif diff > 0 %}<span class="vm-trend-up">↑ {{ diff }}</span> vs yesterday
+                  {% elif diff < 0 %}<span class="vm-trend-down">↓ {{ -diff }}</span> vs yesterday
+                  {% else %}even with yesterday{% endif %}
+                </div>
+              </div>
+              <div class="vm-tile">
+                <div class="vm-tile-label">Yesterday</div>
+                <div class="vm-tile-value">{{ '{:,}'.format(vm_summary.views_yesterday) }}</div>
+                <div class="vm-tile-sub muted smaller">{{ vm_summary.uniques_today }} unique today</div>
+              </div>
+              <div class="vm-tile">
+                <div class="vm-tile-label">Last 7 days</div>
+                <div class="vm-tile-value">{{ '{:,}'.format(vm_summary.views_7d) }}</div>
+                <div class="vm-tile-sub muted smaller">{{ '{:,}'.format(vm_summary.uniques_7d) }} unique visitors</div>
+              </div>
+            </div>
+          {% else %}
+            <p class="muted">No visitor data yet — once a real visitor hits the public site the dashboard will populate.</p>
+          {% endif %}
+        {% endcall %}
+      {% endif %}
+
+      {# ── Pages — recent edits + total count + link to the Pages admin. #}
+      {% if widget_key == 'fe-pages' and current_user.fe_dash_show_pages %}
+        {% call dash_widget(key='fe-pages', title='Pages',
+                             head_icon='file-text',
+                             view_all_url=url_for('main.frontend_pages'),
+                             badge_count=pages_count, badge_title='Total pages') %}
+          {% if recent_pages %}
+            <ul class="list">
+              {% for p in recent_pages %}
+                <li><a href="{{ url_for('main.frontend_page_edit', page_id=p.id) }}">
+                  <span>{{ p.title }}</span>
+                  <span class="muted">{{ p.updated_at.strftime('%b %d') }}</span>
+                </a></li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="muted">No pages yet.</p>
+          {% endif %}
+        {% endcall %}
+      {% endif %}
+
+      {# ── Redirects — count + a few recent. #}
+      {% if widget_key == 'fe-redirects' and current_user.fe_dash_show_redirects %}
+        {% call dash_widget(key='fe-redirects', title='Redirects',
+                             head_icon='link',
+                             view_all_url=url_for('main.frontend_redirects'),
+                             badge_count=redirects_count, badge_title='Total redirects') %}
+          {% if recent_redirects %}
+            <ul class="list">
+              {% for r in recent_redirects %}
+                <li><a href="{{ url_for('main.frontend_redirects') }}">
+                  <span>{{ r.source_path }}</span>
+                  <span class="muted">→ {{ r.target_path }}</span>
+                </a></li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="muted">No redirects configured.</p>
+          {% endif %}
+        {% endcall %}
+      {% endif %}
+
+      {# ── Navigation — header nav items count + quick link. #}
+      {% if widget_key == 'fe-navigation' and current_user.fe_dash_show_navigation %}
+        {% call dash_widget(key='fe-navigation', title='Navigation',
+                             head_icon='layout-grid',
+                             view_all_url=url_for('main.frontend_navigation'),
+                             view_all_label='Edit navigation',
+                             badge_count=nav_count, badge_title='Header nav items') %}
           <p class="muted small">
-            {% if site and site.frontend_enabled %}
-              Visible to everyone at the root URL. Flip off to hide it from the public — admins and frontend editors can still preview.
+            {% if nav_count %}
+              {{ nav_count }} top-level header item{{ '' if nav_count == 1 else 's' }} on the public site.
             {% else %}
-              Hidden from the public. You and other signed-in admins and frontend editors can still preview and keep building.
+              No header navigation items yet — the public site will render with the default minimal nav until you add some.
             {% endif %}
           </p>
-        </div>
-        <form method="post" action="{{ url_for('main.frontend_toggle') }}" class="special-page-toggle-form"
-              data-fe-auto-submit>
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <label class="mode-toggle" title="Toggle public web frontend">
-            <input type="checkbox" name="frontend_enabled" value="1"
-                   onchange="this.form.submit()"
-                   {% if site and site.frontend_enabled %}checked{% endif %}>
-            <span class="mode-track"><span class="mode-thumb"></span></span>
-          </label>
-          <noscript><button class="btn btn-sm btn-primary">Save</button></noscript>
-        </form>
-      </li>
-      {# Sidebar auto-hide — per-user pref. The Web Frontend has its own
-         sub-nav, so the outer app sidebar competes with editing canvas
-         width on laptops. When on, the outer sidebar collapses to a
-         hamburger here only; everywhere else in the portal it stays
-         visible. Default on. #}
-      <li class="special-page-row fe-status-row">
-        <div class="special-page-info">
-          <div class="u-name">Auto-hide app sidebar in Web Frontend</div>
+        {% endcall %}
+      {% endif %}
+
+      {# ── Forms — list of registered public forms with their enabled state. #}
+      {% if widget_key == 'fe-forms' and current_user.fe_dash_show_forms %}
+        {% call dash_widget(key='fe-forms', title='Forms',
+                             head_icon='send',
+                             view_all_url=url_for('main.frontend_forms')) %}
+          {% if fe_forms %}
+            <ul class="list">
+              {% for f in fe_forms %}
+                {% set enabled = site and f.get('enabled_setting') and site[f['enabled_setting']] %}
+                <li><a href="{{ url_for(f['settings_endpoint']) }}">
+                  <span>{{ f['name'] }}</span>
+                  <span class="muted">{% if enabled %}Live{% else %}Off{% endif %}</span>
+                </a></li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="muted">No forms registered.</p>
+          {% endif %}
+        {% endcall %}
+      {% endif %}
+
+      {# ── Branding — active theme + shortcut to branding settings. #}
+      {% if widget_key == 'fe-branding' and current_user.fe_dash_show_branding %}
+        {% call dash_widget(key='fe-branding', title='Branding & theme',
+                             head_icon='star',
+                             view_all_url=url_for('main.frontend_branding'),
+                             view_all_label='Edit branding') %}
           <p class="muted small">
-            When on, the main app sidebar collapses to a hamburger menu while you're inside the Web Frontend admin so the content area gets the full viewport width. Tap the menu icon (top-left of the page) to slide it open. Off keeps both sidebars visible at all times.
+            Active theme: <strong>{{ _active_theme|replace('_', ' ')|capitalize }}</strong>.
+            {% if site and site.frontend_brand_logo_filename %}
+              Custom logo configured.
+            {% else %}
+              No custom logo set yet.
+            {% endif %}
           </p>
-        </div>
-        <form method="post" action="{{ url_for('main.frontend_autohide_sidebar_save') }}"
-              class="special-page-toggle-form"
-              data-fe-auto-submit>
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <label class="mode-toggle" title="Auto-hide app sidebar in Web Frontend">
-            <input type="checkbox" name="fe_admin_autohide_sidebar" value="1"
-                   onchange="this.form.submit()"
-                   {% if current_user.fe_admin_autohide_sidebar %}checked{% endif %}>
-            <span class="mode-track"><span class="mode-thumb"></span></span>
-          </label>
-          <noscript><button class="btn btn-sm btn-primary">Save</button></noscript>
-        </form>
-      </li>
-      <p class="muted" style="margin-top: 20px;">Pick a section on the left to edit:</p>
-      <ul class="list">
-        <li><a href="{{ url_for('main.frontend_header') }}"><b>Header</b><span class="muted">Width, padding, and navigation links</span></a></li>
-        <li><a href="{{ url_for('main.frontend_footer') }}"><b>Footer</b><span class="muted">Footer copy and links</span></a></li>
-        {%- set _hp_id = site.homepage_page_id if site else None -%}
-        {%- if _hp_id -%}
-          <li><a href="{{ url_for('main.frontend_page_edit', page_id=_hp_id) }}"><b>Homepage</b><span class="muted">Edit the Page that renders at the public `/` root</span></a></li>
-        {%- endif -%}
-        <li><a href="{{ url_for('main.frontend_pages') }}"><b>Pages</b><span class="muted">All content pages</span></a></li>
-      </ul>
-    </section>
+        {% endcall %}
+      {% endif %}
+
+      {# ── Header & Footer — quick links to the two most-edited
+         structure pieces. No data here; the widget exists so the
+         operator who lives in those two surfaces can land on the
+         overview and one-click into either. #}
+      {% if widget_key == 'fe-header-footer' and current_user.fe_dash_show_header_footer %}
+        {% call dash_widget(key='fe-header-footer', title='Header & Footer',
+                             head_icon='panel-top') %}
+          <ul class="list">
+            <li><a href="{{ url_for('main.frontend_header') }}">
+              <span>Header</span><span class="muted">Width, padding, navigation</span>
+            </a></li>
+            <li><a href="{{ url_for('main.frontend_footer') }}">
+              <span>Footer</span><span class="muted">Copy and links</span>
+            </a></li>
+          </ul>
+        {% endcall %}
+      {% endif %}
+
+    {% endfor %}
+    </div>
+
+  </div>
+</div>
+
+{# Customize modal — one toggle per widget, posts to /frontend/customize. #}
+<div class="modal" id="fe-overview-customize-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <form method="post" action="{{ url_for('main.fe_dashboard_customize') }}" class="form" data-no-ajax="1">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-head">
+        <h2>Customize Web Frontend Overview</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted small">Toggle widgets here, or drag any widget on the overview to reorder it — changes are saved automatically. These preferences are saved to your account.</p>
+        <ul class="special-pages-list">
+          {% for slug, label, desc in [
+            ('fe-status', 'Status',
+              'Public-frontend on/off toggle plus the per-user sidebar auto-hide preference.'),
+            ('fe-visitor-metrics', 'Visitor metrics',
+              'Five-tile traffic overview — views, unique visitors, today / yesterday / 7-day windows. Same numbers as the full metrics page.'),
+            ('fe-pages', 'Pages',
+              'Most-recently-updated content pages with a count badge and a link to the Pages admin.'),
+            ('fe-redirects', 'Redirects',
+              'Configured URL redirects — count plus the most recent few. Click through to manage.'),
+            ('fe-navigation', 'Navigation',
+              'Count of top-level header navigation items with a link to the navigation editor.'),
+            ('fe-forms', 'Forms',
+              'Every registered public form (Submission, Contact) with its live/off state.'),
+            ('fe-branding', 'Branding & theme',
+              'Active theme plus a shortcut to branding settings (logo, brand name, SEO defaults).'),
+            ('fe-header-footer', 'Header & Footer',
+              'Quick links to the Header and Footer editors — no data, just one-click access.'),
+          ] %}
+          {% set col = 'fe_dash_show_' ~ slug|replace('fe-', '')|replace('-', '_') %}
+          <li class="special-page-row">
+            <div class="special-page-info">
+              <div class="u-name">{{ label }}</div>
+              <p class="muted small">{{ desc }}</p>
+            </div>
+            <label class="mode-toggle" title="Show {{ label }}">
+              <input type="checkbox" name="{{ col }}" value="1" {% if current_user[col] %}checked{% endif %}>
+              <span class="mode-track"><span class="mode-thumb"></span></span>
+            </label>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
   </div>
 </div>
 {% endblock %}

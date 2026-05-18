@@ -1248,7 +1248,10 @@
                     data-chunk-action="{{ url_for('main.data_import_chunk') }}"
                     data-finalize-action="{{ url_for('main.data_import_finalize') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <label>Export archive (.zip)<input type="file" name="archive" accept=".zip,application/zip" required></label>
+                <label>Export archive (.zip or .zip.enc)<input type="file" name="archive" accept=".zip,.enc,application/zip,application/octet-stream" required></label>
+                <label>Decryption passphrase <span class="muted smaller">(required for <code>.zip.enc</code> bundles, leave blank otherwise)</span>
+                  <input type="password" name="passphrase" autocomplete="off" placeholder="Required only for encrypted bundles">
+                </label>
                 <label>Type <code>REPLACE</code> to confirm<input type="text" name="confirm" placeholder="REPLACE" autocomplete="off" required></label>
                 <div class="form-actions"><button class="btn btn-danger" data-import-bundle-submit>Import &amp; Replace All Data</button></div>
               </form>
@@ -1356,7 +1359,7 @@
                   return { uploadId: uploadId, totalChunks: total };
                 }
 
-                function finalize(uploadId, totalChunks, confirmValue, csrfToken) {
+                function finalize(uploadId, totalChunks, confirmValue, csrfToken, passphrase) {
                   // Hand off to a synthetic form POST so the browser
                   // follows the server's redirect-to-logout natively
                   // (carrying the flashed status message).
@@ -1372,6 +1375,7 @@
                     upload_id: uploadId,
                     expected_chunks: String(totalChunks),
                     confirm: confirmValue,
+                    passphrase: passphrase || '',
                   };
                   Object.keys(fields).forEach(function (k) {
                     var input = document.createElement('input');
@@ -1388,6 +1392,7 @@
                   var fileInput    = form.querySelector('input[type="file"]');
                   var confirmInput = form.querySelector('input[name="confirm"]');
                   var csrfInput    = form.querySelector('input[name="csrf_token"]');
+                  var passInput    = form.querySelector('input[name="passphrase"]');
                   if (!fileInput || !fileInput.files || !fileInput.files[0]) return;
                   if (!confirmInput || confirmInput.value !== 'REPLACE') return;
 
@@ -1400,7 +1405,8 @@
                   try {
                     var info = await uploadChunked(fileInput.files[0], csrfInput ? csrfInput.value : '');
                     finalize(info.uploadId, info.totalChunks, confirmInput.value,
-                             csrfInput ? csrfInput.value : '');
+                             csrfInput ? csrfInput.value : '',
+                             passInput ? passInput.value : '');
                   } catch (err) {
                     if (btn) { btn.disabled = false; btn.textContent = 'Import & Replace All Data'; }
                     setStatus('Upload failed',
@@ -1417,9 +1423,130 @@
                 Download a complete archive of this portal — database, uploads, and
                 the Fernet key. Use the Import side on a fresh instance to restore.
               </p>
-              <div class="form-actions">
-                <a class="btn btn-primary" href="{{ url_for('main.data_export') }}">Export full archive (.zip)</a>
-              </div>
+              <p class="muted small">
+                Optional: encrypt the bundle with a passphrase (AES-256-GCM,
+                PBKDF2-derived key). The downloaded file becomes
+                <code>.zip.enc</code>. The destination needs the same passphrase
+                to import it. Recommended when transmitting through Cloudflare or
+                any other TLS-terminating proxy — the edge only sees ciphertext.
+              </p>
+              <form method="post" action="{{ url_for('main.data_export') }}" class="form" data-no-ajax="1" data-export-bundle-form>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label>Encryption passphrase <span class="muted smaller">(leave blank for plain .zip)</span>
+                  <div class="passphrase-row">
+                    <input type="password" name="passphrase" autocomplete="new-password"
+                           placeholder="Optional — encrypts the bundle"
+                           data-passphrase-input>
+                    <button type="button" class="btn btn-sm" data-passphrase-reveal hidden>Show</button>
+                  </div>
+                  <div class="passphrase-tools">
+                    <button type="button" class="btn btn-sm" data-passphrase-generate>Generate strong passphrase</button>
+                    <button type="button" class="btn btn-sm" data-passphrase-copy hidden>Copy to clipboard</button>
+                  </div>
+                </label>
+                <div class="flash flash-warning passphrase-warn" data-passphrase-warn hidden>
+                  <strong>Save this passphrase before exporting.</strong> Store it
+                  somewhere safe — a password manager, encrypted notes app, or a
+                  printed page in a vault. <strong>Without it the encrypted bundle
+                  cannot be decrypted.</strong>
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">Export full archive</button>
+                </div>
+              </form>
+              <script>
+              (function () {
+                var form = document.querySelector('[data-export-bundle-form]');
+                if (!form) return;
+                var input    = form.querySelector('[data-passphrase-input]');
+                var genBtn   = form.querySelector('[data-passphrase-generate]');
+                var copyBtn  = form.querySelector('[data-passphrase-copy]');
+                var showBtn  = form.querySelector('[data-passphrase-reveal]');
+                var warn     = form.querySelector('[data-passphrase-warn]');
+                if (!input || !genBtn) return;
+
+                // Excludes the visually-ambiguous characters (I, l, O, 0, 1)
+                // so the operator can transcribe it from a printed copy
+                // without second-guessing. 54-char alphabet, 24 chars total
+                // → ~138 bits of entropy, more than enough for a 256-bit
+                // AES key derived through 600k PBKDF2 rounds.
+                var ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+                var GROUPS = 6, PER_GROUP = 4;
+
+                function generate() {
+                  if (!window.crypto || !crypto.getRandomValues) return '';
+                  var rnd = new Uint32Array(GROUPS * PER_GROUP);
+                  crypto.getRandomValues(rnd);
+                  var out = [];
+                  for (var g = 0; g < GROUPS; g++) {
+                    var chunk = '';
+                    for (var i = 0; i < PER_GROUP; i++) {
+                      chunk += ALPHABET[rnd[g * PER_GROUP + i] % ALPHABET.length];
+                    }
+                    out.push(chunk);
+                  }
+                  return out.join('-');
+                }
+
+                function showWarn(on) { if (warn) warn.hidden = !on; }
+                function showCopy(on) { if (copyBtn) copyBtn.hidden = !on; }
+                function showReveal(on) {
+                  if (!showBtn) return;
+                  showBtn.hidden = !on;
+                }
+
+                genBtn.addEventListener('click', function () {
+                  var pp = generate();
+                  if (!pp) return;
+                  input.value = pp;
+                  input.type = 'text';   // make it visible so the user can copy
+                  if (showBtn) showBtn.textContent = 'Hide';
+                  showReveal(true);
+                  showCopy(true);
+                  showWarn(true);
+                  input.focus();
+                  input.select();
+                });
+
+                if (showBtn) {
+                  showBtn.addEventListener('click', function () {
+                    var hidden = input.type === 'password';
+                    input.type = hidden ? 'text' : 'password';
+                    showBtn.textContent = hidden ? 'Hide' : 'Show';
+                  });
+                }
+
+                if (copyBtn) {
+                  copyBtn.addEventListener('click', async function () {
+                    var orig = copyBtn.textContent;
+                    try {
+                      await navigator.clipboard.writeText(input.value);
+                      copyBtn.textContent = 'Copied!';
+                    } catch (_) {
+                      // Older browsers / non-secure contexts: fall back to
+                      // selecting the input so the user can Ctrl+C manually.
+                      var prevType = input.type;
+                      input.type = 'text';
+                      input.focus();
+                      input.select();
+                      copyBtn.textContent = 'Press Ctrl+C';
+                      input.type = prevType;
+                    }
+                    setTimeout(function () { copyBtn.textContent = orig; }, 1800);
+                  });
+                }
+
+                // If the user types their own passphrase, still warn them
+                // to save it — same data-loss risk applies regardless of
+                // source. Show/hide reveal + copy buttons in step.
+                input.addEventListener('input', function () {
+                  var hasValue = !!input.value;
+                  showWarn(hasValue);
+                  showCopy(hasValue);
+                  showReveal(hasValue);
+                });
+              })();
+              </script>
             </div>
           </div>
         </section>
