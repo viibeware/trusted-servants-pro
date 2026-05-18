@@ -321,7 +321,7 @@
             <span class="muted small">Last successful backup</span>
             <strong>
               {% if backup_summary.last_ok_at %}
-                {{ backup_summary.last_ok_at.strftime('%b %-d, %H:%M') }} UTC
+                {{ backup_summary.last_ok_at|fmt_site_local('%b %-d, %H:%M %Z') }}
                 {% if backup_summary.last_ok_target %}<span class="muted smaller">· {{ backup_summary.last_ok_target }}</span>{% endif %}
               {% else %}<span class="muted">—</span>{% endif %}
             </strong>
@@ -329,7 +329,7 @@
           <div class="dash-backups-when-row">
             <span class="muted small">Next scheduled run</span>
             <strong>
-              {% if backup_summary.next_run_at %}{{ backup_summary.next_run_at.strftime('%b %-d, %H:%M') }} UTC
+              {% if backup_summary.next_run_at %}{{ backup_summary.next_run_at|fmt_site_local('%b %-d, %H:%M %Z') }}
               {% else %}<span class="muted">—</span>{% endif %}
             </strong>
           </div>
@@ -342,7 +342,7 @@
             <li>
               <span class="backup-status-pill backup-status-{{ r.status }}">{{ r.status }}</span>
               <span class="dash-backups-recent-target">{{ r.target.name if r.target else '(deleted)' }}</span>
-              <span class="muted smaller">{{ r.started_at.strftime('%b %-d, %H:%M') }}</span>
+              <span class="muted smaller">{{ r.started_at|fmt_site_local('%b %-d, %H:%M') }}</span>
             </li>
             {% endfor %}
           </ul>

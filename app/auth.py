@@ -380,6 +380,16 @@ def login():
             _clear_login_failures(ip=ip, username=user.username)
             session.permanent = True
             login_user(user, remember=True)
+            # Stamp `last_seen_at` here (in addition to the throttled
+            # before_request hook in routes.py::_track_last_seen) so the
+            # user shows up in the Currently-Online widget on the very
+            # next 5-second poll — even when the post-login redirect's
+            # GET happens to be one of the request-tracker's skip-list
+            # endpoints, or the visitor closes the tab before the
+            # redirect resolves. Pure additive: the request tracker
+            # still owns ongoing freshness updates.
+            from datetime import datetime as _dt
+            user.last_seen_at = _dt.utcnow()
             from . import activity
             activity.open_session(user)
             activity.log("login", user=user, summary=f"Signed in from {ip}")

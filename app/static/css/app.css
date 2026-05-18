@@ -3338,6 +3338,15 @@ button.chip { font-family: inherit; }
 .online-row > * { min-width: 0; }
 .online-row.is-self { border-color: var(--brand); }
 .online-row.just-moved { animation: online-flash 1400ms ease-out; }
+/* Idle rows — users still on the list (within the 1-hour idle
+   window) but past the 5-minute active window. Drop everything to
+   a low-contrast monotone so they're visually distinct from active
+   rows; the destination link stays muted too rather than brand-blue
+   so the row reads as "background presence" not "live navigation". */
+.online-row.is-idle { opacity: 0.55; }
+.online-row.is-idle .online-avatar { background: var(--border); color: var(--muted); }
+.online-row.is-idle .online-where-link { color: var(--muted); }
+.online-row.is-idle.just-moved { animation: none; }
 @keyframes online-flash {
   0%   { background: color-mix(in srgb, #10b981 22%, transparent); }
   100% { background: var(--panel-2); }

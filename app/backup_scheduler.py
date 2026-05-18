@@ -80,12 +80,38 @@ def compute_next_run(cron_expr, base=None):
     Falls back to base+1d if the expression is unparseable so a bad
     schedule never wedges the scheduler — the row will still appear in
     the UI as failing-to-parse via the wizard's validator.
+
+    Cron is interpreted in the **site's configured timezone**, not
+    UTC, so the operator who types ``0 3 * * *`` gets 3 AM local
+    (matching what they see in the UI and the wall clock), not 3 AM
+    UTC. We attach the site's zone to the base, hand the aware
+    datetime to croniter, then strip the tz so the returned value
+    stays naive-UTC — the storage convention every other backup
+    column uses. Falls back to UTC interpretation when the site row
+    can't be loaded (test fixtures, scheduler-before-app-context, etc.)
+    so a missing SiteSetting never breaks the scheduler.
     """
+    from datetime import timezone as _tz
     base = base or datetime.utcnow()
     try:
+        from .models import SiteSetting as _SS
+        from .timezone import site_timezone as _stz
+        from flask import has_app_context
+        local_tz = _tz.utc
+        if has_app_context():
+            try:
+                local_tz = _stz(_SS.query.first())
+            except Exception:  # noqa: BLE001 — DB hiccup → fall back to UTC
+                local_tz = _tz.utc
+        base_aware = base.replace(tzinfo=_tz.utc).astimezone(local_tz)
         from croniter import croniter
-        it = croniter(cron_expr, base)
-        return it.get_next(datetime)
+        it = croniter(cron_expr, base_aware)
+        nxt_local = it.get_next(datetime)
+        # croniter preserves the tzinfo it was given; convert back to
+        # UTC and strip so the stored next_run_at is naive-UTC.
+        if nxt_local.tzinfo is None:
+            nxt_local = nxt_local.replace(tzinfo=local_tz)
+        return nxt_local.astimezone(_tz.utc).replace(tzinfo=None)
     except Exception:  # noqa: BLE001
         logger.warning("compute_next_run: bad cron %r — defaulting to +1d", cron_expr)
         return base + timedelta(days=1)

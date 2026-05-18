@@ -8,6 +8,29 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [2.1.15] — 2026-05-18
 
+### Changed — Off-site backup datetimes now render in the site's configured timezone
+
+Every backup datetime display path was hard-coded to UTC even though admins set their tz on Settings → Timezone. Promoted everything to render in the site's local zone with a tz abbreviation suffix (e.g. ``May 18, 03:00 PDT``) instead of ``May 18, 03:00 UTC``:
+
+- New ``|fmt_site_local`` Jinja filter (``app/__init__.py``) that attaches UTC to a naive datetime, converts to ``site_timezone(SiteSetting)``, and formats with ``%Z`` so the abbreviation lands on the end. Already-aware datetimes are converted directly rather than double-stamped.
+- ``backups_list.html`` (per-row last/next run + recent-activity rows), ``backups_runs.html`` (run history detail), ``index.html`` Backups dashboard widget (Last successful / Next scheduled run + Recent activity rows), and the wizard step-5 finalize flash all now run through the new filter.
+- **Cron expression itself is interpreted in the site's timezone**, not UTC. ``compute_next_run`` in ``app/backup_scheduler.py`` attaches the site's zone to the base datetime before handing it to croniter, computes the next firing in local time, then converts back to naive-UTC for storage. So ``0 3 * * *`` now means 3 AM local (matching what the admin sees on the wall clock) — not 3 AM UTC. Falls back to UTC when no app context is available so the scheduler boot path stays robust. Both the wizard's step-3 schedule hint and the edit page's hint now read "*interpreted in the site's timezone — set on Settings → Timezone*".
+
+### Changed — Currently Online widget keeps idle users visible for an hour
+
+The widget used to drop a user the moment their ``last_seen_at`` aged past 5 minutes — handy for "who's working in the portal RIGHT NOW", but lost track of admins who'd been around recently and hadn't yet been seen by another. Lift the list cap from 5 min to **1 hour** while keeping the 5-minute window as the "active" threshold:
+
+- New ``IDLE_WINDOW = timedelta(hours=1)`` in ``app/routes.py``. ``_online_users()`` now returns ``(active_count, users)`` where ``users`` is everyone within the 1-hour idle window (newest-first) and ``active_count`` is the within-5-min subset — what the dashboard's server-metrics tile + the widget header still reports as "currently online".
+- ``/api/online-users`` adds an ``is_idle`` boolean per user (``last_seen_at`` past 5 min but within 1 hour).
+- ``_online_widget.html`` adds ``fmtIdle(iso)`` returning "*no activity in X mins*" with pluralisation, renders idle rows with an ``is-idle`` class + ``data-idle="1"`` attribute, and the per-second tick-updater picks ``fmtIdle`` vs ``fmtAgo`` based on the row's idle flag.
+- CSS for ``.online-row.is-idle`` drops opacity to 0.55, mutes the avatar and location-link colors, and skips the just-moved flash so idle rows don't pulse.
+- Empty-state copy changed from "*Nobody is currently signed in.*" to "*No users active.*" — fires only when nobody's been seen at all in the past hour.
+- The dashboard's server-metrics tile tooltip continues to list only the active subset, so the count and the names match.
+
+### Fixed — Newly-logged-in user shows up in the Currently Online widget immediately
+
+``User.last_seen_at`` was only ever set by the request-tracker's before_request hook on a non-skipped GET. If a fresh login's post-redirect GET happened to be skip-listed (an asset request, an API ping) or the visitor closed the tab before the redirect resolved, the user wouldn't appear in the widget on the next 5-second poll. ``auth.login`` now stamps ``user.last_seen_at = utcnow()`` at the moment ``login_user()`` returns, so the row enters the widget regardless of what the redirect lands on.
+
 ### Changed — Form Submissions moved out of the Web Frontend admin into the main app sidebar
 
 The Form Submissions admin used to live as a Web Frontend subnav entry under **Structure**, alongside the form builder. Reaching the inbox from anywhere outside the Web Frontend admin meant clicking into the FE area first — an awkward extra step for a destination admins consult independently of the FE editing surface. Promoted it to a first-class sidebar entry in the **Admin** section of the main app sidebar.

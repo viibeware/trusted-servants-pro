@@ -311,6 +311,35 @@ def create_app():
         h12 = h % 12 or 12
         return f"{h12}:{m:02d} {suffix}"
 
+    @app.template_filter("fmt_site_local")
+    def fmt_site_local(value, fmt="%Y-%m-%d %H:%M %Z"):
+        """Format a naive-UTC datetime in the site's configured timezone.
+
+        Every model column the app writes with ``datetime.utcnow()``
+        ends up naive in the database (no tzinfo) but conventionally
+        UTC. This filter attaches UTC, converts to the site's IANA
+        zone, and runs ``strftime`` with the supplied format —
+        ``%Z`` in the default format expands to the local tz
+        abbreviation (e.g. "PDT", "PST", "EST") so the rendered value
+        carries an explicit zone marker instead of an implicit one.
+        Falsy / non-datetime inputs return an empty string so callers
+        don't need ``{% if x %}…{% endif %}`` guards just for the
+        format step. Already-aware datetimes are converted directly
+        rather than double-stamped with UTC.
+        """
+        from datetime import datetime, timezone as _tz
+        if not value or not isinstance(value, datetime):
+            return ""
+        from .timezone import site_timezone as _stz
+        from .models import SiteSetting as _SS
+        try:
+            site = _SS.query.first()
+        except Exception:  # noqa: BLE001 — DB hiccup; fall back to UTC
+            site = None
+        zone = _stz(site)
+        aware = value if value.tzinfo else value.replace(tzinfo=_tz.utc)
+        return aware.astimezone(zone).strftime(fmt)
+
     from .crypto import init_fernet
     init_fernet(app)
 

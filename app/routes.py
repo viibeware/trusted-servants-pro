@@ -306,6 +306,13 @@ FE_DASHBOARD_WIDGET_KEYS = ("fe-status", "fe-visitor-metrics", "fe-pages",
                             "fe-branding", "fe-header-footer")
 
 ONLINE_WINDOW = timedelta(minutes=5)
+# Idle window — users seen between ONLINE_WINDOW and IDLE_WINDOW are
+# kept in the live "Currently online" list but rendered greyed-out with
+# a "no activity in Xm" label. Beyond IDLE_WINDOW they drop off
+# entirely. Lets the admin keep visibility on who was recently in the
+# portal without conflating them with people actively working in it
+# right now.
+IDLE_WINDOW = timedelta(hours=1)
 LAST_SEEN_THROTTLE = timedelta(seconds=60)
 
 
@@ -418,14 +425,24 @@ def _track_last_seen():
 
 
 def _online_users():
-    """Return (count, list[User]) of users seen within ONLINE_WINDOW."""
-    cutoff = datetime.utcnow() - ONLINE_WINDOW
-    q = (User.query
-         .filter(User.last_seen_at.isnot(None))
-         .filter(User.last_seen_at >= cutoff)
-         .order_by(User.last_seen_at.desc()))
-    users = q.all()
-    return len(users), users
+    """Return ``(active_count, users)`` for the live widget.
+
+    ``users`` is every account seen within IDLE_WINDOW (1 hour),
+    newest-first. ``active_count`` is the subset within ONLINE_WINDOW
+    (5 minutes) — what the widget header / dashboard tile reports as
+    "currently online", since idle users are technically still on
+    the list but visibly distinct in the UI.
+    """
+    now = datetime.utcnow()
+    active_cutoff = now - ONLINE_WINDOW
+    idle_cutoff = now - IDLE_WINDOW
+    users = (User.query
+             .filter(User.last_seen_at.isnot(None))
+             .filter(User.last_seen_at >= idle_cutoff)
+             .order_by(User.last_seen_at.desc())
+             .all())
+    active_count = sum(1 for u in users if u.last_seen_at >= active_cutoff)
+    return active_count, users
 
 
 def _dashboard_order(user):
@@ -509,7 +526,14 @@ def index():
                            .filter_by(is_read=False, is_archived=False)
                            .order_by(ContactSubmission.created_at.desc())
                            .limit(6).all())
-        online_count, online_users = _online_users()
+        # _online_users() now returns the full idle-window list
+        # (1 hour) with active_count counting just the within-5-min
+        # subset. The dashboard's server-metrics tile tooltip lists
+        # only the active users so the count and the names match —
+        # slice off the active prefix (list is ordered newest-first,
+        # so the first `online_count` rows are the active ones).
+        online_count, _online_full = _online_users()
+        online_users = _online_full[:online_count]
         from sqlalchemy import func as _sa_func
         from .auth import currently_locked_usernames, user_lockout_expires_in
         locked_set = currently_locked_usernames()
@@ -628,6 +652,7 @@ def api_online_users():
     if not current_user.is_admin():
         abort(403)
     count, users = _online_users()
+    active_cutoff = datetime.utcnow() - ONLINE_WINDOW
     return jsonify(count=count, users=[
         {"id": u.id,
          "username": u.username,
@@ -636,7 +661,11 @@ def api_online_users():
          "last_endpoint": u.last_endpoint or "",
          "last_path": u.last_path or "",
          "location_label": _endpoint_label(u.last_endpoint, u.last_path),
-         "is_self": (u.id == current_user.id)}
+         "is_self": (u.id == current_user.id),
+         # is_idle = on the list (within IDLE_WINDOW) but past
+         # ONLINE_WINDOW. Widget greys these out + shows
+         # "no activity in Xm" instead of the active "Xs ago" stamp.
+         "is_idle": u.last_seen_at < active_cutoff}
         for u in users
     ])
 
@@ -4232,7 +4261,17 @@ def backups_wizard_step5_post(target_id):
             success = False
             detail = (run.error_message if run else None) or "unknown error"
     else:
-        detail = f"Backup target '{t.name}' is set up — next run {t.next_run_at:%Y-%m-%d %H:%M} UTC."
+        # Render next_run_at in the site's configured tz so the
+        # confirmation matches the wall clock the rest of the admin
+        # uses. ``next_run_at`` is naive-UTC per scheduler convention;
+        # attach tz, convert, format with %Z so the abbreviation
+        # ("PDT" / "EST" / etc.) sits on the end instead of "UTC".
+        from datetime import timezone as _tz
+        from .timezone import site_timezone as _stz
+        _site = _get_site_setting()
+        _aware = t.next_run_at.replace(tzinfo=_tz.utc) if t.next_run_at and t.next_run_at.tzinfo is None else t.next_run_at
+        _stamp = _aware.astimezone(_stz(_site)).strftime("%Y-%m-%d %H:%M %Z") if _aware else "(unscheduled)"
+        detail = f"Backup target '{t.name}' is set up — next run {_stamp}."
 
     if _backup_embed():
         return render_template("backups_wizard_done.html",

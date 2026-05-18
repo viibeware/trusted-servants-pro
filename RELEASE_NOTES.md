@@ -7,11 +7,29 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.15 — 2026-05-18 (latest) — Form Submissions now lives in the main app sidebar
+## 2.1.15 — 2026-05-18 (latest) — Form Submissions sidebar, local-time backups, idle Currently-Online rows
 
-The **Form Submissions** inbox is no longer buried inside the Web Frontend admin's sidebar — it's promoted to a first-class entry in the main app sidebar's **Admin** section, right next to **Contact Form**. Visible only to admins. One click from anywhere in the portal opens the submissions list.
+A few admin-experience polishes that build on the 2.1.12 forms feature and tighten the dashboard widget.
 
-Cleared the duplicate entry out of the **Web Frontend → Structure** subnav. The submissions list and detail pages also picked up a small cleanup: they render as standalone admin pages now, without the Web Frontend admin's two-column subnav chrome.
+### Form Submissions sidebar entry
+
+The **Form Submissions** inbox moved out of the Web Frontend admin and into the main app sidebar's **Admin** section, right next to **Contact Form**. Visible only to admins. One click from anywhere in the portal opens the submissions list. The submissions list and detail pages also picked up a small cleanup: they render as standalone admin pages now, without the Web Frontend admin's two-column subnav chrome.
+
+### Off-site backup times now show in your local timezone
+
+Every backup timestamp in the admin — last successful run on the dashboard widget, next scheduled run, the per-row last/next on the **Off-site Backups** list, the recent-activity rows, the run-history page — now renders in the timezone you set on **Settings → Timezone**, with the proper tz abbreviation on the end (e.g. `May 18, 03:00 PDT` instead of `May 18, 10:00 UTC`).
+
+The cron expression itself is also interpreted in your local timezone now. If you type `0 3 * * *`, you get 3 AM **local** every day — matching what the rest of the admin shows on the wall clock — not 3 AM UTC. The schedule fieldset hints on the wizard and the edit page were updated to say so.
+
+### Currently Online widget keeps idle users visible
+
+The Currently Online widget used to drop a user the moment they hadn't navigated in 5 minutes. Now it keeps them in the list for up to an hour, but renders them greyed-out with "*no activity in X mins*" instead of an "Xs ago" timestamp. After an hour of silence the row drops off.
+
+The header count ("X users") still reflects only the currently-active users (within the 5-minute window), so the number matches what the dashboard tile's "X users · last 5 min" shows. Empty-state copy changed from "Nobody is currently signed in" to "**No users active**" — fires only when nobody has been seen at all in the past hour.
+
+### Newly-logged-in user shows up in the widget right away
+
+A small reliability fix: a user who just logged in now appears in the widget on the very next 5-second poll regardless of what page their post-login redirect lands on. (Previously the widget waited for the first non-asset GET to fire its tracker, which was 99% of the time the next page they loaded but had occasional misses.)
 
 ## 2.1.14 — 2026-05-18 — Fix: custom form submit 500'd while sending recipient email
 

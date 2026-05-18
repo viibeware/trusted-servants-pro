@@ -51,6 +51,18 @@
     return Math.round(s / 3600) + 'h ago';
   }
 
+  // Idle copy: how long they've been quiet. We don't differentiate
+  // between minutes/hours here — idle window is capped at 1 hour
+  // server-side, so "no activity in 59m" is the worst case before
+  // the row drops off entirely.
+  function fmtIdle(iso){
+    if (!iso) return '';
+    const t = new Date(iso);
+    const ms = Date.now() - t.getTime();
+    const mins = Math.max(1, Math.round(ms / 60000));
+    return 'no activity in ' + mins + ' min' + (mins === 1 ? '' : 's');
+  }
+
   function escapeHtml(s){
     if (s == null) return '';
     return String(s).replace(/[&<>"']/g, c => ({
@@ -60,11 +72,18 @@
 
   function render(data){
     const users = data.users || [];
-    countEl.textContent = users.length
-      ? users.length + (users.length === 1 ? ' user' : ' users')
+    // The header count reflects ACTIVE users only (server's
+    // ``count`` — within the 5-min window). Idle rows still appear
+    // on the list but visibly distinct, so the header label stays
+    // accurate to "currently online right now".
+    const activeCount = typeof data.count === 'number' ? data.count : users.filter(u => !u.is_idle).length;
+    countEl.textContent = activeCount
+      ? activeCount + (activeCount === 1 ? ' user' : ' users')
       : 'no one online';
     if (!users.length){
-      listEl.innerHTML = '<p class="muted online-empty">Nobody is currently signed in.</p>';
+      // Distinguish "nobody seen at all in the past hour" (true
+      // empty) from "everyone's idle right now" (still has rows).
+      listEl.innerHTML = '<p class="muted online-empty">No users active.</p>';
       lastLoc.clear();
       return;
     }
@@ -77,7 +96,15 @@
         ? '<a class="online-where-link" href="' + escapeHtml(path) + '">'
         : '<span class="online-where-link">';
       const linkClose = path ? '</a>' : '</span>';
-      return '<div class="online-row' + (u.is_self ? ' is-self' : '') + (moved ? ' just-moved' : '') + '" data-uid="' + u.id + '">'
+      const classes = ['online-row'];
+      if (u.is_self) classes.push('is-self');
+      if (moved)    classes.push('just-moved');
+      if (u.is_idle) classes.push('is-idle');
+      // Time stamp: active rows show "Xs/Xm ago", idle rows show
+      // "no activity in Xm" — same data-iso so the second-tick
+      // updater keeps the value fresh between polls.
+      const seenLabel = u.is_idle ? fmtIdle(u.last_seen_at) : fmtAgo(u.last_seen_at);
+      return '<div class="' + classes.join(' ') + '" data-uid="' + u.id + '" data-idle="' + (u.is_idle ? '1' : '0') + '">'
         + '<div class="online-avatar">' + escapeHtml((u.username || '?').slice(0,1).toUpperCase()) + '</div>'
         + '<div class="online-meta">'
         + '<div class="online-name">' + escapeHtml(u.username) + (u.is_self ? ' <span class="muted smaller">(you)</span>' : '') + '</div>'
@@ -87,7 +114,7 @@
         + linkOpen + escapeHtml(u.location_label || u.last_path || '—') + linkClose
         + (u.last_path ? '<div class="muted smaller mono online-path">' + escapeHtml(u.last_path) + '</div>' : '')
         + '</div>'
-        + '<div class="online-seen muted smaller" data-iso="' + escapeHtml(u.last_seen_at || '') + '">' + fmtAgo(u.last_seen_at) + '</div>'
+        + '<div class="online-seen muted smaller" data-iso="' + escapeHtml(u.last_seen_at || '') + '">' + seenLabel + '</div>'
         + '</div>';
     }).join('');
     listEl.innerHTML = html;
@@ -108,12 +135,18 @@
     }
   }
 
-  // Tick the "Xs ago" stamps every second between polls so they
-  // don't sit static for the full 5-second window.
+  // Tick the time-since stamps every second between polls so they
+  // don't sit static for the full 5-second window. Idle rows use
+  // fmtIdle ("no activity in Xm"); active rows use fmtAgo
+  // ("just now" / "Xs ago" / "Xm ago"). The parent row's
+  // data-idle="1" attribute tells us which to use.
   function tickAgo(){
     document.querySelectorAll('.online-seen[data-iso]').forEach(el => {
       const iso = el.dataset.iso;
-      if (iso) el.textContent = fmtAgo(iso);
+      if (!iso) return;
+      const row = el.closest('.online-row');
+      const idle = row && row.dataset.idle === '1';
+      el.textContent = idle ? fmtIdle(iso) : fmtAgo(iso);
     });
   }
 

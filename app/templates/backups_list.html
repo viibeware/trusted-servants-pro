@@ -60,8 +60,8 @@
             · keep last {{ t.retain_count }}
           </div>
           <div class="backup-target-sub muted smaller">
-            {% if t.last_run_at %}Last run {{ t.last_run_at.strftime('%Y-%m-%d %H:%M') }} UTC{% else %}Never run{% endif %}
-            {% if t.next_run_at and t.enabled %}· next {{ t.next_run_at.strftime('%Y-%m-%d %H:%M') }} UTC{% endif %}
+            {% if t.last_run_at %}Last run {{ t.last_run_at|fmt_site_local }}{% else %}Never run{% endif %}
+            {% if t.next_run_at and t.enabled %}· next {{ t.next_run_at|fmt_site_local }}{% endif %}
           </div>
           {% if t.last_status == 'failed' and t.last_error %}
           <div class="backup-target-error small">{{ icon('alert-triangle') }} {{ t.last_error }}</div>
@@ -109,7 +109,7 @@
       {% for r in recent_runs %}
       <li class="backup-run-row">
         <span class="backup-status-pill backup-status-{{ r.status }}">{{ r.status }}</span>
-        <span class="backup-run-when muted smaller">{{ r.started_at.strftime('%Y-%m-%d %H:%M') }} UTC</span>
+        <span class="backup-run-when muted smaller">{{ r.started_at|fmt_site_local }}</span>
         <span class="backup-run-target">{{ r.target.name if r.target else '(deleted)' }}</span>
         <span class="muted smaller">{{ r.triggered_by }}</span>
         {% if r.archive_name %}<code class="smaller">{{ r.archive_name }}</code>{% endif %}

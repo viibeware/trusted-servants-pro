@@ -19,7 +19,7 @@
     <li class="backup-run-row">
       <span class="backup-status-pill backup-status-{{ r.status }}">{{ r.status }}</span>
       <span class="backup-run-when muted smaller">
-        {{ r.started_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC
+        {{ r.started_at|fmt_site_local('%Y-%m-%d %H:%M:%S %Z') }}
         {% if r.finished_at %}
           · {{ ((r.finished_at - r.started_at).total_seconds()) | round(1) }}s
         {% endif %}
