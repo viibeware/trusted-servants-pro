@@ -13942,7 +13942,15 @@ def posts():
     _auto_archive_events()
     show = (request.args.get("show") or "active").strip()
     kind = (request.args.get("kind") or "all").strip()
-    sort = (request.args.get("sort") or "").strip()
+    # Sort resolution order: explicit ?sort= wins, then the user's
+    # remembered cookie, then the per-tab default. Default for the
+    # main tabs is ``posted_desc`` (newest at top by Posted date);
+    # the pending tab keeps ``submitted_desc`` so the freshest
+    # submission sits up top. Any saved sort the route doesn't
+    # recognise is dropped to the default downstream.
+    sort = (request.args.get("sort")
+            or request.cookies.get("view-posts-sort")
+            or "").strip()
     try:
         page = max(1, int(request.args.get("page") or 1))
     except (TypeError, ValueError):
@@ -13970,10 +13978,13 @@ def posts():
     elif kind == "announcements":
         q = q.filter(Post.is_announcement.is_(True))
     # Sort modes. Default flips by tab — pending shows freshest
-    # submissions on top, every other tab shows by event-start so
-    # upcoming events read first. Admin can override via the column-
-    # header click which sets ?sort=… directly.
-    default_sort = "submitted_desc" if show == "pending" else "event_desc"
+    # submissions on top, every other tab shows by posted date
+    # (newest first) so the most recent activity reads first.
+    # Admin can override via the column-header click which sets
+    # ?sort=… directly; their choice is persisted to the
+    # ``view-posts-sort`` cookie at the bottom of the handler so
+    # the same sort sticks across reloads.
+    default_sort = "submitted_desc" if show == "pending" else "posted_desc"
     if sort not in ("event_asc", "event_desc",
                     "title_asc", "title_desc",
                     "updated_asc", "updated_desc",
@@ -14021,10 +14032,19 @@ def posts():
     items = q.offset((page - 1) * per_page).limit(per_page).all()
     pending_count = (Post.query.filter(Post.is_pending_review.is_(True),
                                         Post.is_archived.is_(False)).count())
-    return render_template("posts.html", posts=items, show=show, kind=kind,
-                           sort=sort, page=page, per_page=per_page,
-                           total=total, total_pages=total_pages,
-                           pending_count=pending_count)
+    resp = current_app.make_response(
+        render_template("posts.html", posts=items, show=show, kind=kind,
+                        sort=sort, page=page, per_page=per_page,
+                        total=total, total_pages=total_pages,
+                        pending_count=pending_count))
+    # Remember the user's chosen sort so the next visit lands on
+    # the same order. Skip persistence on the pending tab — its
+    # ``submitted_desc`` default is contextual to that view and
+    # shouldn't bleed onto the regular tabs.
+    if show != "pending":
+        resp.set_cookie("view-posts-sort", sort,
+                        max_age=60*60*24*365, samesite="Lax")
+    return resp
 
 
 @bp.route("/announcementsevents/new")

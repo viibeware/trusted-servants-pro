@@ -13512,11 +13512,53 @@ body.embed .backups-wrap {
 .fe-form-field-card.drag-over {
   box-shadow: 0 0 0 2px var(--brand, #0B5CFF) inset;
 }
+.fe-form-field-card {
+  cursor: pointer;
+}
+.fe-form-field-card:hover { background: var(--panel-2, rgba(0,0,0,.03)); }
+/* Open-card form controls revert to the regular text cursor and
+   skip the hover background so the active edit surface doesn't
+   read as a giant button. */
+.fe-form-field-card.is-open { cursor: default; }
+.fe-form-field-card.is-open:hover { background: var(--panel); }
 .fe-form-field-head {
   display: flex;
   align-items: center;
   gap: .5rem;
   padding: .55rem .65rem;
+  user-select: none;
+}
+.fe-form-field-chev {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  transition: transform 160ms ease;
+}
+.fe-form-field-chev .icon { width: 16px; height: 16px; }
+.fe-form-field-card.is-open > .fe-form-field-head .fe-form-field-chev {
+  transform: rotate(180deg);
+}
+/* Collapsed by default; opens with a 200ms max-height + opacity
+   transition driven by the ``is-open`` class on the parent card.
+   ``max-height: 1500px`` is generously above the natural height of
+   any field card we render, so the animation reaches the natural
+   bottom without clipping while still being short enough that
+   close transitions complete in the 200ms window. */
+.fe-form-field-body {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  padding: 0 .75rem;
+  border-top-width: 0;
+  transition: max-height 200ms ease, opacity 200ms ease,
+              padding 200ms ease, border-top-width 200ms ease;
+}
+.fe-form-field-card.is-open > .fe-form-field-body {
+  max-height: 1500px;
+  opacity: 1;
+  padding: .5rem .75rem .75rem;
+  border-top-width: 1px;
 }
 .fe-form-field-drag {
   cursor: grab;
@@ -13545,14 +13587,19 @@ body.embed .backups-wrap {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Body's static layout (border + flex column gap) lives here.
+   Sizing / animation is set in the collapsible-body rule above
+   (max-height + opacity transition driven by ``.is-open``). The
+   padding has to live in the animated rule too so it can ease to
+   zero on collapse — duplicating it here would break the
+   transition by setting a non-zero floor that overrides the
+   closed state's zero padding. */
 .fe-form-field-body {
-  padding: .5rem .75rem .75rem;
   border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: .5rem;
 }
-.fe-form-field-body[hidden] { display: none; }
 .fe-form-builder-toolbar {
   display: flex;
   align-items: center;

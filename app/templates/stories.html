@@ -16,6 +16,7 @@
       </a>
     </div>
   </div>
+  <a class="btn" href="{{ url_for('main.frontend_form_story') }}">{{ icon('settings') }} Manage form</a>
   <button type="button" class="btn btn-primary"
           data-open-modal="story-edit-modal"
           data-modal-src="{{ url_for('main.story_new', embed=1) }}"

@@ -37,10 +37,10 @@
         <span class="fe-form-field-drag" aria-hidden="true" title="Drag to reorder">{{ icon('grip-vertical') }}</span>
         <span class="fe-form-field-type-pill">{{ f.type }}</span>
         <span class="fe-form-field-title">{{ f.label }}{% if f.required %} <span class="muted smaller">· required</span>{% endif %}</span>
-        <button type="button" class="btn btn-sm" data-field-edit>Edit</button>
+        <span class="fe-form-field-chev" aria-hidden="true">{{ icon('chevron-down') }}</span>
         <button type="button" class="btn btn-sm btn-danger" data-field-delete title="Delete field">{{ icon('trash') }}</button>
       </div>
-      <div class="fe-form-field-body" hidden>
+      <div class="fe-form-field-body">
         <div class="form-row">
           <label>Label
             <input type="text" name="field_{{ idx }}_label" value="{{ f.label }}" maxlength="200" required>
@@ -94,7 +94,7 @@
         <span class="fe-form-field-drag" aria-hidden="true" title="Drag to reorder">{{ icon('grip-vertical') }}</span>
         <span class="fe-form-field-type-pill">__TYPE__</span>
         <span class="fe-form-field-title">New field</span>
-        <button type="button" class="btn btn-sm" data-field-edit>Edit</button>
+        <span class="fe-form-field-chev" aria-hidden="true">{{ icon('chevron-down') }}</span>
         <button type="button" class="btn btn-sm btn-danger" data-field-delete title="Delete field">{{ icon('trash') }}</button>
       </div>
       <div class="fe-form-field-body">
@@ -201,11 +201,21 @@
   }
 
   function wireCard(card) {
-    var editBtn = card.querySelector('[data-field-edit]');
-    var body    = card.querySelector('.fe-form-field-body');
-    if (editBtn && body) {
-      editBtn.addEventListener('click', function () { body.hidden = !body.hidden; });
-    }
+    // Click anywhere on the card toggles the body open/closed.
+    // Bail when the click landed inside the body (so form
+    // controls keep working — labels, inputs, options textareas)
+    // OR on one of the head's interactive controls (drag handle,
+    // delete button). Everything else on the card surface — head
+    // padding, type pill, title, chevron, dead space in between —
+    // toggles the open state. The actual 200ms expand/collapse
+    // animation is CSS-driven via the ``is-open`` class; see
+    // app.css ``.fe-form-field-body``.
+    card.addEventListener('click', function (e) {
+      if (e.target.closest('.fe-form-field-body, .fe-form-field-drag, [data-field-delete]')) {
+        return;
+      }
+      card.classList.toggle('is-open');
+    });
     var delBtn = card.querySelector('[data-field-delete]');
     if (delBtn) {
       delBtn.addEventListener('click', function () {
@@ -276,8 +286,11 @@
       builder.appendChild(card);
       swapHelpInputForCheckboxes(card);
       wireCard(card);
-      var body = card.querySelector('.fe-form-field-body');
-      if (body) body.hidden = false;
+      // New cards open immediately so the operator can type the
+      // label right away. The animation runs naturally from the
+      // collapsed default — keeping the same 200ms reveal as a
+      // user-triggered expand.
+      card.classList.add('is-open');
       showOptionsIfNeeded(card);
       var firstInput = card.querySelector('input[name$="_label"]');
       if (firstInput) firstInput.focus();

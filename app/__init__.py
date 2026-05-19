@@ -19,6 +19,14 @@ csrf = CSRFProtect()
 
 def create_app():
     app = Flask(__name__, instance_relative_config=False)
+    # Accept URLs with or without a trailing slash. Werkzeug's
+    # default behaviour 404s ``/foo/`` when the route was declared
+    # as ``/foo`` (and vice-versa) — flipping this once on the URL
+    # map relaxes the rule globally so external links / typos with
+    # a stray trailing slash still resolve. Routes that need to
+    # enforce one form can override per-rule via ``strict_slashes``
+    # on the decorator.
+    app.url_map.strict_slashes = False
 
     # Production deploys (install.sh) front the app with Caddy → gunicorn,
     # so request.remote_addr is the Caddy container's IP unless we honor

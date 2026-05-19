@@ -3,7 +3,7 @@
 {% block heading %}Contact Form{% endblock %}
 {% block heading_help %}Messages from the public /contact form. Each submission also goes out by email to the configured recipient; this list is the persistent record so nothing is lost when the email lands in spam. Page settings (enable, recipient, copy) live in <a href="{{ url_for('main.frontend_form_contact') }}">Web Frontend → Forms</a>.{% endblock %}
 {% block top_actions %}
-<a class="btn" href="{{ url_for('main.frontend_form_contact') }}">Form settings</a>
+<a class="btn" href="{{ url_for('main.frontend_form_contact') }}">{{ icon('settings') }} Manage form</a>
 <a class="btn" href="{{ url_for('frontend.contact') }}" target="_blank" rel="noopener">View page ↗</a>
 {% endblock %}
 {% block content %}

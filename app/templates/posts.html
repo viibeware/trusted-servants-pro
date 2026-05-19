@@ -24,6 +24,7 @@
          href="{{ url_for('main.posts', show='archived', kind=kind, sort=sort) }}">Archived</a>
     </div>
   </div>
+  <a class="btn" href="{{ url_for('main.frontend_form_submission') }}">{{ icon('settings') }} Manage form</a>
   <a class="btn btn-primary" href="{{ url_for('main.post_new') }}">+ New</a>
 {% endblock %}
 {% block content %}

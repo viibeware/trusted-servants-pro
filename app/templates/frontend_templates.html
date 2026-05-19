@@ -2212,5 +2212,122 @@
     </div>
   </div>
 </div>
+
+{# Collapsible section cards. Every ``<section class="card">`` on
+   the Templates page starts collapsed by default; the operator's
+   expansion state is remembered per-card via localStorage so
+   reloading the page restores the same view. Card heading
+   becomes a clickable toggle with a chevron indicator on the
+   right; the rest of the card content lives inside a body div
+   that hides/shows. Key is derived from the card's heading text
+   so reorders / additions don't shift saved state. #}
+<style>
+  .fe-tpl-collapsed-card > .card-head {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .fe-tpl-collapsed-card > .card-head .fe-tpl-collapse-chev {
+    display: inline-flex;
+    align-items: center;
+    transition: transform 180ms ease;
+    color: var(--muted);
+    flex: 0 0 auto;
+  }
+  .fe-tpl-collapsed-card > .card-head .fe-tpl-collapse-chev .icon {
+    width: 18px; height: 18px;
+  }
+  .fe-tpl-collapsed-card.is-open > .card-head .fe-tpl-collapse-chev {
+    transform: rotate(180deg);
+  }
+  .fe-tpl-collapsible-body { display: none; }
+  .fe-tpl-collapsed-card.is-open > .fe-tpl-collapsible-body { display: block; }
+</style>
+<script>
+(function () {
+  // Stable key from the heading + a stripped query of the surrounding
+  // form's action so two cards with identical headings on the same
+  // page still get distinct localStorage slots. Falls back to the
+  // section's DOM-order index so missing headings don't collide.
+  function keyFor(section, idx) {
+    var h2 = section.querySelector(':scope > .card-head h2, :scope > .card-head h3');
+    var heading = h2 ? (h2.textContent || '').trim() : '';
+    var formAction = (section.querySelector('form') || {}).action || '';
+    return 'fe-tpl-card:' + (heading || ('#' + idx)) + (formAction ? '|' + formAction.split('?')[0] : '');
+  }
+
+  function chevronSvg() {
+    return '<span class="fe-tpl-collapse-chev" aria-hidden="true">' +
+      '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<polyline points="6 9 12 15 18 9"/></svg></span>';
+  }
+
+  // Skip cards inside modal panels — only collapsible at the
+  // top-level page surface. Also skip the very first section
+  // (page intro) so the operator sees the legend without an
+  // extra click.
+  var sections = Array.from(document.querySelectorAll('section.card'))
+    .filter(function (s) { return !s.closest('.modal'); });
+
+  sections.forEach(function (section, idx) {
+    var head = section.querySelector(':scope > .card-head');
+    if (!head) return;
+    section.classList.add('fe-tpl-collapsed-card');
+
+    // Wrap every non-head child into a single body element so we
+    // can toggle one node instead of N. Idempotent — if a previous
+    // pass already wrapped, skip.
+    var body = section.querySelector(':scope > .fe-tpl-collapsible-body');
+    if (!body) {
+      body = document.createElement('div');
+      body.className = 'fe-tpl-collapsible-body';
+      var moved = [];
+      Array.from(section.children).forEach(function (child) {
+        if (child !== head) moved.push(child);
+      });
+      moved.forEach(function (c) { body.appendChild(c); });
+      section.appendChild(body);
+    }
+
+    if (!head.querySelector('.fe-tpl-collapse-chev')) {
+      head.insertAdjacentHTML('beforeend', chevronSvg());
+    }
+
+    var storageKey = keyFor(section, idx);
+    var saved = null;
+    try { saved = localStorage.getItem(storageKey); } catch (_) {}
+    var open = saved === '1';  // default closed
+    section.classList.toggle('is-open', open);
+    head.setAttribute('role', 'button');
+    head.setAttribute('tabindex', '0');
+    head.setAttribute('aria-expanded', String(open));
+
+    function setOpen(next) {
+      open = next;
+      section.classList.toggle('is-open', open);
+      head.setAttribute('aria-expanded', String(open));
+      try { localStorage.setItem(storageKey, open ? '1' : '0'); } catch (_) {}
+    }
+
+    head.addEventListener('click', function (e) {
+      // Don't toggle when the click came from an interactive child
+      // (e.g. a link or button inside the heading). Cards on this
+      // page don't have any today, but be defensive.
+      if (e.target.closest('a, button, input, select, textarea')) return;
+      setOpen(!open);
+    });
+    head.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        setOpen(!open);
+      }
+    });
+  });
+})();
+</script>
 {% endblock %}
 
