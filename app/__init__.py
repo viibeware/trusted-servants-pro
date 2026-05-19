@@ -1580,6 +1580,7 @@ def _migrate_sqlite(app):
                          ("dash_show_online_users", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_access_requests", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_contact_form", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("dash_show_forms", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_deletions", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_currently_online", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("dash_show_visitor_metrics", "BOOLEAN NOT NULL DEFAULT 1"),

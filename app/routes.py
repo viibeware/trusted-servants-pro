@@ -262,6 +262,7 @@ def inject_globals():
     pending_access_count = 0
     unread_contact_count = 0
     locked_accounts_count = 0
+    pending_posts_count = 0
     try:
         if current_user.is_authenticated and current_user.is_admin():
             pending_access_count = AccessRequest.query.filter_by(
@@ -277,10 +278,21 @@ def inject_globals():
                 locked_accounts_count = len(currently_locked_usernames())
             except Exception:
                 locked_accounts_count = 0
+        # Pending Announcements/Events submissions chip. Shown to anyone
+        # who can act on the holding tank — same gate the Posts route
+        # uses to enable the "approve" action. Computed outside the
+        # admin-only block so editors see the chip too.
+        if (current_user.is_authenticated
+                and getattr(current_user, "can_edit", lambda: False)()
+                and site and getattr(site, "posts_enabled", False)):
+            pending_posts_count = Post.query.filter(
+                Post.is_pending_review.is_(True),
+                Post.is_archived.is_(False)).count()
     except Exception:
         pending_access_count = 0
         unread_contact_count = 0
         locked_accounts_count = 0
+        pending_posts_count = 0
     try:
         otp = _get_otp_email()
     except Exception:
@@ -289,10 +301,19 @@ def inject_globals():
             "DAYS_OF_WEEK": DAYS_OF_WEEK, "site": site, "nav_links": nav_links,
             "pending_access_count": pending_access_count,
             "unread_contact_count": unread_contact_count,
-            "locked_accounts_count": locked_accounts_count, "otp": otp}
+            "locked_accounts_count": locked_accounts_count,
+            "pending_posts_count": pending_posts_count, "otp": otp}
 
 
-DASHBOARD_WIDGET_KEYS = ("server-metrics", "visitor-metrics", "currently-online", "backups", "trusted-servants", "meetings", "libraries", "files", "access-requests", "contact-form", "deletions")
+DASHBOARD_WIDGET_KEYS = ("server-metrics", "visitor-metrics", "currently-online", "backups", "trusted-servants", "meetings", "libraries", "files", "access-requests", "forms", "deletions")
+
+# Legacy widget keys that have been merged into newer widgets. The
+# dashboard order loader maps these forward so a user who has the old
+# key saved in ``dash_order_json`` doesn't lose their position on the
+# grid when the widget gets folded in. (``contact-form`` → ``forms``
+# happened when the contact-form widget was absorbed into the unified
+# Forms widget that surfaces every form on the site.)
+_DASHBOARD_WIDGET_ALIASES = {"contact-form": "forms"}
 
 # Web Frontend overview tab widget keys. Same shape as the main
 # dashboard — kebab-case slugs that map to ``fe_dash_show_<snake>``
@@ -452,11 +473,129 @@ def _dashboard_order(user):
         try:
             parsed = json.loads(user.dash_order_json)
             if isinstance(parsed, list):
-                saved = [k for k in parsed if k in DASHBOARD_WIDGET_KEYS]
+                seen_aliased = set()
+                for k in parsed:
+                    if not isinstance(k, str):
+                        continue
+                    # Forward legacy widget keys to their replacement so a
+                    # saved order from before a widget merge still places
+                    # the new widget where the user put the old one.
+                    k = _DASHBOARD_WIDGET_ALIASES.get(k, k)
+                    if k in DASHBOARD_WIDGET_KEYS and k not in seen_aliased:
+                        seen_aliased.add(k)
+                        saved.append(k)
         except (ValueError, TypeError):
             saved = []
     seen = set(saved)
     return saved + [k for k in DASHBOARD_WIDGET_KEYS if k not in seen]
+
+
+def _forms_widget_data():
+    """Aggregate every form the operator might need to action into a
+    single ordered list for the dashboard Forms widget.
+
+    Each row carries the form's display name, an icon, the link to its
+    admin surface, a lifetime submission count, and an ``attention``
+    count for items that haven't been actioned yet (unread contact
+    messages, pending event/announcement submissions). Custom forms
+    are picked up from ``CustomForm`` automatically so a new form
+    surfaces on the dashboard without further code changes.
+
+    Returns ``(rows, total_attention, total_submissions)``. The rows
+    are sorted attention-first so anything needing review floats to
+    the top of the widget."""
+    from datetime import timedelta as _td
+    s = _get_site_setting()
+    rows = []
+    now = datetime.utcnow()
+    week_cutoff = now - _td(days=7)
+    # Submission form (legacy events/announcements holding tank). Only
+    # surfaces if the module is reachable on the public site so the
+    # widget doesn't dangle a link to a disabled form.
+    if s and getattr(s, "posts_enabled", False):
+        pending = (Post.query
+                   .filter(Post.is_pending_review.is_(True),
+                           Post.is_archived.is_(False)).count())
+        recent_pending = (Post.query
+                          .filter(Post.is_pending_review.is_(True),
+                                  Post.is_archived.is_(False),
+                                  Post.submitted_at.isnot(None))
+                          .order_by(Post.submitted_at.desc()).first())
+        last_at = recent_pending.submitted_at if recent_pending else None
+        rows.append({
+            "key": "submission",
+            "name": "Submission Form",
+            "subtitle": "Events & announcements",
+            "icon": "send",
+            "url": url_for("main.posts", show="pending"),
+            "attention": pending,
+            "attention_label": "pending review",
+            "total": (Post.query
+                      .filter(Post.is_pending_review.isnot(None))
+                      .filter(Post.submitted_at.isnot(None)).count()),
+            "last_at": last_at,
+            "enabled": bool(getattr(s, "submission_form_enabled", True)),
+        })
+    # Contact form. Always listed when present in SiteSetting (which it
+    # always is once the app has run once).
+    if s is not None:
+        unread = ContactSubmission.query.filter_by(
+            is_read=False, is_archived=False).count()
+        total = ContactSubmission.query.count()
+        last = (ContactSubmission.query
+                .order_by(ContactSubmission.created_at.desc()).first())
+        rows.append({
+            "key": "contact",
+            "name": "Contact Form",
+            "subtitle": "Visitor messages",
+            "icon": "mail",
+            "url": url_for("main.contact_form"),
+            "attention": unread,
+            "attention_label": "unread",
+            "total": total,
+            "last_at": last.created_at if last else None,
+            "enabled": bool(getattr(s, "contact_form_enabled", True)),
+        })
+    # Every CustomForm row. New custom forms surface here automatically;
+    # the link routes through the form-submissions index pre-filtered to
+    # that form so the operator lands directly on its submissions.
+    try:
+        custom_forms = CustomForm.query.order_by(CustomForm.title).all()
+    except Exception:  # noqa: BLE001
+        custom_forms = []
+    for cf in custom_forms:
+        total = (FormSubmission.query
+                 .filter_by(form_id=cf.id).count())
+        # FormSubmission has no read/unread state, so "attention" for
+        # custom forms means submissions in the last 7 days — a soft
+        # cue that there's recent traffic the operator may not have
+        # looked at yet. Lifetime total still shows alongside.
+        recent = (FormSubmission.query
+                  .filter(FormSubmission.form_id == cf.id,
+                          FormSubmission.created_at >= week_cutoff).count())
+        last = (FormSubmission.query
+                .filter_by(form_id=cf.id)
+                .order_by(FormSubmission.created_at.desc()).first())
+        rows.append({
+            "key": f"custom:{cf.id}",
+            "name": cf.title or cf.slug,
+            "subtitle": "Custom form",
+            "icon": "file-text",
+            "url": url_for("main.frontend_form_submissions", form=cf.id),
+            "attention": recent,
+            "attention_label": "new this week",
+            "total": total,
+            "last_at": last.created_at if last else None,
+            "enabled": bool(cf.enabled),
+        })
+    total_attention = sum(r["attention"] for r in rows)
+    total_submissions = sum(r["total"] for r in rows)
+    # Attention-first sort with most recent activity as the tiebreaker
+    # so the widget reads top-down as a to-do list.
+    rows.sort(key=lambda r: (-r["attention"],
+                             -(r["last_at"].timestamp() if r["last_at"] else 0),
+                             r["name"].lower()))
+    return rows, total_attention, total_submissions
 
 
 def _fe_dashboard_order(user):
@@ -490,7 +629,6 @@ def index():
     libraries = Library.query.order_by(Library.name).all()
     recent_files = MediaItem.query.order_by(MediaItem.created_at.desc()).limit(6).all()
     access_requests = []
-    unread_contacts = []
     online_count = 0
     online_users = []
     locked_accounts = []
@@ -517,14 +655,6 @@ def index():
         access_requests = (AccessRequest.query
                            .filter_by(status="pending", is_archived=False)
                            .order_by(AccessRequest.created_at.desc())
-                           .limit(6).all())
-        # Unread contact-form messages preview for the dashboard widget.
-        # Cap at 6 so the card stays compact; full list lives at
-        # /tspro/contact-form. Active-only filter mirrors the sidebar
-        # badge so the two stay in lockstep.
-        unread_contacts = (ContactSubmission.query
-                           .filter_by(is_read=False, is_archived=False)
-                           .order_by(ContactSubmission.created_at.desc())
                            .limit(6).all())
         # _online_users() now returns the full idle-window list
         # (1 hour) with active_count counting just the within-5-min
@@ -599,10 +729,21 @@ def index():
         except Exception:  # noqa: BLE001
             backup_summary = None
             backup_recent_runs = []
+    # Forms widget aggregates every form on the system (legacy
+    # submission + contact forms plus any CustomForm rows). Admin-only:
+    # the rest of the portal already gates per-form admin pages to
+    # admins, so the widget mirrors that.
+    forms_widget_rows = []
+    forms_widget_attention = 0
+    forms_widget_total = 0
+    if current_user.is_admin():
+        try:
+            forms_widget_rows, forms_widget_attention, forms_widget_total = _forms_widget_data()
+        except Exception:  # noqa: BLE001
+            forms_widget_rows, forms_widget_attention, forms_widget_total = [], 0, 0
     dashboard_order = _dashboard_order(current_user)
     return render_template("index.html", meetings=meetings, libraries=libraries,
                            recent_files=recent_files, access_requests=access_requests,
-                           unread_contacts=unread_contacts,
                            online_count=online_count, online_users=online_users,
                            locked_accounts=locked_accounts,
                            recent_deletions=recent_deletions,
@@ -612,6 +753,9 @@ def index():
                            backup_recent_runs=backup_recent_runs,
                            trusted_servants_enabled=trusted_servants_enabled,
                            trusted_servants_subscription=trusted_servants_subscription,
+                           forms_widget_rows=forms_widget_rows,
+                           forms_widget_attention=forms_widget_attention,
+                           forms_widget_total=forms_widget_total,
                            dashboard_order=dashboard_order)
 
 
@@ -626,7 +770,7 @@ def dashboard_customize():
     current_user.dash_show_trusted_servants = request.form.get("dash_show_trusted_servants") == "1"
     if current_user.is_admin():
         current_user.dash_show_access_requests = request.form.get("dash_show_access_requests") == "1"
-        current_user.dash_show_contact_form = request.form.get("dash_show_contact_form") == "1"
+        current_user.dash_show_forms = request.form.get("dash_show_forms") == "1"
         current_user.dash_show_deletions = request.form.get("dash_show_deletions") == "1"
         current_user.dash_show_currently_online = request.form.get("dash_show_currently_online") == "1"
         current_user.dash_show_visitor_metrics = request.form.get("dash_show_visitor_metrics") == "1"
@@ -969,7 +1113,10 @@ def dashboard_order_save():
     cleaned = []
     seen = set()
     for key in order:
-        if isinstance(key, str) and key in DASHBOARD_WIDGET_KEYS and key not in seen:
+        if not isinstance(key, str):
+            continue
+        key = _DASHBOARD_WIDGET_ALIASES.get(key, key)
+        if key in DASHBOARD_WIDGET_KEYS and key not in seen:
             cleaned.append(key); seen.add(key)
     current_user.dash_order_json = json.dumps(cleaned)
     db.session.commit()

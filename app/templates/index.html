@@ -377,20 +377,37 @@
     {% endcall %}
   {% endif %}
 
-  {% if widget_key == 'contact-form' and current_user.is_admin() and current_user.dash_show_contact_form %}
-    {% call dash_widget(key='contact-form', title='Contact Form',
-                         head_icon='mail',
-                         view_all_url=url_for('main.contact_form'),
-                         view_all_label='View inbox',
-                         badge_count=unread_contact_count,
-                         badge_title='Unread messages') %}
-      {% if unread_contacts %}
-      <ul class="list">
-        {% for c in unread_contacts %}
-        <li><a href="{{ url_for('main.contact_form') }}"><span>{{ c.name }}{% if c.subject %} — {{ c.subject }}{% endif %}</span><span class="muted">{{ c.created_at.strftime('%b %d') }}</span></a></li>
+  {% if widget_key == 'forms' and current_user.is_admin() and current_user.dash_show_forms %}
+    {% call dash_widget(key='forms', title='Forms',
+                         head_icon='inbox',
+                         view_all_url=url_for('main.frontend_forms'),
+                         view_all_label='Manage forms',
+                         badge_count=forms_widget_attention,
+                         badge_title='Submissions needing review') %}
+      {% if forms_widget_rows %}
+      <ul class="list dash-forms-list">
+        {% for row in forms_widget_rows %}
+        <li class="dash-forms-row">
+          <a href="{{ row.url }}" class="dash-forms-link">
+            <span class="dash-forms-icon" aria-hidden="true">{{ icon(row.icon) }}</span>
+            <span class="dash-forms-body">
+              <span class="dash-forms-name">
+                {{ row.name }}
+                {% if not row.enabled %}<span class="nav-badge nav-badge-muted" title="This form is disabled and not accepting submissions">Off</span>{% endif %}
+              </span>
+              <span class="dash-forms-meta muted smaller">
+                {{ row.subtitle }} ·
+                {% if row.total %}{{ row.total }} submission{{ '' if row.total == 1 else 's' }}{% else %}no submissions yet{% endif %}
+                {% if row.last_at %} · last {{ row.last_at.strftime('%b %-d') }}{% endif %}
+              </span>
+            </span>
+            {% if row.attention %}<span class="nav-badge nav-badge-warn" title="{{ row.attention }} {{ row.attention_label }}">{{ row.attention }}</span>{% endif %}
+            <span class="dash-forms-cta" aria-hidden="true">{{ icon('chevron-right') }}</span>
+          </a>
+        </li>
         {% endfor %}
       </ul>
-      {% else %}<p class="muted">No unread messages — inbox is clear.</p>{% endif %}
+      {% else %}<p class="muted">No forms configured.</p>{% endif %}
     {% endcall %}
   {% endif %}
 
@@ -487,11 +504,11 @@
           </li>
           <li class="special-page-row">
             <div class="special-page-info">
-              <div class="u-name">Contact Form</div>
-              <p class="muted small">Unread submissions from the public /contact form. Highlights when there's something to read; quiet when the inbox is clear.</p>
+              <div class="u-name">Forms</div>
+              <p class="muted small">Activity from every form on the site — Submission Form, Contact Form, and any custom forms you've built. New forms appear here automatically as they're created.</p>
             </div>
-            <label class="mode-toggle" title="Show Contact Form">
-              <input type="checkbox" name="dash_show_contact_form" value="1" {% if current_user.dash_show_contact_form %}checked{% endif %}>
+            <label class="mode-toggle" title="Show Forms">
+              <input type="checkbox" name="dash_show_forms" value="1" {% if current_user.dash_show_forms %}checked{% endif %}>
               <span class="mode-track"><span class="mode-thumb"></span></span>
             </label>
           </li>

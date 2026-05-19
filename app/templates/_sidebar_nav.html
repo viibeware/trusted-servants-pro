@@ -34,6 +34,7 @@
       {{ it.label }}{% if it.is_external %} ↗{% endif %}
       {%- if it.key == 'watchtower' and pending_access_count %}<span class="nav-badge" title="Pending access requests">{{ pending_access_count }}</span>{% endif -%}
       {%- if it.key == 'contact_form' and unread_contact_count %}<span class="nav-badge" title="Unread contact-form messages">{{ unread_contact_count }}</span>{% endif -%}
+      {%- if it.key == 'posts' and pending_posts_count %}<span class="nav-badge" title="Submissions awaiting review">{{ pending_posts_count }}</span>{% endif -%}
       {%- if it.key == 'web_frontend' and site and not site.frontend_enabled %} <span class="nav-badge nav-badge-muted" title="Public access is off — only signed-in admins and frontend editors can preview">Off</span>{% endif -%}
     </a>
   {% endfor %}

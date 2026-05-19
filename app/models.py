@@ -88,6 +88,11 @@ class User(UserMixin, db.Model):
     dash_show_online_users = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_access_requests = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_contact_form = db.Column(db.Boolean, nullable=False, default=True)
+    # Per-user toggle for the unified Forms dashboard widget. Replaces
+    # the standalone contact-form widget (whose column above is kept
+    # for backwards-compat with existing rows but no longer surfaces
+    # in the dashboard customize modal).
+    dash_show_forms = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_deletions = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_currently_online = db.Column(db.Boolean, nullable=False, default=True)
     dash_show_visitor_metrics = db.Column(db.Boolean, nullable=False, default=True)

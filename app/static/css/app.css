@@ -12452,6 +12452,58 @@ body.embed .backups-wrap {
   justify-content: flex-start;
 }
 
+/* Forms widget — unified roll-up of every form on the site
+   (Submission, Contact, and any CustomForm rows). Each row is its
+   own anchor so the entire surface clicks through to the form's
+   admin page. The trailing attention badge inherits .nav-badge so it
+   matches the sidebar chips. */
+.dash-forms-list { margin: 0; padding: 0; }
+.dash-forms-row { list-style: none; margin: 0; padding: 0; }
+.dash-forms-row + .dash-forms-row { border-top: 1px solid var(--border); }
+.dash-forms-link {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .6rem 0;
+  text-decoration: none;
+  color: inherit;
+}
+.dash-forms-link:hover .dash-forms-name { text-decoration: underline; }
+.dash-forms-icon {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2, rgba(0,0,0,.04));
+  color: var(--brand);
+}
+.dash-forms-icon .icon { width: 18px; height: 18px; }
+.dash-forms-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+.dash-forms-name {
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  flex-wrap: wrap;
+}
+.dash-forms-meta { line-height: 1.35; }
+.dash-forms-cta {
+  flex: 0 0 auto;
+  color: var(--muted);
+  display: inline-flex;
+}
+.dash-forms-cta .icon { width: 16px; height: 16px; }
+.dash-forms-link:hover .dash-forms-cta { color: var(--brand); }
+
 /* Trusted Servants — dashboard sign-up widget. Compact form that
    hides once the user has subscribed; lives inside the standard
    dash_widget chrome. */
