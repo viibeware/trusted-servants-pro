@@ -1128,9 +1128,28 @@
 
   // Media picker modal: open on [data-media-picker] buttons
   let currentMediaTarget = null;
+  // Mode flag — when a picker is opened for the post-edit featured
+  // image, the postMessage handler routes the picked item into the
+  // dedicated preview area instead of the generic "set media_id on
+  // form" path used by the library + meeting modals.
+  let currentMediaMode = null;
   document.querySelectorAll("[data-media-picker]").forEach(btn => {
     btn.addEventListener("click", () => {
       currentMediaTarget = btn.dataset.mediaPicker;
+      currentMediaMode = "form";
+      const frame = document.getElementById("media-picker-frame");
+      if (frame && frame.src === "about:blank") frame.src = "/tspro/files?picker=1&embed=1";
+      openModal("media-picker-modal");
+    });
+  });
+  // Post edit page — Featured image "Choose from File Browser" button.
+  // Opens the same media picker modal but routes the result into the
+  // post-edit form's hidden media-id input + preview swap instead of
+  // the generic form/media_id handler used by library + meeting forms.
+  document.querySelectorAll("[data-post-featured-picker]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      currentMediaTarget = null;
+      currentMediaMode = "post-featured";
       const frame = document.getElementById("media-picker-frame");
       if (frame && frame.src === "about:blank") frame.src = "/tspro/files?picker=1&embed=1";
       openModal("media-picker-modal");
@@ -1140,6 +1159,41 @@
     if (e.origin !== window.location.origin) return;
     if (!e.data || e.data.type !== "media-selected") return;
     const item = e.data.item;
+    if (currentMediaMode === "post-featured") {
+      const section = document.querySelector("[data-post-featured-image]");
+      if (section) {
+        const hidden = section.querySelector("[data-featured-media-id]");
+        if (hidden) hidden.value = item.id;
+        // Clear any pending file-upload selection so the browser-picked
+        // item is what actually gets saved (uploads otherwise win on
+        // the server side).
+        const upload = section.querySelector("[data-featured-upload]");
+        if (upload) upload.value = "";
+        // Uncheck the "Remove current image" box if it's there — the
+        // admin clearly wants to swap, not clear.
+        const clear = section.querySelector('input[name="clear_featured_image"]');
+        if (clear) clear.checked = false;
+        // Swap the preview image. Public file route resolves by
+        // original filename, which the picker hands us in the
+        // postMessage payload.
+        const img = section.querySelector("[data-featured-preview-img]");
+        if (img && item.original_filename) {
+          img.src = "/pub/" + encodeURIComponent(item.original_filename);
+          img.hidden = false;
+        }
+        const empty = section.querySelector("[data-featured-preview-empty]");
+        if (empty) empty.hidden = true;
+        const label = section.querySelector("[data-featured-picked-label]");
+        if (label) {
+          label.textContent = "Selected from File Browser: " + item.original_filename;
+          label.hidden = false;
+        }
+      }
+      const m = document.getElementById("media-picker-modal");
+      if (m) closeModal(m);
+      currentMediaMode = null;
+      return;
+    }
     if (!currentMediaTarget) return;
     const form = document.getElementById(currentMediaTarget);
     if (!form) return;
@@ -1160,6 +1214,7 @@
     // Close modal
     const m = document.getElementById("media-picker-modal");
     if (m) closeModal(m);
+    currentMediaMode = null;
   });
 
   // Drag-and-drop reorder for .file-list-sortable

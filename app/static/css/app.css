@@ -1331,6 +1331,17 @@ html[data-theme="dark"] .post-chip-private      { background: rgba(168, 85, 247,
   margin-top: 8px; padding: 24px; border: 1px dashed var(--border);
   border-radius: 8px; text-align: center; background: var(--panel-2);
 }
+.og-image-actions {
+  margin-top: .55rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+.og-image-picked {
+  margin-top: .35rem;
+  line-height: 1.4;
+  word-break: break-all;
+}
 
 /* Branding & SEO: two-panel grid inside the Site Identity card —
    Site name + Favicon | Open Graph. Mirrors .fe-header-grid. */

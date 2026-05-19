@@ -13473,7 +13473,12 @@ def post_save():
     post.contact_phone = (request.form.get("contact_phone") or "").strip()[:64] or None
     post.contact_email = (request.form.get("contact_email") or "").strip()[:255] or None
 
-    # Featured image — same upload/clear semantics as the OG image.
+    # Featured image — same upload/clear semantics as the OG image,
+    # plus a File-Browser pick that resolves a posted ``MediaItem.id``
+    # back to its stored filename. Priority order:
+    #   1. Explicit "Remove current image" checkbox wins (clear intent).
+    #   2. New upload — admin attached a fresh file.
+    #   3. File Browser pick — admin selected an existing media row.
     if request.form.get("clear_featured_image") == "1":
         old = post.featured_image_filename
         post.featured_image_filename = None
@@ -13485,6 +13490,18 @@ def post_save():
         post.featured_image_filename = stored
         if old and old != stored:
             _cleanup_retired_asset(old)
+    else:
+        picked_raw = (request.form.get("featured_image_media_id") or "").strip()
+        if picked_raw.isdigit():
+            m = db.session.get(MediaItem, int(picked_raw))
+            if m and m.stored_filename:
+                old = post.featured_image_filename
+                post.featured_image_filename = m.stored_filename
+                # The picked file lives in MediaItem and is shared with
+                # other rows — never clean it up here. Only retire the
+                # *previous* asset if it isn't the freshly-picked one.
+                if old and old != m.stored_filename:
+                    _cleanup_retired_asset(old)
 
     # Draft/publish state — submit-button name="action" carries the
     # admin's intent. Values: "draft" (force is_draft=True), "publish"

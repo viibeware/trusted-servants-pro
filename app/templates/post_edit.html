@@ -188,26 +188,35 @@
   </section>
 
   {# ── Featured image ─────────────────────────────────────────── #}
-  <section class="card">
+  <section class="card" data-post-featured-image>
     <div class="card-head">
       <h2>Featured image</h2>
       <span class="muted smaller">Displayed at the top of the post and in link-preview cards. PNG, JPG, or WebP.</span>
     </div>
     <div class="og-image-row">
-      <div class="og-image-preview">
+      <div class="og-image-preview" data-featured-preview>
         {% if _p and _p.featured_image_filename %}
-        <img src="{{ url_for('public.post_featured_image', pid=_p.id) }}" alt="Featured image">
+        <img src="{{ url_for('public.post_featured_image', pid=_p.id) }}" alt="Featured image" data-featured-preview-img>
         <label class="check fe-logo-clear-label">
           <input type="checkbox" name="clear_featured_image" value="1"><span>Remove current image</span>
         </label>
         {% else %}
-        <div class="og-image-empty muted small">No image uploaded yet.</div>
+        <img alt="Featured image" data-featured-preview-img hidden>
+        <div class="og-image-empty muted small" data-featured-preview-empty>No image uploaded yet.</div>
         {% endif %}
       </div>
       <div class="og-image-fields">
-        <label>Replace image
-          <input type="file" name="featured_image" accept="image/png,image/jpeg,image/webp">
+        <label>Upload new image
+          <input type="file" name="featured_image" accept="image/png,image/jpeg,image/webp" data-featured-upload>
         </label>
+        <div class="og-image-actions">
+          <button type="button" class="btn btn-sm" data-post-featured-picker>{{ icon('folder') }} Choose from File Browser</button>
+        </div>
+        {# Hidden input set by the File Browser modal. Resolved to a
+           stored filename on the server side; cleared if the admin
+           picks a different upload after browsing. #}
+        <input type="hidden" name="featured_image_media_id" value="" data-featured-media-id>
+        <div class="og-image-picked muted small" data-featured-picked-label hidden></div>
       </div>
     </div>
   </section>
