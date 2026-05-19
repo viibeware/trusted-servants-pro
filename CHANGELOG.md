@@ -6,6 +6,34 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.18] — 2026-05-18
+
+### Changed — Form Submissions list: card layout with per-row submitter preview
+
+The Form Submissions index used to render each row as a thin "Form name · timestamp · IP · View details →" strip. Replaced with a card-per-row layout that surfaces who submitted, how to reach them, and what they wrote, so an operator can triage at a glance without opening every row.
+
+- **New ``_summarise_form_submission(sub)`` helper** in ``routes.py`` walks the parent CustomForm's ``blocks_json`` to identify fields by type + name heuristics (since the operator types free-form labels): NAME_HINTS = ``full_name`` / ``your_name`` / ``submitter_name`` / ``name`` / ``contact_name``; phone hints = ``phone`` / ``tel`` / ``mobile``; subject hints = ``subject`` / ``title`` / ``topic``; body hints = ``message`` / ``comments`` / ``body`` / ``details`` / ``description`` / ``notes``. Returns ``display_name`` (with email-localpart and "Anonymous" fallbacks), ``email``, ``phone``, ``headline`` (140-char trimmed), ``field_count`` (non-empty answers), ``file_count``.
+- **``frontend_form_submissions``** route precomputes a ``{sub.id: preview}`` dict and threads it into the template so the Jinja loop stays declarative (no payload JSON parsing in the template).
+- **``frontend_form_submissions.html``** renders each submission as a card with:
+  - a brand-blue avatar circle with the submitter's first initial (muted grey when "Anonymous")
+  - bold submitter name + form pill + site-local timestamp on the head row
+  - 2-line clamped headline below
+  - chips for email, phone, field count, file count (when present), and IP (muted, mono)
+  - right-side chevron with a hover slide on the card
+- **CSS** replaced the old ``.fe-submission-row`` flat strip with the new ``.fe-submission-card`` system — hover lifts the border to brand-blue with a soft shadow, mobile breakpoint at 640px drops the chevron and stacks the timestamp.
+
+### Changed — Zoom Accounts calendar shows 12-hour times
+
+The grid's ``cal-time`` cells used to render ``18:45–20:00``. Now ``6:45 PM–8:00 PM`` via the existing ``|fmt12h`` filter — matches the rest of the app's time displays.
+
+### Changed — Sidebar Intergroup section: "+ Add Library" → "+ Add IG Library"
+
+The admin-only action pinned to the bottom of the Intergroup subsection used to read "+ Add Library" — easy to confuse with the standalone "+ New Library" button on the main libraries page (which creates a regular non-Intergroup library). Renamed to "+ Add IG Library" so the operator sees at a glance that this entry creates a library scoped to the Intergroup module.
+
+### Changed — Currently Online widget no longer shows the viewing admin
+
+A small UX nit: the widget surfaced the admin who was viewing it, which added noise (the admin already knows they're signed in) and inflated the header count. ``/api/online-users`` now drops the viewing admin from ``users`` and recomputes the active ``count`` from the filtered list. The dashboard's server-metrics tile and its tooltip-names list got the same treatment so the count + names stay in sync between the two surfaces.
+
 ## [2.1.17] — 2026-05-18
 
 ### Added — Custom forms support Cloudflare Turnstile

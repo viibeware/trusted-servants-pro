@@ -108,7 +108,7 @@
           <td>
             {% for s in calendar[a.id][d]|sort(attribute='start_time') %}
               <div class="cal-slot{% if s.id in conflict_ids %} cal-slot-conflict{% endif %}">
-                <div class="cal-time">{{ (s.opens_time or s.start_time) }}–{{ s.end_time }}</div>
+                <div class="cal-time">{{ (s.opens_time or s.start_time)|fmt12h }}–{{ s.end_time|fmt12h }}</div>
                 <a class="cal-link" href="{{ url_for('main.meeting_detail', slug=s.meeting.public_slug) }}">{{ s.meeting.name }}</a>
               </div>
             {% endfor %}

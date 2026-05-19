@@ -291,15 +291,18 @@ def _build_intergroup_items(site, user, current_endpoint, url_for):
                 if it["key"] not in seen:
                     ordered.append(it)
             items = ordered
-    # Pin the admin-only "+ Add Library" action to the bottom of the
-    # subsection regardless of sort mode — it's a creation entry point,
-    # not a content row, so it shouldn't shuffle with the libraries
-    # above it. Appending after any reorder logic keeps it sticky.
+    # Pin the admin-only "+ Add IG Library" action to the bottom of
+    # the subsection regardless of sort mode — it's a creation entry
+    # point, not a content row, so it shouldn't shuffle with the
+    # libraries above it. Appending after any reorder logic keeps it
+    # sticky. Label calls out "IG" so the operator doesn't confuse it
+    # with the standalone "+ New Library" button on the main libraries
+    # page (which creates a regular non-Intergroup library).
     if user.is_admin() and items is not None:
         ep = "main.intergroup_library_new"
         items.append({
             "key": "ig_add_library",
-            "label": "+ Add Library",
+            "label": "+ Add IG Library",
             "href": url_for(ep),
             "active": (current_endpoint or "") == ep,
             "target": None,

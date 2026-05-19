@@ -529,11 +529,15 @@ def index():
         # _online_users() now returns the full idle-window list
         # (1 hour) with active_count counting just the within-5-min
         # subset. The dashboard's server-metrics tile tooltip lists
-        # only the active users so the count and the names match —
-        # slice off the active prefix (list is ordered newest-first,
-        # so the first `online_count` rows are the active ones).
-        online_count, _online_full = _online_users()
-        online_users = _online_full[:online_count]
+        # only the active users so the count and the names match.
+        # Drop the viewing admin too — they don't need to see their
+        # own name in the tooltip, and the count should reflect
+        # *other* people on the portal.
+        _active_count, _online_full = _online_users()
+        active_cutoff = datetime.utcnow() - ONLINE_WINDOW
+        online_users = [u for u in _online_full
+                        if u.id != current_user.id and u.last_seen_at >= active_cutoff]
+        online_count = len(online_users)
         from sqlalchemy import func as _sa_func
         from .auth import currently_locked_usernames, user_lockout_expires_in
         locked_set = currently_locked_usernames()
@@ -651,8 +655,14 @@ def api_version():
 def api_online_users():
     if not current_user.is_admin():
         abort(403)
-    count, users = _online_users()
+    _full_count, users = _online_users()
+    # Drop the viewing admin from the list — they already know they're
+    # signed in, and surfacing their own row inflates the count + adds
+    # noise. Recompute the active count AFTER the filter so the header
+    # tally matches what's visible.
+    users = [u for u in users if u.id != current_user.id]
     active_cutoff = datetime.utcnow() - ONLINE_WINDOW
+    count = sum(1 for u in users if u.last_seen_at >= active_cutoff)
     return jsonify(count=count, users=[
         {"id": u.id,
          "username": u.username,
@@ -661,7 +671,7 @@ def api_online_users():
          "last_endpoint": u.last_endpoint or "",
          "last_path": u.last_path or "",
          "location_label": _endpoint_label(u.last_endpoint, u.last_path),
-         "is_self": (u.id == current_user.id),
+         "is_self": False,  # filtered out above; kept for client back-compat
          # is_idle = on the list (within IDLE_WINDOW) but past
          # ONLINE_WINDOW. Widget greys these out + shows
          # "no activity in Xm" instead of the active "Xs ago" stamp.
@@ -6945,14 +6955,129 @@ def frontend_custom_form_edit(form_id):
                            field_types=sorted(_FORM_FIELD_TYPES))
 
 
+def _summarise_form_submission(sub):
+    """Build a per-row preview dict for the Form Submissions list.
+
+    Walks the parent CustomForm's blocks_json to find the right fields
+    by type + name heuristics (rather than guessing from the payload
+    alone, which has snake_case field-names not labels). Returns:
+
+      display_name — best guess at the submitter (name-type fields,
+                     then email local-part, then "Anonymous"). Drives
+                     the row's avatar initial + bold title.
+      email        — the first email-field value, when present;
+                     surfaces as a click-to-mail mailto link.
+      phone        — first phone-field value, used as secondary contact.
+      headline     — a short snippet from a subject / message / textarea
+                     field. Long values are trimmed to ~140 chars.
+      field_count  — how many fields the submitter actually answered
+                     (non-empty values), used for the "N fields" badge.
+      file_count   — number of file attachments (drives the paperclip
+                     pill).
+    """
+    import json as _json
+    try:
+        payload = _json.loads(sub.payload_json or "{}")
+    except (ValueError, TypeError):
+        payload = {}
+    fvals = payload.get("fields") or {}
+    files = payload.get("files") or {}
+
+    cf = sub.form
+    blocks = []
+    if cf and cf.blocks_json:
+        try:
+            blocks = _json.loads(cf.blocks_json)
+        except (ValueError, TypeError):
+            blocks = []
+    if not isinstance(blocks, list):
+        blocks = []
+
+    # Heuristic match on the field NAME (which is auto-derived from
+    # the operator's label via _name_from_label, so "Your Name" →
+    # "your_name", "Full name" → "full_name", etc.). Compose a list of
+    # name substrings to look for in priority order.
+    NAME_HINTS = ("full_name", "your_name", "submitter_name", "name", "contact_name")
+    PHONE_HINTS = ("phone", "tel", "mobile")
+    SUBJECT_HINTS = ("subject", "title", "topic")
+    BODY_HINTS = ("message", "comments", "body", "details", "description", "notes")
+
+    def _first_by(types=None, name_hints=()):
+        """First field in declared order whose type is in ``types`` (when set)
+        and whose name CONTAINS one of ``name_hints`` (when set). Returns
+        the (block, value) pair, or (None, None)."""
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            bn = (block.get("name") or "").lower()
+            if not bn:
+                continue
+            if types and block.get("type") not in types:
+                continue
+            if name_hints and not any(h in bn for h in name_hints):
+                continue
+            val = fvals.get(bn)
+            if val:
+                return block, val
+        return None, None
+
+    # display_name resolution order:
+    # 1. text field with "name" in the slug
+    # 2. local part of any email field
+    # 3. "Anonymous"
+    _, name_val = _first_by(types={"text"}, name_hints=NAME_HINTS)
+    _, email_val = _first_by(types={"email"})
+    _, phone_val = _first_by(types={"text", "phone"}, name_hints=PHONE_HINTS)
+
+    if name_val:
+        display_name = str(name_val).strip()
+    elif email_val:
+        display_name = str(email_val).split("@", 1)[0]
+    else:
+        display_name = "Anonymous"
+
+    # headline: prefer subject-like field, then textarea body-like field,
+    # then any textarea.
+    _, headline = _first_by(types={"text", "textarea"}, name_hints=SUBJECT_HINTS)
+    if not headline:
+        _, headline = _first_by(types={"textarea"}, name_hints=BODY_HINTS)
+    if not headline:
+        _, headline = _first_by(types={"textarea"})
+    if headline:
+        headline = str(headline).strip().replace("\n", " ")
+        if len(headline) > 140:
+            headline = headline[:137].rstrip() + "…"
+
+    # Field count: count non-empty payload values, including
+    # checkbox arrays (one entry is "answered", empty arrays aren't).
+    answered = 0
+    for v in fvals.values():
+        if v is None:
+            continue
+        if isinstance(v, (list, tuple)):
+            if v: answered += 1
+        elif str(v).strip():
+            answered += 1
+
+    return {
+        "display_name": display_name,
+        "email": str(email_val).strip() if email_val else None,
+        "phone": str(phone_val).strip() if phone_val else None,
+        "headline": headline,
+        "field_count": answered,
+        "file_count": len(files),
+    }
+
+
 @bp.route("/frontend/forms/submissions")
 @admin_required
 def frontend_form_submissions():
     """List of every FormSubmission across every CustomForm, newest
     first. Filterable by form via ``?form=<id>``. Per-submission row
-    shows the form name, submitted-at time, the IP, and a short
-    summary of the field values inline; clicking through opens the
-    full detail view."""
+    surfaces the submitter's name (or email local-part / "Anonymous"
+    when no name field exists), inline contact links, a short
+    headline from the first subject/textarea field, and badges for
+    field count + file-attachment count."""
     form_id_raw = (request.args.get("form") or "").strip()
     form_id = int(form_id_raw) if form_id_raw.isdigit() else None
     q = FormSubmission.query
@@ -6960,8 +7085,13 @@ def frontend_form_submissions():
         q = q.filter_by(form_id=form_id)
     submissions = q.order_by(FormSubmission.created_at.desc()).limit(200).all()
     forms = CustomForm.query.order_by(CustomForm.title).all()
+    # Pre-compute per-row preview dicts so the template stays declarative
+    # (no payload JSON parsing in Jinja). Mapping by id keeps the lookup
+    # cheap inside the loop.
+    previews = {sub.id: _summarise_form_submission(sub) for sub in submissions}
     return render_template("frontend_form_submissions.html",
                            submissions=submissions,
+                           previews=previews,
                            forms=forms,
                            selected_form_id=form_id)
 

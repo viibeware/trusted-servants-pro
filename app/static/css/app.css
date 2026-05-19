@@ -13070,18 +13070,164 @@ body.embed .backups-wrap {
   border-color: #1f2937;
 }
 
-/* Form Submissions admin — list + detail. */
+/* Form Submissions admin — list + detail.
+
+   The list uses a card-per-row layout: avatar circle with the
+   submitter's initial on the left, body in the middle (name + form
+   pill + when, then headline + contact/meta chips), affordance arrow
+   on the right. Anonymous submissions get a muted avatar to fade
+   into the rail. Hover lifts the border to brand-blue without
+   shifting layout. */
 .fe-submissions-filter { margin-bottom: 1rem; }
-.fe-submissions-list { list-style: none; margin: 0; padding: 0;
-  display: flex; flex-direction: column; gap: .35rem; }
-.fe-submission-row { border: 1px solid var(--border); border-radius: 10px;
-  background: var(--panel); transition: border-color 120ms ease, background 120ms ease; }
-.fe-submission-row:hover { border-color: var(--brand, #0B5CFF); background: var(--panel-2); }
-.fe-submission-row-link { display: flex; flex-direction: column; gap: .25rem;
-  padding: .7rem .85rem; text-decoration: none; color: inherit; }
-.fe-submission-row-head { display: flex; align-items: baseline;
-  justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
-.fe-submission-row-meta { font-size: .85rem; }
+.fe-submissions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .55rem;
+}
+.fe-submission-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+  overflow: hidden;
+}
+.fe-submission-card:hover {
+  border-color: var(--brand, #0B5CFF);
+  box-shadow: 0 2px 8px rgba(11, 92, 255, .08);
+}
+.fe-submission-card-main {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
+  text-decoration: none;
+  color: inherit;
+}
+.fe-submission-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 1.05rem;
+  background: var(--brand, #0B5CFF);
+  color: #fff;
+  flex: 0 0 auto;
+  letter-spacing: .02em;
+}
+.fe-submission-card.is-anonymous .fe-submission-avatar {
+  background: var(--border);
+  color: var(--muted);
+}
+.fe-submission-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.fe-submission-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.fe-submission-name {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fe-submission-form-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: .75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fe-submission-form-pill .icon {
+  width: 12px;
+  height: 12px;
+}
+.fe-submission-when {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.fe-submission-headline {
+  font-size: .92rem;
+  color: var(--text);
+  line-height: 1.45;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.fe-submission-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.fe-submission-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--brand, #0B5CFF) 7%, transparent);
+  color: var(--brand, #0B5CFF);
+  font-size: .8rem;
+  font-weight: 500;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fe-submission-chip .icon {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+.fe-submission-chip--ghost {
+  background: transparent;
+  color: var(--muted);
+}
+.fe-submission-cta {
+  color: var(--muted);
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  transition: transform 120ms ease, color 120ms ease;
+}
+.fe-submission-card:hover .fe-submission-cta {
+  color: var(--brand, #0B5CFF);
+  transform: translateX(2px);
+}
+.fe-submission-cta .icon { width: 18px; height: 18px; }
+
+@media (max-width: 640px) {
+  .fe-submission-card-main { grid-template-columns: auto 1fr; gap: 12px; padding: 12px; }
+  .fe-submission-cta { display: none; }
+  .fe-submission-when { margin-left: 0; width: 100%; }
+}
+
+[data-theme="dark"] .fe-submission-card:hover {
+  box-shadow: 0 2px 12px rgba(81, 100, 255, .25);
+}
+
 .fe-submission-dl { display: grid; grid-template-columns: minmax(140px, 1fr) 3fr; gap: .5rem 1rem; }
 .fe-submission-dl dt { font-weight: 600; }
 .fe-submission-dl dd { margin: 0; word-break: break-word; }

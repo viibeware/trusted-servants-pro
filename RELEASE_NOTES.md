@@ -7,7 +7,35 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.17 — 2026-05-18 (latest) — Custom forms now support Cloudflare Turnstile
+## 2.1.18 — 2026-05-18 (latest) — Form Submissions redesign, 12-hour Zoom calendar, small UX polish
+
+A grab-bag release focused on making admin pages scan faster.
+
+### Form Submissions page is now a card layout with submitter previews
+
+The Form Submissions inbox used to render each row as a thin "Form name · timestamp · IP" strip — fine for one row, hard to scan for thirty. Replaced with a card layout that surfaces, per row:
+
+- **Avatar circle** with the submitter's first initial (muted grey when nobody can be identified).
+- **Submitter name** in bold, pulled from name-type fields in the form (or the email's local-part / "Anonymous" as fallbacks).
+- **Form pill** showing which form they used, plus a local-time timestamp.
+- **2-line headline** taken from the first subject or message field — see what they actually wrote without opening the detail.
+- **Meta chips**: email, phone, field count, file-attachment count (when any), submitter IP.
+
+Hover any card and it lifts toward brand-blue with a soft shadow + chevron slide. Mobile drops the chevron and stacks the timestamp.
+
+### Zoom Accounts calendar shows 12-hour times
+
+The grid used to render `18:45–20:00`. Now `6:45 PM–8:00 PM` — matches every other time display in the app.
+
+### Sidebar Intergroup section: "+ Add Library" → "+ Add IG Library"
+
+Disambiguates it from the **+ New Library** button on the main libraries page, which creates a regular non-Intergroup library.
+
+### Currently Online widget no longer shows you
+
+The widget used to surface the viewing admin's own row, which inflated the count and added noise — you already know you're signed in. Filtered out everywhere: the widget's list, the widget's header count, the dashboard tile's "X users · last 5 min" number, and the tile's tooltip names. Now they all show *other* people on the portal.
+
+## 2.1.17 — 2026-05-18 — Custom forms now support Cloudflare Turnstile
 
 If you have **Cloudflare Turnstile** turned on in **Settings → Security**, custom forms now show the Turnstile widget right above the Submit button — same as the events-submission form and the contact form already do. Visitors complete the challenge as part of filling out the form; the server verifies the token before storing the submission. If the challenge fails, the page re-renders with a red banner above the form explaining what happened, with everything the visitor typed still in place so they don't have to start over.
 

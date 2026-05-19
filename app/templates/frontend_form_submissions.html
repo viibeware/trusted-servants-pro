@@ -27,16 +27,54 @@
   {% if submissions %}
   <ul class="fe-submissions-list">
     {% for sub in submissions %}
-    <li class="fe-submission-row">
-      <a class="fe-submission-row-link" href="{{ url_for('main.frontend_form_submission_detail', sub_id=sub.id) }}">
-        <div class="fe-submission-row-head">
-          <strong>{{ sub.form.title if sub.form else '(deleted form)' }}</strong>
-          <span class="muted smaller">{{ sub.created_at.strftime('%Y-%m-%d %H:%M') }} UTC</span>
+    {% set p = previews[sub.id] %}
+    {% set initial = (p.display_name or '?')[:1]|upper %}
+    {% set anonymous = (p.display_name == 'Anonymous') %}
+    <li class="fe-submission-card{% if anonymous %} is-anonymous{% endif %}">
+      <a class="fe-submission-card-main"
+         href="{{ url_for('main.frontend_form_submission_detail', sub_id=sub.id) }}">
+        <span class="fe-submission-avatar" aria-hidden="true">{{ initial }}</span>
+        <div class="fe-submission-body">
+          <div class="fe-submission-head">
+            <span class="fe-submission-name">{{ p.display_name }}</span>
+            <span class="fe-submission-form-pill">
+              {{ icon('send') }} {{ sub.form.title if sub.form else '(deleted form)' }}
+            </span>
+            <span class="fe-submission-when muted smaller">{{ sub.created_at|fmt_site_local('%b %-d, %-I:%M %p') }}</span>
+          </div>
+          {% if p.headline %}
+          <div class="fe-submission-headline">{{ p.headline }}</div>
+          {% endif %}
+          <div class="fe-submission-meta">
+            {% if p.email %}
+            <span class="fe-submission-chip">
+              {{ icon('mail') }}
+              <span>{{ p.email }}</span>
+            </span>
+            {% endif %}
+            {% if p.phone %}
+            <span class="fe-submission-chip">
+              {{ icon('phone') }}
+              <span>{{ p.phone }}</span>
+            </span>
+            {% endif %}
+            <span class="fe-submission-chip fe-submission-chip--ghost" title="Fields answered">
+              {{ icon('list') }}
+              <span>{{ p.field_count }} field{{ '' if p.field_count == 1 else 's' }}</span>
+            </span>
+            {% if p.file_count %}
+            <span class="fe-submission-chip fe-submission-chip--ghost" title="File attachments">
+              {{ icon('paperclip') }}
+              <span>{{ p.file_count }}</span>
+            </span>
+            {% endif %}
+            <span class="fe-submission-chip fe-submission-chip--ghost" title="Submitter IP address">
+              {{ icon('globe') }}
+              <span class="mono">{{ sub.ip or 'unknown' }}</span>
+            </span>
+          </div>
         </div>
-        <div class="fe-submission-row-meta muted smaller">
-          IP <code>{{ sub.ip or 'unknown' }}</code>
-          · <span>{{ icon('arrow-right') }} View details</span>
-        </div>
+        <span class="fe-submission-cta" aria-hidden="true">{{ icon('chevron-right') }}</span>
       </a>
     </li>
     {% endfor %}
