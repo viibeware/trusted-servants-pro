@@ -1466,6 +1466,15 @@ html[data-theme="dark"] .post-chip-private      { background: rgba(168, 85, 247,
   line-height: 1.4;
 }
 
+/* Headline card on the announcement / event edit page — adds 1rem
+   of vertical breathing room between each grouping (card-head,
+   type pills, title, public URL, GSR summary, body, posted-on,
+   auto-archive). Uses adjacent-sibling so the first element keeps
+   the card's own top padding without doubling. */
+.post-edit-headline-card > * + * {
+  margin-top: 1rem;
+}
+
 /* Multi-row Links editor on the announcement/event edit page.
    Each row is a card-ish stack: URL + label inputs side-by-side on
    top, the "open in new tab" toggle + remove button on the bottom. */

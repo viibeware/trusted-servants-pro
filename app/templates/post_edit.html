@@ -30,21 +30,21 @@
        draft     → "Save draft" (keeps draft) + "Publish" (state route)
        active    → "Save post" (keeps active) + "Move to drafts" (state route)
   #}
+  {# The "primary save" action — the one that just commits edits
+     without changing the post's lifecycle state — moves to the yellow
+     save bar at the bottom of the page so it only appears when there
+     ARE edits to save. Only the state-transition button (Publish on
+     drafts, Move to Drafts on active) stays in the top action area
+     since it's an explicit lifecycle change, not a routine save. New
+     posts keep both options at the top because state must be picked
+     on the first save. #}
   {% if _is_new %}
     <button type="submit" form="post-edit-form" name="action" value="draft" class="btn">Save as draft</button>
     <button type="submit" form="post-edit-form" name="action" value="publish" class="btn btn-primary">Publish post</button>
   {% elif _p and _p.is_draft %}
-    {# Both buttons submit the post-edit form so any in-progress edits
-       persist alongside the state flip. The dedicated `post_publish`
-       route still exists for the per-row Publish button on the list
-       page (no form to save there), but here the form-submit path
-       routes through `post_save` which handles `action=publish` to
-       both flip is_draft AND stamp `published_at = now`. #}
-    <button type="submit" form="post-edit-form" name="action" value="draft" class="btn">Save draft</button>
     <button type="submit" form="post-edit-form" name="action" value="publish" class="btn btn-primary"
             title="Save these changes and publish the draft">Publish</button>
   {% else %}
-    <button type="submit" form="post-edit-form" class="btn btn-primary">Save post</button>
     {# Move-to-Drafts also routes through the form so the admin's
        in-progress edits aren't lost on the way back to drafts. The
        confirm() prompt prevents accidental "save and unpublish" — the
@@ -125,7 +125,7 @@
   {% if _p %}<input type="hidden" name="post_id" value="{{ _p.id }}">{% endif %}
 
   {# ── Type + headline ─────────────────────────────────────────── #}
-  <section class="card">
+  <section class="card post-edit-headline-card">
     <div class="card-head">
       <h2>Headline</h2>
       <span class="muted smaller">Title shown wherever the post appears. Type tags drive how it's shown.</span>
@@ -145,7 +145,7 @@
                {% if _p and _p.is_event %}checked{% endif %}>
         <span class="post-type-pill-body">
           <span class="post-type-pill-title">Event</span>
-          <span class="post-type-pill-sub muted smaller">Picks up the event date / location / contact fields below.</span>
+          <span class="post-type-pill-sub muted smaller">Shows up in event feeds.</span>
         </span>
       </label>
     </div>
@@ -173,7 +173,7 @@
     {% include "_slug_history.html" %}
     {% endif %}
     {% endif %}
-    <label>Summary <span class="muted small">(short blurb shown in lists and link previews)</span>
+    <label>GSR Summary <span class="muted small">(GSR summary — short blurb shown in lists, link previews, and the GSR summary frontend block)</span>
       <textarea name="summary" rows="2"
                 placeholder="One or two sentences — what is this and why does it matter?">{{ (_p.summary if _p else '') or '' }}</textarea>
     </label>
@@ -263,6 +263,31 @@
     syncWrap();
     syncField();
   })();
+
+  // Event details card visibility — hidden unless the Event
+  // checkbox at the top is on. Pure announcements never use the
+  // date / location / zoom / event-contact fields, so the whole
+  // card collapses out of the form (and skips submission of empty
+  // event_starts_at / event_ends_at) when Event is unchecked.
+  // Deferred to DOMContentLoaded because this inline <script> lives
+  // BEFORE the event-details card in the DOM (the card was moved
+  // below Links so admins see CTAs first); without the defer, the
+  // querySelector returns null and the toggle silently no-ops.
+  (function () {
+    function wire() {
+      var eventCheck = document.querySelector('input[type="checkbox"][name="is_event"]');
+      var card = document.querySelector('[data-event-details-card]');
+      if (!eventCheck || !card) return;
+      function sync() { card.hidden = !eventCheck.checked; }
+      eventCheck.addEventListener('change', sync);
+      sync();
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', wire);
+    } else {
+      wire();
+    }
+  })();
   </script>
 
   {# ── Featured image ─────────────────────────────────────────── #}
@@ -297,92 +322,6 @@
         <div class="og-image-picked muted small" data-featured-picked-label hidden></div>
       </div>
     </div>
-  </section>
-
-  {# ── Event details (date, location, zoom) ──────────────────────── #}
-  <section class="card">
-    <div class="card-head">
-      <h2>Event details</h2>
-      <span class="muted smaller">Filled in when the post is tagged as an event. Posts tagged only as announcements can leave these blank.</span>
-    </div>
-
-    <div class="form-row">
-      <label>Starts
-        <input type="datetime-local" name="event_starts_at"
-               value="{% if _p and _p.event_starts_at %}{{ _p.event_starts_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
-      </label>
-      <label>Ends
-        <input type="datetime-local" name="event_ends_at"
-               value="{% if _p and _p.event_ends_at %}{{ _p.event_ends_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
-      </label>
-    </div>
-
-    <li class="special-page-row" style="list-style:none; margin: 1rem 0;">
-      <div class="special-page-info">
-        <div class="u-name">Online event</div>
-        <p class="muted small">When on, the location address is optional and the Zoom block below is shown.</p>
-      </div>
-      <label class="mode-toggle">
-        <input type="checkbox" name="is_online" value="1"
-               {% if _p and _p.is_online %}checked{% endif %}>
-        <span class="mode-track"><span class="mode-thumb"></span></span>
-      </label>
-    </li>
-
-    <label>Venue / location name
-      <input type="text" name="location_name" maxlength="255"
-             value="{{ (_p.location_name if _p else '') or '' }}"
-             placeholder="Community Center · Hall B">
-    </label>
-    <label>Address
-      <textarea name="location_address" rows="2"
-                placeholder="123 Main St, Springfield, IL 62701">{{ (_p.location_address if _p else '') or '' }}</textarea>
-    </label>
-    <label>Google Maps link <span class="muted small">(optional — direct link the front-end can render as "Get directions")</span>
-      <input type="url" name="google_maps_url" maxlength="500"
-             value="{{ (_p.google_maps_url if _p else '') or '' }}"
-             placeholder="https://maps.google.com/?q=...">
-    </label>
-
-    <div class="post-zoom-block">
-      <h3 class="post-subhead">Zoom <span class="muted smaller">(for online events)</span></h3>
-      <div class="form-row">
-        <label>Meeting ID
-          <input type="text" name="zoom_meeting_id" maxlength="64"
-                 value="{{ (_p.zoom_meeting_id if _p else '') or '' }}"
-                 placeholder="123 456 7890">
-        </label>
-        <label>Passcode
-          <input type="text" name="zoom_passcode" maxlength="128"
-                 value="{{ (_p.zoom_passcode if _p else '') or '' }}">
-        </label>
-      </div>
-      <label>Zoom URL
-        <input type="url" name="zoom_url" maxlength="500"
-               value="{{ (_p.zoom_url if _p else '') or '' }}"
-               placeholder="https://zoom.us/j/...">
-      </label>
-    </div>
-
-    {# Event contact — folded in above Links. Shown publicly when
-       set; admins can leave all three fields blank when an event
-       has no host contact info to surface. #}
-    <h3 class="post-subhead">Event contact <span class="muted smaller">(optional)</span></h3>
-    <label>Name
-      <input type="text" name="contact_name" maxlength="120"
-             value="{{ (_p.contact_name if _p else '') or '' }}">
-    </label>
-    <div class="form-row">
-      <label>Phone
-        <input type="tel" name="contact_phone" maxlength="64"
-               value="{{ (_p.contact_phone if _p else '') or '' }}">
-      </label>
-      <label>Email
-        <input type="email" name="contact_email" maxlength="255"
-               value="{{ (_p.contact_email if _p else '') or '' }}">
-      </label>
-    </div>
-
   </section>
 
   {# ── Links ────────────────────────────────────────────────────
@@ -518,6 +457,97 @@
 
   </section>
 
+  {# ── Event details (date, location, zoom) ────────────────────────
+     Only rendered when the Event checkbox at the top is on — pure
+     announcements don't carry any of these fields, so showing the
+     card just adds noise. JS below the card mirrors that gate so
+     toggling the checkbox shows/hides the card live. #}
+  <section class="card" data-event-details-card
+           {% if not (_p and _p.is_event) %}hidden{% endif %}>
+    <div class="card-head">
+      <h2>Event details</h2>
+      <span class="muted smaller">Filled in when the post is tagged as an event. Posts tagged only as announcements can leave these blank.</span>
+    </div>
+
+    <div class="form-row">
+      <label>Starts
+        <input type="datetime-local" name="event_starts_at"
+               value="{% if _p and _p.event_starts_at %}{{ _p.event_starts_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+      </label>
+      <label>Ends
+        <input type="datetime-local" name="event_ends_at"
+               value="{% if _p and _p.event_ends_at %}{{ _p.event_ends_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+      </label>
+    </div>
+
+    <li class="special-page-row" style="list-style:none; margin: 1rem 0;">
+      <div class="special-page-info">
+        <div class="u-name">Online event</div>
+        <p class="muted small">When on, the location address is optional and the Zoom block below is shown.</p>
+      </div>
+      <label class="mode-toggle">
+        <input type="checkbox" name="is_online" value="1"
+               {% if _p and _p.is_online %}checked{% endif %}>
+        <span class="mode-track"><span class="mode-thumb"></span></span>
+      </label>
+    </li>
+
+    <label>Venue / location name
+      <input type="text" name="location_name" maxlength="255"
+             value="{{ (_p.location_name if _p else '') or '' }}"
+             placeholder="Community Center · Hall B">
+    </label>
+    <label>Address
+      <textarea name="location_address" rows="2"
+                placeholder="123 Main St, Springfield, IL 62701">{{ (_p.location_address if _p else '') or '' }}</textarea>
+    </label>
+    <label>Google Maps link <span class="muted small">(optional — direct link the front-end can render as "Get directions")</span>
+      <input type="url" name="google_maps_url" maxlength="500"
+             value="{{ (_p.google_maps_url if _p else '') or '' }}"
+             placeholder="https://maps.google.com/?q=...">
+    </label>
+
+    <div class="post-zoom-block">
+      <h3 class="post-subhead">Zoom <span class="muted smaller">(for online events)</span></h3>
+      <div class="form-row">
+        <label>Meeting ID
+          <input type="text" name="zoom_meeting_id" maxlength="64"
+                 value="{{ (_p.zoom_meeting_id if _p else '') or '' }}"
+                 placeholder="123 456 7890">
+        </label>
+        <label>Passcode
+          <input type="text" name="zoom_passcode" maxlength="128"
+                 value="{{ (_p.zoom_passcode if _p else '') or '' }}">
+        </label>
+      </div>
+      <label>Zoom URL
+        <input type="url" name="zoom_url" maxlength="500"
+               value="{{ (_p.zoom_url if _p else '') or '' }}"
+               placeholder="https://zoom.us/j/...">
+      </label>
+    </div>
+
+    {# Event contact — folded in above Links. Shown publicly when
+       set; admins can leave all three fields blank when an event
+       has no host contact info to surface. #}
+    <h3 class="post-subhead">Event contact <span class="muted smaller">(optional)</span></h3>
+    <label>Name
+      <input type="text" name="contact_name" maxlength="120"
+             value="{{ (_p.contact_name if _p else '') or '' }}">
+    </label>
+    <div class="form-row">
+      <label>Phone
+        <input type="tel" name="contact_phone" maxlength="64"
+               value="{{ (_p.contact_phone if _p else '') or '' }}">
+      </label>
+      <label>Email
+        <input type="email" name="contact_email" maxlength="255"
+               value="{{ (_p.contact_email if _p else '') or '' }}">
+      </label>
+    </div>
+
+  </section>
+
 </form>
 
 {# Live title → slug sync. Mirrors `_normalize_slug` in app/routes.py:
@@ -614,4 +644,77 @@
   });
 })();
 </script>
+
+{# Yellow save bar — only renders the routine "save without changing
+   state" affordance; explicit state transitions (Publish, Move to
+   Drafts) stay in the top action area. New posts have to pick state
+   on the first save so they keep both top buttons and skip the bar
+   entirely. The bar surfaces only when the form has unsaved edits;
+   the corresponding native submit button (hidden) is what the bar's
+   button targets via the `form` attribute, so server-side validation
+   + the post_save redirect-after-POST path keeps working unchanged. #}
+{% if not _is_new %}
+<div id="post-edit-save-bar" class="fe-save-bar fe-save-bar-content" hidden
+     data-post-edit-save-bar>
+  <span class="fe-save-bar-msg">Unsaved changes</span>
+  <button type="submit" form="post-edit-form"
+          {% if _p and _p.is_draft %}name="action" value="draft"{% endif %}
+          class="btn fe-save-bar-btn">
+    {% if _p and _p.is_draft %}Save draft{% else %}Save post{% endif %}
+  </button>
+</div>
+<script>
+(function () {
+  var form = document.getElementById('post-edit-form');
+  var bar = document.getElementById('post-edit-save-bar');
+  if (!form || !bar) return;
+  var msg = bar.querySelector('.fe-save-bar-msg');
+  var btn = bar.querySelector('.fe-save-bar-btn');
+  var dirty = false;
+
+  function show() {
+    if (dirty) return;
+    dirty = true;
+    bar.hidden = false;
+    bar.classList.remove('is-leaving');
+    if (msg) msg.textContent = 'Unsaved changes';
+    if (btn) btn.disabled = false;
+  }
+
+  form.addEventListener('input', show);
+  form.addEventListener('change', show);
+
+  // Newly added rows (the Links multi-row editor) live in nodes
+  // that get appended after this script runs — observe the form
+  // so any insert/remove flips the bar dirty too.
+  if (window.MutationObserver) {
+    var mo = new MutationObserver(function (records) {
+      for (var i = 0; i < records.length; i++) {
+        var r = records[i];
+        var nodes = r.addedNodes.length ? r.addedNodes : r.removedNodes;
+        for (var j = 0; j < nodes.length; j++) {
+          var n = nodes[j];
+          if (n.nodeType === 1 && (
+              (n.matches && n.matches('input, select, textarea')) ||
+              (n.querySelector && n.querySelector('input, select, textarea')))) {
+            show();
+            return;
+          }
+        }
+      }
+    });
+    mo.observe(form, { childList: true, subtree: true });
+  }
+
+  // Native submit through the bar's button — the bar lets the
+  // browser follow the form's redirect-after-POST, so we just flash
+  // "Saving…" while the round-trip runs. The server's flash-success
+  // banner takes over once the new page lands.
+  form.addEventListener('submit', function () {
+    if (msg) msg.textContent = 'Saving…';
+    if (btn) btn.disabled = true;
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}
