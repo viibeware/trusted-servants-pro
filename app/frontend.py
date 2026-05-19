@@ -1263,6 +1263,9 @@ def meeting_detail(slug):
     active meetings share the same slug, the lower-id (first-created) one
     wins; admins can rename to disambiguate."""
     from .colors import slugify
+    from .routes import _expire_meeting_alerts, _apply_meeting_schedule_changes
+    _expire_meeting_alerts()
+    _apply_meeting_schedule_changes()
     site = _site()
     gate = _frontend_gate(site)
     if gate is not None:
@@ -1478,6 +1481,9 @@ def meetings_list():
     decides how the list is presented; each layout shares the same data —
     every active Meeting eagerly loaded with its schedules — so client-side
     filtering can run without follow-up requests."""
+    from .routes import _expire_meeting_alerts, _apply_meeting_schedule_changes
+    _expire_meeting_alerts()
+    _apply_meeting_schedule_changes()
     site = _site()
     gate = _frontend_gate(site)
     if gate is not None:

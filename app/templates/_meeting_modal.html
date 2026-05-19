@@ -113,6 +113,39 @@
           <span class="muted small" style="display:block; margin: 2px 0 4px;">Displayed prominently on the public meeting detail page.</span>
           <textarea name="public_alert_message" rows="2" placeholder="Notice for the public, e.g. cancellation, change of venue.">{{ (meeting.public_alert_message if meeting else '') or '' }}</textarea>
         </label>
+        {# Optional auto-expiration for the public alert. When the
+           toggle is on, the alert is hidden from the public site
+           after the chosen datetime AND the message + expiry are
+           cleared from the DB on the next page load past that
+           cutoff (see ``_expire_meeting_alerts``). Stored as a naive
+           site-local datetime, same convention as other admin-typed
+           timestamps. #}
+        {%- set _alert_expiry = meeting.public_alert_expires_at if meeting else none -%}
+        <div class="public-alert-expiry" data-public-alert-expiry>
+          <label class="mode-toggle public-alert-expiry-toggle">
+            <input type="checkbox"
+                   name="public_alert_expires_enabled"
+                   value="1"
+                   {% if _alert_expiry %}checked{% endif %}
+                   data-public-alert-expiry-toggle>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+            <span class="muted smaller">Auto-hide this alert after a specific date &amp; time</span>
+          </label>
+          <div class="public-alert-expiry-field"
+               data-public-alert-expiry-field
+               {% if not _alert_expiry %}hidden{% endif %}>
+            <label class="public-alert-expiry-input">
+              <span class="muted smaller">Expires on</span>
+              <input type="datetime-local"
+                     name="public_alert_expires_at"
+                     value="{% if _alert_expiry %}{{ _alert_expiry.strftime('%Y-%m-%dT%H:%M') }}{% endif %}"
+                     data-public-alert-expiry-input>
+            </label>
+            <p class="muted smaller public-alert-expiry-help">
+              Times are in the site timezone{% if site and site.timezone %} ({{ site.timezone }}){% endif %}. After this moment the message is hidden from the public site and removed from this field automatically.
+            </p>
+          </div>
+        </div>
 
         {# Extended-content section — admin-tunable Markdown blocks
            rendered on the public meeting detail page below the schedule
@@ -200,6 +233,122 @@
             {% endfor %}
           </div>
         </fieldset>
+
+        {% if meeting %}
+        {# Scheduled future schedule swaps. Lives visually inside the
+           Day & Times area so admins see queued changes in context,
+           but every interactive element (cancel buttons + the
+           "Schedule a future change" form fields) is bound via the
+           HTML5 ``form="…"`` attribute to forms rendered AFTER the
+           main edit form's </form>. That sidesteps HTML's "no nested
+           forms" rule while keeping the UI where it belongs. #}
+        {%- set _sched_chg_new_form_id = "meeting-sched-chg-new-" ~ meeting.id -%}
+        <fieldset class="fieldset schedule-change-fieldset">
+          <legend>Scheduled changes</legend>
+          <p class="muted small schedule-change-blurb">
+            Set up a future schedule swap and forget about it. The new
+            days and times automatically replace the current ones on
+            the date you pick — nothing to remember to do later.
+          </p>
+          {% set _changes = meeting.schedule_changes %}
+          {% if _changes %}
+          <ul class="schedule-change-list">
+            {% for chg in _changes %}
+            {%- set _entries = chg.schedules_json|from_json -%}
+            {%- set _cancel_form_id = "meeting-sched-chg-cancel-" ~ chg.id -%}
+            <li class="schedule-change-item">
+              <div class="schedule-change-head">
+                <div>
+                  <div class="schedule-change-when">
+                    Effective <strong>{{ chg.effective_date.strftime('%A, %B %-d, %Y') }}</strong>
+                  </div>
+                  {% if chg.note %}
+                  <div class="muted small schedule-change-note">{{ chg.note }}</div>
+                  {% endif %}
+                </div>
+                <button type="submit" form="{{ _cancel_form_id }}"
+                        class="btn btn-sm"
+                        onclick="return confirm('Cancel this scheduled change? The meeting will keep its current days and times.');">
+                  {{ icon('x') }} Cancel
+                </button>
+              </div>
+              {% if _entries %}
+              <ul class="schedule-change-entries muted small">
+                {% for e in _entries %}
+                {%- set _day_idx = e.day if e.day is defined else -1 -%}
+                <li>
+                  {% if 0 <= _day_idx < 7 %}{{ DAYS_OF_WEEK[_day_idx] }}{% else %}?{% endif %}
+                  · {{ (e.start_time or '?')|fmt12h }}
+                  {% if e.duration %}<span class="muted smaller">· {{ e.duration }} min</span>{% endif %}
+                  {% if e.opens_time %}<span class="muted smaller">· opens {{ e.opens_time|fmt12h }}</span>{% endif %}
+                </li>
+                {% endfor %}
+              </ul>
+              {% else %}
+              <p class="muted smaller">No days defined for this change — it will clear the schedule on the effective date.</p>
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+
+          <details class="schedule-change-add">
+            <summary>{{ icon('plus') }} Schedule a future change</summary>
+            {# Inputs below are bound to the outer form rendered after
+               the main </form> tag via the ``form`` attribute. The
+               outer form just carries the csrf + submit button. #}
+            <div class="schedule-change-form">
+              <div class="schedule-change-form-row">
+                <label>Effective date
+                  <input type="date" name="change_effective_date"
+                         form="{{ _sched_chg_new_form_id }}" required>
+                </label>
+                <label class="schedule-change-form-note">Optional note
+                  <input type="text" name="change_note" maxlength="500"
+                         form="{{ _sched_chg_new_form_id }}"
+                         placeholder="e.g. Summer schedule — earlier start.">
+                </label>
+              </div>
+              <div class="day-list day-list-change">
+                <div class="day-row day-row-head">
+                  <span class="day-col-label">Day</span>
+                  <span class="day-col-label">Start</span>
+                  <span class="day-col-label">End</span>
+                  <span class="day-col-label zoom-only-field">Opens</span>
+                </div>
+                {% for d in DAYS_OF_WEEK %}
+                  {% set idx = loop.index0 %}
+                  <div class="day-row">
+                    <label class="mode-toggle day-check">
+                      <input type="checkbox" class="day-toggle"
+                             data-day="{{ idx }}">
+                      <span class="mode-track"><span class="mode-thumb"></span></span>
+                      <span class="day-label">{{ d }}</span>
+                    </label>
+                    <input type="hidden" class="day-hidden" name="change_schedule_day"
+                           form="{{ _sched_chg_new_form_id }}"
+                           value="{{ idx }}" disabled>
+                    <input type="time" class="day-field" name="change_schedule_time"
+                           form="{{ _sched_chg_new_form_id }}"
+                           title="Start time" disabled>
+                    <input type="time" class="day-field" name="change_schedule_end"
+                           form="{{ _sched_chg_new_form_id }}"
+                           title="End time" disabled>
+                    <input type="time" class="day-field zoom-only-field" name="change_schedule_opens"
+                           form="{{ _sched_chg_new_form_id }}"
+                           title="Zoom opens at" placeholder="Opens" disabled>
+                  </div>
+                {% endfor %}
+              </div>
+              <div class="form-actions">
+                <button type="submit" form="{{ _sched_chg_new_form_id }}" class="btn btn-primary">
+                  Queue schedule change
+                </button>
+              </div>
+            </div>
+          </details>
+        </fieldset>
+        {% endif %}
 
         <fieldset class="fieldset zoom-only">
           <legend>Zoom</legend>
@@ -321,6 +470,25 @@
       </form>
 
       {% if meeting %}
+      {# Bare host forms for the in-place "Scheduled changes" UI that
+         lives visually inside the schedule fieldset above. The inputs
+         and submit buttons up there are tied to these forms via the
+         HTML5 ``form="…"`` attribute — sidesteps the "no nested
+         forms" rule without making the operator hunt for the section
+         at the bottom of the modal. #}
+      <form id="meeting-sched-chg-new-{{ meeting.id }}" method="post"
+            action="{{ url_for('main.meeting_schedule_change_new', slug=meeting.public_slug) }}"
+            hidden>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      </form>
+      {% for chg in meeting.schedule_changes %}
+      <form id="meeting-sched-chg-cancel-{{ chg.id }}" method="post"
+            action="{{ url_for('main.meeting_schedule_change_delete', slug=meeting.public_slug, cid=chg.id) }}"
+            hidden>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      </form>
+      {% endfor %}
+
       <fieldset class="fieldset">
         <legend>Files</legend>
         {% for cat in FILE_CATEGORIES %}
@@ -610,6 +778,33 @@
     function sync() {
       editor.style.display = toggle.checked ? '' : 'none';
       editor.setAttribute('aria-hidden', toggle.checked ? 'false' : 'true');
+    }
+    toggle.addEventListener('change', sync);
+    sync();
+  });
+
+  // Public-alert expiration toggle — reveals the datetime field when
+  // checked. When the toggle is off, the field is hidden AND its
+  // current value is cleared so an accidental toggle-off-toggle-on
+  // doesn't carry a stale expiry forward into the save.
+  document.querySelectorAll('[data-public-alert-expiry-toggle]').forEach(function (toggle) {
+    var wrap = toggle.closest('[data-public-alert-expiry]');
+    var field = wrap && wrap.querySelector('[data-public-alert-expiry-field]');
+    var input = wrap && wrap.querySelector('[data-public-alert-expiry-input]');
+    if (!field) return;
+    function sync() {
+      field.hidden = !toggle.checked;
+      if (toggle.checked && input && !input.value) {
+        // Default to 7 days out so the admin has a sensible starting
+        // point — they can adjust before saving. Site-local "now" is
+        // approximated from the browser clock; close enough for a
+        // default, and the admin can pick whatever they want.
+        var d = new Date();
+        d.setDate(d.getDate() + 7);
+        var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+        input.value = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' +
+                      pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      }
     }
     toggle.addEventListener('change', sync);
     sync();

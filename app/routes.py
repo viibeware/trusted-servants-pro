@@ -11,7 +11,7 @@ from flask import (Blueprint, render_template, redirect, url_for, request,
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
-from .models import (db, User, Meeting, MeetingFile, MeetingSchedule, MeetingLibrary, CustomIcon, CustomFont, CustomLayout, FrontendHeroButton,
+from .models import (db, User, Meeting, MeetingFile, MeetingSchedule, MeetingScheduleChange, MeetingLibrary, CustomIcon, CustomFont, CustomLayout, FrontendHeroButton,
                      Post, Story, BlogPost, BlogCategory, BlogTag,
                      ZoomAccount, ZoomOtpEmail, Location, Library, LibraryItem,
                      LibraryCategory, MediaItem, NavLink, SiteSetting,
@@ -1128,6 +1128,8 @@ def dashboard_order_save():
 @bp.route("/meetings")
 @login_required
 def meetings():
+    _expire_meeting_alerts()
+    _apply_meeting_schedule_changes()
     sort = request.args.get("sort") or request.cookies.get("view-meetings-sort") or "name"
     direction = request.args.get("dir") or request.cookies.get("view-meetings-dir") or "asc"
     view = request.args.get("view") or request.cookies.get("view-meetings") or "table"
@@ -1410,6 +1412,100 @@ def _parse_date_only(value):
         return None
 
 
+def _apply_meeting_schedule_changes():
+    """Idempotent sweep that activates any pending schedule swaps that
+    have reached their ``effective_date``. For each matching
+    ``MeetingScheduleChange`` row:
+
+      1. Delete the parent meeting's existing ``MeetingSchedule``
+         rows.
+      2. Materialise new ``MeetingSchedule`` rows from
+         ``schedules_json``.
+      3. Delete the change row itself.
+
+    The "effective" comparison uses the *site-local* date — same
+    convention the admin types when scheduling the change — so a
+    change set for "Aug 15" goes live at the start of Aug 15 in the
+    fellowship's timezone regardless of where the server lives.
+
+    Safe to call on every meeting-related request; the query is a
+    cheap index lookup and exits without writes when nothing's due."""
+    from .timezone import now_local_naive
+    import json as _json
+    today = now_local_naive(_get_site_setting()).date()
+    due = (MeetingScheduleChange.query
+           .filter(MeetingScheduleChange.effective_date <= today)
+           .all())
+    if not due:
+        return
+    changed = False
+    for chg in due:
+        m = chg.meeting
+        if m is None:
+            # Orphaned (parent meeting was deleted before activation).
+            db.session.delete(chg)
+            changed = True
+            continue
+        try:
+            entries = _json.loads(chg.schedules_json or "[]")
+        except (ValueError, TypeError):
+            entries = []
+        # Wipe the current schedule set and rebuild from the stored
+        # change payload. Loaded as MeetingSchedule rows (not raw SQL
+        # delete) so SQLAlchemy's cascade + identity-map stays
+        # consistent for any code still holding references.
+        for s in list(m.schedules):
+            db.session.delete(s)
+        for e in entries:
+            if not isinstance(e, dict):
+                continue
+            day = e.get("day")
+            start_time = (e.get("start_time") or "").strip()
+            if day is None or not start_time:
+                continue
+            duration = e.get("duration") or 60
+            opens_time = (e.get("opens_time") or None)
+            zacct = e.get("zoom_account_id")
+            db.session.add(MeetingSchedule(
+                meeting_id=m.id,
+                day_of_week=int(day),
+                start_time=start_time,
+                duration_minutes=int(duration),
+                opens_time=opens_time,
+                zoom_account_id=zacct if zacct else None,
+            ))
+        db.session.delete(chg)
+        changed = True
+    if changed:
+        try:
+            db.session.commit()
+        except Exception:  # noqa: BLE001
+            db.session.rollback()
+
+
+def _expire_meeting_alerts():
+    """Idempotent sweep that clears any expired public alert messages
+    on Meeting rows. When ``public_alert_expires_at`` is set and has
+    passed in the site's local timezone, the message AND the expiry
+    are both wiped so the alert disappears from public AND admin
+    views without an admin having to clean it up. Safe to call on
+    every request that surfaces meeting alerts."""
+    from .timezone import now_local_naive
+    cutoff = now_local_naive(_get_site_setting())
+    q = Meeting.query.filter(Meeting.public_alert_expires_at.isnot(None),
+                             Meeting.public_alert_expires_at <= cutoff)
+    changed = False
+    for m in q.all():
+        m.public_alert_message = None
+        m.public_alert_expires_at = None
+        changed = True
+    if changed:
+        try:
+            db.session.commit()
+        except Exception:  # noqa: BLE001
+            db.session.rollback()
+
+
 def _apply_meeting_form(m, form, schedules, files=None):
     # Capture the previous effective slug *before* mutating name/slug so
     # the history row can record the URL the public site used to serve.
@@ -1419,6 +1515,18 @@ def _apply_meeting_form(m, form, schedules, files=None):
     m.description = form.get("description", "").strip()
     m.alert_message = form.get("alert_message", "").strip() or None
     m.public_alert_message = form.get("public_alert_message", "").strip() or None
+    # Public-alert expiration. Only honored when the admin checks the
+    # "Expires" toggle AND types a datetime; otherwise the column is
+    # cleared so the alert sticks until manually edited. Blank message
+    # + an expiry doesn't make sense, so wipe the expiry when the
+    # message itself is gone.
+    if not m.public_alert_message:
+        m.public_alert_expires_at = None
+    elif form.get("public_alert_expires_enabled") == "1":
+        m.public_alert_expires_at = _parse_post_dt(
+            form.get("public_alert_expires_at"))
+    else:
+        m.public_alert_expires_at = None
 
     # Slug edits are gated to admins + frontend editors. Non-editors'
     # form submissions can't change the slug, even by hand-crafting a
@@ -1531,6 +1639,8 @@ def _resolve_meeting_by_slug(slug):
 @bp.route("/meetings/<slug>")
 @login_required
 def meeting_detail(slug):
+    _expire_meeting_alerts()
+    _apply_meeting_schedule_changes()
     m = _resolve_meeting_by_slug(slug) or abort(404)
     all_libraries = Library.query.order_by(Library.name).all()
     zoom_accounts = ZoomAccount.query.order_by(ZoomAccount.name).all()
@@ -1569,6 +1679,87 @@ def meeting_edit(slug):
                  summary=f"Updated meeting “{m.name}”")
     flash("Meeting updated", "success")
     return redirect(url_for("main.meeting_detail", slug=m.public_slug))
+
+
+@bp.route("/meetings/<slug>/schedule-changes/new", methods=["POST"])
+@editor_required
+def meeting_schedule_change_new(slug):
+    """Queue a future schedule swap for the named meeting.
+
+    Reuses ``_parse_schedule_form`` so the inline form inside the
+    meeting edit modal can post the same ``schedule_day`` /
+    ``schedule_time`` / ``schedule_end`` / ``schedule_opens`` fields
+    the main edit form uses, just prefixed with ``change_``. The
+    handler stores the parsed list of entries as JSON on a
+    ``MeetingScheduleChange`` row plus the effective date the admin
+    typed. Until that date arrives the meeting keeps showing its
+    current schedules; once reached, ``_apply_meeting_schedule_changes``
+    swaps them in and deletes the change row."""
+    import json as _json
+    m = _resolve_meeting_by_slug(slug) or abort(404)
+    effective_raw = (request.form.get("change_effective_date") or "").strip()
+    try:
+        eff_date = datetime.strptime(effective_raw, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        flash("Pick a valid effective date for the schedule change.", "danger")
+        return redirect(_safe_referrer() or url_for("main.meeting_detail", slug=m.public_slug))
+    # Re-map the change_* form fields into the names _parse_schedule_form
+    # expects, then feed the existing parser so the new schedule is
+    # validated against the same conflict / format rules the live edit
+    # path runs.
+    from werkzeug.datastructures import MultiDict
+    sub_form = MultiDict()
+    sub_form["meeting_type"] = m.meeting_type or "in_person"
+    if m.zoom_account_id:
+        sub_form["zoom_account_id"] = str(m.zoom_account_id)
+    for k_src, k_dst in (("change_schedule_day", "schedule_day"),
+                          ("change_schedule_time", "schedule_time"),
+                          ("change_schedule_end", "schedule_end"),
+                          ("change_schedule_opens", "schedule_opens")):
+        for v in request.form.getlist(k_src):
+            sub_form.add(k_dst, v)
+    entries, err = _parse_schedule_form(sub_form, meeting_id=m.id)
+    if err:
+        flash(err, "danger")
+        return redirect(_safe_referrer() or url_for("main.meeting_detail", slug=m.public_slug))
+    if not entries:
+        flash("Add at least one day + start time to the future schedule.", "danger")
+        return redirect(_safe_referrer() or url_for("main.meeting_detail", slug=m.public_slug))
+    note = (request.form.get("change_note") or "").strip()[:500] or None
+    chg = MeetingScheduleChange(
+        meeting_id=m.id,
+        effective_date=eff_date,
+        note=note,
+        schedules_json=_json.dumps(entries),
+        created_by=current_user.id if current_user.is_authenticated else None,
+    )
+    db.session.add(chg)
+    db.session.commit()
+    from . import activity
+    activity.log("meeting.schedule_change.create",
+                 entity_type="meeting", entity_id=m.id,
+                 summary=f"Queued schedule change for “{m.name}” effective {eff_date.isoformat()}")
+    flash(f"Schedule change saved — goes live on {eff_date.strftime('%b %-d, %Y')}.", "success")
+    return redirect(_safe_referrer() or url_for("main.meeting_detail", slug=m.public_slug))
+
+
+@bp.route("/meetings/<slug>/schedule-changes/<int:cid>/delete", methods=["POST"])
+@editor_required
+def meeting_schedule_change_delete(slug, cid):
+    """Cancel a pending schedule swap before it activates."""
+    m = _resolve_meeting_by_slug(slug) or abort(404)
+    chg = db.session.get(MeetingScheduleChange, cid)
+    if not chg or chg.meeting_id != m.id:
+        abort(404)
+    eff = chg.effective_date.isoformat() if chg.effective_date else "?"
+    db.session.delete(chg)
+    db.session.commit()
+    from . import activity
+    activity.log("meeting.schedule_change.delete",
+                 entity_type="meeting", entity_id=m.id,
+                 summary=f"Cancelled schedule change for “{m.name}” effective {eff}")
+    flash("Schedule change cancelled.", "success")
+    return redirect(_safe_referrer() or url_for("main.meeting_detail", slug=m.public_slug))
 
 
 @bp.route("/meetings/<int:mid>.json")

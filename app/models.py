@@ -306,6 +306,12 @@ class Meeting(db.Model):
     description = db.Column(db.Text)
     alert_message = db.Column(db.Text)         # admin-only — shown on the backend meeting list / detail page
     public_alert_message = db.Column(db.Text)  # rendered on the public meeting detail page
+    # Optional auto-expiry for the public alert. When set, the alert
+    # is shown to the public only until this timestamp; the next page
+    # load past the cutoff also clears the message + expiry from the
+    # DB so the field empties itself on the admin side too. NULL =
+    # no expiry (the alert sticks until the admin clears it).
+    public_alert_expires_at = db.Column(db.DateTime)
     day_of_week = db.Column(db.String(32))  # legacy, unused by new UI
     time = db.Column(db.String(32))         # legacy, unused by new UI
     location = db.Column(db.String(255))
@@ -479,6 +485,45 @@ class MeetingSchedule(db.Model):
     def end_time(self):
         total = self.end_minutes()
         return f"{(total // 60) % 24:02d}:{total % 60:02d}"
+
+
+class MeetingScheduleChange(db.Model):
+    """A pending future schedule swap for a Meeting.
+
+    Stores a *complete* replacement schedule (one full week's worth)
+    plus the date it goes live. Until ``effective_date`` arrives the
+    row sits dormant — the meeting's existing ``schedules`` rows keep
+    rendering. On or after ``effective_date`` the sweep helper
+    (``_apply_meeting_schedule_changes`` in routes) replaces every
+    ``MeetingSchedule`` row on the parent meeting with the contents
+    of ``schedules_json`` and deletes this change row.
+
+    ``schedules_json`` is the same shape ``_parse_schedule_form``
+    produces: a list of ``{day, start_time, duration, opens_time,
+    zoom_account_id}`` dicts so the activation step is a 1:1 swap."""
+    __tablename__ = "meeting_schedule_change"
+    id = db.Column(db.Integer, primary_key=True)
+    meeting_id = db.Column(db.Integer,
+                           db.ForeignKey("meeting.id", ondelete="CASCADE"),
+                           nullable=False, index=True)
+    # Site-local calendar date the swap goes live. Stored as a Date
+    # (no time component) — the swap activates at the start of this
+    # day in the site's configured timezone.
+    effective_date = db.Column(db.Date, nullable=False, index=True)
+    # Optional admin-authored note explaining what's changing and why.
+    # Shown on the meeting modal next to the pending row.
+    note = db.Column(db.String(500))
+    # JSON list mirroring _parse_schedule_form's output shape.
+    schedules_json = db.Column(db.Text, nullable=False, default="[]")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer,
+                           db.ForeignKey("user.id", ondelete="SET NULL"))
+
+    meeting = db.relationship(
+        "Meeting",
+        backref=db.backref("schedule_changes",
+                           cascade="all, delete-orphan",
+                           order_by="MeetingScheduleChange.effective_date"))
 
 
 class Location(db.Model):

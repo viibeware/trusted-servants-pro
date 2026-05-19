@@ -1229,6 +1229,7 @@ def _migrate_sqlite(app):
                          ("zoom_link", "VARCHAR(1000)"),
                          ("alert_message", "TEXT"),
                          ("public_alert_message", "TEXT"),
+                         ("public_alert_expires_at", "DATETIME"),
                          ("slug", "VARCHAR(255)"),
                          ("archived_at", "DATETIME"),
                          ("show_otp", "BOOLEAN NOT NULL DEFAULT 1"),

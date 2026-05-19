@@ -1343,6 +1343,99 @@ html[data-theme="dark"] .post-chip-private      { background: rgba(168, 85, 247,
   word-break: break-all;
 }
 
+/* Public-alert expiration controls inside the meeting edit modal.
+   Toggle row sits flush under the textarea; the datetime field
+   reveals beneath it with a small indent so the connection between
+   the switch and its input reads cleanly. */
+.public-alert-expiry { margin-top: .35rem; }
+.public-alert-expiry-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: .55rem;
+  margin: .15rem 0 .35rem;
+}
+.public-alert-expiry-field {
+  padding: .55rem .75rem;
+  border-left: 3px solid var(--border);
+  margin-left: .35rem;
+}
+.public-alert-expiry-input {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  max-width: 280px;
+}
+.public-alert-expiry-input input {
+  font: inherit;
+}
+.public-alert-expiry-help {
+  margin: .35rem 0 0;
+  line-height: 1.4;
+}
+
+/* Scheduled meeting-schedule changes — pending future swap UI in
+   the meeting edit modal. List of queued changes plus a collapsible
+   form to queue a new one. */
+.schedule-change-fieldset .schedule-change-blurb {
+  margin: 0 0 .85rem;
+  line-height: 1.5;
+}
+.schedule-change-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .65rem;
+}
+.schedule-change-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: .65rem .85rem;
+  background: var(--panel-2, transparent);
+}
+.schedule-change-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: .85rem;
+}
+.schedule-change-when { line-height: 1.4; }
+.schedule-change-note { margin-top: .15rem; }
+.schedule-change-entries {
+  margin: .5rem 0 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+.schedule-change-add {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: .55rem .85rem;
+}
+.schedule-change-add[open] { padding-bottom: 1rem; }
+.schedule-change-add summary {
+  cursor: pointer;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+}
+.schedule-change-add summary .icon {
+  width: 16px; height: 16px;
+}
+.schedule-change-form { margin-top: .85rem; }
+.schedule-change-form-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) 1fr;
+  gap: .75rem;
+  margin-bottom: .85rem;
+}
+@media (max-width: 720px) {
+  .schedule-change-form-row { grid-template-columns: 1fr; }
+}
+
 /* Branding & SEO: two-panel grid inside the Site Identity card —
    Site name + Favicon | Open Graph. Mirrors .fe-header-grid. */
 .fe-branding-grid {

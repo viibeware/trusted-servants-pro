@@ -100,6 +100,13 @@
     </p>
     {% endif %}
 
+    {% if m.public_alert_message %}
+    <div class="fe-mlist-card-alert" role="status">
+      {{ icon('alert-triangle') }}
+      <span>{{ m.public_alert_message }}</span>
+    </div>
+    {% endif %}
+
     {% if m.description %}
     <p class="fe-mlist-card-desc muted">{{ m.description|truncate(280, True, '…') }}</p>
     {% endif %}
@@ -227,6 +234,13 @@
       Zoom
       {%- if m.zoom_meeting_id %} · ID <code>{{ m.zoom_meeting_id }}</code>{% endif -%}
     </span>
+  </div>
+  {% endif %}
+
+  {% if m.public_alert_message %}
+  <div class="fe-mlist-card-alert" role="status">
+    {{ icon('alert-triangle') }}
+    <span>{{ m.public_alert_message }}</span>
   </div>
   {% endif %}
 
