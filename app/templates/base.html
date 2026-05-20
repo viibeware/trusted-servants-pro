@@ -121,6 +121,19 @@
     </div>
     {% endif %}
 
+    {# Notifications Center button. Shown to anyone who can act on the
+       attention sources (editors and up); opens the notifications modal
+       and carries a live count chip of uncleared items. #}
+    {% if current_user.can_edit() %}
+    <button type="button" class="sidebar-notif-btn" data-open-modal="notifications-modal"
+            data-notifications-trigger title="Notifications">
+      <span class="sidebar-notif-icon" aria-hidden="true">{{ icon('bell') }}</span>
+      <span class="sidebar-notif-label">Notifications</span>
+      <span class="nav-badge nav-badge-warn sidebar-notif-chip" data-notif-chip
+            {% if not notifications_count %}hidden{% endif %}>{{ notifications_count or 0 }}</span>
+    </button>
+    {% endif %}
+
     {# Sidebar Search button. Opens the floating search modal; on
        narrow viewports the JS first hides the sidebar overlay so the
        modal isn't covered by it. #}
@@ -1934,6 +1947,12 @@
 <script>
   window.tspUser = { role: "{{ current_user.role if current_user.is_authenticated else '' }}" };
 </script>
+{# Notifications modal — included before app.js so its data-close /
+   data-open-modal handlers are bound at init like every other modal.
+   This sits outside the authenticated-only chrome (it renders on the
+   login page too), so guard on is_authenticated before calling
+   can_edit() — current_user is Anonymous there. #}
+{% if current_user.is_authenticated and current_user.can_edit() %}{% include "_notifications_modal.html" %}{% endif %}
 <script src="{{ url_for('static', filename='js/app.js', v=app_build_id) }}"></script>
 <script src="{{ url_for('static', filename='js/tour.js', v=app_build_id) }}"></script>
 

@@ -7,7 +7,15 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.33 — 2026-05-20 (latest) — Watchtower 404s, GSR Summary popup, smarter utility-bar collapse
+## 2.1.34 — 2026-05-20 (latest) — Notifications Center
+
+A new **Notifications** button in the sidebar (just above Search) gathers everything that needs your attention into one place, with a live count chip:
+
+- Click it to open a popup listing your notifications — pending access requests, locked accounts, unread contact messages, and submissions awaiting review (announcements/events and stories). Each one links straight to the section that needs attention.
+- **Clear** items one at a time with the × button, or **Clear all** at once. The count chip updates instantly as you clear them.
+- You only ever see notifications for sections you can act on — admins see everything; editors see submissions awaiting review.
+
+## 2.1.33 — 2026-05-20 — Watchtower 404s, GSR Summary popup, smarter utility-bar collapse
 
 Three improvements landed together:
 

@@ -3786,7 +3786,11 @@ button.chip { font-family: inherit; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
-  margin: 10px 12px 6px;
+  /* No bottom margin: the sidebar is a flex column (margins don't
+     collapse), so the gap to the Notifications button below comes
+     solely from that button's top margin — keeping quicknav → notif →
+     search a uniform 8px rhythm. */
+  margin: 10px 12px 0;
 }
 .sidebar-quicknav-btn {
   display: flex; align-items: center; gap: 8px;
@@ -3892,6 +3896,70 @@ button.chip { font-family: inherit; }
   .sidebar-search-kbd { display: none; }
   .search-modal .modal-panel { margin: 4vh 12px 0; }
 }
+
+/* ── Notifications Center ─────────────────────────────────────────── */
+/* Sidebar button — mirrors the Search button chrome with a live count
+   chip pinned to the right. */
+.sidebar-notif-btn {
+  display: flex; align-items: center; gap: 10px;
+  margin: 8px 12px 0; padding: 9px 12px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel-2); color: var(--muted);
+  cursor: pointer; font-size: 0.875rem; font-weight: 500;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.sidebar-notif-btn:hover {
+  background: var(--panel); color: var(--text);
+  border-color: color-mix(in srgb, var(--brand) 35%, var(--border));
+}
+.sidebar-notif-icon { display: inline-flex; flex: 0 0 auto; }
+.sidebar-notif-icon .icon { width: 16px; height: 16px; display: block; }
+.sidebar-notif-label { flex: 1; text-align: left; }
+.sidebar-notif-chip { flex: 0 0 auto; margin-left: 0; }
+.sidebar-notif-chip[hidden] { display: none; }
+
+/* Modal */
+.modal-panel-notifications { width: min(480px, 100%); }
+.notif-modal-body { max-height: min(60vh, 560px); overflow-y: auto; padding: 0; }
+.notif-head-actions { display: inline-flex; align-items: center; gap: 8px; }
+
+/* List */
+.notif-list { list-style: none; margin: 0; padding: 6px; display: flex;
+  flex-direction: column; gap: 2px; }
+.notif-item { display: flex; align-items: stretch; gap: 4px; border-radius: 10px;
+  transition: background 120ms ease; }
+.notif-item:hover { background: var(--panel-2); }
+.notif-link { flex: 1 1 auto; min-width: 0; display: flex; gap: 12px;
+  padding: 12px; text-decoration: none; color: inherit; border-radius: 10px; }
+.notif-link:hover { text-decoration: none; }
+.notif-icon { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 9px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+  color: var(--brand); }
+.notif-icon .icon { width: 17px; height: 17px; }
+.notif-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.notif-title { font-weight: 600; font-size: 0.9rem; line-height: 1.3; color: var(--text); }
+.notif-body { font-size: 0.825rem; color: var(--muted); line-height: 1.4;
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.notif-meta { font-size: 0.72rem; }
+.notif-clear { flex: 0 0 auto; align-self: center; width: 30px; height: 30px;
+  margin-right: 8px; display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 999px; background: transparent; color: var(--muted);
+  cursor: pointer; transition: background 120ms ease, color 120ms ease; }
+.notif-clear:hover { background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger); }
+.notif-clear .icon { width: 16px; height: 16px; }
+.notif-clear:disabled { opacity: 0.4; cursor: default; }
+
+/* Empty / loading states */
+.notif-empty { text-align: center; padding: 40px 28px; }
+.notif-empty-icon { display: inline-flex; width: 48px; height: 48px; border-radius: 999px;
+  align-items: center; justify-content: center; margin-bottom: 12px;
+  background: color-mix(in srgb, var(--success) 14%, transparent); color: var(--success); }
+.notif-empty-icon .icon { width: 24px; height: 24px; }
+.notif-empty-title { font-weight: 600; color: var(--text); margin: 0 0 4px; }
+.notif-loading { padding: 32px; text-align: center; }
 
 /* Permission-locked button: editor-tier user has the broad gate but
    fails the per-row check. Renders dim + greyed; cursor flips to

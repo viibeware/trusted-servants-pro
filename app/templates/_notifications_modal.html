@@ -1,0 +1,98 @@
+{# Notifications Center modal — opened by the sidebar Notifications
+   button (data-open-modal="notifications-modal"). The body is fetched
+   fresh on each open from main.notifications_list; clearing a single
+   item or all items posts to the clear endpoints and updates the sidebar
+   chip(s) live from the count the endpoint returns. Self-contained:
+   markup + JS here, styles in app.css. #}
+<div class="modal" id="notifications-modal" aria-hidden="true"
+     data-notif-list-url="{{ url_for('main.notifications_list') }}"
+     data-notif-clear-url="{{ url_for('main.notifications_clear') }}"
+     data-notif-clear-all-url="{{ url_for('main.notifications_clear_all') }}">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel modal-panel-notifications" role="dialog" aria-modal="true"
+       aria-label="Notifications">
+    <div class="modal-head">
+      <h2>Notifications</h2>
+      <div class="notif-head-actions">
+        <button type="button" class="btn btn-sm" data-notif-clear-all hidden>Clear all</button>
+        <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+      </div>
+    </div>
+    <div class="modal-body notif-modal-body" data-notif-body>
+      <div class="notif-loading muted">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var modal = document.getElementById('notifications-modal');
+  if (!modal) return;
+  var body = modal.querySelector('[data-notif-body]');
+  var clearAllBtn = modal.querySelector('[data-notif-clear-all]');
+  var listUrl = modal.getAttribute('data-notif-list-url');
+  var clearUrl = modal.getAttribute('data-notif-clear-url');
+  var clearAllUrl = modal.getAttribute('data-notif-clear-all-url');
+
+  function setChip(count) {
+    document.querySelectorAll('[data-notif-chip]').forEach(function (el) {
+      el.textContent = count;
+      el.hidden = !count;
+    });
+  }
+  function syncClearAll() {
+    if (clearAllBtn) clearAllBtn.hidden = !body.querySelector('.notif-item');
+  }
+  function load() {
+    body.innerHTML = '<div class="notif-loading muted">Loading…</div>';
+    if (clearAllBtn) clearAllBtn.hidden = true;
+    fetch(listUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+      .then(function (r) { return r.text(); })
+      .then(function (html) { body.innerHTML = html; syncClearAll(); })
+      .catch(function () {
+        body.innerHTML = '<div class="notif-loading muted">Couldn’t load notifications.</div>';
+      });
+  }
+
+  document.addEventListener('click', function (e) {
+    // Open: (re)fetch the list each time the button is clicked. The
+    // generic data-open-modal handler opens the modal in parallel.
+    if (e.target.closest('[data-notifications-trigger]')) { load(); return; }
+
+    // Clear one.
+    var one = e.target.closest('[data-notif-clear]');
+    if (one) {
+      e.preventDefault();
+      var key = one.getAttribute('data-notif-clear');
+      var row = one.closest('.notif-item');
+      one.disabled = true;
+      fetch(clearUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ key: key })
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (!d || !d.ok) { one.disabled = false; return; }
+        if (row) row.remove();
+        setChip(d.count || 0);
+        if (!body.querySelector('.notif-item')) { load(); } else { syncClearAll(); }
+      }).catch(function () { one.disabled = false; });
+      return;
+    }
+
+    // Clear all.
+    if (e.target.closest('[data-notif-clear-all]')) {
+      fetch(clearAllUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({})
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (!d || !d.ok) return;
+        setChip(d.count || 0);
+        load();
+      });
+    }
+  });
+})();
+</script>

@@ -307,13 +307,24 @@ def inject_globals():
         otp = _get_otp_email()
     except Exception:
         otp = None
+    # Notifications Center chip — uncleared count for the current user.
+    # Read-only; derived from the same attention sources as the badges
+    # above (see app/notifications.py).
+    notifications_count = 0
+    try:
+        if current_user.is_authenticated:
+            from . import notifications as _notif
+            notifications_count = _notif.unread_count(current_user)
+    except Exception:
+        notifications_count = 0
     return {"CATEGORY_LABELS": CATEGORY_LABELS, "FILE_CATEGORIES": FILE_CATEGORIES,
             "DAYS_OF_WEEK": DAYS_OF_WEEK, "site": site, "nav_links": nav_links,
             "pending_access_count": pending_access_count,
             "unread_contact_count": unread_contact_count,
             "locked_accounts_count": locked_accounts_count,
             "pending_posts_count": pending_posts_count,
-            "pending_stories_count": pending_stories_count, "otp": otp}
+            "pending_stories_count": pending_stories_count,
+            "notifications_count": notifications_count, "otp": otp}
 
 
 DASHBOARD_WIDGET_KEYS = ("server-metrics", "visitor-metrics", "currently-online", "backups", "trusted-servants", "release-notes", "meetings", "libraries", "files", "access-requests", "forms", "deletions")
@@ -1167,6 +1178,43 @@ def dashboard_order_save():
     current_user.dash_order_json = json.dumps(cleaned)
     db.session.commit()
     return jsonify(ok=True, order=cleaned)
+
+
+# --- Notifications Center ---
+
+@bp.route("/notifications")
+@login_required
+def notifications_list():
+    """HTML fragment for the notifications modal body — the current
+    user's uncleared notifications, newest first. Pruned on read so
+    dismissals for resolved items don't linger."""
+    from . import notifications as notif
+    return render_template("_notifications_list.html",
+                           items=notif.active(current_user, prune=True))
+
+
+@bp.route("/notifications/clear", methods=["POST"])
+@login_required
+def notifications_clear():
+    """Clear one notification by its stable key. Returns the new
+    uncleared count so the sidebar chip can update live."""
+    from . import notifications as notif
+    payload = request.get_json(silent=True) or {}
+    key = payload.get("key")
+    if not key:
+        return jsonify(ok=False, error="missing key"), 400
+    notif.dismiss(current_user, key)
+    return jsonify(ok=True, count=notif.unread_count(current_user))
+
+
+@bp.route("/notifications/clear-all", methods=["POST"])
+@login_required
+def notifications_clear_all():
+    """Clear every active notification for the current user."""
+    from . import notifications as notif
+    cleared = notif.dismiss_all(current_user)
+    return jsonify(ok=True, cleared=cleared,
+                   count=notif.unread_count(current_user))
 
 
 # --- Meetings ---

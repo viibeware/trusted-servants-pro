@@ -6,6 +6,21 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.34] — 2026-05-20
+
+### Added — Notifications Center
+
+A sidebar **Notifications** button (with a live uncleared-count chip) that opens a popup modal of everything needing the user's attention; each item deep-links to its section and can be cleared individually or all at once.
+
+- **Derived, not event-sourced.** ``app/notifications.py`` walks the same attention sources the sidebar badges use (pending access requests, locked accounts, unread contact messages, posts/stories awaiting review) and turns each into a notification keyed by a stable string (``access_request:42``, ``locked_account:jdoe`` …). The only thing persisted is each user's *dismissals* — new ``NotificationDismissal`` table (auto-created by ``db.create_all``). "Uncleared" = current attention items minus dismissals; a dismissal whose item resolves is pruned so a recurring key resurfaces. No event plumbing to maintain, nothing to go stale.
+- **Role-scoped.** Admins see access/security/contact items; editors and up see submissions awaiting review (gated by the relevant module being on). Viewers get no button.
+- **Endpoints.** ``GET /tspro/notifications`` (HTML fragment), ``POST /tspro/notifications/clear`` (one key), ``POST /tspro/notifications/clear-all`` — the clear endpoints return the new count so the chip updates live. ``notifications_count`` is injected via the existing context processor.
+- **UI.** Sidebar button mirrors the Search button chrome with a ``nav-badge`` chip; ``_notifications_modal.html`` (self-contained markup + JS, fetches the list on open) and ``_notifications_list.html`` fragment; ``.notif-*`` styles in ``app.css``. The modal is included before ``app.js`` so its ``data-close`` / ``data-open-modal`` handlers bind at init (guarded with ``is_authenticated`` since that spot also renders on the login page).
+
+### Fixed — sidebar quicknav spacing
+
+The sidebar is a flex column (margins don't collapse), so ``.sidebar-quicknav``'s bottom margin stacked with the Notifications button's top margin into a 14px gap. Dropped the quicknav bottom margin so quicknav → Notifications → Search share a uniform 8px rhythm.
+
 ## [2.1.33] — 2026-05-20
 
 ### Added — Watchtower 404s tab

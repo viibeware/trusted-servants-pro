@@ -1482,6 +1482,30 @@ class ContactSubmission(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class NotificationDismissal(db.Model):
+    """Per-user record that a derived notification has been cleared.
+
+    The Notifications Center derives its items from live attention state
+    (pending access requests, locked accounts, unread contact messages,
+    submissions awaiting review) rather than from stored notification
+    rows — so there's no event plumbing to maintain and items can never
+    go stale. The only thing we persist is each user's *dismissals*,
+    keyed by a stable string like ``access_request:42`` or
+    ``locked_account:jdoe``. "Uncleared" = current attention items the
+    user hasn't dismissed; clearing one inserts a row here. A dismissal
+    whose underlying item later resolves is pruned, so if the same key
+    recurs (e.g. an account locks again) it surfaces fresh."""
+    __tablename__ = "notification_dismissal"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"),
+                        nullable=False, index=True)
+    key = db.Column(db.String(128), nullable=False)
+    dismissed_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "key", name="uq_notif_dismissal_user_key"),
+    )
+
+
 class LibraryItem(db.Model):
     """A single file / link / pasted-body entry inside a Library.
 

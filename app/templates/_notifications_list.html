@@ -1,0 +1,30 @@
+{# Notifications modal body — rendered by main.notifications_list and
+   injected into #notifications-modal. Each row links to the section that
+   needs attention and carries a clear (×) button keyed by the stable
+   notification key. JS in _notifications_modal.html handles clearing. #}
+{% if not items %}
+<div class="notif-empty">
+  <span class="notif-empty-icon" aria-hidden="true">{{ icon('inbox') }}</span>
+  <p class="notif-empty-title">You're all caught up</p>
+  <p class="muted small">Items that need your attention — access requests, locked accounts, messages, and submissions — show up here.</p>
+</div>
+{% else %}
+<ul class="notif-list">
+  {% for n in items %}
+  <li class="notif-item" data-notif-key="{{ n.key }}">
+    <a class="notif-link" href="{{ n.url }}">
+      <span class="notif-icon" aria-hidden="true">{{ icon(n.icon) }}</span>
+      <span class="notif-text">
+        <span class="notif-title">{{ n.title }}</span>
+        {% if n.body %}<span class="notif-body">{{ n.body }}</span>{% endif %}
+        <span class="notif-meta muted smaller">
+          {{ n.category }}{% if n.ts %} · {{ n.ts.strftime('%b %-d, %H:%M') }}{% endif %}
+        </span>
+      </span>
+    </a>
+    <button type="button" class="notif-clear" data-notif-clear="{{ n.key }}"
+            title="Clear this notification" aria-label="Clear notification">{{ icon('x') }}</button>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
