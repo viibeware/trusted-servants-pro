@@ -55,36 +55,9 @@
 
       <div class="fe-events-omni-panel fe-announcements-gsr-panel"
            data-announcements-panel="gsr" role="tabpanel" aria-label="GSR Summary view" hidden>
-        {# Paper-styled stripped-down view: titles + summaries only,
-           Libre Baskerville set on a Surface-Alt sheet. Long-form body
-           is intentionally omitted — this is the GSR's read-aloud
-           digest, not the full content. #}
-        <div class="fe-announcements-gsr-paper">
-          <header class="fe-announcements-gsr-paper-head">
-            <h2>GSR Summary</h2>
-            <p>Fellowship news, in brief.</p>
-          </header>
-          {% if not all_announcements %}
-          <p class="fe-announcements-gsr-empty">No announcements right now.</p>
-          {% else %}
-          <ol class="fe-announcements-gsr-list">
-            {% for ann in all_announcements %}
-            <li class="fe-announcements-gsr-item">
-              {# Title links to the announcement detail page. Styled
-                 to read as plain text (no link colour, no underline)
-                 with a subtle hover underline so the GSR sheet keeps
-                 its "printed digest" look while still being navigable. #}
-              <h3 class="fe-announcements-gsr-title">
-                <a href="{{ post_url(ann) }}">{{ ann.title }}</a>
-              </h3>
-              {% if ann.summary %}
-              <p class="fe-announcements-gsr-summary">{{ ann.summary }}</p>
-              {% endif %}
-            </li>
-            {% endfor %}
-          </ol>
-          {% endif %}
-        </div>
+        {# Paper-styled digest — shared verbatim with the global GSR
+           modal so the two surfaces never drift apart. #}
+        {% include "frontend/_gsr_summary.html" %}
       </div>
     </div>
   </div>

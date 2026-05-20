@@ -1,0 +1,167 @@
+{# Global GSR Summary modal — opened by the utility-bar GSR button
+   (``data-fe-gsr-trigger``) on any public page. The GSR button is global
+   but the announcement data only lives on /announcements, so the modal
+   fetches the GSR Summary fragment (frontend.announcements_gsr_summary)
+   on first open and drops the EXACT paper used on the announcements page
+   inside, so the styling is identical.
+
+   Desktop: centred popup. Mobile (≤540px): full-screen sheet that covers
+   the whole viewport including the sticky header (z-index 1300 > header's
+   40). A footer button links through to the full Announcements page.
+
+   Self-contained: markup + style + behaviour all live here, like
+   _lightbox.html. Included once at the bottom of frontend/base.html. #}
+<div class="fe-gsr-modal" data-fe-gsr-modal
+     data-fe-gsr-url="{{ url_for('frontend.announcements_gsr_summary') }}"
+     hidden aria-hidden="true">
+  <div class="fe-gsr-modal-backdrop" data-fe-gsr-close></div>
+  <div class="fe-gsr-modal-panel" role="dialog" aria-modal="true" aria-label="GSR Summary">
+    <button type="button" class="fe-gsr-modal-close" data-fe-gsr-close aria-label="Close">{{ icon('x') }}</button>
+    <div class="fe-gsr-modal-scroll">
+      <div class="fe-gsr-modal-body" data-fe-gsr-body aria-live="polite">
+        <p class="fe-gsr-modal-loading">Loading…</p>
+      </div>
+    </div>
+    <footer class="fe-gsr-modal-foot">
+      <a class="fe-btn fe-btn-primary" href="{{ url_for('frontend.announcements_list') }}">
+        Go to Announcements
+      </a>
+    </footer>
+  </div>
+</div>
+
+<style>
+  .fe-gsr-modal { position: fixed; inset: 0; z-index: 1300;
+    display: flex; align-items: center; justify-content: center;
+    padding: 5vh 1rem; }
+  .fe-gsr-modal[hidden] { display: none; }
+  .fe-gsr-modal-backdrop { position: fixed; inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+    animation: fe-gsr-fade 160ms ease-out; }
+  /* The whole modal is one uniform surface using the primary card
+     surface token (--fe-panel light / --fe-dm-surface dark) — the same
+     colour the GSR paper used to be. */
+  .fe-gsr-modal-panel { position: relative; width: 100%; max-width: 760px;
+    max-height: 90vh; display: flex; flex-direction: column;
+    background: var(--fe-panel, #fff); color: var(--fe-ink, #0f172a);
+    border-radius: 16px; box-shadow: 0 28px 70px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+    animation: fe-gsr-pop 180ms cubic-bezier(.18, .74, .3, 1); }
+  .fe-gsr-modal-scroll { flex: 1 1 auto; overflow-y: auto;
+    -webkit-overflow-scrolling: touch; padding: 0; }
+  /* Inside the modal the fetched ``.fe-announcements-gsr-paper`` drops
+     its sheet look — no background, no shadow — so it blends into the
+     single modal surface. Only the typography is kept. Its own padding
+     supplies the content inset (the scroll area adds none). Scoped to
+     .fe-gsr-modal so the /announcements GSR tab keeps its paper sheet. */
+  .fe-gsr-modal .fe-announcements-gsr-paper {
+    background: transparent; box-shadow: none; max-width: none;
+    border-radius: 0; margin: 0; }
+  .fe-gsr-modal-foot { flex: 0 0 auto; display: flex; justify-content: center;
+    padding: .9rem 1.25rem 1.25rem;
+    background: var(--fe-panel, #fff); }
+  .fe-gsr-modal-close { position: absolute; top: 12px; right: 12px; z-index: 3;
+    width: 38px; height: 38px; padding: 0; line-height: 0; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: none; border-radius: 999px;
+    background: rgba(15, 23, 42, 0.08); color: var(--fe-ink, #0f172a);
+    transition: background 140ms ease; }
+  .fe-gsr-modal-close:hover { background: rgba(15, 23, 42, 0.18); }
+  .fe-gsr-modal-close svg { width: 20px; height: 20px; }
+  .fe-gsr-modal-loading, .fe-gsr-modal-error { text-align: center; margin: 0;
+    padding: 3rem 1rem; color: var(--fe-ink-muted, #475569); }
+  @keyframes fe-gsr-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fe-gsr-pop {
+    from { opacity: 0; transform: translateY(8px) scale(.985); }
+    to   { opacity: 1; transform: none; } }
+  body.fe-gsr-open { overflow: hidden; }
+
+  /* Mobile: full-screen sheet covering everything, header included. */
+  @media (max-width: 540px) {
+    .fe-gsr-modal { padding: 0; }
+    .fe-gsr-modal-panel { max-width: none; width: 100%;
+      height: 100vh; height: 100dvh; max-height: none; border-radius: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fe-gsr-modal-backdrop, .fe-gsr-modal-panel { animation: none; }
+  }
+
+  /* Dark mode — same single surface, using the dark card-surface token.
+     The paper override is scoped + theme-qualified so it beats the
+     shared ``html[data-theme="dark"] .fe-announcements-gsr-paper`` rule
+     (which would otherwise re-apply the sheet background + shadow). */
+  html[data-theme="dark"] .fe-gsr-modal-panel,
+  body.fe-frontend-force-dark .fe-gsr-modal-panel {
+    background: var(--fe-dm-surface, #141a2b); color: var(--fe-dm-text, #e5e7eb); }
+  html[data-theme="dark"] .fe-gsr-modal-foot,
+  body.fe-frontend-force-dark .fe-gsr-modal-foot {
+    background: var(--fe-dm-surface, #141a2b); }
+  html[data-theme="dark"] .fe-gsr-modal .fe-announcements-gsr-paper,
+  body.fe-frontend-force-dark .fe-gsr-modal .fe-announcements-gsr-paper {
+    background: transparent; box-shadow: none; }
+  html[data-theme="dark"] .fe-gsr-modal-close,
+  body.fe-frontend-force-dark .fe-gsr-modal-close {
+    background: rgba(255, 255, 255, 0.12); color: var(--fe-dm-text, #e5e7eb); }
+  html[data-theme="dark"] .fe-gsr-modal-close:hover,
+  body.fe-frontend-force-dark .fe-gsr-modal-close:hover {
+    background: rgba(255, 255, 255, 0.22); }
+  html[data-theme="dark"] .fe-gsr-modal-loading,
+  html[data-theme="dark"] .fe-gsr-modal-error,
+  body.fe-frontend-force-dark .fe-gsr-modal-loading,
+  body.fe-frontend-force-dark .fe-gsr-modal-error {
+    color: var(--fe-dm-text-muted, #94a3b8); }
+</style>
+
+<script>
+(function () {
+  var modal = document.querySelector('[data-fe-gsr-modal]');
+  if (!modal) return;
+  var body = document.body;
+  var content = modal.querySelector('[data-fe-gsr-body]');
+  var scroll = modal.querySelector('.fe-gsr-modal-scroll');
+  var url = modal.getAttribute('data-fe-gsr-url');
+  var foot = modal.querySelector('.fe-gsr-modal-foot a');
+  var loaded = false;
+
+  function open() {
+    modal.hidden = false;
+    modal.setAttribute('aria-hidden', 'false');
+    body.classList.add('fe-gsr-open');
+    if (scroll) scroll.scrollTop = 0;
+    if (!loaded) load();
+  }
+
+  function close() {
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+    body.classList.remove('fe-gsr-open');
+  }
+
+  function load() {
+    if (!url || !content) return;
+    fetch(url, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function (html) {
+        content.innerHTML = html;
+        loaded = true;
+        if (scroll) scroll.scrollTop = 0;
+      })
+      .catch(function () {
+        var href = foot ? foot.getAttribute('href') : '/announcements';
+        content.innerHTML = '<p class="fe-gsr-modal-error">Couldn’t load the GSR Summary. ' +
+          '<a href="' + href + '">Open the Announcements page</a> instead.</p>';
+      });
+  }
+
+  // Delegated so it works regardless of where the GSR button renders
+  // (utility bar lives in the header, above this script).
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('[data-fe-gsr-trigger]')) { e.preventDefault(); open(); return; }
+    if (e.target.closest('[data-fe-gsr-close]')) { close(); }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !modal.hidden) { e.preventDefault(); close(); }
+  });
+})();
+</script>

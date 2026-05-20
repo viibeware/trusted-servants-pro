@@ -13,6 +13,11 @@
     <span class="wt-tab-icon">{{ icon('users') }}</span>
     <span class="wt-tab-label">Visitors</span>
   </a>
+  <a href="{{ url_for('main.watchtower_not_found') }}"
+     class="wt-tab {% if active_tab == 'not-found' %}is-active{% endif %}">
+    <span class="wt-tab-icon">{{ icon('alert-triangle') }}</span>
+    <span class="wt-tab-label">404s</span>
+  </a>
   <a href="{{ url_for('main.watchtower_access') }}"
      class="wt-tab {% if active_tab == 'access' %}is-active{% endif %}">
     <span class="wt-tab-icon">{{ icon('key') }}</span>

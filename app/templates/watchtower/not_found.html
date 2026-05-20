@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}Watchtower · 404s{% endblock %}
+{% block heading %}Watchtower{% endblock %}
+{% block heading_help %}Public-site URLs visitors hit that resolved to nothing — broken inbound links, mistyped addresses, and pages that moved without a redirect. Signed-in staff and admin (/tspro) paths are excluded.{% endblock %}
+{% block top_actions %}
+<form method="get" action="{{ url_for('main.watchtower_not_found') }}" class="wt-window-form">
+  <label>
+    <span class="visually-hidden">Window</span>
+    <select name="window" onchange="this.form.submit()">
+      {% for w in windows %}
+      <option value="{{ w }}" {% if w == window %}selected{% endif %}>Last {{ w }} days</option>
+      {% endfor %}
+    </select>
+  </label>
+</form>
+{% if summary.total_lifetime %}
+<form method="post" action="{{ url_for('main.watchtower_not_found_clear') }}"
+      onsubmit="return confirm('Clear the entire 404 log? This removes all {{ '{:,}'.format(summary.total_lifetime) }} logged hits and cannot be undone.');"
+      style="display:inline">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit" class="btn btn-sm">{{ icon('trash-2') }} Clear log</button>
+</form>
+{% endif %}
+{% endblock %}
+{% block content %}
+{% include "watchtower/_tabs.html" %}
+
+<section class="wt-kpi-grid wt-kpi-grid--four">
+  <div class="wt-kpi wt-kpi--accent">
+    <div class="wt-kpi-label">404s · {{ window }}d</div>
+    <div class="wt-kpi-value">{{ '{:,}'.format(summary.total_window) }}</div>
+    <div class="wt-kpi-sub muted small">{{ '{:,}'.format(summary.distinct_paths_window) }} distinct URL{{ '' if summary.distinct_paths_window == 1 else 's' }}</div>
+  </div>
+  <div class="wt-kpi">
+    <div class="wt-kpi-label">Today</div>
+    <div class="wt-kpi-value">{{ '{:,}'.format(summary.today) }}</div>
+    <div class="wt-kpi-sub muted small">
+      {% set diff = summary.today - summary.yesterday %}
+      {% if diff > 0 %}↑ {{ diff }} vs yesterday{% elif diff < 0 %}↓ {{ -diff }} vs yesterday{% else %}even with yesterday{% endif %}
+    </div>
+  </div>
+  <div class="wt-kpi">
+    <div class="wt-kpi-label">Last 7 days</div>
+    <div class="wt-kpi-value">{{ '{:,}'.format(summary.count_7d) }}</div>
+    <div class="wt-kpi-sub muted small">missed page loads</div>
+  </div>
+  <div class="wt-kpi">
+    <div class="wt-kpi-label">Lifetime</div>
+    <div class="wt-kpi-value">{{ '{:,}'.format(summary.total_lifetime) }}</div>
+    <div class="wt-kpi-sub muted small">{% if summary.first_seen_at %}since {{ summary.first_seen_at.strftime('%b %d, %Y') }}{% else %}—{% endif %}</div>
+  </div>
+</section>
+
+{# Trend chart — single amber series so 404s read distinctly from the
+   blue visitor-traffic chart on the Visitors tab. #}
+{% set chart_max = ((daily|map(attribute='count')|max) if daily else 1) or 1 %}
+<section class="card wt-chart-card">
+  <div class="card-head">
+    <h2>404s · last {{ window }} days</h2>
+    <span class="muted smaller">{{ '{:,}'.format(summary.total_window) }} in window</span>
+  </div>
+  {% if daily and summary.total_window %}
+  <div class="wt-chart-wrap">
+    <svg class="wt-chart wt-chart--tall" viewBox="0 0 900 240" preserveAspectRatio="none" role="img" aria-label="404 errors over time">
+      <defs>
+        <linearGradient id="wt-404-grad" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="rgba(245,158,11,0.42)"/>
+          <stop offset="100%" stop-color="rgba(245,158,11,0.02)"/>
+        </linearGradient>
+      </defs>
+      <line x1="0" y1="230" x2="900" y2="230" stroke="rgba(148,163,184,0.25)"/>
+      {% set n = daily|length %}
+      {% set step = 900 / (n - 1) if n > 1 else 0 %}
+      <path d="M 0 230
+        {%- for d in daily -%}
+          L {{ '%.1f'|format(loop.index0 * step) }} {{ '%.1f'|format(230 - (d.count / chart_max) * 210) }}
+        {%- endfor -%}
+        L 900 230 Z" fill="url(#wt-404-grad)"/>
+      <path d="M
+        {%- for d in daily -%}
+          {{ '%.1f'|format(loop.index0 * step) }},{{ '%.1f'|format(230 - (d.count / chart_max) * 210) }}{% if not loop.last %} L {% endif %}
+        {%- endfor -%}" fill="none" stroke="rgb(245,158,11)" stroke-width="2.5"/>
+    </svg>
+  </div>
+  {% else %}
+  <p class="muted">No 404s recorded in this window. 🎉</p>
+  {% endif %}
+</section>
+
+<div class="wt-two-col">
+  <section class="card">
+    <div class="card-head"><h2>Top missing URLs</h2><span class="muted smaller">{{ window }}d · fix these first</span></div>
+    {% if not top_paths %}
+    <p class="muted">No 404s in this window.</p>
+    {% else %}
+    {% set tp_max = (top_paths|map(attribute='count')|max) or 1 %}
+    <ul class="wt-rank-list">
+      {% for r in top_paths %}
+      <li class="wt-rank-row">
+        <div class="wt-rank-label mono small">
+          <a href="{{ r.label }}" target="_blank" rel="noopener nofollow" title="Open {{ r.label }} (will 404)">{{ r.label }}</a>
+          {% if r.last_seen %}<span class="muted smaller"> · last {{ r.last_seen.strftime('%b %d') }}</span>{% endif %}
+        </div>
+        <div class="wt-rank-bar"><span style="width: {{ (r.count / tp_max * 100)|round(0,'floor') }}%"></span></div>
+        <div class="wt-rank-count">{{ '{:,}'.format(r.count) }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Top referrers</h2><span class="muted smaller">{{ window }}d · where they came from</span></div>
+    {% if not top_referrers %}
+    <p class="muted">No data.</p>
+    {% else %}
+    {% set tr_max = (top_referrers|map(attribute='count')|max) or 1 %}
+    <ul class="wt-rank-list">
+      {% for r in top_referrers %}
+      <li class="wt-rank-row">
+        <div class="wt-rank-label small" title="{{ r.label }}">{{ r.label|truncate(64) }}</div>
+        <div class="wt-rank-bar"><span style="width: {{ (r.count / tr_max * 100)|round(0,'floor') }}%"></span></div>
+        <div class="wt-rank-count">{{ '{:,}'.format(r.count) }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-head">
+    <h2>Recent 404s</h2>
+    <span class="muted smaller">latest {{ recent|length }} hit{{ '' if recent|length == 1 else 's' }}</span>
+  </div>
+  {% if not recent %}
+  <p class="muted">Nothing logged yet. When a visitor hits a URL that doesn't exist on the public site, it'll show up here.</p>
+  {% else %}
+  <div style="overflow-x:auto">
+    <table class="tbl">
+      <thead>
+        <tr><th>When (UTC)</th><th>Requested URL</th><th>Referrer</th><th>Device</th></tr>
+      </thead>
+      <tbody>
+        {% for e in recent %}
+        <tr>
+          <td class="muted small" style="white-space:nowrap">{{ e.created_at.strftime('%b %d, %H:%M') }}</td>
+          <td class="mono small">
+            <a href="{{ e.path }}" target="_blank" rel="noopener nofollow" title="Open {{ e.path }} (will 404)">{{ e.path|truncate(70) }}</a>
+          </td>
+          <td class="muted small">
+            {% if e.referrer %}<span title="{{ e.referrer }}">{{ e.referrer|truncate(60) }}</span>{% else %}<span class="muted">— direct / typed</span>{% endif %}
+          </td>
+          <td class="muted small">{{ (e.device or 'other')|title }}{% if e.browser %} · {{ e.browser }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

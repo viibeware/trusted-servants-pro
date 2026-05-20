@@ -238,6 +238,17 @@ html[data-theme="dark"] .fe-megamenu-link:hover:not(.fe-megamenu-link-colored) {
   background: rgba(0, 0, 0, 0.12); }
 .fe-utility-bar.is-live .fe-utility-container--collapsed:hover {
   background: rgba(0, 0, 0, 0.22); }
+/* The live-meeting collapse is desktop-only. Both the collapsed icon and
+   the full container are emitted server-side; on desktop we show the icon
+   (to free centre space for the LIVE message) and hide the expanded copy.
+   At ≤720px the bar becomes a horizontal swipe strip with room to spare,
+   so we flip it: hide the icon, show the full container. Breakpoint
+   matches the bar's mobile swipe threshold below. */
+.fe-utility-container--live-expanded { display: none; }
+@media (max-width: 720px) {
+  .fe-utility-container--collapsed { display: none; }
+  .fe-utility-container--live-expanded { display: inline-flex; }
+}
 .fe-utility-link { text-decoration: none; }
 .fe-utility-link:hover { text-decoration: underline; }
 .fe-utility-btn { padding: 4px 12px; border-radius: 999px;

@@ -6,6 +6,30 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.33] — 2026-05-20
+
+### Added — Watchtower 404s tab
+
+A new ``/tspro/watchtower/not-found`` tab surfacing the public-site 404s visitors hit.
+
+- **Model:** new ``NotFoundEvent`` table (created via ``db.create_all`` — no ``_migrate_sqlite`` entry needed for a new table). Stores ``created_at``/``day``, ``path``, the full ``referrer`` (kept in full — for internal broken links the referrer is our own site, which ``VisitorEvent`` deliberately discards) plus ``referrer_host``, parsed device/browser/os, and a daily-rotating ``visitor_hash``.
+- **Recording:** ``visitor_metrics.record_404`` reuses the existing bot/asset/UA/hash helpers; called from the global 404 errorhandler in ``app/__init__.py`` only on the public-frontend branch (admin ``/tspro`` paths and signed-in users are excluded). Fully defensive — a logging failure can never turn a 404 into a 500.
+- **Aggregation:** ``watchtower.py`` gains ``not_found_summary`` / ``not_found_daily`` / ``top_missing_paths`` / ``top_404_referrers`` / ``recent_404s`` / ``clear_404s``.
+- **UI:** ``watchtower/not_found.html`` mirrors the Visitors tab (KPI tiles, amber trend chart, two ranked lists, recent-hits table) with a window selector and a Clear-log action. Tab added to ``watchtower/_tabs.html``; ``_ENDPOINT_LABELS`` entry added.
+
+### Added — GSR Summary modal
+
+The utility-bar **GSR** button now opens the GSR Summary in a modal instead of linking to ``/announcements#gsr``.
+
+- **Shared partial:** the GSR "paper" markup was extracted from ``announcements_list/omni.html`` into ``frontend/_gsr_summary.html``, included by both the announcements page and the modal so they never drift.
+- **Fragment endpoint:** ``GET /announcements/gsr-summary`` renders just that partial. The announcements query was refactored into ``frontend._active_announcements`` and is shared by the list route and the fragment. The GSR button is global but the data only lives here, so the modal fetches the fragment on first open.
+- **Modal:** self-contained ``frontend/_gsr_modal.html`` (markup + style + JS, like ``_lightbox.html``), included once in ``frontend/base.html``. Centred popup on desktop; full-screen sheet covering the header on mobile (≤540px, z-index 1300 > header). Footer "Go to Announcements" button; close via X / backdrop / Esc; body scroll-lock. The GSR button keeps its ``/announcements#gsr`` href as a no-JS fallback (``data-fe-gsr-trigger``).
+- **Surface:** the modal is one uniform card surface (``--fe-panel`` / ``--fe-dm-surface``); inside the modal the paper drops its sheet background + shadow (override scoped to ``.fe-gsr-modal`` and theme-qualified so it beats the shared dark paper rule), keeping only the typography.
+
+### Changed — Utility-bar live collapse is desktop-only
+
+When the live-meeting bar is active, a container with a ``collapsed_icon`` collapsed to its icon on every viewport. It now collapses **only on desktop** (to free centre room for the LIVE banner); at ≤720px — where the bar is a horizontal swipe strip — the full container is shown instead. ``_utility_bar.html`` emits both variants and ``frontend.css`` shows the right one per width (``.fe-utility-container--live-expanded``).
+
 ## [2.1.32] — 2026-05-20
 
 ### Added — "What's New" release-notes dashboard widget

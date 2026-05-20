@@ -22,7 +22,8 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, or_
 
 from .models import (db, User, ActivityLog, LoginSession, LoginFailure,
-                     VisitorEvent, DeletedFile, AccessRequest, IPBlock)
+                     VisitorEvent, NotFoundEvent, DeletedFile, AccessRequest,
+                     IPBlock)
 
 
 # ─── KPI tiles ───────────────────────────────────────────────────
@@ -123,6 +124,113 @@ def hourly_failed_logins(hours=24):
         if bucket in buckets:
             buckets[bucket] += 1
     return [{"hour": k, "count": v} for k, v in sorted(buckets.items())]
+
+
+# ─── 404 / not-found roll-ups ────────────────────────────────────
+def not_found_summary(days=30):
+    """Top-line numbers for the 404s tab header.
+
+    Returns a dict with the window total, today / yesterday counts, the
+    7-day count, the number of distinct dead paths in the window, the
+    lifetime total, and the timestamp of the first logged 404.
+    """
+    today = datetime.utcnow().date()
+    today_s = today.strftime("%Y-%m-%d")
+    yesterday_s = (today - timedelta(days=1)).strftime("%Y-%m-%d")
+    cutoff_7d = (today - timedelta(days=6)).strftime("%Y-%m-%d")
+    cutoff_window = (today - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+
+    def _count(day_from, day_to=None):
+        q = db.session.query(func.count(NotFoundEvent.id))
+        if day_to is None:
+            q = q.filter(NotFoundEvent.day == day_from)
+        else:
+            q = q.filter(NotFoundEvent.day >= day_from,
+                         NotFoundEvent.day <= day_to)
+        return int(q.scalar() or 0)
+
+    distinct_paths = int(
+        db.session.query(func.count(func.distinct(NotFoundEvent.path)))
+        .filter(NotFoundEvent.day >= cutoff_window).scalar() or 0
+    )
+    total_lifetime = int(
+        db.session.query(func.count(NotFoundEvent.id)).scalar() or 0
+    )
+    first_row = (db.session.query(NotFoundEvent.created_at)
+                 .order_by(NotFoundEvent.created_at.asc()).first())
+    return {
+        "total_window":          _count(cutoff_window, today_s),
+        "today":                 _count(today_s),
+        "yesterday":             _count(yesterday_s),
+        "count_7d":              _count(cutoff_7d, today_s),
+        "distinct_paths_window": distinct_paths,
+        "total_lifetime":        total_lifetime,
+        "first_seen_at":         first_row[0] if first_row else None,
+    }
+
+
+def not_found_daily(days=30):
+    """Per-day 404 counts for the trend chart, oldest first, zero-filled."""
+    today = datetime.utcnow().date()
+    start = today - timedelta(days=days - 1)
+    rows = (db.session.query(NotFoundEvent.day, func.count(NotFoundEvent.id))
+            .filter(NotFoundEvent.day >= start.strftime("%Y-%m-%d"))
+            .group_by(NotFoundEvent.day).all())
+    by_day = {r[0]: int(r[1] or 0) for r in rows}
+    out = []
+    for i in range(days):
+        ds = (start + timedelta(days=i)).strftime("%Y-%m-%d")
+        out.append({"day": ds, "count": by_day.get(ds, 0)})
+    return out
+
+
+def top_missing_paths(days=30, limit=12):
+    """The most-hit dead paths in the window. Returns a list of dicts
+    ``{label, count, last_seen}`` ordered by hit count desc — this is the
+    "fix these first" list."""
+    today = datetime.utcnow().date()
+    cutoff = (today - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+    rows = (db.session.query(
+                NotFoundEvent.path,
+                func.count(NotFoundEvent.id),
+                func.max(NotFoundEvent.created_at))
+            .filter(NotFoundEvent.day >= cutoff)
+            .group_by(NotFoundEvent.path)
+            .order_by(func.count(NotFoundEvent.id).desc())
+            .limit(limit).all())
+    return [{"label": p or "/", "count": int(c), "last_seen": ls}
+            for p, c, ls in rows]
+
+
+def top_404_referrers(days=30, limit=10):
+    """Where the 404s are coming from, grouped by the full referrer URL
+    (the linking page). Direct hits / typed URLs bucket together. Knowing
+    the linking page is what lets an admin go fix the broken link."""
+    today = datetime.utcnow().date()
+    cutoff = (today - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+    rows = (db.session.query(NotFoundEvent.referrer,
+                             func.count(NotFoundEvent.id))
+            .filter(NotFoundEvent.day >= cutoff)
+            .group_by(NotFoundEvent.referrer)
+            .order_by(func.count(NotFoundEvent.id).desc())
+            .limit(limit).all())
+    return [{"label": r or "Direct / typed", "count": int(c)} for r, c in rows]
+
+
+def recent_404s(limit=50):
+    """Newest 404 hits for the detail table — one row per hit (not
+    grouped) so an admin can see the exact sequence and referrers."""
+    return (NotFoundEvent.query
+            .order_by(NotFoundEvent.created_at.desc())
+            .limit(limit).all())
+
+
+def clear_404s():
+    """Wipe the entire 404 log. Returns the number of rows deleted so the
+    toast can report it."""
+    n = NotFoundEvent.query.delete(synchronize_session=False)
+    db.session.commit()
+    return int(n or 0)
 
 
 # ─── Anomaly indicators ──────────────────────────────────────────

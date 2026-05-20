@@ -1062,6 +1062,14 @@ def create_app():
         except Exception:  # noqa: BLE001 — DB might be unavailable mid-boot
             s = None
         if s and getattr(s, "frontend_module_enabled", False):
+            # Log the miss so Watchtower's 404s tab can surface broken
+            # inbound links / dead URLs. Defensive inside record_404 —
+            # never lets a logging failure escalate a 404 into a 500.
+            try:
+                from . import visitor_metrics
+                visitor_metrics.record_404(path)
+            except Exception:  # noqa: BLE001
+                pass
             # Build the full frontend context so the 404 page renders
             # with the active theme's header / footer / mega menu (the
             # template defaults to Classic when those keys aren't set).

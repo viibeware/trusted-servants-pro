@@ -7,7 +7,15 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.32 — 2026-05-20 (latest) — "What's New" release-notes dashboard widget
+## 2.1.33 — 2026-05-20 (latest) — Watchtower 404s, GSR Summary popup, smarter utility-bar collapse
+
+Three improvements landed together:
+
+- **Watchtower → 404s.** A new tab tracks the dead URLs visitors hit on the public site — broken inbound links, mistyped addresses, and pages that moved without a redirect. It shows totals over a time window, a trend chart, a ranked "Top missing URLs" list (with where each came from), and a recent-hits table. There's a **Clear log** button when you want to reset it. Admin pages and signed-in staff are never counted — these are real visitor misses.
+- **GSR Summary popup.** The **GSR** button in the utility bar now opens the GSR Summary in a popup instead of jumping to the announcements page. It shows the exact same summary, styled to match. On phones it opens full-screen; on desktop it's a centred popup. A **Go to Announcements** button at the bottom takes you to the full page when you want it.
+- **Utility-bar containers stay open on mobile.** When a live meeting is showing, a utility-bar group set to collapse to an icon (e.g. the helpline) still collapses on desktop to make room for the LIVE banner — but on mobile it now stays fully expanded, since the swipe strip has plenty of room and there's no need to hide its links behind an icon.
+
+## 2.1.32 — 2026-05-20 — "What's New" release-notes dashboard widget
 
 A new **What's New** widget on the main dashboard surfaces the latest release at a glance:
 

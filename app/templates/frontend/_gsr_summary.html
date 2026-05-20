@@ -1,0 +1,35 @@
+{# GSR Summary "paper" — the print-style digest of active announcements
+   (titles + summaries only, Libre Baskerville on a Surface-Alt sheet).
+   Rendered in two places, both from this single source so they stay
+   pixel-identical:
+     1. Inside the /announcements omni layout's GSR tab.
+     2. Standalone by ``frontend.announcements_gsr_summary`` for the
+        global GSR modal (the utility-bar GSR button).
+   Self-sufficient: only ``all_announcements`` and the ``post_url``
+   Jinja global are required. #}
+<div class="fe-announcements-gsr-paper">
+  <header class="fe-announcements-gsr-paper-head">
+    <h2>GSR Summary</h2>
+    <p>Fellowship news, in brief.</p>
+  </header>
+  {% if not all_announcements %}
+  <p class="fe-announcements-gsr-empty">No announcements right now.</p>
+  {% else %}
+  <ol class="fe-announcements-gsr-list">
+    {% for ann in all_announcements %}
+    <li class="fe-announcements-gsr-item">
+      {# Title links to the announcement detail page. Styled to read as
+         plain text (no link colour, no underline) with a subtle hover
+         underline so the GSR sheet keeps its "printed digest" look while
+         still being navigable. #}
+      <h3 class="fe-announcements-gsr-title">
+        <a href="{{ post_url(ann) }}">{{ ann.title }}</a>
+      </h3>
+      {% if ann.summary %}
+      <p class="fe-announcements-gsr-summary">{{ ann.summary }}</p>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+</div>

@@ -476,6 +476,10 @@
    block lower down. #}
 {% include "frontend/_submission_modal.html" %}
 
+{# Global GSR Summary modal — opened by the utility-bar GSR button on any
+   page. Self-contained (markup + style + JS in the partial). #}
+{% include "frontend/_gsr_modal.html" %}
+
 {% if site and site.turnstile_enabled and site.turnstile_site_key %}
 {# Loaded once for the page so the modal's Turnstile widget can
    render. The standalone /submissionform page loads its own copy

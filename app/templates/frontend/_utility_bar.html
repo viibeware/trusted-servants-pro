@@ -54,14 +54,15 @@
             aria-label="Search the site"
             title="Search (Ctrl/Cmd+K)">{{ icon('search') }}</button>
   {%- elif it.kind == 'gsr_summary' -%}
-    {# Singleton "GSR" pill — links to /announcements#gsr. The
-       announcements omni layout's view-tab JS reads location.hash on
-       load (and on hashchange) so the GSR Summary tab opens directly
-       from this click without further interaction. #}
+    {# Singleton "GSR" pill — opens the GSR Summary modal (the exact same
+       paper shown on /announcements) on any page. The href to
+       /announcements#gsr stays as a no-JS fallback: with JS the click is
+       intercepted and the modal opens instead (see frontend/_gsr_modal.html). #}
     <a class="fe-utility-btn fe-utility-gsr-btn"
        href="{{ url_for('frontend.announcements_list') }}#gsr"
+       data-fe-gsr-trigger
        aria-label="GSR Summary"
-       title="Open the GSR Summary view"><span>GSR</span></a>
+       title="Open the GSR Summary"><span>GSR</span></a>
   {%- endif %}
 {%- endmacro %}
 
@@ -77,7 +78,14 @@
    round icon button (matching the search/theme-toggle chrome) so
    the centre live message has room to breathe. The first child link
    inside the container, if any, supplies the click target so the
-   collapsed pill stays useful (e.g. tap-to-call helpline). #}
+   collapsed pill stays useful (e.g. tap-to-call helpline).
+
+   That collapse is DESKTOP-ONLY. On mobile the bar is a horizontal
+   swipe strip with room to spare, so collapsing would needlessly hide
+   the container's links behind an icon. We therefore emit BOTH the
+   collapsed icon and the full expanded container; CSS shows the icon on
+   desktop and the full container at ≤720px (the swipe breakpoint). See
+   `.fe-utility-container--live-expanded` in frontend.css. #}
 {% macro render_item(it, is_live=False) -%}
   {%- if it.kind == 'container' -%}
     {%- set _collapsed = is_live and (it.collapsed_icon or '') -%}
@@ -100,6 +108,12 @@
         <span class="fe-utility-container fe-utility-container--collapsed"
               aria-label="{{ _aria }}" title="{{ _aria }}">{{ icon(it.collapsed_icon) }}</span>
       {% endif %}
+      {# Mobile counterpart: the full expanded container. The swipe strip
+         has room for it, so CSS hides the collapsed icon and shows this
+         instead at ≤720px (see .fe-utility-container--live-expanded). #}
+      <span class="fe-utility-container fe-utility-container--live-expanded">
+        {% for inner in (it['items'] or []) %}{{ render_leaf(inner) }}{% endfor %}
+      </span>
     {%- else -%}
       <span class="fe-utility-container">
         {# `it.items` would resolve to dict.items() in Jinja's attribute-

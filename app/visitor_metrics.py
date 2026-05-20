@@ -30,7 +30,7 @@ from flask import current_app, request
 from flask_login import current_user
 from sqlalchemy import func
 
-from .models import db, VisitorEvent
+from .models import db, VisitorEvent, NotFoundEvent
 
 
 # Patterns matched against the lowercased UA string. The first hit wins,
@@ -240,6 +240,54 @@ def record_visit():
             path=path[:500],
             endpoint=(endpoint or None) and endpoint[:128],
             referrer_host=_referrer_host(request.headers.get("Referer")),
+            device=device,
+            browser=browser,
+            os=os_name,
+            visitor_hash=_visitor_hash(_client_ip(), ua),
+        )
+        db.session.add(ev)
+        db.session.commit()
+    except Exception:  # noqa: BLE001
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def record_404(path=None):
+    """Log one ``NotFoundEvent`` for a public-site 404.
+
+    Called from the global 404 errorhandler once it has decided the
+    request is a public-frontend 404 (not an admin ``/tspro`` path, and
+    the public frontend is enabled). We still apply the same
+    asset/bot/non-GET filter as ``record_visit`` so the table tracks real
+    visitor navigations, and we keep the *full* referrer (the page that
+    linked to the dead URL) which is the whole point of the tab.
+
+    Fully defensive: any failure is swallowed so a logging hiccup can
+    never turn a visitor's 404 page into a 500.
+    """
+    try:
+        # Visitor 404s only — a signed-in admin/editor clicking a dead
+        # link (including from the Watchtower 404s tab itself) shouldn't
+        # pollute the log. Mirrors record_visit's authenticated skip.
+        if getattr(current_user, "is_authenticated", False):
+            return
+        path = path or request.path or "/"
+        ua = request.headers.get("User-Agent") or ""
+        if _should_skip(path, request.method, ua):
+            return
+        device, browser, os_name = _parse_ua(ua)
+        if device == "bot":
+            return
+        referrer = request.headers.get("Referer") or None
+        now = datetime.utcnow()
+        ev = NotFoundEvent(
+            created_at=now,
+            day=now.strftime("%Y-%m-%d"),
+            path=path[:500],
+            referrer=referrer[:500] if referrer else None,
+            referrer_host=_referrer_host(referrer),
             device=device,
             browser=browser,
             os=os_name,

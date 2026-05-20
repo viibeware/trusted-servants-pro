@@ -2488,6 +2488,53 @@ class VisitorEvent(db.Model):
     )
 
 
+class NotFoundEvent(db.Model):
+    """One row per public-frontend 404 — a URL a visitor requested that
+    resolved to nothing (an unmatched route or a handler that aborted
+    404). Powers Watchtower's "404s" tab so admins can spot broken
+    inbound links, mistyped URLs, and pages that were renamed/removed
+    without a redirect.
+
+    Recorded from the global 404 errorhandler, but only for public-site
+    paths (admin ``/tspro`` 404s are excluded) and only while the public
+    frontend is enabled. Asset fetches and obvious bots are dropped
+    before insert, mirroring ``VisitorEvent``.
+
+    Unlike VisitorEvent, this table keeps the *full* referrer URL: the
+    whole point of the tab is "which page links to this dead URL", and
+    for internal broken links the referrer is our own site (which
+    VisitorEvent deliberately discards). It's operational data, not
+    cross-site tracking.
+    """
+    __tablename__ = "not_found_event"
+    id = db.Column(db.Integer, primary_key=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow,
+                           index=True)
+    # The 404'd path (e.g. "/old-page", "/blog/deleted-post"). Capped at
+    # 500 chars to match the rest of the codebase's path columns.
+    path = db.Column(db.String(500), nullable=False, index=True)
+    # Full Referer header (the page that linked here), truncated to 500.
+    # None = direct hit / no referer.
+    referrer = db.Column(db.String(500))
+    # Referrer origin (scheme+host) for grouping external sources; None
+    # for direct hits and same-host (internal) referrers.
+    referrer_host = db.Column(db.String(255))
+    # Parsed UA classification — same buckets as VisitorEvent.
+    device = db.Column(db.String(16), index=True)
+    browser = db.Column(db.String(32))
+    os = db.Column(db.String(32))
+    # Daily-rotating one-way hash for unique-visitor approximation. Same
+    # privacy properties as VisitorEvent.visitor_hash.
+    visitor_hash = db.Column(db.String(32), index=True)
+    # Date-only UTC bucket (YYYY-MM-DD) so the tab's today/7d/window
+    # rollups run in SQLite without a per-row date conversion.
+    day = db.Column(db.String(10), nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index("ix_not_found_event_day_path", "day", "path"),
+    )
+
+
 BACKUP_KINDS = ("ftp", "sftp", "dropbox")
 BACKUP_STATUS = ("ok", "failed", "running", "never_run")
 

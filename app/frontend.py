@@ -3006,6 +3006,46 @@ def archive_detail(slug):
                            is_in_archive=True, **og, **ctx)
 
 
+def _active_announcements():
+    """Active announcements (non-archived, published, approved), newest
+    first. Shared by the /announcements list and the GSR-summary fragment
+    so both surfaces show exactly the same set.
+
+    Newest-first by post order. ``display_posted`` prefers the admin-set
+    ``published_at`` over the auto ``created_at``, so the SQL sort mirrors
+    that priority via ``coalesce`` — back-dated posts surface in the right
+    slot, and rows with NULL ``published_at`` (legacy imports) still sort
+    sensibly via their creation time.
+    """
+    from sqlalchemy import func as _sql_func
+    return (Post.query
+            .filter(Post.is_announcement.is_(True),
+                    Post.is_archived.is_(False),
+                    Post.is_draft.is_(False),
+                    Post.is_pending_review.is_(False))
+            .order_by(_sql_func.coalesce(Post.published_at,
+                                         Post.created_at).desc())
+            .all())
+
+
+@bp.route("/announcements/gsr-summary")
+def announcements_gsr_summary():
+    """HTML fragment: just the GSR Summary "paper", reusing the exact
+    partial the /announcements page renders. Powers the GSR modal opened
+    by the utility-bar GSR button on any page — the button is global but
+    the announcement data only lives here, so the modal fetches this
+    fragment on demand. Not a navigable section (no @public_section); the
+    static path is matched ahead of any dynamic /announcements/<slug>."""
+    site = _site()
+    gate = _frontend_gate(site)
+    if gate is not None:
+        return gate
+    if not site or not getattr(site, "posts_enabled", True):
+        abort(404)
+    return render_template("frontend/_gsr_summary.html",
+                           all_announcements=_active_announcements())
+
+
 @bp.route("/announcements")
 @public_section("Announcements", gate=lambda s: bool(getattr(s, "posts_enabled", True)))
 def announcements_list():
@@ -3023,20 +3063,7 @@ def announcements_list():
         abort(404)
     ctx = _frontend_context(site)
 
-    # Newest-first by post order. `display_posted` prefers the admin-
-    # set `published_at` over the auto `created_at`, so the SQL sort
-    # mirrors that priority via `coalesce` — back-dated posts surface
-    # in the right slot, and rows with NULL `published_at` (legacy
-    # imports) still sort sensibly via their creation time.
-    from sqlalchemy import func as _sql_func
-    rows = (Post.query
-            .filter(Post.is_announcement.is_(True),
-                    Post.is_archived.is_(False),
-                    Post.is_draft.is_(False),
-                          Post.is_pending_review.is_(False))
-            .order_by(_sql_func.coalesce(Post.published_at,
-                                         Post.created_at).desc())
-            .all())
+    rows = _active_announcements()
 
     tpl = _template_meta(ANNOUNCEMENTS_LIST_TEMPLATES,
                          (site.frontend_announcements_list_template if site else None) or "omni")

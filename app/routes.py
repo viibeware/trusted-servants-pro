@@ -903,6 +903,7 @@ _ENDPOINT_LABELS = {
     "main.watchtower_access":  "Watchtower · Access",
     "main.watchtower_deletes": "Watchtower · Deletes",
     "main.watchtower_requests": "Watchtower · Requests",
+    "main.watchtower_not_found": "Watchtower · 404s",
     "main.frontend_dashboard": "Web Frontend",
     "auth.users":              "Settings → Users",
 }
@@ -13218,6 +13219,41 @@ def watchtower_visitors():
         top_referrers=vm.top_referrers(days=window, limit=10),
         devices=vm.device_breakdown(days=window),
     )
+
+
+@bp.route("/watchtower/not-found")
+@admin_required
+def watchtower_not_found():
+    """404 tracker tab — the public-site URLs visitors hit that resolved
+    to nothing (unmatched routes + handlers that aborted 404). Surfaces
+    broken inbound links and dead pages so an admin can redirect or fix
+    them. Admin (/tspro) 404s are never logged here."""
+    from . import watchtower as wt
+    try:
+        window = max(7, min(365, int(request.args.get("window", 30))))
+    except (TypeError, ValueError):
+        window = 30
+    return render_template(
+        "watchtower/not_found.html",
+        active_tab="not-found",
+        window=window,
+        windows=(7, 14, 30, 60, 90, 180, 365),
+        summary=wt.not_found_summary(days=window),
+        daily=wt.not_found_daily(days=window),
+        top_paths=wt.top_missing_paths(days=window, limit=12),
+        top_referrers=wt.top_404_referrers(days=window, limit=10),
+        recent=wt.recent_404s(limit=100),
+    )
+
+
+@bp.route("/watchtower/not-found/clear", methods=["POST"])
+@admin_required
+def watchtower_not_found_clear():
+    """Wipe the entire 404 log."""
+    from . import watchtower as wt
+    n = wt.clear_404s()
+    flash(f"Cleared {n} logged 404{'' if n == 1 else 's'}.", "success")
+    return redirect(url_for("main.watchtower_not_found"))
 
 
 @bp.route("/watchtower/access")
