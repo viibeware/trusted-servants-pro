@@ -20,7 +20,11 @@
    matching styles block lower down handles the rest of the
    layout — only the hide rule needs to come this early. #}
 <style>
-  body:not(.fe-tpl-index-ready) .fe-admin-main section.card { visibility: hidden; }
+  /* Only hide the per-template configurator cards (``.fe-tplgrid-
+     section``) until the JS lifts them into modals — the
+     "Reusable templates" intro card (a plain ``.card``) is never
+     lifted and should stay visible / expanded from first paint. */
+  body:not(.fe-tpl-index-ready) .fe-admin-main section.card.fe-tplgrid-section { visibility: hidden; }
   /* Modals are appended to <body> by the JS; keep them invisible
      until they're explicitly opened so a freshly-built (not-yet-
      opened) modal can't flash during the lift. The global .modal
@@ -2257,6 +2261,8 @@
     align-items: center;
     gap: .65rem;
     margin: 0 0 .85rem;
+    /* Sort control sits at the far right of the container. */
+    justify-content: flex-end;
   }
   .fe-tpl-index-toolbar-label { font-weight: 600; }
   .fe-tpl-index-sort .btn { min-width: 64px; }
@@ -2266,7 +2272,7 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: .5rem;
+    gap: 1rem;
   }
   .fe-tpl-index-row {
     display: flex;
@@ -2283,27 +2289,49 @@
   .fe-tpl-index-row-info {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    /* 1rem between each element stacked inside a card. */
+    gap: 1rem;
     flex: 1 1 auto;
     min-width: 0;
   }
+  /* Title row holds the name + the (/url) chip inline. */
   .fe-tpl-index-row-name {
     font-weight: 600;
     line-height: 1.3;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex-wrap: wrap;
+  }
+  /* (/url) chip — styled to resemble a secondary (outline) button:
+     transparent fill, neutral border, monospace URL text. */
+  .fe-tpl-index-row-url {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-weight: 500;
+    font-size: .78rem;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
   }
   .fe-tpl-index-row-active {
     font-size: .82rem;
     color: var(--muted);
     line-height: 1.4;
   }
+  /* Active-template pill — brand colour at reduced opacity so it
+     reads as a soft brand-tinted chip rather than a solid button. */
   .fe-tpl-index-row-active-pill {
     display: inline-block;
     padding: 1px 8px;
     border-radius: 999px;
-    background: var(--panel-2);
+    background: color-mix(in srgb, var(--brand) 18%, transparent);
     margin-right: .35rem;
     font-weight: 600;
-    color: var(--text);
+    color: var(--brand);
   }
   .fe-tpl-index-row-blurb {
     font-size: .82rem;
@@ -2504,7 +2532,22 @@
             : '') +
         '</div>' +
         '<button type="button" class="btn btn-sm btn-primary fe-tpl-index-row-edit" data-tpl-open="' + modalId + '">Edit</button>';
-      row.querySelector('.fe-tpl-index-row-name').textContent = m.heading;
+      // Split a "Title (/url)" heading into the title text + a
+      // separate (/url) chip. Headings without a parenthetical URL
+      // suffix just render the whole string as the title.
+      var nameEl = row.querySelector('.fe-tpl-index-row-name');
+      var urlMatch = m.heading.match(/^(.*?)\s*(\([^()]*\))\s*$/);
+      if (urlMatch) {
+        var titleSpan = document.createElement('span');
+        titleSpan.textContent = urlMatch[1];
+        nameEl.appendChild(titleSpan);
+        var urlChip = document.createElement('span');
+        urlChip.className = 'fe-tpl-index-row-url';
+        urlChip.textContent = urlMatch[2];
+        nameEl.appendChild(urlChip);
+      } else {
+        nameEl.textContent = m.heading;
+      }
       if (m.active) {
         row.querySelector('.fe-tpl-index-row-active-pill').textContent = m.active;
         row.querySelector('.fe-tpl-index-row-active-tail').textContent = 'currently active';
