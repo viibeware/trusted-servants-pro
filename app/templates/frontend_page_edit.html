@@ -21,7 +21,12 @@
                     url_for('main.frontend_theme_save'),
                     "site-theme-modal", "page", "Site theme", label="Theme") }}
 <a class="btn" href="{{ url_for('main.frontend_pages') }}">← All pages</a>
-{% if page %}<a class="btn" href="{{ url_for('frontend.page_detail', slug=page.slug) }}" target="_blank" rel="noopener">View ↗</a>{% endif %}
+{% if page %}
+<button type="button" class="btn btn-primary" id="page-preview-btn"
+        data-preview-url="{{ url_for('frontend.page_preview', page_id=page.id) }}"
+        title="Open a preview of your current (unsaved) changes in a new tab">Preview ↗</button>
+<a class="btn" href="{{ url_for('frontend.page_detail', slug=page.slug) }}" target="_blank" rel="noopener" title="Open the live published page">View ↗</a>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -1251,5 +1256,42 @@ window.tspBlogTags = [
       });
     });
   });
+</script>
+
+<script>
+// Preview button — opens the current (unsaved) editor state in a new tab
+// via the editor-gated preview route. Building a FormData from the edit
+// form fires its `formdata` listener, which serialises the live block
+// editor into the blocks_json field — so the preview reflects the exact
+// in-progress content without saving anything.
+(function () {
+  var btn = document.getElementById('page-preview-btn');
+  var form = document.getElementById('page-edit-form');
+  if (!btn || !form) return;
+  btn.addEventListener('click', function () {
+    var url = btn.getAttribute('data-preview-url');
+    var fd;
+    try { fd = new FormData(form); } catch (_) { fd = null; }
+    var blocks = (fd && fd.get('blocks_json'))
+      || (document.getElementById('page-blocks-json') || {}).value || '[]';
+    var csrf = (form.querySelector('[name="csrf_token"]') || {}).value || '';
+    var tmp = document.createElement('form');
+    tmp.method = 'POST';
+    tmp.action = url;
+    tmp.target = '_blank';
+    tmp.rel = 'noopener';
+    tmp.style.display = 'none';
+    function add(name, value) {
+      var i = document.createElement('input');
+      i.type = 'hidden'; i.name = name; i.value = value;
+      tmp.appendChild(i);
+    }
+    add('csrf_token', csrf);
+    add('blocks_json', blocks);
+    document.body.appendChild(tmp);
+    tmp.submit();
+    tmp.remove();
+  });
+})();
 </script>
 {% endblock %}

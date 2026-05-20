@@ -584,6 +584,44 @@
 {%- set _heading_align = (page.heading_align or 'auto') -%}
 
 {% block content %}
+{% if preview_mode %}
+{# Editor-only preview banner — fixed to the bottom so it doesn't shift
+   the page layout. Never rendered on the public site (preview_mode is
+   only set by the editor-gated preview route). #}
+<div class="fe-preview-banner" role="status">
+  <span class="fe-preview-banner-dot" aria-hidden="true"></span>
+  <span class="fe-preview-banner-text">
+    <b>Preview</b> —
+    {% if preview_unsaved %}showing <b>unsaved changes</b>; the live page is unchanged until you Save.
+    {% elif page and not page.is_published %}this page is a <b>draft</b> and isn't visible to the public.
+    {% else %}this is the editor preview, not the public page URL.{% endif %}
+  </span>
+  <button type="button" class="fe-preview-banner-close"
+          onclick="window.close(); return false;" title="Close preview">Close ✕</button>
+</div>
+<style>
+  .fe-preview-banner {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 2147483000;
+    display: flex; align-items: center; justify-content: center; gap: .6rem;
+    padding: 10px 16px; font-size: .9rem; line-height: 1.3;
+    background: #1e293b; color: #fff;
+    box-shadow: 0 -6px 18px rgba(0,0,0,.28);
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+  .fe-preview-banner-dot {
+    width: 9px; height: 9px; border-radius: 999px; background: #f59e0b;
+    box-shadow: 0 0 0 0 rgba(245,158,11,.6); animation: fe-prev-pulse 1.8s infinite; flex: 0 0 auto;
+  }
+  @keyframes fe-prev-pulse { 70% { box-shadow: 0 0 0 9px rgba(245,158,11,0); } 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); } }
+  .fe-preview-banner-text b { font-weight: 700; }
+  .fe-preview-banner-close {
+    border: 1px solid rgba(255,255,255,.35); background: transparent; color: #fff;
+    border-radius: 999px; padding: 3px 12px; font-size: .82rem; cursor: pointer; flex: 0 0 auto;
+  }
+  .fe-preview-banner-close:hover { background: rgba(255,255,255,.15); }
+  @media (prefers-reduced-motion: reduce) { .fe-preview-banner-dot { animation: none; } }
+</style>
+{% endif %}
 {# Page-wide width formatting. Boxed = centered with max_width.
    Full = viewport-wide with `full_padding_pct` % left/right gutter.
    Both branches share the same render path (no auto-injected

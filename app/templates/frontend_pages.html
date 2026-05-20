@@ -164,6 +164,8 @@
               {%- else %}
                 <a class="btn btn-sm" href="{{ url_for('frontend.page_detail', slug=p.slug) }}" target="_blank" rel="noopener">View</a>
               {%- endif %}
+              <a class="btn btn-sm" href="{{ url_for('frontend.page_preview', page_id=p.id) }}" target="_blank" rel="noopener"
+                 title="Preview this page (works for drafts) — not visible to the public">Preview</a>
               <a class="btn btn-sm" href="{{ url_for('main.frontend_page_edit', page_id=p.id) }}">Edit</a>
               {%- if not _is_hp %}
                 <form method="post" action="{{ url_for('main.frontend_page_set_homepage', page_id=p.id) }}"

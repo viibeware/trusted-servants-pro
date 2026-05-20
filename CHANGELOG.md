@@ -6,6 +6,19 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.2.0] — 2026-05-20
+
+### Added — Preview frontend pages (and homepage) before publishing
+
+An editor-only preview surface for content pages and the homepage, so changes can be checked before they go live.
+
+- **Preview route:** ``frontend.page_preview`` (``/_preview/page/<id>``, GET + POST) renders a Page through the same pipeline as the public site, gated to signed-in frontend editors (``can_edit_frontend``) — never the public. **GET** renders the saved content (so DRAFT/unpublished pages, which ``page_detail`` hides even from editors, can finally be previewed); **POST** renders the ``blocks_json`` posted from the structure editor — the current *unsaved* edits — with page-level settings (background, layout, SEO) taken from the saved row.
+- **Shared render path:** extracted ``frontend._render_page(page, site, sections=…, preview=…, unsaved=…)`` from the duplicated tails of ``index`` and ``page_detail`` (TOC, lottie detection, meetings/events hydration, OG tags, context); all three now render through it, so the preview is byte-for-byte the public render.
+- **Editor button:** a **Preview ↗** action in the page editor builds the live block JSON via ``new FormData(form)`` (firing the editor's existing serialize hook) and POSTs it to the preview route in a new tab — no save required.
+- **Pages list:** a **Preview** link per row (works for drafts).
+- **Banner:** ``frontend/page.html`` shows a fixed preview banner (only when ``preview_mode``) with accurate wording for unsaved-changes / draft / plain-preview.
+- No schema change and no change to save/publish semantics — purely additive (the live page already only changes on Save).
+
 ## [2.1.35] — 2026-05-20
 
 ### Added — WordPress importer: universal custom-field mapping

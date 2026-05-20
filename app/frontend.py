@@ -1220,6 +1220,63 @@ def _post_url(post):
     return url_for("frontend.announcement_detail", slug=slug)
 
 
+def _render_page(page, site, *, sections=None, preview=False, unsaved=False):
+    """Single render path for a Page → ``frontend/page.html``.
+
+    Used by the homepage (``index``), the public ``page_detail``, and the
+    editor preview. When ``sections`` is None the page's saved
+    ``blocks_json`` is parsed; the preview route passes its own
+    ``sections`` (the unsaved editor blocks) and ``preview=True`` so the
+    template shows the preview banner. Page-level settings (background,
+    layout, SEO) always come from the saved row.
+    """
+    import json as _json
+    if sections is None:
+        sections = []
+        if page.blocks_json:
+            try:
+                sections = _json.loads(page.blocks_json)
+            except (ValueError, TypeError):
+                sections = []
+    toc_items = _collect_page_headings(sections)
+    has_lottie = _sections_have_block_type(sections, "lottie")
+    # Per-block data hydration (meetings / events) keyed by block id, so
+    # the data-driven blocks stay live in the preview too.
+    from .blocks import filtered_meetings, filtered_events
+    pp_meetings_groups_by_id = {}
+    pp_events_list_by_id = {}
+
+    def _hydrate(blocks):
+        for b in (blocks or []):
+            if not isinstance(b, dict):
+                continue
+            bid = b.get("id") or ""
+            t = b.get("type")
+            d = b.get("data") or {}
+            if t == "meetings" and bid:
+                pp_meetings_groups_by_id[bid] = filtered_meetings(d)
+            elif t == "events" and bid:
+                pp_events_list_by_id[bid] = filtered_events(d, site=site)
+            elif t == "container":
+                _hydrate((d or {}).get("blocks") or [])
+    for _sec in (sections or []):
+        if isinstance(_sec, dict):
+            _hydrate(_sec.get("blocks") or [])
+    og = _page_og(site, title=page.og_title or page.title,
+                  description=page.og_description,
+                  image_url=(url_for("public.public_page_og_image", page_id=page.id, _external=True)
+                             if page.og_image_filename else None))
+    return render_template("frontend/page.html", page=page,
+                           sections=sections, toc_items=toc_items,
+                           has_lottie=has_lottie,
+                           pp_meetings_groups_by_id=pp_meetings_groups_by_id,
+                           pp_events_list_by_id=pp_events_list_by_id,
+                           preview_mode=preview,
+                           preview_unsaved=unsaved,
+                           **og,
+                           **_frontend_context(site))
+
+
 @bp.route("/")
 @public_section("Home")
 def index():
@@ -1258,47 +1315,7 @@ def index():
                                pp_events_list_by_id={},
                                homepage_missing=True,
                                **_frontend_context(site))
-    sections = []
-    if page.blocks_json:
-        try:
-            sections = _json.loads(page.blocks_json)
-        except (ValueError, TypeError):
-            sections = []
-    toc_items = _collect_page_headings(sections)
-    has_lottie = _sections_have_block_type(sections, "lottie")
-    # Same per-block data hydration as `page_detail` — keeps the meetings
-    # / events / library blocks fully functional on the homepage.
-    from .blocks import filtered_meetings, filtered_events
-    pp_meetings_groups_by_id = {}
-    pp_events_list_by_id = {}
-
-    def _hydrate(blocks):
-        for b in (blocks or []):
-            if not isinstance(b, dict):
-                continue
-            bid = b.get("id") or ""
-            t = b.get("type")
-            d = b.get("data") or {}
-            if t == "meetings" and bid:
-                pp_meetings_groups_by_id[bid] = filtered_meetings(d)
-            elif t == "events" and bid:
-                pp_events_list_by_id[bid] = filtered_events(d, site=site)
-            elif t == "container":
-                _hydrate((d or {}).get("blocks") or [])
-    for _sec in (sections or []):
-        if isinstance(_sec, dict):
-            _hydrate(_sec.get("blocks") or [])
-    og = _page_og(site, title=page.og_title or page.title,
-                  description=page.og_description,
-                  image_url=(url_for("public.public_page_og_image", page_id=page.id, _external=True)
-                             if page.og_image_filename else None))
-    return render_template("frontend/page.html", page=page,
-                           sections=sections, toc_items=toc_items,
-                           has_lottie=has_lottie,
-                           pp_meetings_groups_by_id=pp_meetings_groups_by_id,
-                           pp_events_list_by_id=pp_events_list_by_id,
-                           **og,
-                           **_frontend_context(site))
+    return _render_page(page, site)
 
 
 @bp.route("/meetings/<slug>")
@@ -4504,53 +4521,43 @@ def page_detail(slug):
         if cf is not None:
             return _render_custom_form(cf, ctx=_frontend_context(site))
         abort(404)
-    sections = []
-    if page.blocks_json:
-        try:
-            sections = _json.loads(page.blocks_json)
-        except (ValueError, TypeError):
-            sections = []
-    toc_items = _collect_page_headings(sections)
-    has_lottie = _sections_have_block_type(sections, "lottie")
+    return _render_page(page, site)
 
-    # Pre-fetch data-driven block payloads per instance. Same shape the
-    # homepage uses (block id → groups / rows), so `frontend/page.html`
-    # can include the homepage section partials directly. Computed
-    # once per request, even when the same block type appears multiple
-    # times on the page — each instance gets its own filter applied.
-    from .blocks import filtered_meetings, filtered_events
-    pp_meetings_groups_by_id = {}
-    pp_events_list_by_id = {}
 
-    def _hydrate(blocks):
-        for b in (blocks or []):
-            if not isinstance(b, dict):
-                continue
-            bid = b.get("id") or ""
-            t = b.get("type")
-            d = b.get("data") or {}
-            if t == "meetings" and bid:
-                pp_meetings_groups_by_id[bid] = filtered_meetings(d)
-            elif t == "events" and bid:
-                pp_events_list_by_id[bid] = filtered_events(d, site=site)
-            elif t == "container":
-                _hydrate((d or {}).get("blocks") or [])
-    for _sec in (sections or []):
-        if isinstance(_sec, dict):
-            _hydrate(_sec.get("blocks") or [])
+@bp.route("/_preview/page/<int:page_id>", methods=["GET", "POST"])
+def page_preview(page_id):
+    """Editor-only preview of a content page (or the homepage), rendered
+    exactly as the public site would.
 
-    ctx = _frontend_context(site)
-    og = _page_og(site, title=page.og_title or page.title,
-                  description=page.og_description,
-                  image_url=(url_for("public.public_page_og_image", page_id=page.id, _external=True)
-                             if page.og_image_filename else None))
-    return render_template("frontend/page.html", page=page,
-                           sections=sections, toc_items=toc_items,
-                           has_lottie=has_lottie,
-                           pp_meetings_groups_by_id=pp_meetings_groups_by_id,
-                           pp_events_list_by_id=pp_events_list_by_id,
-                           **og,
-                           **ctx)
+    Differs from the public ``page_detail`` in two ways:
+      • Visible to signed-in frontend editors ONLY (never the public), so
+        DRAFT / unpublished pages can be previewed before publishing.
+      • On POST, renders the ``blocks_json`` posted from the structure
+        editor — the current, UNSAVED edits — instead of the saved
+        content, so changes can be seen before hitting Save. Page-level
+        settings (background, layout, SEO) come from the saved row.
+    """
+    from .models import Page
+    if not (current_user.is_authenticated
+            and getattr(current_user, "can_edit_frontend", lambda: False)()):
+        abort(404)
+    site = _site()
+    if not site or not site.frontend_module_enabled:
+        abort(404)
+    page = Page.query.get_or_404(page_id)
+    sections = None
+    if request.method == "POST":
+        raw = request.form.get("blocks_json")
+        if raw:
+            import json as _json
+            try:
+                parsed = _json.loads(raw)
+                if isinstance(parsed, list):
+                    sections = parsed
+            except (ValueError, TypeError):
+                sections = None
+    return _render_page(page, site, sections=sections, preview=True,
+                        unsaved=(sections is not None))
 
 
 def _sections_have_block_type(sections, block_type):

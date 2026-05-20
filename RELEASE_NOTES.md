@@ -7,7 +7,15 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.35 — 2026-05-20 (latest) — WordPress importer: custom-field mapping + large-site chunked import
+## 2.2.0 — 2026-05-20 (latest) — Preview frontend pages before publishing
+
+You can now **preview content pages and the homepage before they go live**:
+
+- In the page editor, a new **Preview ↗** button opens a new tab showing your **current, unsaved changes** exactly as the public site would render them — so you can check your work before hitting Save. The live page doesn't change until you Save.
+- In **Frontend → Pages**, every page now has a **Preview** link. This works for **draft pages too**, which previously couldn't be viewed at all until published.
+- Previews are visible only to signed-in admins/editors (never the public) and carry a clear banner so you always know you're looking at a preview, not the live page.
+
+## 2.1.35 — 2026-05-20 — WordPress importer: custom-field mapping + large-site chunked import
 
 Two big upgrades to the WordPress importer, plus a small polish:
 
