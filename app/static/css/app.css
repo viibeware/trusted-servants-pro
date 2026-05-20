@@ -3785,7 +3785,12 @@ button.chip { font-family: inherit; }
 .sidebar-quicknav {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  /* 6px between the side-by-side Web/View buttons, but 8px between the
+     Web/View row and the full-width Watchtower button below it so the
+     vertical rhythm matches the quicknav → Notifications → Search gaps
+     (all 8px). */
+  column-gap: 6px;
+  row-gap: 8px;
   /* No bottom margin: the sidebar is a flex column (margins don't
      collapse), so the gap to the Notifications button below comes
      solely from that button's top margin — keeping quicknav → notif →
