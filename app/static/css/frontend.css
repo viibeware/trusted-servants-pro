@@ -3479,6 +3479,54 @@ html[data-theme="dark"] .fe-meeting-detail-alert {
   flex-wrap: wrap;
   gap: 10px;
 }
+
+/* Public gallery — rendered in the same column / wrapper as the
+   featured image on each detail template so its width matches the
+   featured image visually. Grid is a fixed 3 columns of square
+   thumbnails; ``_lightbox.html`` handles click-to-zoom + keyboard
+   nav. The title has been removed in favour of the visual itself.
+   For templates without an inline featured image (poster, minimal)
+   the parent constraint is missing, so we cap the section's own
+   ``max-width`` to roughly match a typical featured-image render
+   width and centre it on the container. */
+.fe-post-gallery {
+  margin: 16px auto 28px;
+  max-width: 480px;
+}
+/* When the gallery is nested inside the classic template's cover
+   column or the timeline's main column, the parent already
+   constrains the width — strip the centred max-width override so
+   the grid fills its host. */
+.fe-event-detail-cover-col .fe-post-gallery,
+.fe-event-time-main .fe-post-gallery {
+  max-width: none;
+  margin: 16px 0 28px;
+}
+/* Classic — the cover button has its own bottom margin built into
+   the hero gap; let the gallery sit closer to it for a tighter
+   "image + thumbnails" stack. */
+.fe-event-detail-cover-col .fe-post-gallery {
+  margin-top: 12px;
+}
+.fe-post-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.fe-post-gallery-tile {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--fe-color-surface, var(--fe-panel));
+  transition: transform 160ms ease, box-shadow 160ms ease;
+  cursor: zoom-in;
+}
+.fe-post-gallery-tile:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.10);
+}
 .fe-event-detail-when {
   margin: 0; display: flex; flex-direction: column; gap: 4px;
 }

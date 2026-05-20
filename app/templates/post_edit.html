@@ -324,6 +324,55 @@
     </div>
   </section>
 
+  {# ── Gallery ─────────────────────────────────────────────────
+     Up to 10 images shown as a grid below the description on the
+     public detail page (with a lightbox). Each card has a remove
+     button; the order in which they appear here matches the
+     public render order. Add images via the upload input or the
+     File Browser picker — picked items reference existing
+     MediaItem rows so the same asset can be shared across posts
+     without duplicating storage. #}
+  {%- set _gallery = (_p.gallery_filenames if _p else []) -%}
+  {%- set _gallery_count = _gallery|length -%}
+  <section class="card" data-post-gallery
+           data-gallery-max="6"
+           data-gallery-count="{{ _gallery_count }}">
+    <div class="card-head">
+      <h2>Gallery <span class="muted smaller" data-gallery-count-label>({{ _gallery_count }} / 6)</span></h2>
+      <span class="muted smaller">Optional. Up to 6 images that render in a grid alongside the featured image on the public page, with a click-to-zoom lightbox. Order matches the list below.</span>
+    </div>
+    <ul class="post-gallery-grid" data-gallery-list>
+      {% if _p %}
+        {% for fname in _gallery %}
+        {% set _idx = loop.index0 %}
+        <li class="post-gallery-tile" data-gallery-tile>
+          <img src="{{ url_for('public.post_gallery_image', pid=_p.id, idx=_idx, thumb=240) }}"
+               alt="Gallery image {{ _idx + 1 }}" loading="lazy">
+          <input type="hidden" name="gallery_existing" value="{{ fname }}">
+          <button type="button" class="btn btn-sm btn-danger post-gallery-remove"
+                  data-gallery-remove
+                  title="Remove from gallery">{{ icon('x') }}</button>
+        </li>
+        {% endfor %}
+      {% endif %}
+    </ul>
+    <div class="post-gallery-actions">
+      <label class="post-gallery-upload-label">
+        <span>Upload images</span>
+        <span class="muted smaller">— PNG, JPG, WebP, or GIF. Multi-select supported.</span>
+        <input type="file" name="gallery_upload" multiple
+               accept="image/png,image/jpeg,image/webp,image/gif"
+               data-gallery-upload>
+      </label>
+      <button type="button" class="btn btn-sm" data-post-gallery-picker>
+        {{ icon('folder') }} Choose from File Browser
+      </button>
+    </div>
+    {# Media-ID hidden inputs populated by the File Browser picker —
+       the JS appends one per picked item below. #}
+    <div data-gallery-picks hidden></div>
+  </section>
+
   {# ── Links ────────────────────────────────────────────────────
      Universal to both announcements and events — pulled out of the
      Event details card so a pure announcement can still attach

@@ -1663,7 +1663,8 @@ def _migrate_sqlite(app):
                          ("submitted_at", "DATETIME"),
                          ("published_at", "DATETIME"),
                          ("announcement_auto_archive_at", "DATETIME"),
-                         ("links_json", "TEXT")):
+                         ("links_json", "TEXT"),
+                         ("gallery_json", "TEXT")):
             add("post", col, ddl)
         for col, ddl in (("published_at", "DATETIME"),
                          ("is_pending_review", "BOOLEAN NOT NULL DEFAULT 0"),

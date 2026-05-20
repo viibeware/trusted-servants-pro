@@ -1,0 +1,32 @@
+{# Public gallery — included from each event detail template
+   under the description. Renders nothing when the post has no
+   gallery, so each template can include it unconditionally
+   without an outer ``{% if %}``.
+
+   Uses the shared ``_lightbox.html`` partial: the grid container
+   carries ``data-lightbox-scope`` so the lightbox script auto-
+   wires every ``<img>`` inside it. Thumbnails ship as a
+   ``?thumb=400`` source with a srcset for high-DPI / wider tiles,
+   plus a ``data-lightbox-src`` pointing at the full-resolution
+   image so clicking opens the original instead of the
+   downscaled thumb. #}
+{%- set _gallery = event.gallery_filenames -%}
+{% if _gallery %}
+<section class="fe-post-gallery" aria-label="Photo gallery">
+  <div class="fe-post-gallery-grid" data-lightbox-scope>
+    {% for fname in _gallery %}
+    {% set _i = loop.index0 %}
+    <img class="fe-post-gallery-tile"
+         src="{{ url_for('public.post_gallery_image', pid=event.id, idx=_i, thumb=400) }}"
+         srcset="{{ url_for('public.post_gallery_image', pid=event.id, idx=_i, thumb=240) }} 240w,
+                 {{ url_for('public.post_gallery_image', pid=event.id, idx=_i, thumb=400) }} 400w,
+                 {{ url_for('public.post_gallery_image', pid=event.id, idx=_i, thumb=720) }} 720w"
+         sizes="(max-width: 640px) 45vw, 240px"
+         data-lightbox-src="{{ url_for('public.post_gallery_image', pid=event.id, idx=_i) }}"
+         alt="{{ event.title }} — photo {{ _i + 1 }} of {{ _gallery|length }}"
+         loading="lazy">
+    {% endfor %}
+  </div>
+</section>
+{% include "frontend/_lightbox.html" %}
+{% endif %}

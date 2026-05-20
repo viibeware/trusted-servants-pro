@@ -1728,6 +1728,39 @@ class Post(db.Model):
     # legacy single-pair columns when this is unset so renderers can
     # iterate one consistent collection.
     links_json = db.Column(db.Text)
+    # Image gallery — JSON list of up to 10 stored filenames (UUID-
+    # prefixed under UPLOAD_FOLDER, same convention as
+    # ``featured_image_filename``). Rendered on the public detail
+    # page below the description with a lightbox, and editable from
+    # the admin post-edit page (upload + File Browser picker). The
+    # gallery is independent of the featured image — admins can
+    # share or not share an image between the two.
+    gallery_json = db.Column(db.Text)
+
+    @property
+    def gallery_filenames(self):
+        """Decoded list of stored filenames for the post's gallery.
+
+        Filters out non-string entries / blanks so a corrupted blob
+        can't crash the renderer; tail-truncates to 10 since that's
+        the hard cap the editor enforces. Returns ``[]`` when the
+        column is empty so callers can iterate unconditionally."""
+        if not self.gallery_json:
+            return []
+        try:
+            import json as _json
+            data = _json.loads(self.gallery_json)
+        except (ValueError, TypeError):
+            return []
+        if not isinstance(data, list):
+            return []
+        out = []
+        for entry in data:
+            if isinstance(entry, str) and entry.strip():
+                out.append(entry.strip())
+            if len(out) >= 6:
+                break
+        return out
 
     @property
     def event_links(self):

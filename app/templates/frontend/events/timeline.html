@@ -53,6 +53,10 @@
         </div>
         {% endif %}
 
+        {# Gallery rendered inside the main column so it shares
+           the same width as the featured image above. #}
+        {% include "frontend/events/_gallery.html" %}
+
         <ul class="fe-event-time-meta">
           {% if event.event_starts_at %}
           <li>

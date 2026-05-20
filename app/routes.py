@@ -12647,6 +12647,18 @@ def _cleanup_retired_asset(stored):
             + Story.query.filter_by(featured_image_filename=stored).count())
     if refs > 0:
         return
+    # Post gallery references — the column stores a JSON list of
+    # stored filenames so a straight equality query doesn't work.
+    # LIKE-scan against the JSON blob; this is rare enough (only
+    # triggered on retire) that the table-scan cost doesn't show
+    # up in latency budgets. Wrap the needle in quotes so a longer
+    # filename that *contains* the stored name as a substring
+    # doesn't generate a false positive.
+    gallery_token = '"' + stored.replace('"', '\\"') + '"'
+    gallery_refs = Post.query.filter(
+        Post.gallery_json.contains(gallery_token)).count()
+    if gallery_refs > 0:
+        return
     # Inline body image survival — if any post / story / blog body
     # still embeds /pub/<original_filename> pointing at this stored
     # file, keep it alive. Resolve stored -> original through the
@@ -12683,6 +12695,11 @@ def media_list():
     from sqlalchemy import case, func, or_
     q = (request.args.get("q") or "").strip().lower()
     picker = request.args.get("picker") == "1"
+    # Multi-select picker mode — surfaces a checkbox on every item +
+    # a fixed bottom bar with the running count and a "Done — add N"
+    # button that posts a batch ``media-selected-batch`` message back
+    # to the parent. Only meaningful when ``picker=1``.
+    picker_multi = picker and request.args.get("multi") == "1"
     view = request.args.get("view") or request.cookies.get("view-media") or "list"
     if view not in ("list", "grid"): view = "list"  # legacy "table" → "list"
     sort = request.args.get("sort") or request.cookies.get("view-media-sort") or "uploaded"
@@ -12772,7 +12789,8 @@ def media_list():
     }
 
     resp = current_app.make_response(
-        render_template("media.html", items=items, q=q, picker=picker, view=view,
+        render_template("media.html", items=items, q=q, picker=picker,
+                        picker_multi=picker_multi, view=view,
                         sort=sort, direction=direction, media_type=_media_type,
                         pagination=pagination))
     if not picker:
@@ -14238,6 +14256,57 @@ def post_save():
                 if old and old != m.stored_filename:
                     _cleanup_retired_asset(old)
 
+    # Gallery — up to 6 images. The editor submits three parallel
+    # streams:
+    #   gallery_existing[] — stored filenames to keep, in the
+    #                        admin's chosen order (drag-reordered).
+    #   gallery_upload[]   — new file uploads to append.
+    #   gallery_media_id[] — MediaItem ids picked from the File
+    #                        Browser modal to append.
+    # We rebuild the gallery list from scratch every save: the
+    # admin's "existing" list represents the kept-after-edits state,
+    # so anything removed from it goes through ``_cleanup_retired_
+    # asset`` to retire orphaned files. Hard cap at 10 enforced both
+    # server-side here and by the client UI.
+    import json as _gjson
+    prev_gallery = set(post.gallery_filenames)
+    kept_existing = []
+    for raw in request.form.getlist("gallery_existing"):
+        name = (raw or "").strip()
+        if not name:
+            continue
+        if name in prev_gallery and name not in kept_existing:
+            kept_existing.append(name)
+    new_files = []
+    for upload in request.files.getlist("gallery_upload"):
+        if not upload or not upload.filename:
+            continue
+        if len(kept_existing) + len(new_files) >= 6:
+            break
+        try:
+            stored, _orig = _save_upload(upload)
+        except Exception:  # noqa: BLE001
+            continue
+        new_files.append(stored)
+    picked_files = []
+    for raw in request.form.getlist("gallery_media_id"):
+        token = (raw or "").strip()
+        if not token.isdigit():
+            continue
+        if len(kept_existing) + len(new_files) + len(picked_files) >= 6:
+            break
+        m = db.session.get(MediaItem, int(token))
+        if m and m.stored_filename:
+            picked_files.append(m.stored_filename)
+    new_gallery = kept_existing + new_files + picked_files
+    new_gallery = new_gallery[:6]
+    # Retire removed images — anything that was in the prior list
+    # but isn't in the new list. ``_cleanup_retired_asset`` is
+    # reference-counted so shared images survive automatically.
+    for stale in prev_gallery - set(new_gallery):
+        _cleanup_retired_asset(stale)
+    post.gallery_json = _gjson.dumps(new_gallery) if new_gallery else None
+
     # Draft/publish state — submit-button name="action" carries the
     # admin's intent. Values: "draft" (force is_draft=True), "publish"
     # (force is_draft=False), or absent (preserve current state for
@@ -14386,18 +14455,24 @@ def post_delete(pid):
     # post (e.g. one created by Duplicate) still points at the same
     # stored filename, the helper sees it and keeps the file.
     old_image = post.featured_image_filename
+    old_gallery = list(post.gallery_filenames)
     # Snapshot inline /pub/ image stored filenames BEFORE the delete so
     # we still have the body text to scan. The cleanup helper runs
     # AFTER commit so its reference-count scan doesn't still see this
     # row's body holding the same /pub/<filename>.
     body_inline_stored = _collect_body_inline_stored(post.body)
     post.featured_image_filename = None
+    post.gallery_json = None
     if old_image:
         _cleanup_retired_asset(old_image)
     db.session.delete(post)
     db.session.commit()
     for s in body_inline_stored:
         _cleanup_retired_asset(s)
+    # Retire each gallery image. Reference-counted so shared
+    # images still in another post's gallery survive automatically.
+    for g in old_gallery:
+        _cleanup_retired_asset(g)
     flash("Post deleted", "success")
     return redirect(url_for("main.posts"))
 
@@ -14549,6 +14624,42 @@ def post_featured_image(pid):
     if not p or not p.featured_image_filename:
         abort(404)
     return send_from_directory(current_app.config["UPLOAD_FOLDER"], p.featured_image_filename)
+
+
+@public_bp.route("/post-gallery-image/<int:pid>/<int:idx>")
+def post_gallery_image(pid, idx):
+    """Serve the ``idx``-th image of a post's gallery. Public so the
+    frontend renders gallery thumbnails / lightbox full-size images
+    without authentication.
+
+    Supports ``?thumb=<size>`` for postage-stamp tiles — same
+    contract the featured-image / story-image routes use. Without
+    the param, the full-resolution source is returned. The ``idx``
+    is the position in the gallery list (0-based) so renames /
+    deletions inside the array shift indices, but the public URL
+    shape stays simple."""
+    p = db.session.get(Post, pid)
+    if not p:
+        abort(404)
+    filenames = p.gallery_filenames
+    if idx < 0 or idx >= len(filenames):
+        abort(404)
+    stored = filenames[idx]
+    upload_dir = current_app.config["UPLOAD_FOLDER"]
+    thumb_arg = (request.args.get("thumb") or "").strip()
+    if thumb_arg:
+        from . import thumbnails
+        try:
+            size = int(thumb_arg)
+        except ValueError:
+            size = None
+        if size and size in thumbnails.ALLOWED_SIZES:
+            thumb_name = thumbnails.ensure_thumb(stored, size, upload_dir=upload_dir)
+            if thumb_name:
+                resp = send_from_directory(upload_dir, thumb_name)
+                resp.headers["Cache-Control"] = "public, max-age=86400"
+                return resp
+    return send_from_directory(upload_dir, stored)
 
 
 # ---------------------------------------------------------------------------

@@ -39,13 +39,19 @@
     {% set _cover_url = url_for('public.post_featured_image', pid=event.id) if _has_cover else '' %}
     <div class="fe-event-detail-hero{% if _has_cover %} has-cover{% endif %}">
       {% if _has_cover %}
-      <button type="button" class="fe-event-detail-cover"
-              data-img-lightbox-src="{{ _cover_url }}"
-              data-img-lightbox-alt="{{ event.title }}"
-              aria-label="Open featured image full screen">
-        <img src="{{ _cover_url }}" alt="" loading="lazy">
-        <span class="fe-event-detail-cover-zoom" aria-hidden="true">{{ icon('maximize') }}</span>
-      </button>
+      <div class="fe-event-detail-cover-col">
+        <button type="button" class="fe-event-detail-cover"
+                data-img-lightbox-src="{{ _cover_url }}"
+                data-img-lightbox-alt="{{ event.title }}"
+                aria-label="Open featured image full screen">
+          <img src="{{ _cover_url }}" alt="" loading="lazy">
+          <span class="fe-event-detail-cover-zoom" aria-hidden="true">{{ icon('maximize') }}</span>
+        </button>
+        {# Gallery rendered as a sibling of the cover so it
+           inherits the cover column's width — same visual
+           footprint as the featured image. #}
+        {% include "frontend/events/_gallery.html" %}
+      </div>
       {% endif %}
 
       <header class="fe-event-detail-head">
@@ -70,6 +76,12 @@
         </div>
         {% endif %}
       </header>
+      {% if not _has_cover %}
+      {# No featured image to anchor to — render the gallery as a
+         full-row sibling under the heading so it still appears in
+         the hero area, just without the cover column to share. #}
+      {% include "frontend/events/_gallery.html" %}
+      {% endif %}
     </div>
 
     <div class="fe-event-detail-grid">

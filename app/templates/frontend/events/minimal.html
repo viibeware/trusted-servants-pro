@@ -34,6 +34,11 @@
       {% if event.summary %}<p class="fe-event-min-summary">{{ event.summary }}</p>{% endif %}
     </header>
 
+    {# Gallery — full container width, placed under the heading
+       so it reads as the visual centrepiece for templates that
+       don't render a featured image of their own. #}
+    {% include "frontend/events/_gallery.html" %}
+
     {% if event.body %}
     <article class="fe-event-min-prose">
       {{ event.body|markdown }}

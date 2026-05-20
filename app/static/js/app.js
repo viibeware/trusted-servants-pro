@@ -998,21 +998,103 @@
     });
   });
 
-  // Media library: select (inside picker iframe)
-  document.querySelectorAll(".media-select").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const card = btn.closest(".media-card");
-      const payload = {
-        type: "media-selected",
-        item: {
-          id: card.dataset.mediaId,
-          stored_filename: card.dataset.stored,
-          original_filename: card.dataset.original,
-        },
+  // Media library: select (inside picker iframe). Two modes:
+  //   • Single-select (default) — clicking the per-item Select
+  //     button immediately posts ``media-selected`` to the parent.
+  //     Used by the meeting + library file pickers + the featured-
+  //     image picker.
+  //   • Multi-select (``picker_multi`` flag from the route) — the
+  //     Select button instead toggles the item into a running
+  //     ``selected`` set; a fixed bottom bar shows the count and a
+  //     "Done — add N" button posts a single ``media-selected-batch``
+  //     message back with the array of items.
+  //
+  // ``closest('[data-media-id]')`` walks UP to either the card
+  // article OR the table row, fixing the prior bug where only card
+  // view worked — list view rows are <tr>, not .media-card.
+  (function () {
+    var multiBar = document.querySelector('[data-media-multi-bar]');
+    var multi = !!multiBar;
+    var selected = new Map();  // id → {id, stored_filename, original_filename}
+    function captureItem(host) {
+      return {
+        id: host.dataset.mediaId,
+        stored_filename: host.dataset.stored,
+        original_filename: host.dataset.original,
       };
-      if (window.parent !== window) window.parent.postMessage(payload, window.location.origin);
+    }
+    function refreshBar() {
+      if (!multiBar) return;
+      var count = selected.size;
+      multiBar.hidden = count === 0;
+      var countEl = multiBar.querySelector('[data-multi-count]');
+      if (countEl) countEl.textContent = count;
+      var doneBtn = multiBar.querySelector('[data-multi-done]');
+      if (doneBtn) doneBtn.textContent = count === 1
+        ? 'Add 1 item'
+        : ('Add ' + count + ' items');
+    }
+    function setSelected(host, on) {
+      if (!host) return;
+      var id = host.dataset.mediaId;
+      if (!id) return;
+      if (on) selected.set(id, captureItem(host));
+      else selected.delete(id);
+      host.classList.toggle('is-selected', on);
+      // Update the Select button label so the operator can see
+      // what state each row is in at a glance.
+      var btn = host.querySelector('.media-select');
+      if (btn) btn.textContent = on ? 'Selected ✓' : 'Select';
+      refreshBar();
+    }
+    document.querySelectorAll('.media-select').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var host = btn.closest('[data-media-id]');
+        if (!host) return;
+        if (multi) {
+          var id = host.dataset.mediaId;
+          setSelected(host, !selected.has(id));
+          return;
+        }
+        // Single-select: post + done.
+        var payload = { type: 'media-selected', item: captureItem(host) };
+        if (window.parent !== window) {
+          window.parent.postMessage(payload, window.location.origin);
+        }
+      });
     });
-  });
+    if (multiBar) {
+      var doneBtn = multiBar.querySelector('[data-multi-done]');
+      if (doneBtn) {
+        doneBtn.addEventListener('click', function () {
+          if (!selected.size) return;
+          var items = Array.from(selected.values());
+          if (window.parent !== window) {
+            window.parent.postMessage(
+              { type: 'media-selected-batch', items: items },
+              window.location.origin
+            );
+          }
+        });
+      }
+      var clearBtn = multiBar.querySelector('[data-multi-clear]');
+      if (clearBtn) {
+        clearBtn.addEventListener('click', function () {
+          selected.forEach(function (_v, id) {
+            var host = document.querySelector('[data-media-id="' + id + '"]');
+            if (host) {
+              host.classList.remove('is-selected');
+              var btn = host.querySelector('.media-select');
+              if (btn) btn.textContent = 'Select';
+            }
+          });
+          selected.clear();
+          refreshBar();
+        });
+      }
+      refreshBar();
+    }
+  })();
 
   // Auto-dismiss flash toasts after 3s
   document.querySelectorAll(".flashes .flash").forEach(el => {
@@ -1138,7 +1220,13 @@
       currentMediaTarget = btn.dataset.mediaPicker;
       currentMediaMode = "form";
       const frame = document.getElementById("media-picker-frame");
-      if (frame && frame.src === "about:blank") frame.src = "/tspro/files?picker=1&embed=1";
+      // Force the iframe back to single-select mode in case the
+      // gallery picker (which uses ?multi=1) opened previously and
+      // left it on the multi-select URL.
+      const singleUrl = "/tspro/files?picker=1&embed=1";
+      if (frame && (frame.src === "about:blank" || frame.src.indexOf("multi=1") > -1)) {
+        frame.src = singleUrl;
+      }
       openModal("media-picker-modal");
     });
   });
@@ -1151,14 +1239,170 @@
       currentMediaTarget = null;
       currentMediaMode = "post-featured";
       const frame = document.getElementById("media-picker-frame");
-      if (frame && frame.src === "about:blank") frame.src = "/tspro/files?picker=1&embed=1";
+      const singleUrl = "/tspro/files?picker=1&embed=1";
+      if (frame && (frame.src === "about:blank" || frame.src.indexOf("multi=1") > -1)) {
+        frame.src = singleUrl;
+      }
       openModal("media-picker-modal");
     });
   });
+
+  // Post edit page — Gallery "Choose from File Browser" button. Same
+  // picker modal as the featured-image one but the selected item
+  // gets appended to the gallery list (up to the 10-image cap)
+  // instead of replacing a single field. The picked id rides via a
+  // hidden ``gallery_media_id`` input which the server save handler
+  // resolves to a MediaItem.stored_filename.
+  document.querySelectorAll("[data-post-gallery-picker]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      currentMediaTarget = null;
+      currentMediaMode = "post-gallery";
+      const frame = document.getElementById("media-picker-frame");
+      // Gallery picker opens the file browser in multi-select mode
+      // so the operator can grab several images in one round-trip.
+      // ``multi=1`` toggles the bottom action bar inside the iframe
+      // and changes Select clicks to toggle-into-set instead of
+      // immediate post-back; the parent handles the batch message
+      // below by iterating the items array.
+      const multiUrl = "/tspro/files?picker=1&embed=1&multi=1";
+      if (frame && (frame.src === "about:blank" || frame.src.indexOf("multi=1") < 0)) {
+        frame.src = multiUrl;
+      }
+      openModal("media-picker-modal");
+    });
+  });
+
+  // Gallery — per-tile remove buttons + upload tally so the
+  // 10-image cap is reflected live. Uploads count as soon as the
+  // file picker dialog returns since the form submit hasn't yet
+  // happened; admins see the chip increase immediately.
+  (function () {
+    var section = document.querySelector("[data-post-gallery]");
+    if (!section) return;
+    var max = parseInt(section.dataset.galleryMax, 10) || 10;
+    var list = section.querySelector("[data-gallery-list]");
+    var picks = section.querySelector("[data-gallery-picks]");
+    var upload = section.querySelector("[data-gallery-upload]");
+    var label = section.querySelector("[data-gallery-count-label]");
+    function tally() {
+      var existing = section.querySelectorAll('input[name="gallery_existing"]').length;
+      var picked = section.querySelectorAll('input[name="gallery_media_id"]').length;
+      var pending = upload && upload.files ? upload.files.length : 0;
+      return Math.min(existing + picked + pending, max);
+    }
+    function refresh() {
+      var total = tally();
+      section.dataset.galleryCount = String(total);
+      if (label) label.textContent = "(" + total + " / " + max + ")";
+    }
+    function canAdd(n) { return (tally() + (n || 0)) <= max; }
+    section.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-gallery-remove]");
+      if (!btn) return;
+      var tile = btn.closest("[data-gallery-tile]");
+      if (!tile) return;
+      tile.remove();
+      refresh();
+    });
+    if (upload) {
+      upload.addEventListener("change", function () {
+        // If the multi-file selection would exceed the cap, drop the
+        // overflow by re-creating a DataTransfer with the allowed
+        // slice. Older browsers without DataTransfer just truncate
+        // server-side.
+        if (!upload.files) return;
+        var allowed = max - tally() + upload.files.length;
+        if (allowed < upload.files.length) {
+          try {
+            var dt = new DataTransfer();
+            for (var i = 0; i < allowed && i < upload.files.length; i++) {
+              dt.items.add(upload.files[i]);
+            }
+            upload.files = dt.files;
+            (window.tspShowToast || (() => {}))(
+              "Gallery is capped at " + max + " images — extras dropped.",
+              "warn"
+            );
+          } catch (_) { /* DataTransfer unsupported — server enforces */ }
+        }
+        refresh();
+      });
+    }
+    // Expose a setter the postMessage handler below uses when a
+    // gallery picker selection comes back from the File Browser.
+    section.__galleryAddPicked = function (item) {
+      if (!canAdd(1)) {
+        (window.tspShowToast || (() => {}))(
+          "Gallery is full (" + max + " images).", "warn");
+        return;
+      }
+      if (!picks) return;
+      var hidden = document.createElement("input");
+      hidden.type = "hidden";
+      hidden.name = "gallery_media_id";
+      hidden.value = item.id;
+      picks.appendChild(hidden);
+      // Optimistic preview tile so the operator sees their pick
+      // without saving + reloading. The tile holds the
+      // ``gallery_media_id`` hidden input (moved from the hidden
+      // ``picks`` container so a per-tile remove takes the pick
+      // out of the form too). The save handler resolves the
+      // media-id into a stored filename and appends it to the
+      // gallery list.
+      if (list && item.original_filename) {
+        var li = document.createElement("li");
+        li.className = "post-gallery-tile";
+        li.setAttribute("data-gallery-tile", "");
+        var img = document.createElement("img");
+        img.src = "/pub/" + encodeURIComponent(item.original_filename);
+        img.alt = "Gallery image";
+        img.loading = "lazy";
+        li.appendChild(img);
+        li.appendChild(hidden);  // re-parent the media-id input
+        var rm = document.createElement("button");
+        rm.type = "button";
+        rm.className = "btn btn-sm btn-danger post-gallery-remove";
+        rm.setAttribute("data-gallery-remove", "");
+        rm.title = "Remove from gallery";
+        rm.textContent = "×";
+        li.appendChild(rm);
+        list.appendChild(li);
+      }
+      refresh();
+    };
+    refresh();
+  })();
   window.addEventListener("message", (e) => {
     if (e.origin !== window.location.origin) return;
+    // Multi-select batch — the picker iframe sends one message
+    // with the full items array on Done. Route it through the same
+    // gallery handler one item at a time so the existing per-pick
+    // optimistic-tile logic + count cap still apply.
+    if (e.data && e.data.type === "media-selected-batch") {
+      if (currentMediaMode === "post-gallery") {
+        const gallerySection = document.querySelector("[data-post-gallery]");
+        const adder = gallerySection && gallerySection.__galleryAddPicked;
+        (e.data.items || []).forEach((item) => {
+          if (typeof adder === "function") adder(item);
+        });
+      }
+      const mb = document.getElementById("media-picker-modal");
+      if (mb) closeModal(mb);
+      currentMediaMode = null;
+      return;
+    }
     if (!e.data || e.data.type !== "media-selected") return;
     const item = e.data.item;
+    if (currentMediaMode === "post-gallery") {
+      const gallerySection = document.querySelector("[data-post-gallery]");
+      if (gallerySection && typeof gallerySection.__galleryAddPicked === "function") {
+        gallerySection.__galleryAddPicked(item);
+      }
+      const mg = document.getElementById("media-picker-modal");
+      if (mg) closeModal(mg);
+      currentMediaMode = null;
+      return;
+    }
     if (currentMediaMode === "post-featured") {
       const section = document.querySelector("[data-post-featured-image]");
       if (section) {

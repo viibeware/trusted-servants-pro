@@ -414,6 +414,13 @@
   </p>
 </section>
 
+{# Anchor for the JS-built sortable index of every template card
+   on the page. Placed AFTER the Reusable templates intro card so
+   the legend copy stays visible above the list; the JS auto-
+   discovers each ``<section class="card fe-tplgrid-section">``
+   below and lifts them into modals. #}
+<div id="tpl-index-host"></div>
+
 {{ tpl_section(
      "Announcements / Events / Archive detail",
      "Used for every announcement, event, and archived-post detail page (e.g. /event/spring-roundup-2026, /announcement/group-conscience, /archive/2024-fall-roundup).",
@@ -2213,120 +2220,409 @@
   </div>
 </div>
 
-{# Collapsible section cards. Every ``<section class="card">`` on
-   the Templates page starts collapsed by default; the operator's
-   expansion state is remembered per-card via localStorage so
-   reloading the page restores the same view. Card heading
-   becomes a clickable toggle with a chevron indicator on the
-   right; the rest of the card content lives inside a body div
-   that hides/shows. Key is derived from the card's heading text
-   so reorders / additions don't shift saved state. #}
+{# Styles + JS that power the sortable index of every template
+   card on the page. The host element lives inside
+   ``.fe-admin-main`` (see above); the JS auto-discovers each
+   ``<section class="card">``, lifts it into its own modal,
+   and renders a list row pointing at it. Admins drag rows to
+   reorder the index (saved per-browser via localStorage) and
+   click Edit to open the matching template settings as a
+   centred modal. Form submits inside the modal are intercepted
+   to use the yellow save bar pattern — modal stays open until
+   the operator clicks the X. #}
 <style>
-  .fe-tpl-collapsed-card > .card-head {
-    cursor: pointer;
-    user-select: none;
+  /* Hide every original section.card on initial render — the JS
+     immediately moves them into modals so a brief flash of the
+     stacked-cards layout would be visually noisy. Removed once the
+     JS has run and tagged the host. */
+  body:not(.fe-tpl-index-ready) main section.card { visibility: hidden; }
+
+  .fe-tpl-index-toolbar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
+    gap: .65rem;
+    margin: 0 0 .85rem;
   }
-  .fe-tpl-collapsed-card > .card-head .fe-tpl-collapse-chev {
-    display: inline-flex;
+  .fe-tpl-index-toolbar-label { font-weight: 600; }
+  .fe-tpl-index-sort .btn { min-width: 64px; }
+  .fe-tpl-index {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+  }
+  .fe-tpl-index-row {
+    display: flex;
     align-items: center;
-    transition: transform 180ms ease;
+    gap: 1rem;
+    padding: .85rem 1rem;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04));
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+  .fe-tpl-index-row:hover { border-color: var(--brand); box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07); }
+  .fe-tpl-index-row-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .fe-tpl-index-row-name {
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .fe-tpl-index-row-active {
+    font-size: .82rem;
     color: var(--muted);
-    flex: 0 0 auto;
+    line-height: 1.4;
   }
-  .fe-tpl-collapsed-card > .card-head .fe-tpl-collapse-chev .icon {
-    width: 18px; height: 18px;
+  .fe-tpl-index-row-active-pill {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--panel-2);
+    margin-right: .35rem;
+    font-weight: 600;
+    color: var(--text);
   }
-  .fe-tpl-collapsed-card.is-open > .card-head .fe-tpl-collapse-chev {
-    transform: rotate(180deg);
+  .fe-tpl-index-row-blurb {
+    font-size: .82rem;
+    color: var(--muted);
+    line-height: 1.4;
   }
-  .fe-tpl-collapsible-body { display: none; }
-  .fe-tpl-collapsed-card.is-open > .fe-tpl-collapsible-body { display: block; }
+  .fe-tpl-index-row-edit { flex: 0 0 auto; }
+
+  /* Modal wrapping per-template settings. Reuses the global .modal
+     chrome — width is the standard large-modal cap. Save bar lives
+     inline in the modal footer; the X button closes (save bar
+     leaves the modal open). */
+  .modal.tpl-modal .modal-panel {
+    width: min(1080px, 96vw);
+    max-height: calc(100vh - 8vh);
+  }
+  .modal.tpl-modal .modal-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 0 1rem 1rem;
+  }
+  /* Tighten the moved section's chrome — it was designed for the
+     standalone page (full-bleed card with its own border / padding)
+     and would otherwise nest awkwardly inside the modal panel. */
+  .modal.tpl-modal .modal-body > section.card {
+    border: 0;
+    box-shadow: none;
+    padding: 1rem 0 0;
+    margin: 0;
+    background: transparent;
+  }
+  .modal.tpl-modal .modal-body > section.card > .card-head { padding: 0; }
+  .modal.tpl-modal .modal-foot {
+    border-top: 1px solid var(--border);
+    padding: .75rem 1rem;
+  }
+  .modal.tpl-modal .modal-foot[data-tpl-foot-empty] { display: none; }
 </style>
 <script>
 (function () {
-  // Stable key from the heading + a stripped query of the surrounding
-  // form's action so two cards with identical headings on the same
-  // page still get distinct localStorage slots. Falls back to the
-  // section's DOM-order index so missing headings don't collide.
-  function keyFor(section, idx) {
-    var h2 = section.querySelector(':scope > .card-head h2, :scope > .card-head h3');
-    var heading = h2 ? (h2.textContent || '').trim() : '';
-    var formAction = (section.querySelector('form') || {}).action || '';
-    return 'fe-tpl-card:' + (heading || ('#' + idx)) + (formAction ? '|' + formAction.split('?')[0] : '');
+  // Wait for layout so the section markup is fully in the DOM
+  // before we start moving nodes around. Inline scripts at the
+  // bottom of the content block already run after all sections
+  // are parsed, but DOMContentLoaded is the conservative anchor.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
   }
 
-  function chevronSvg() {
-    return '<span class="fe-tpl-collapse-chev" aria-hidden="true">' +
-      '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<polyline points="6 9 12 15 18 9"/></svg></span>';
-  }
-
-  // Skip cards inside modal panels — only collapsible at the
-  // top-level page surface. Also skip the very first section
-  // (page intro) so the operator sees the legend without an
-  // extra click.
-  var sections = Array.from(document.querySelectorAll('section.card'))
-    .filter(function (s) { return !s.closest('.modal'); });
-
-  sections.forEach(function (section, idx) {
-    var head = section.querySelector(':scope > .card-head');
-    if (!head) return;
-    section.classList.add('fe-tpl-collapsed-card');
-
-    // Wrap every non-head child into a single body element so we
-    // can toggle one node instead of N. Idempotent — if a previous
-    // pass already wrapped, skip.
-    var body = section.querySelector(':scope > .fe-tpl-collapsible-body');
-    if (!body) {
-      body = document.createElement('div');
-      body.className = 'fe-tpl-collapsible-body';
-      var moved = [];
-      Array.from(section.children).forEach(function (child) {
-        if (child !== head) moved.push(child);
+  function init() {
+    var host = document.getElementById('tpl-index-host');
+    if (!host) return;
+    var sections = Array.from(document.querySelectorAll('section.card'))
+      .filter(function (s) {
+        if (s.closest('.modal')) return false;
+        // Only lift "real" template-config cards. The Reusable-templates
+        // intro card (no .fe-tplgrid-section, no form) is just legend
+        // copy — leave it inline above the index so the explanation
+        // stays visible without an extra click.
+        return s.classList.contains('fe-tplgrid-section');
       });
-      moved.forEach(function (c) { body.appendChild(c); });
-      section.appendChild(body);
+
+    // Each section gets a stable key derived from the heading + the
+    // surrounding form's action URL, so reorders in source / future
+    // additions don't shuffle the saved index order.
+    function keyFor(section) {
+      var h = section.querySelector(':scope > .card-head h2, :scope > .card-head h3');
+      var heading = h ? (h.textContent || '').trim() : '';
+      var formAction = (section.querySelector('form') || {}).action || '';
+      return (heading || 'card') + '|' + (formAction || '');
+    }
+    function activeTplName(section) {
+      // The card the JS knows is "active" carries a .active class
+      // on its surrounding label.
+      var active = section.querySelector('.fe-tplgrid-card.active .fe-tplgrid-name');
+      if (!active) return '';
+      return (active.firstChild ? active.firstChild.textContent : '').trim();
     }
 
-    if (!head.querySelector('.fe-tpl-collapse-chev')) {
-      head.insertAdjacentHTML('beforeend', chevronSvg());
-    }
-
-    var storageKey = keyFor(section, idx);
-    var saved = null;
-    try { saved = localStorage.getItem(storageKey); } catch (_) {}
-    var open = saved === '1';  // default closed
-    section.classList.toggle('is-open', open);
-    head.setAttribute('role', 'button');
-    head.setAttribute('tabindex', '0');
-    head.setAttribute('aria-expanded', String(open));
-
-    function setOpen(next) {
-      open = next;
-      section.classList.toggle('is-open', open);
-      head.setAttribute('aria-expanded', String(open));
-      try { localStorage.setItem(storageKey, open ? '1' : '0'); } catch (_) {}
-    }
-
-    head.addEventListener('click', function (e) {
-      // Don't toggle when the click came from an interactive child
-      // (e.g. a link or button inside the heading). Cards on this
-      // page don't have any today, but be defensive.
-      if (e.target.closest('a, button, input, select, textarea')) return;
-      setOpen(!open);
+    // Build per-section metadata, then sort by saved index order
+    // (when present) before rendering the list. Sections without an
+    // entry in saved order trail in their source-declared order.
+    var meta = sections.map(function (section, i) {
+      var headEl = section.querySelector(':scope > .card-head h2');
+      var blurbEl = section.querySelector(':scope > .card-head .muted.smaller');
+      return {
+        section: section,
+        key: keyFor(section),
+        heading: headEl ? (headEl.textContent || '').trim() : 'Template card ' + (i + 1),
+        blurb: blurbEl ? (blurbEl.textContent || '').trim() : '',
+        active: activeTplName(section),
+      };
     });
-    head.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        setOpen(!open);
+
+    // Sort direction toggle — persisted per-browser. Default A→Z so
+    // the list reads alphabetically on first visit.
+    var sortDir = 'asc';
+    try {
+      var saved = localStorage.getItem('fe-tpl-index-sort');
+      if (saved === 'asc' || saved === 'desc') sortDir = saved;
+    } catch (_) {}
+    function applySort(items) {
+      var sorted = items.slice().sort(function (a, b) {
+        var an = (a.heading || '').toLowerCase();
+        var bn = (b.heading || '').toLowerCase();
+        if (an < bn) return -1;
+        if (an > bn) return 1;
+        return 0;
+      });
+      if (sortDir === 'desc') sorted.reverse();
+      return sorted;
+    }
+    var ordered = applySort(meta);
+
+    // Sort toolbar — A→Z / Z→A toggle above the list.
+    var toolbar = document.createElement('div');
+    toolbar.className = 'fe-tpl-index-toolbar';
+    toolbar.innerHTML =
+      '<span class="fe-tpl-index-toolbar-label muted small">Sort</span>' +
+      '<div class="view-toggle fe-tpl-index-sort">' +
+        '<button type="button" class="btn btn-sm" data-tpl-sort="asc">A → Z</button>' +
+        '<button type="button" class="btn btn-sm" data-tpl-sort="desc">Z → A</button>' +
+      '</div>';
+    host.appendChild(toolbar);
+
+    // Build the sortable index list + a modal per section. Modals
+    // are appended once on init (DOM order doesn't matter for them
+    // — they're full-screen overlays). The visible row list is
+    // re-rendered on sort flip so the order matches.
+    var list = document.createElement('ol');
+    list.className = 'fe-tpl-index';
+    function buildRow(m, i) {
+      var modalId = m.modalId;
+      var row = document.createElement('li');
+      row.className = 'fe-tpl-index-row';
+      row.dataset.tplKey = m.key;
+      row.innerHTML =
+        '<div class="fe-tpl-index-row-info">' +
+          '<div class="fe-tpl-index-row-name"></div>' +
+          (m.active
+            ? '<div class="fe-tpl-index-row-active"><span class="fe-tpl-index-row-active-pill"></span><span class="fe-tpl-index-row-active-tail"></span></div>'
+            : '') +
+          (m.blurb
+            ? '<div class="fe-tpl-index-row-blurb"></div>'
+            : '') +
+        '</div>' +
+        '<button type="button" class="btn btn-sm btn-primary fe-tpl-index-row-edit" data-tpl-open="' + modalId + '">Edit</button>';
+      row.querySelector('.fe-tpl-index-row-name').textContent = m.heading;
+      if (m.active) {
+        row.querySelector('.fe-tpl-index-row-active-pill').textContent = m.active;
+        row.querySelector('.fe-tpl-index-row-active-tail').textContent = 'currently active';
       }
+      if (m.blurb) row.querySelector('.fe-tpl-index-row-blurb').textContent = m.blurb;
+      return row;
+    }
+    function renderList() {
+      var current = applySort(meta);
+      list.innerHTML = '';
+      current.forEach(function (m) { list.appendChild(buildRow(m)); });
+      toolbar.querySelectorAll('[data-tpl-sort]').forEach(function (b) {
+        b.classList.toggle('active', b.dataset.tplSort === sortDir);
+      });
+    }
+    // Build modal shells once, before the first list render.
+    ordered.forEach(function (m, i) {
+      var modalId = 'fe-tpl-modal-' + i;
+      m.modalId = modalId;
+      m.section.dataset.tplModalId = modalId;
+      buildModal(m, modalId);
     });
-  });
+    renderList();
+    host.appendChild(list);
+    document.body.classList.add('fe-tpl-index-ready');
+
+    // Sort toggle click — flips direction, re-renders rows.
+    toolbar.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-tpl-sort]');
+      if (!btn) return;
+      sortDir = btn.dataset.tplSort === 'desc' ? 'desc' : 'asc';
+      try { localStorage.setItem('fe-tpl-index-sort', sortDir); } catch (_) {}
+      renderList();
+    });
+
+    function buildModal(m, modalId) {
+      var modal = document.createElement('div');
+      modal.className = 'modal modal-lg tpl-modal';
+      modal.id = modalId;
+      modal.setAttribute('aria-hidden', 'true');
+      modal.innerHTML =
+        '<div class="modal-backdrop" data-close></div>' +
+        '<div class="modal-panel" role="dialog" aria-modal="true">' +
+          '<div class="modal-head">' +
+            '<h2></h2>' +
+            '<button type="button" class="icon-btn" data-close aria-label="Close">' +
+              '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>' +
+            '</button>' +
+          '</div>' +
+          '<div class="modal-body"></div>' +
+          '<div class="modal-foot" data-tpl-foot>' +
+            '<div class="fe-save-bar fe-modal-save-bar" data-tpl-save-bar hidden>' +
+              '<span class="fe-save-bar-msg">Unsaved changes</span>' +
+              '<button type="button" class="btn fe-save-bar-btn" data-tpl-save-btn>Save</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      modal.querySelector('.modal-head h2').textContent = m.heading;
+      modal.querySelector('.modal-body').appendChild(m.section);
+      // Hide the section's now-redundant heading (the modal head
+      // already shows it) so we don't double up.
+      var origHead = m.section.querySelector(':scope > .card-head');
+      if (origHead) origHead.style.display = 'none';
+      document.body.appendChild(modal);
+
+      wireDirty(modal);
+    }
+
+    // Per-modal dirty tracking + save bar. Listens for input /
+    // change on every form inside the modal; flips the bar visible
+    // on first edit. Save bar's click POSTs every dirty form via
+    // fetch and shows "Saved" — the modal stays open until the
+    // operator clicks the X.
+    function wireDirty(modal) {
+      var bar = modal.querySelector('[data-tpl-save-bar]');
+      var btn = modal.querySelector('[data-tpl-save-btn]');
+      var msg = bar.querySelector('.fe-save-bar-msg');
+      var dirtyForms = new Set();
+      function show() {
+        bar.hidden = false;
+        bar.classList.remove('is-leaving');
+        msg.textContent = dirtyForms.size > 1
+          ? ('Unsaved changes (' + dirtyForms.size + ' sections)')
+          : 'Unsaved changes';
+        btn.disabled = false;
+        btn.textContent = 'Save';
+      }
+      function hide() {
+        bar.hidden = true;
+        bar.classList.remove('is-leaving');
+        dirtyForms.clear();
+      }
+      modal.querySelectorAll('form').forEach(function (form) {
+        function markDirty() { dirtyForms.add(form); show(); }
+        form.addEventListener('input', markDirty);
+        form.addEventListener('change', markDirty);
+        // Block native submit (would close the modal + reload) and
+        // route through the save bar instead. Submit buttons that
+        // belong to a different form (form="…" attr) keep their
+        // own behaviour.
+        form.addEventListener('submit', function (e) {
+          if (e.submitter && e.submitter.form !== form) return;
+          e.preventDefault();
+          dirtyForms.add(form);
+          show();
+          // Mirror the bar-click path so a stray Enter in a field
+          // still triggers the same save flow.
+          btn.click();
+        });
+        // Hide any inline primary "Save" buttons each section
+        // shipped with — the bar is the canonical commit affordance
+        // now, and a duplicate inside the body would just confuse.
+        form.querySelectorAll('button.btn-primary').forEach(function (b) {
+          var wrap = b.closest('.form-actions, .branding-save-row');
+          (wrap || b).style.display = 'none';
+        });
+      });
+
+      btn.addEventListener('click', function () {
+        if (!dirtyForms.size) { hide(); return; }
+        btn.disabled = true;
+        msg.textContent = 'Saving…';
+        btn.textContent = 'Saving…';
+        var jobs = Array.from(dirtyForms).map(function (form) {
+          var fd = new FormData(form);
+          return fetch(form.action, {
+            method: form.method || 'POST',
+            credentials: 'same-origin',
+            body: fd,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          }).then(function (r) {
+            if (!r.ok) throw new Error('save failed ' + r.status);
+          });
+        });
+        Promise.all(jobs).then(function () {
+          msg.textContent = 'Saved';
+          // Animate the bar out via the same fe-save-leave keyframe
+          // the global save bar uses, then reset state so a follow-
+          // up edit re-shows it fresh. Modal itself stays open
+          // until the operator clicks the X.
+          var done = false;
+          function finish() { if (done) return; done = true; hide(); }
+          bar.addEventListener('animationend', finish, { once: true });
+          bar.classList.add('is-leaving');
+          setTimeout(finish, 400);
+        }).catch(function () {
+          btn.disabled = false;
+          btn.textContent = 'Save';
+          msg.textContent = 'Save failed — try again';
+        });
+      });
+    }
+
+    // Click an Edit row → open the matching modal. Uses the global
+    // ``openModal`` helper exposed by app.js when present; falls
+    // back to a class toggle when running in isolation.
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-tpl-open]');
+      if (!btn) return;
+      var id = btn.dataset.tplOpen;
+      var modal = document.getElementById(id);
+      if (!modal) return;
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+    });
+    document.addEventListener('click', function (e) {
+      var close = e.target.closest('.tpl-modal [data-close]');
+      if (!close) return;
+      var modal = close.closest('.tpl-modal');
+      if (!modal) return;
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      document.querySelectorAll('.tpl-modal.open').forEach(function (m) {
+        m.classList.remove('open');
+        m.setAttribute('aria-hidden', 'true');
+      });
+      document.body.style.overflow = '';
+    });
+
+  }
 })();
 </script>
 {% endblock %}

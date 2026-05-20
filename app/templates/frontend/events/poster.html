@@ -127,6 +127,14 @@
     </article>
     {% endif %}
 
+    {# Gallery — centred under the body content with a constrained
+       max-width so it reads at the same visual scale as a featured
+       image would. The poster template's hero is a full-bleed
+       background, so there's no inline featured image to anchor
+       to; the centred max-width keeps the thumbnails proportionate
+       with the rest of the body. #}
+    {% include "frontend/events/_gallery.html" %}
+
     {% if event.contact_name or event.contact_phone or event.contact_email %}
     <section class="fe-event-poster-contact">
       <h3>{{ icon('user') }} Contact</h3>

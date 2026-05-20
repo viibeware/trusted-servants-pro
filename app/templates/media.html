@@ -37,6 +37,21 @@
   {% endif %}
 {% endblock %}
 {% block content %}
+{# Multi-select picker bar — only rendered when the caller opened
+   the picker with ``multi=1``. The JS in app.js wires per-item
+   Select buttons to toggle items into a running set; this bar
+   shows the running count + a Done button that posts a single
+   ``media-selected-batch`` message back. Hidden by default until
+   at least one item is selected. #}
+{% if picker_multi %}
+<div class="media-multi-bar" data-media-multi-bar hidden>
+  <span class="media-multi-count">
+    <strong data-multi-count>0</strong> selected
+  </span>
+  <button type="button" class="btn btn-sm" data-multi-clear>Clear</button>
+  <button type="button" class="btn btn-primary" data-multi-done>Add items</button>
+</div>
+{% endif %}
 {# A media row is "previewable" if it's an image (any ext we render
    inline) or a PDF. We compute this in Python so both views share the
    same definition + the lightbox JS can iterate items in DOM order. #}
