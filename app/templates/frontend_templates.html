@@ -2312,15 +2312,67 @@
   }
   /* Tighten the moved section's chrome — it was designed for the
      standalone page (full-bleed card with its own border / padding)
-     and would otherwise nest awkwardly inside the modal panel. */
+     and would otherwise nest awkwardly inside the modal panel.
+     ``display: flex; flex-direction: column`` re-flows the
+     section's direct children as a vertical stack with explicit
+     ``gap`` between them — fixes layouts (Blog detail, others)
+     where the picker form, the customize <details>, and a follow-
+     up settings form would otherwise sit flush against each other
+     or, in flex contexts, visually overlap. */
   .modal.tpl-modal .modal-body > section.card {
     border: 0;
     box-shadow: none;
     padding: 1rem 0 0;
     margin: 0;
     background: transparent;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    min-width: 0;
   }
   .modal.tpl-modal .modal-body > section.card > .card-head { padding: 0; }
+  /* Defensive — anything that might position itself unusually
+     inside the modal-hosted section gets clipped to the visible
+     flow. Prevents the customize <details> + sibling forms from
+     appearing to "stack on top of" each other when the section
+     content is taller than the viewport. */
+  .modal.tpl-modal .modal-body > section.card > * {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+  .modal.tpl-modal .modal-body > section.card > form,
+  .modal.tpl-modal .modal-body > section.card > details {
+    position: static;
+  }
+  /* The customize panel's fieldset grid is ``auto-fit, minmax(240px,
+     1fr)`` for the standalone page where the section fills the
+     whole content column. Inside the modal we cap to two columns
+     so heavy fieldsets (Background, Fonts, Sidebar widgets, Sizes)
+     don't squeeze into 3-4 narrow columns where their padding +
+     internal layout would overflow neighbors. Drops to a single
+     column on narrow viewports. */
+  .modal.tpl-modal .fe-tplgrid-customize-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+  @media (max-width: 720px) {
+    .modal.tpl-modal .fe-tplgrid-customize-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  /* Trim the heavy ``.fieldset`` padding / inner gap that's
+     designed for the standalone page — modals have limited
+     vertical room, so we lighten the spacing without affecting
+     the fieldset's appearance outside this context. */
+  .modal.tpl-modal .modal-body .fieldset {
+    padding: 1rem 1.25rem;
+    gap: .75rem;
+  }
+  /* And tighten the picker grid (template thumbs) so wide thumbs
+     don't push the modal-body wider than its parent panel. */
+  .modal.tpl-modal .fe-tplgrid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
   .modal.tpl-modal .modal-foot {
     border-top: 1px solid var(--border);
     padding: .75rem 1rem;
