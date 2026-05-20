@@ -2588,6 +2588,13 @@ button.sidebar-section-toggle[aria-expanded="false"] .sidebar-section-chevron {
 .fe-admin-main .card.is-collapsed { padding: 1rem 1.5rem; cursor: pointer; }
 .fe-admin-main .card.is-collapsed:hover { background: var(--panel-2); }
 .fe-admin-main .card.is-collapsed > :not(.card-head) { display: none !important; }
+/* Opted-out cards (``data-no-collapse``) are non-interactive — they
+   never collapse, so they shouldn't read as clickable: reset the
+   pointer cursor + the hover heading-colour shift the collapsible
+   cards use to advertise their toggle. */
+.fe-admin-main .card[data-no-collapse],
+.fe-admin-main .card[data-no-collapse] .card-head { cursor: default; }
+.fe-admin-main .card[data-no-collapse] .card-head:hover h2 { color: inherit; }
 /* Re-enable spacing under the head when expanded (we cleared the default
    margin-bottom above so the chevron alignment stays consistent). */
 .fe-admin-main .card:not(.is-collapsed) .card-head { margin-bottom: 12px; }

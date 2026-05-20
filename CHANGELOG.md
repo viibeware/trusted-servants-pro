@@ -6,6 +6,27 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.1.31] — 2026-05-20
+
+### Changed — Frontend → Templates page index polish
+
+Follow-up refinements to the 2.1.29 list-of-modals refactor:
+
+- **Active-template pill** now renders the brand colour at 18% opacity (``color-mix(in srgb, var(--brand) 18%, transparent)``) with brand-coloured text, instead of the neutral panel fill.
+- **(/url) suffix** in each row title is split into its own pill chip styled like a secondary (outline) button — transparent fill, neutral border, monospace URL text.
+- **Sort A→Z / Z→A toggle** moved to the far right of the toolbar (``justify-content: flex-end``).
+- **1rem gap** between the stacked elements inside each index card and between cards in the list.
+- **Index rows** now match the standard backend ``.card`` chrome (same border, ``var(--radius)``, ``var(--shadow)``) — the frontend-style hover lift / brand-border treatment is dropped.
+
+### Fixed — Templates page card flash + stray collapse carrot
+
+- The first-paint hide rule that keeps template cards invisible until the JS lifts them into modals lived in a ``<style>`` at the bottom of the content block, so the cards (and one stray modal section) briefly flashed before the rule was parsed. Moved the critical ``visibility: hidden`` rule to the top of the content block so it applies from the first paint.
+- The global ``feCollapsibleCards()`` helper (which adds a chevron toggle to every ``.card`` in ``.fe-admin-main`` across FE-admin pages) was decorating cards on the Templates page too. Added a ``data-no-collapse`` opt-out — the helper early-returns for those cards and the index JS strips any chevron / collapsed state from cards as they're lifted into modals.
+
+### Removed — "Reusable templates" intro card
+
+The standalone intro card is gone; its explanatory copy now lives in the Templates page title's ``?`` tooltip (``heading_help``) so the legend is available without consuming a card slot.
+
 ## [2.1.30] — 2026-05-20
 
 ### Fixed — Frontend → Templates per-template modal layout

@@ -3497,6 +3497,15 @@
 
   function decorate(card) {
     if (card.__feCollapseInit) return;
+    // Explicit opt-out — cards carrying ``data-no-collapse`` are
+    // never made collapsible (e.g. the Templates page's "Reusable
+    // templates" intro card, which is pure legend copy that should
+    // always read in full).
+    if (card.hasAttribute("data-no-collapse")) {
+      card.__feCollapseInit = true;
+      card.classList.remove("is-collapsed");
+      return;
+    }
     // Cards rendered inside a modal panel (homepage / footer block-edit
     // popups) shouldn't be collapsible — the modal IS the disclosure;
     // a nested expand/collapse layer just gets in the user's way and

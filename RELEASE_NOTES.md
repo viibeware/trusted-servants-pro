@@ -7,7 +7,17 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.1.30 — 2026-05-20 (latest) — Templates page modal layout fixes
+## 2.1.31 — 2026-05-20 (latest) — Templates page index polish
+
+More refinement to the **Frontend → Templates** page now that each template configurator opens as a modal:
+
+- The standalone **Reusable templates** intro card is removed — its explanation moved into the `?` tooltip next to the page title.
+- Each row's URL (e.g. `/blog/<slug>`) shows as a tidy outline chip beside the template name; the "currently active" template shows in a soft brand-tinted pill.
+- The **A→Z / Z→A** sort toggle sits at the far right of the toolbar.
+- Rows now use the same flat card styling as the rest of the admin (no frontend-style hover lift).
+- Fixed a brief flash of the old stacked-card layout on page load, and removed a stray collapse carrot that the global card-collapse feature was adding to this page.
+
+## 2.1.30 — 2026-05-20 — Templates page modal layout fixes
 
 Per-template modals on the **Frontend → Templates** page now reflow cleanly. Customize-panel cards (Background, Fonts, Sidebar widgets, Sizes) used to squeeze into one row inside the modal width and the content overflowed into adjacent neighbours; the grid is now capped at two columns inside modals (single column under 720px) so every card has full breathing room.
 
