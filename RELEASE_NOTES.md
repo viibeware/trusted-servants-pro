@@ -7,7 +7,17 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.3.0 — 2026-05-21 (latest) — Image & asset caching for a faster public site
+## 2.4.0 — 2026-05-21 (latest) — Live meeting bar updates on its own
+
+The **LIVE meeting badge** at the top of your public site now appears and disappears **automatically, without anyone needing to refresh the page**.
+
+- When an online or hybrid meeting reaches its start (or Zoom-opens) time, the yellow **LIVE: <meeting>** badge — with its **Join Zoom Meeting** button — slides in for everyone currently on the site, and clears itself when the meeting ends. Previously a visitor only saw it if they happened to load the page during the meeting.
+- It checks for changes every 30 seconds (and the moment someone switches back to your tab), so the bar always reflects what's live right now.
+- On desktop, any "Helpline"-style grouped item still tucks into its compact icon while a meeting is live to give the live message room — now correctly, whether the meeting was already live when the page loaded or went live while the visitor was reading.
+
+No setup needed beyond the existing utility-bar settings: keep the bar enabled and the live-meeting badge turned on.
+
+## 2.3.0 — 2026-05-21 — Image & asset caching for a faster public site
 
 Your public site now lets returning visitors **keep images and styling in their browser cache** instead of re-downloading everything on every visit — so pages load noticeably faster the second time around — without ever showing stale content.
 

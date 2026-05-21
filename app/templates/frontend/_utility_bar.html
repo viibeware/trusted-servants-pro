@@ -88,7 +88,13 @@
    `.fe-utility-container--live-expanded` in frontend.css. #}
 {% macro render_item(it, is_live=False) -%}
   {%- if it.kind == 'container' -%}
-    {%- set _collapsed = is_live and (it.collapsed_icon or '') -%}
+    {# Emit the collapsed-icon + expanded duo whenever the container has a
+       collapsed_icon — independent of the live state. Whether the icon or
+       the full container shows is decided in CSS by the bar's `.is-live`
+       class + viewport, so the collapse works both for a page rendered
+       while live AND when the live-meeting poller flips the bar live
+       client-side (no reload). `is_live` is no longer consulted here. #}
+    {%- set _collapsed = (it.collapsed_icon or '') -%}
     {%- if _collapsed -%}
       {%- set _target = namespace(url='', new_tab=False, label='') -%}
       {% for inner in (it['items'] or []) %}
@@ -127,9 +133,15 @@
 {%- endmacro %}
 
 {% set _is_live = (live_meeting is defined and live_meeting is not none and live_meeting.meeting) %}
-{% set _has_content = utility_bar and (utility_bar.left or utility_bar.right
-                                       or _is_live or utility_bar.show_theme_toggle) %}
-{% if utility_bar and utility_bar.enabled and _has_content %}
+{% set _static_content = utility_bar and (utility_bar.left or utility_bar.right
+                                          or utility_bar.show_theme_toggle) %}
+{% set _has_content = _static_content or _is_live %}
+{# Render whenever the bar has content OR the live-meeting badge is on:
+   in the latter case the bar may be idle/empty right now, but the poller
+   below needs a target already in the DOM to fill the moment a meeting
+   goes live (so the badge appears without a page reload). An empty idle
+   bar is rendered `hidden`; the poller shows/hides it as state changes. #}
+{% if utility_bar and utility_bar.enabled and (_has_content or utility_bar.show_live) %}
   {# Live state colours come from CSS so dark mode can dim the yellow;
      idle palette keeps the inline admin-chosen values. #}
   {% set _bg = utility_bar.bg_color or '#0b1220' %}
@@ -156,6 +168,10 @@
        role="region" aria-label="Site utility bar"
        data-fe-utility-bar
        data-mobile-default="{{ _mobile_default }}"
+       data-ub-show-live="{{ '1' if utility_bar.show_live else '0' }}"
+       data-ub-static="{{ '1' if _static_content else '0' }}"
+       data-ub-bg="{{ _bg }}" data-ub-fg="{{ _fg }}"
+       {% if not _has_content %}hidden{% endif %}
        {% if not _is_live %}style="background: {{ _bg }}; color: {{ _fg }};"{% endif %}>
     {# Single inner row that adapts: 3-col grid on desktop (left |
        live | right), horizontal swipe strip on mobile. The live
@@ -197,21 +213,21 @@
 
   <script>
   (function(){
-    // On mobile (≤ 720 px) the bar collapses to a horizontal swipe
-    // strip whose snap points are either individual items or whole
-    // side-groups depending on the admin's mobile-default choice.
-    // Scroll the chosen default into view on first paint so visitors
-    // see the right thing without needing to swipe first.
     var bar = document.querySelector('[data-fe-utility-bar]');
     if (!bar) return;
     var strip = bar.querySelector('.fe-utility-bar-inner');
-    if (!strip) return;
+    var center = bar.querySelector('.fe-utility-bar-center');
+
+    // ── Mobile snap-to-default ──
+    // On mobile (≤ 720 px) the bar collapses to a horizontal swipe strip
+    // whose snap points are either individual items or whole side-groups
+    // depending on the admin's mobile-default choice. Scroll the chosen
+    // default into view on first paint so visitors see the right thing
+    // without needing to swipe first. Live mode wins: visitors land on
+    // the LIVE: <meeting> snap point first.
     function scrollToDefault(){
+      if (!strip) return;
       if (window.matchMedia('(min-width: 721px)').matches) return;
-      // Live mode wins on mobile: visitors should always land on the
-      // LIVE: <meeting> snap point first, with the rest of the items
-      // available by swiping. Falls back to the admin's saved default
-      // when no meeting is live.
       var isLive = bar.classList.contains('is-live');
       var target = null;
       if (isLive) {
@@ -231,12 +247,69 @@
       var off = target.offsetLeft - (strip.clientWidth - target.clientWidth) / 2;
       strip.scrollTo({left: Math.max(0, off), behavior: 'instant'});
     }
-    // Run after layout settles. requestAnimationFrame waits one paint;
-    // a fallback timeout covers fonts/images that resize the strip
-    // after the first frame.
     requestAnimationFrame(scrollToDefault);
     setTimeout(scrollToDefault, 80);
     window.addEventListener('resize', scrollToDefault);
+
+    // ── Live-meeting auto-refresh ──
+    // Poll a tiny JSON endpoint so the LIVE: <meeting> badge appears,
+    // updates, and clears on its own as online/hybrid meetings open and
+    // close — no page reload needed. Only runs when the admin enabled the
+    // live badge (data-ub-show-live).
+    if (bar.getAttribute('data-ub-show-live') !== '1' || !center) return;
+    var hasStatic = bar.getAttribute('data-ub-static') === '1';
+    var idleBg = bar.getAttribute('data-ub-bg') || '';
+    var idleFg = bar.getAttribute('data-ub-fg') || '';
+    var POLL_URL = {{ url_for('frontend.api_live_meeting') | tojson }};
+
+    function buildLive(name, joinUrl){
+      var w = document.createElement('div'); w.className = 'fe-utility-live';
+      var p = document.createElement('span'); p.className = 'fe-utility-live-pulse'; p.setAttribute('aria-hidden', 'true');
+      var l = document.createElement('span'); l.className = 'fe-utility-live-label'; l.textContent = 'LIVE:';
+      var n = document.createElement('span'); n.className = 'fe-utility-live-name'; n.textContent = name;
+      w.appendChild(p); w.appendChild(l); w.appendChild(n);
+      if (joinUrl){
+        var a = document.createElement('a'); a.className = 'fe-utility-live-cta';
+        a.href = joinUrl; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Join Zoom Meeting';
+        w.appendChild(a);
+      }
+      return w;
+    }
+    function curName(){ var n = center.querySelector('.fe-utility-live-name'); return n ? n.textContent : ''; }
+    function curJoin(){ var c = center.querySelector('.fe-utility-live-cta'); return c ? c.getAttribute('href') : null; }
+
+    function apply(d){
+      var wasLive = bar.classList.contains('is-live');
+      if (d && d.live){
+        var join = d.join_url || null;
+        if (!wasLive || curName() !== d.name || curJoin() !== join){
+          center.textContent = '';
+          center.appendChild(buildLive(d.name, join));
+        }
+        bar.classList.add('is-live');
+        // The .is-live yellow background isn't !important, so the idle
+        // inline colours have to be cleared for it to take effect.
+        bar.style.removeProperty('background');
+        bar.style.removeProperty('color');
+        bar.removeAttribute('hidden');
+        if (!wasLive) scrollToDefault();
+      } else if (wasLive || center.firstChild || !hasStatic){
+        bar.classList.remove('is-live');
+        center.textContent = '';
+        if (idleBg) bar.style.background = idleBg;
+        if (idleFg) bar.style.color = idleFg;
+        // A bar that exists only for the live badge collapses when idle.
+        if (!hasStatic) bar.setAttribute('hidden', '');
+      }
+    }
+    function poll(){
+      fetch(POLL_URL, {headers: {'Accept': 'application/json'}, credentials: 'same-origin'})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(d){ if (d) apply(d); })
+        .catch(function(){});
+    }
+    setInterval(poll, 30000);
+    document.addEventListener('visibilitychange', function(){ if (!document.hidden) poll(); });
   })();
   </script>
 {% endif %}

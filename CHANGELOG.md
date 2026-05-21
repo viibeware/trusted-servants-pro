@@ -6,6 +6,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.4.0] — 2026-05-21
+
+### Added — Live meeting bar updates without a page refresh
+
+The utility-bar "LIVE: <meeting>" badge now appears, updates, and clears on its own as online/hybrid meetings open and close — visitors no longer have to reload to see it.
+
+- **New endpoint** `GET /api/live-meeting` (`app/frontend.py`) returns the current live-meeting state as JSON (`{"live": …, "name": …, "join_url": …}`), reusing the exact `current_live_meeting()` logic the server render uses so a poll always matches a refresh. Public, gated on the admin's live-badge toggle, uncached.
+- **Poller in the utility bar** (`_utility_bar.html`) fetches that endpoint every 30s (and on tab refocus) and updates the bar in place: inserts/updates/clears the LIVE badge + Join CTA and toggles the bar's `is-live` styling (clearing the idle inline colours so the yellow shows). The server-rendered state still paints the correct bar on first load; the poller just keeps it fresh. When a site uses the badge but has no other bar items, the bar is rendered `hidden` so the poller has a target and reveals it only when a meeting is live.
+- **Container collapse is now CSS-driven.** Containers with a `collapsed_icon` (e.g. a Helpline pill) always emit both the collapsed icon and the full container; which one shows is decided by the bar's `.is-live` class + viewport. This fixes the collapse so it works whether the bar was rendered live OR flipped live by the poller (previously the collapse was gated on the server-render live state and didn't trigger on the dynamic path).
+
 ## [2.3.3] — 2026-05-21
 
 ### Changed — Web Frontend quick-nav visible to non-admins (read-only)

@@ -3557,6 +3557,30 @@ def blog_tag_view(slug):
     return redirect(url_for("frontend.blog_list", tag=slug))
 
 
+@bp.route("/api/live-meeting")
+def api_live_meeting():
+    """Current live-meeting state for the utility bar's poller, so the
+    LIVE badge appears / updates / clears without a page refresh.
+
+    Public — meeting names already show on the public site. Gated on the
+    admin's live-badge toggle (``show_live``): returns ``{"live": false}``
+    when the badge is disabled or no online/hybrid meeting is live right
+    now. The response is small and uncached (the global after-request hook
+    already stamps non-asset paths ``no-store``)."""
+    from flask import jsonify
+    from .utility_bar import utility_bar_context, current_live_meeting
+    site = _site()
+    ub = utility_bar_context(site)
+    if not ub.get("show_live"):
+        return jsonify(live=False)
+    lm = current_live_meeting(site)
+    if not lm or not lm.get("meeting"):
+        return jsonify(live=False)
+    return jsonify(live=True,
+                   name=lm["meeting"].name,
+                   join_url=lm.get("join_url") or None)
+
+
 @bp.route("/api/search-index")
 def api_search_index():
     """JSON feed for the frontend-wide search modal: every public

@@ -219,7 +219,7 @@ html[data-theme="dark"] .fe-megamenu-link:hover:not(.fe-megamenu-link-colored) {
    so the three pill-icons read as a matched set wherever the admin
    drags them. */
 .fe-utility-container--collapsed {
-  display: inline-flex; align-items: center; justify-content: center;
+  display: none; align-items: center; justify-content: center;
   width: 30px; height: 30px;
   background: rgba(255, 255, 255, 0.12); color: inherit;
   border: 0; padding: 0; border-radius: 999px;
@@ -238,16 +238,21 @@ html[data-theme="dark"] .fe-megamenu-link:hover:not(.fe-megamenu-link-colored) {
   background: rgba(0, 0, 0, 0.12); }
 .fe-utility-bar.is-live .fe-utility-container--collapsed:hover {
   background: rgba(0, 0, 0, 0.22); }
-/* The live-meeting collapse is desktop-only. Both the collapsed icon and
-   the full container are emitted server-side; on desktop we show the icon
-   (to free centre space for the LIVE message) and hide the expanded copy.
-   At ≤720px the bar becomes a horizontal swipe strip with room to spare,
-   so we flip it: hide the icon, show the full container. Breakpoint
-   matches the bar's mobile swipe threshold below. */
-.fe-utility-container--live-expanded { display: none; }
+/* The live-meeting collapse is desktop-only AND live-only. Both the
+   collapsed icon and the full container are always emitted server-side
+   (for containers with a collapsed_icon); CSS picks which to show based
+   on the bar's `.is-live` state — toggled server-side OR by the
+   live-meeting poller — and the viewport:
+     • not live            → full container, icon hidden (normal bar).
+     • live + desktop      → icon (frees centre space for the LIVE msg).
+     • live + ≤720px strip → full container (swipe strip has room).
+   Breakpoint matches the bar's mobile swipe threshold below. */
+.fe-utility-container--live-expanded { display: inline-flex; }
+.fe-utility-bar.is-live .fe-utility-container--collapsed { display: inline-flex; }
+.fe-utility-bar.is-live .fe-utility-container--live-expanded { display: none; }
 @media (max-width: 720px) {
-  .fe-utility-container--collapsed { display: none; }
-  .fe-utility-container--live-expanded { display: inline-flex; }
+  .fe-utility-bar.is-live .fe-utility-container--collapsed { display: none; }
+  .fe-utility-bar.is-live .fe-utility-container--live-expanded { display: inline-flex; }
 }
 .fe-utility-link { text-decoration: none; }
 .fe-utility-link:hover { text-decoration: underline; }
