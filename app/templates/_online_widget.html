@@ -11,6 +11,7 @@
          data-endpoint="{{ url_for('main.api_online_users') }}">
   <div class="card-head">
     <h2>
+      {% if online_dash_handle %}<span class="dash-drag-handle dash-drag-handle--in-head" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
       <span class="online-pulse" aria-hidden="true"></span>
       {{ icon('users') }}
       Currently online

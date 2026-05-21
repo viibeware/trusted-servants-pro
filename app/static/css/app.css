@@ -3834,14 +3834,13 @@ button.chip { font-family: inherit; }
   background: color-mix(in srgb, var(--text) 28%, transparent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 10%, transparent);
 }
+/* Live state reuses the "Currently online" widget's pulsing dot
+   (.online-pulse / @keyframes online-pulse) so the same emerald
+   ping signals "frontend module enabled and public" here. */
 .sidebar-quicknav-status.is-live {
-  background: #16a34a;
-  box-shadow: 0 0 0 2px color-mix(in srgb, #16a34a 35%, transparent);
-  animation: sidebar-quicknav-pulse 2.4s ease-in-out infinite;
-}
-@keyframes sidebar-quicknav-pulse {
-  0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, #16a34a 35%, transparent); }
-  50%      { box-shadow: 0 0 0 4px color-mix(in srgb, #16a34a 18%, transparent); }
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55);
+  animation: online-pulse 2s ease-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .sidebar-quicknav-status.is-live { animation: none; }
@@ -3854,6 +3853,10 @@ button.chip { font-family: inherit; }
    but no items need attention, the chips slot collapses to zero width
    so the button reads cleanly as "Watchtower" with no decoration. */
 .sidebar-quicknav-watchtower { grid-column: 1 / -1; }
+/* Watchtower's shield reads slightly small at the 14px shared quicknav
+   size next to its label and chips — bump it to 16px so it matches the
+   Notifications/Search icons below it. Web/View stay at 14px. */
+.sidebar-quicknav-watchtower .sidebar-quicknav-icon .icon { width: 16px; height: 16px; }
 .sidebar-quicknav-chips {
   margin-left: auto;
   display: inline-flex;
@@ -3878,7 +3881,7 @@ button.chip { font-family: inherit; }
    the kbd hint slides off on narrow viewports where the sidebar is
    tighter. */
 .sidebar-search-btn {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 8px;
   margin: 8px 12px 12px; padding: 9px 12px;
   border: 1px solid var(--border); border-radius: 10px;
   background: var(--panel-2); color: var(--muted);
@@ -3906,7 +3909,7 @@ button.chip { font-family: inherit; }
 /* Sidebar button — mirrors the Search button chrome with a live count
    chip pinned to the right. */
 .sidebar-notif-btn {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 8px;
   margin: 8px 12px 0; padding: 9px 12px;
   border: 1px solid var(--border); border-radius: 10px;
   background: var(--panel-2); color: var(--muted);
@@ -6346,52 +6349,60 @@ body.fe-admin-autohide .menu-btn { display: grid; place-items: center; }
 .dash-widget.drag-over > .card,
 .dash-widget.drag-over > .stats { outline: 2px dashed var(--brand); outline-offset: 4px; }
 
-/* Drag handle — always visible chip in the top-LEFT corner so it
-   never collides with the card's View-all link or right-aligned
-   metadata (the old top-right placement disappeared behind those on
-   most widgets). The pill background plus full opacity make it a
+/* Drag handle — an always-visible pill at the start of each widget's
+   title row. The pill background plus full opacity make it a
    first-class affordance instead of a near-invisible ghost icon, so
-   every widget has an obvious grab point. Hover/active states
-   continue to tighten the visual cue. */
-.dash-drag-handle { position: absolute; top: 10px; left: 10px; z-index: 3;
-  cursor: grab; color: var(--muted); line-height: 1;
+   every widget has an obvious grab point. Hover/active states tighten
+   the visual cue. This base rule carries only the chip chrome; the
+   in-flow positioning lives on .dash-widget-head .dash-drag-handle
+   (macro widgets) and .dash-drag-handle--in-head (the three that build
+   their own head), which is where every handle actually renders. */
+.dash-drag-handle { cursor: grab; color: var(--muted); line-height: 1;
   user-select: none; padding: 5px 7px;
   background: var(--panel-2); border: 1px solid var(--border);
   border-radius: 6px; display: inline-flex; align-items: center;
   transition: color 120ms ease, background 120ms ease, border-color 120ms ease; }
 .dash-drag-handle .icon { font-size: 1.05rem; }
-.dash-widget[draggable="true"]:hover > .dash-drag-handle,
 .dash-drag-handle:hover { color: var(--text);
   background: color-mix(in srgb, var(--brand) 12%, var(--panel-2));
   border-color: color-mix(in srgb, var(--brand) 40%, var(--border)); }
 .dash-drag-handle:active { cursor: grabbing; }
 
-/* Inset the card header so the absolutely-positioned handle doesn't
-   bump into the title text. Scoped to .dash-widget so it only applies
-   inside dashboard widget cards, not every .card-head on the site.
-   Macro-driven widgets (which use the new .dash-widget-head flex row
-   with an inline handle) opt out via the more-specific override
-   further down — for them the handle takes its own column width and
-   no extra padding is needed. */
-.dash-widget .card-head { padding-left: 38px; }
-.dash-widget .dash-widget-head { padding-left: 0; }
-/* Two widgets have no .card-head and put their primary title as a
-   plain heading inside the card — push those titles right so the
-   handle chip clears them visually. */
-.dash-widget .access-requests-card .ar-title { padding-left: 38px; }
-/* Server-metrics widget has no card-head at the card's top edge — its
-   role-panel content starts flush at the top-left, exactly where the
-   handle chip sits. Pad the panel top so the small "YOUR ROLE" label
-   isn't covered. Only nudges the left column; the right (server stats)
-   column stays at its natural top. */
-.dash-widget .server-metrics .role-panel { padding-top: 18px; }
+/* The three structurally-unique widgets (Your role / server metrics,
+   Currently online, Access requests) opt out of the dash_widget macro,
+   so their handle never landed inside a .dash-widget-head row and never
+   picked up the macro's inline treatment — it stayed the absolute
+   top-left chip, leaving it a different size, offset and position from
+   every other widget's handle. They now render the handle inline at the
+   start of their own title row with this modifier, which reproduces the
+   macro handle exactly: in-flow (.dash-widget-head .dash-drag-handle)
+   and a 22px brand grip (.data-card-head .icon). No header inset is
+   needed anymore, so the old padding-left:38px / padding-top:18px
+   spacer rules are gone. */
+.dash-widget .dash-drag-handle--in-head { position: static; flex: 0 0 auto; }
+.dash-widget .dash-drag-handle--in-head .icon { width: 22px; height: 22px; color: var(--brand); }
+/* Access-requests is a two-column card, but only the left ("Access
+   Requests") title carries the handle, so its title row is taller than
+   the right ("Locked Accounts") title. Give both titles the handle's
+   height (22px grip + 5px×2 padding + 1px×2 border = 34px) so the two
+   columns' lists still start on the same line. */
+.dash-widget .access-requests-card .ar-title,
+.dash-widget .access-requests-card .locked-accounts-title { min-height: 34px; }
+/* Server-metrics has no horizontal title row of its own — its role
+   panel is a vertical stack. Wrap the handle and the (label + role
+   name) title block in a flex row so the handle sits to their left,
+   vertically centred, matching the [handle][title] layout of every
+   other widget head. */
+.role-panel-head { display: flex; align-items: center; gap: .6rem; }
+.role-panel-titles { min-width: 0; }
 
 /* Macro-driven widgets put the drag handle inline inside the
    .data-card-head flex row (followed by the title icon and label).
-   Override the global absolute positioning so it lives in the flow
-   with the rest of the head and the row's existing gap handles
-   spacing. The chip's hover styling continues to come from
-   .dash-drag-handle:hover above. */
+   It rides in the flow as a fixed-width flex item so the row's existing
+   gap handles spacing; the 22px brand grip glyph comes from
+   .data-card-head .icon, and the chip's hover styling from
+   .dash-drag-handle:hover above. The three opt-out widgets reproduce
+   this via .dash-drag-handle--in-head. */
 .dash-widget-head .dash-drag-handle {
   position: static;
   flex: 0 0 auto;

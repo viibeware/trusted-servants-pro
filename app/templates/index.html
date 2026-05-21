@@ -20,7 +20,6 @@
 
   {% if widget_key == 'server-metrics' and current_user.dash_show_server_metrics %}
   <div class="dash-widget dash-widget-wide" data-widget-key="server-metrics" {% if can_reorder %}draggable="true"{% endif %}>
-    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
     {# Role-only styling applies to viewers AND editors — both see the
        role panel without the server metrics column. The right column
        (CPU / memory / disk / network) is reserved for the operator
@@ -28,8 +27,13 @@
     <section class="card data-card server-metrics{% if not _has_server %} server-metrics-role-only{% endif %}" id="server-metrics-widget" data-endpoint="{{ url_for('main.api_server_metrics') }}">
       <div class="server-metrics-body">
         <div class="role-panel">
-          <div class="role-panel-label">Your role</div>
-          <div class="role-panel-name">{{ current_user.role.replace('_', ' ')|capitalize }}</div>
+          <div class="role-panel-head">
+            {% if can_reorder %}<span class="dash-drag-handle dash-drag-handle--in-head" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
+            <div class="role-panel-titles">
+              <div class="role-panel-label">Your role</div>
+              <div class="role-panel-name">{{ current_user.role.replace('_', ' ')|capitalize }}</div>
+            </div>
+          </div>
           <ul class="role-caps">
             {# Positive capabilities only — restrictions live in
                Settings → Your Access so the dashboard widget stays
@@ -152,7 +156,11 @@
 
   {% if widget_key == 'currently-online' and current_user.is_admin() and current_user.dash_show_currently_online %}
   <div class="dash-widget" data-widget-key="currently-online" {% if can_reorder %}draggable="true"{% endif %}>
-    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
+    {# Render the drag handle inline inside the widget's own card-head
+       (see _online_widget.html). The flag keeps it dashboard-only — the
+       same partial is reused standalone on the Watchtower Access page,
+       which isn't reorderable. #}
+    {% set online_dash_handle = can_reorder %}
     {% include "_online_widget.html" %}
   </div>
   {% endif %}
@@ -459,10 +467,9 @@
 
   {% if widget_key == 'access-requests' and current_user.is_admin() and current_user.dash_show_access_requests %}
   <div class="dash-widget" data-widget-key="access-requests" {% if can_reorder %}draggable="true"{% endif %}>
-    {% if can_reorder %}<span class="dash-drag-handle" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}
     <section class="card data-card access-requests-card">
       <div class="access-requests-block">
-        <h2 class="ar-title">{{ icon('user-plus') }} Access Requests
+        <h2 class="ar-title">{% if can_reorder %}<span class="dash-drag-handle dash-drag-handle--in-head" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}{{ icon('user-plus') }} Access Requests
           {% if pending_access_count %}<span class="nav-badge">{{ pending_access_count }}</span>{% endif %}
         </h2>
         {% if access_requests %}
