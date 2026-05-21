@@ -6,6 +6,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.3.3] — 2026-05-21
+
+### Changed — Web Frontend quick-nav visible to non-admins (read-only)
+
+The sidebar Web/View quick-nav previously rendered only for admins. Signed-in non-admins (viewer / editor / intergroup_member) now see it too when the Web Frontend module is enabled:
+
+- **Web** renders as a non-clickable status indicator (a `<span aria-disabled="true">`, not a link) that still shows the live dot — so non-admins can see at a glance whether the public site is live, but can't open the admin panel they aren't authorized for. The icon/label are muted to read as a status chip; the live dot keeps full strength.
+- **View** opens the public site in a new tab — shown to non-admins when the site is live (admins keep it always, since they get the editor preview even while the public toggle is off, and a non-admin would otherwise be bounced straight back).
+- Admins are unaffected: clickable Web link + View + Watchtower as before. A lone Web button (non-admin, site off) spans the full quick-nav width.
+
 ## [2.3.2] — 2026-05-21
 
 ### Fixed — Redirects match with or without a trailing slash

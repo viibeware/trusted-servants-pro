@@ -77,27 +77,55 @@
        The Watchtower button below renders for every admin, with two
        attention chips (pending access requests + locked accounts)
        so they don't have to open the page just to check counts. #}
-    {% set _has_quicknav = (site and site.frontend_module_enabled and current_user.can_edit_frontend())
-                            or current_user.is_admin() %}
+    {% set _can_fe = current_user.can_edit_frontend() %}
+    {% set _fe_on = site and site.frontend_module_enabled %}
+    {% set _fe_live = site and site.frontend_enabled %}
+    {# The Web button + live dot render whenever the module is on, so
+       non-admins can see at a glance whether the public site is live.
+       Only admins (can_edit_frontend) get a working link into the admin
+       panel; everyone else sees a non-clickable indicator. The View
+       button opens the public site: admins always (it serves a preview
+       even while the public toggle is off), other signed-in users only
+       when the site is actually live (otherwise the public frontend
+       bounces them straight back to /tspro). Watchtower stays admin-only. #}
+    {% set _show_view = _fe_on and (_can_fe or _fe_live) %}
+    {% set _has_quicknav = _fe_on or current_user.is_admin() %}
     {% if _has_quicknav %}
     <div class="sidebar-quicknav" role="group" aria-label="Quick navigation">
-      {% if site and site.frontend_module_enabled and current_user.can_edit_frontend() %}
-      <a class="sidebar-quicknav-btn{% if request.endpoint and request.endpoint.startswith('main.frontend_') %} is-active{% endif %}"
-         href="{{ url_for('main.frontend_dashboard') }}"
-         title="Open the Web Frontend admin panel">
-        <span class="sidebar-quicknav-icon" aria-hidden="true">{{ icon('layout-grid') }}</span>
-        <span class="sidebar-quicknav-label">Web</span>
-        <span class="sidebar-quicknav-status{% if site.frontend_enabled %} is-live{% endif %}"
-              title="{{ 'Public site is LIVE — visible to everyone' if site.frontend_enabled else 'Public site is OFF — visible only to signed-in admins and frontend editors' }}"
-              aria-label="{{ 'Live' if site.frontend_enabled else 'Off' }}"></span>
-      </a>
-      <a class="sidebar-quicknav-btn"
-         href="{{ url_for('frontend.index') }}"
-         target="_blank" rel="noopener"
-         title="Open the public frontend in a new tab">
-        <span class="sidebar-quicknav-icon" aria-hidden="true">{{ icon('external-link') }}</span>
-        <span class="sidebar-quicknav-label">View</span>
-      </a>
+      {% if _fe_on %}
+        {% if _can_fe %}
+        <a class="sidebar-quicknav-btn{% if not _show_view %} sidebar-quicknav-btn--full{% endif %}{% if request.endpoint and request.endpoint.startswith('main.frontend_') %} is-active{% endif %}"
+           href="{{ url_for('main.frontend_dashboard') }}"
+           title="Open the Web Frontend admin panel">
+          <span class="sidebar-quicknav-icon" aria-hidden="true">{{ icon('layout-grid') }}</span>
+          <span class="sidebar-quicknav-label">Web</span>
+          <span class="sidebar-quicknav-status{% if _fe_live %} is-live{% endif %}"
+                title="{{ 'Public site is LIVE — visible to everyone' if _fe_live else 'Public site is OFF — visible only to signed-in admins and frontend editors' }}"
+                aria-label="{{ 'Live' if _fe_live else 'Off' }}"></span>
+        </a>
+        {% else %}
+        {# Non-privileged: a non-clickable Web indicator (rendered as a
+           <span>, not a link). Keeps the live dot so the user can still
+           see whether the public site is live, but offers no way into the
+           admin panel they're not allowed to open. #}
+        <span class="sidebar-quicknav-btn is-disabled{% if not _show_view %} sidebar-quicknav-btn--full{% endif %}"
+              aria-disabled="true"
+              title="{{ 'Web Frontend is LIVE — managed by admins' if _fe_live else 'Web Frontend — managed by admins' }}">
+          <span class="sidebar-quicknav-icon" aria-hidden="true">{{ icon('layout-grid') }}</span>
+          <span class="sidebar-quicknav-label">Web</span>
+          <span class="sidebar-quicknav-status{% if _fe_live %} is-live{% endif %}"
+                aria-label="{{ 'Live' if _fe_live else 'Off' }}"></span>
+        </span>
+        {% endif %}
+        {% if _show_view %}
+        <a class="sidebar-quicknav-btn"
+           href="{{ url_for('frontend.index') }}"
+           target="_blank" rel="noopener"
+           title="Open the public frontend in a new tab">
+          <span class="sidebar-quicknav-icon" aria-hidden="true">{{ icon('external-link') }}</span>
+          <span class="sidebar-quicknav-label">View</span>
+        </a>
+        {% endif %}
       {% endif %}
       {% if current_user.is_admin() %}
       {%- set _watchtower_total = (pending_access_count or 0) + (locked_accounts_count or 0) -%}
