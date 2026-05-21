@@ -124,6 +124,7 @@ def _get_otp_email():
 
 MEETING_TYPES = ("in_person", "online", "hybrid")
 from .crypto import encrypt, decrypt
+from . import imgcache
 
 # Admin app blueprint: everything mounted under /tspro.
 bp = Blueprint("main", __name__, url_prefix="/tspro")
@@ -6933,6 +6934,7 @@ def frontend_custom_icon_upload():
         uploaded_by=getattr(current_user, "id", None),
     )
     db.session.add(ci)
+    imgcache.note_image_change()  # bust cached icon URLs
     db.session.commit()
     return jsonify(ok=True, icon=_custom_icon_json(ci))
 
@@ -8544,6 +8546,94 @@ def frontend_design_reset():
     db.session.commit()
     flash("Design reset to theme defaults", "success")
     return redirect(url_for("main.frontend_design"))
+
+
+# ── Web Frontend → Caching ────────────────────────────────────────────
+# Cache-lifetime presets offered in the panel (label, seconds). Custom
+# values from a tampered POST are clamped, not trusted.
+_CACHE_TTL_PRESETS = (
+    ("1 hour", 3600),
+    ("6 hours", 21600),
+    ("12 hours", 43200),
+    ("1 day", 86400),
+    ("7 days", 604800),
+    ("30 days", 2592000),
+    ("1 year", 31536000),
+)
+_CACHE_TTL_MIN = 60
+_CACHE_TTL_MAX = 31536000
+
+
+def _coerce_ttl(raw, default):
+    """Parse a max-age form value to a sane integer second count."""
+    try:
+        v = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return default
+    return max(_CACHE_TTL_MIN, min(_CACHE_TTL_MAX, v))
+
+
+def _fmt_bytes(n):
+    n = float(n or 0)
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024 or unit == "GB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
+
+
+@bp.route("/frontend/caching")
+@admin_required
+def frontend_caching():
+    """Frontend asset caching control panel. See app/imgcache.py."""
+    s = _get_site_setting()
+    thumb_count, thumb_bytes = imgcache.thumb_stats()
+    return render_template(
+        "frontend_caching.html", site=s,
+        ttl_presets=_CACHE_TTL_PRESETS,
+        thumb_count=thumb_count,
+        thumb_size=_fmt_bytes(thumb_bytes),
+        static_token=imgcache.static_token(),
+    )
+
+
+@bp.route("/frontend/caching/save", methods=["POST"])
+@admin_required
+def frontend_caching_save():
+    """Persist caching toggles/lifetimes. Booleans default off when their
+    checkbox is absent from the POST."""
+    s = _get_site_setting()
+    s.media_cache_enabled = request.form.get("media_cache_enabled") == "1"
+    s.media_cache_immutable = request.form.get("media_cache_immutable") == "1"
+    s.media_cache_static_assets = request.form.get("media_cache_static_assets") == "1"
+    s.media_cache_autobump = request.form.get("media_cache_autobump") == "1"
+    s.media_cache_max_age = _coerce_ttl(
+        request.form.get("media_cache_max_age"), s.media_cache_max_age or 604800)
+    s.media_cache_static_max_age = _coerce_ttl(
+        request.form.get("media_cache_static_max_age"), s.media_cache_static_max_age or 2592000)
+    db.session.commit()
+    imgcache.invalidate()
+    flash("Caching settings saved", "success")
+    return redirect(url_for("main.frontend_caching"))
+
+
+@bp.route("/frontend/caching/clear", methods=["POST"])
+@admin_required
+def frontend_caching_clear():
+    """Force every visitor to refetch images now by advancing the bust
+    token (a new ?v= on every image URL)."""
+    imgcache.clear_cache()
+    flash("Image cache cleared — visitors will refetch images on their next visit.", "success")
+    return redirect(url_for("main.frontend_caching"))
+
+
+@bp.route("/frontend/caching/thumbnails/clear", methods=["POST"])
+@admin_required
+def frontend_caching_thumbnails_clear():
+    """Delete generated thumbnail files from disk; they regenerate lazily
+    on the next request."""
+    removed = imgcache.clear_thumbnails()
+    flash(f"Cleared {removed} generated thumbnail file{'' if removed == 1 else 's'}.", "success")
+    return redirect(url_for("main.frontend_caching"))
 
 
 @bp.route("/frontend/fonts-icons/save", methods=["POST"])
@@ -11397,6 +11487,7 @@ def frontend_page_save():
         stored = f"{_uuid4().hex}_{safe}"
         bg_upload.save(_os.path.join(current_app.config["UPLOAD_FOLDER"], stored))
         page.bg_image_filename = stored
+        imgcache.note_image_change()  # bust cached page-bg URL
     page.bg_mode = bg_mode
     page.bg_tile_scale = bg_tile_scale
     # Dynamic-background catalog key (None = no dynbg). Coerced through
@@ -11633,6 +11724,7 @@ def frontend_footer_save():
             stored = f"{uuid4().hex}_{safe}"
             upload.save(os.path.join(current_app.config["UPLOAD_FOLDER"], stored))
             s.frontend_brand_logo_filename = stored
+            imgcache.note_image_change()  # bust cached brand-logo URL
     # Structured content — only update if the form-level marker is
     # present. parse_footer is given the existing content so any section
     # whose editor card was hidden (because the active layout doesn't
@@ -12751,6 +12843,11 @@ def _save_upload(uploaded):
     if ext in ADMIN_ONLY_UPLOAD_EXTENSIONS:
         if not getattr(current_user, "is_authenticated", False) or not current_user.is_admin():
             abort(400, description=f"File type '{ext}' is only allowed for admins.")
+    # Advance the frontend image cache-bust token so returning visitors
+    # pick up the new/replaced image immediately (committed with the
+    # caller's transaction). No-op for non-images and when autobump is off.
+    if ext in imgcache.IMAGE_EXTENSIONS:
+        imgcache.note_image_change()
     data = uploaded.read()
     if ext == ".svg":
         # Strip <script>, on*= handlers, and javascript: hrefs BEFORE the

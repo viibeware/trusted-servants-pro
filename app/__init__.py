@@ -503,15 +503,26 @@ def create_app():
             return redirect(row.target_path, code=301)
         return None
 
+    # Cache-bust token (?v=) on image + static asset URLs. See app/imgcache.py.
+    from . import imgcache
+    imgcache.register(app)
+
     @app.after_request
     def _security_headers(response):
-        # Cache-control: stops Cloudflare/browsers from caching per-user pages
-        # and stale form responses. /static/ and /pub/ are deterministic.
+        # Asset caching is centralized in imgcache: it stamps image/static
+        # responses with the admin-configured Cache-Control (Web Frontend →
+        # Caching) and returns True when it owns the header. Anything it
+        # doesn't own falls through to the no-store rule below.
         path = request.path or ""
-        if not (path.startswith("/static/") or path.startswith("/pub/")):
-            response.headers["Cache-Control"] = "no-store, max-age=0"
-            response.headers.setdefault("Pragma", "no-cache")
-            response.headers.setdefault("Expires", "0")
+        if not imgcache.apply_cache_headers(response):
+            # Cache-control: stops Cloudflare/browsers from caching per-user
+            # pages and stale form responses. /static/ and /pub/ are
+            # deterministic (and asset caching above already handled their
+            # image/static responses).
+            if not (path.startswith("/static/") or path.startswith("/pub/")):
+                response.headers["Cache-Control"] = "no-store, max-age=0"
+                response.headers.setdefault("Pragma", "no-cache")
+                response.headers.setdefault("Expires", "0")
 
         # Common security headers, applied to every response.
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -1735,7 +1746,16 @@ def _migrate_sqlite(app):
                          ("frontend_site_index_show_stories", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("frontend_site_index_show_library", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("frontend_site_index_bg_dynamic_key", "VARCHAR(64)"),
-                         ("frontend_site_index_bg_dynbg_config_json", "TEXT")):
+                         ("frontend_site_index_bg_dynbg_config_json", "TEXT"),
+                         # Frontend asset caching (Web Frontend → Caching).
+                         ("media_cache_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("media_cache_max_age", "INTEGER NOT NULL DEFAULT 604800"),
+                         ("media_cache_immutable", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("media_cache_static_assets", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("media_cache_static_max_age", "INTEGER NOT NULL DEFAULT 2592000"),
+                         ("media_cache_autobump", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("media_cache_version", "INTEGER NOT NULL DEFAULT 1"),
+                         ("media_cache_cleared_at", "DATETIME")):
             add("site_setting", col, ddl)
         for col, ddl in (("kind", "VARCHAR(16) NOT NULL DEFAULT 'link'"),
                          ("button_style", "VARCHAR(16) NOT NULL DEFAULT 'pill'"),

@@ -6,6 +6,20 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.3.0] — 2026-05-21
+
+### Added — Frontend image & asset caching control panel
+
+A new **Web Frontend → Setup → Caching** admin page that makes returning visitors stop re-downloading images on every page view, while keeping changes instant.
+
+- **Root cause fixed**: the `_security_headers` after-request hook forced `Cache-Control: no-store` on every path except `/static/` and `/pub/`, *overwriting* the `max-age` that image routes (`/story-image`, `/blog-image`, `/post-gallery-image`, `/site-branding/*`, …) set themselves. So most frontend images were re-fetched on every visit. Caching is now centralized in `app/imgcache.py::apply_cache_headers`, wired into the same hook (it owns image/static responses; everything else still gets `no-store`).
+- **Cache-busting without template surgery**: a `?v=<token>` is auto-appended to all ~121 image URLs and every `/static` URL via Flask's `url_defaults` hook (`imgcache.inject_bust`) — no per-call-site edits. Images use a monotonic `SiteSetting.media_cache_version` token (read live, request-cached in `g`); `/static` uses `version.__build_id__` (a content hash of the `app/` tree), so each deploy busts CSS/JS/fonts automatically.
+- **Instant freshness on change**: `imgcache.note_image_change()` advances the version token whenever an image is uploaded/replaced. Wired into the central `_save_upload` (image extensions only) plus the three direct-`.save()` image routes (custom icon, page background, brand logo). A change → new URL → immediate refetch; unchanged images stay cached for the full lifetime with zero requests.
+- **The panel** (`frontend_caching.html`): master image-caching toggle, cache lifetime (1h–1yr presets, default 7 days), auto-refresh-on-change toggle, `immutable` toggle; a separate static-assets toggle + lifetime (default 30 days); and a Maintenance card showing cache version, last-cleared time, and on-disk thumbnail count/size, with **Clear image cache now** (bumps the token for all visitors) and **Rebuild thumbnails** (deletes generated `_thumb_` files, regenerated lazily) actions.
+- **Admin-uploaded fonts** (the `site_custom_font_asset` route) are cached aggressively too, but treated as self-busting (their URLs embed a UUID filename) so they don't churn on the image token.
+- **Schema**: 8 additive `media_cache_*` columns on `SiteSetting` (enabled, max-age, immutable, static toggle + max-age, autobump, version, cleared-at), with matching `_migrate_sqlite` entries. Defaults: image + static caching **on**.
+- **Untouched**: HTML pages, API/JSON, admin pages, and document downloads stay `no-store` / Flask defaults, so dynamic surfaces like the live-meeting utility bar remain per-request fresh. Verified end-to-end with a headless browser against sandboxed copies of the DB (migration on real data; static `public, max-age=2592000, immutable` + build-id token; image `public, max-age=604800, immutable` + version token; toggle-off → `no-store`; upload/clear bump the token immediately).
+
 ## [2.2.2] — 2026-05-21
 
 ### Fixed — Frontend export now carries per-page OG overrides + story dates

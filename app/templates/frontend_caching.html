@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block heading %}Caching{% endblock %}
+{% block heading_help %}Long-lived browser &amp; CDN caching for images and static assets so returning visitors don't re-download them every visit. A version token on every image URL means your edits still appear immediately — no waiting for the cache to expire.{% endblock %}
+{% block top_actions %}
+<a class="btn" href="{{ url_for('frontend.index') }}" target="_blank" rel="noopener">View frontend ↗</a>
+{% endblock %}
+{% block content %}
+<div class="fe-admin-layout">
+  {% include "_frontend_subnav.html" %}
+  <div class="fe-admin-main">
+
+  <style>
+    .fe-cache-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;
+      padding:.85rem 0;border-top:1px solid rgba(127,127,127,.18);}
+    .fe-cache-row:first-of-type{border-top:0;}
+    .fe-cache-row-text{min-width:0;}
+    .fe-cache-row-label{font-weight:600;}
+    .fe-cache-row .mode-toggle{flex:0 0 auto;}
+    .fe-cache-field{display:block;margin-top:1rem;max-width:22rem;}
+    .fe-cache-field select{margin-top:.3rem;}
+    .fe-cache-disabled{opacity:.5;pointer-events:none;}
+    .fe-cache-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));
+      gap:.75rem;margin:.25rem 0 1rem;}
+    .fe-cache-stat{border:1px solid rgba(127,127,127,.18);border-radius:10px;padding:.7rem .85rem;}
+    .fe-cache-stat-k{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;opacity:.65;}
+    .fe-cache-stat-v{font-size:1.15rem;font-weight:600;margin-top:.15rem;word-break:break-word;}
+    .fe-cache-action{display:flex;align-items:center;gap:.85rem;flex-wrap:wrap;
+      padding:.75rem 0;border-top:1px solid rgba(127,127,127,.18);}
+    .fe-cache-action form{margin:0;}
+    .fe-cache-action .btn{flex:0 0 auto;}
+  </style>
+
+  {# ── Settings ──────────────────────────────────────────────── #}
+  <form class="form" method="post" action="{{ url_for('main.frontend_caching_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Image caching</h2>
+        <span class="muted smaller">Covers every frontend image — featured images, logos, favicons, page backgrounds, custom icons, gallery &amp; story art. When on, browsers and Cloudflare keep them cached so revisits are instant.</span>
+      </div>
+
+      <div class="fe-cache-row">
+        <div class="fe-cache-row-text">
+          <div class="fe-cache-row-label">Enable image caching</div>
+          <div class="muted small">Off = images are re-downloaded on every page view (the current behaviour for most images).</div>
+        </div>
+        <label class="mode-toggle">
+          <input type="checkbox" name="media_cache_enabled" value="1" {% if site.media_cache_enabled %}checked{% endif %}>
+          <span class="mode-track"><span class="mode-thumb"></span></span>
+        </label>
+      </div>
+
+      {% set _cur = site.media_cache_max_age or 604800 %}
+      {% set ns = namespace(matched=false) %}
+      {% for label, secs in ttl_presets %}{% if secs == _cur %}{% set ns.matched = true %}{% endif %}{% endfor %}
+      <label class="fe-cache-field">Cache lifetime
+        <select name="media_cache_max_age">
+          {% if not ns.matched %}<option value="{{ _cur }}" selected>Custom ({{ _cur }}s)</option>{% endif %}
+          {% for label, secs in ttl_presets %}
+          <option value="{{ secs }}" {% if secs == _cur %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <span class="muted small">How long a visitor's browser may reuse an image before checking back. Changes you make still appear immediately — the lifetime only applies when nothing changed.</span>
+      </label>
+
+      <div class="fe-cache-row">
+        <div class="fe-cache-row-text">
+          <div class="fe-cache-row-label">Auto-refresh on image changes</div>
+          <div class="muted small">Recommended. When you upload or replace an image, advance the version token so every visitor sees the new image right away.</div>
+        </div>
+        <label class="mode-toggle">
+          <input type="checkbox" name="media_cache_autobump" value="1" {% if site.media_cache_autobump %}checked{% endif %}>
+          <span class="mode-track"><span class="mode-thumb"></span></span>
+        </label>
+      </div>
+
+      <div class="fe-cache-row">
+        <div class="fe-cache-row-text">
+          <div class="fe-cache-row-label">Skip revalidation <span class="muted small">(immutable)</span></div>
+          <div class="muted small">Tell browsers not to re-check images at all within the lifetime — fastest. Safe because every cached image URL carries a version token. Turn off if you front the site with a proxy that mishandles <code>immutable</code>.</div>
+        </div>
+        <label class="mode-toggle">
+          <input type="checkbox" name="media_cache_immutable" value="1" {% if site.media_cache_immutable %}checked{% endif %}>
+          <span class="mode-track"><span class="mode-thumb"></span></span>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Static assets</h2>
+        <span class="muted smaller">The site's CSS, JavaScript, and bundled font files under <code>/static</code>. These are versioned by the app build, so a new release busts them automatically — no manual clearing needed.</span>
+      </div>
+
+      <div class="fe-cache-row">
+        <div class="fe-cache-row-text">
+          <div class="fe-cache-row-label">Cache static assets</div>
+          <div class="muted small">Build id: <code>{{ static_token }}</code> — appended to every <code>/static</code> URL and changes on each deploy.</div>
+        </div>
+        <label class="mode-toggle">
+          <input type="checkbox" name="media_cache_static_assets" value="1" {% if site.media_cache_static_assets %}checked{% endif %}>
+          <span class="mode-track"><span class="mode-thumb"></span></span>
+        </label>
+      </div>
+
+      {% set _scur = site.media_cache_static_max_age or 2592000 %}
+      {% set sns = namespace(matched=false) %}
+      {% for label, secs in ttl_presets %}{% if secs == _scur %}{% set sns.matched = true %}{% endif %}{% endfor %}
+      <label class="fe-cache-field">Cache lifetime
+        <select name="media_cache_static_max_age">
+          {% if not sns.matched %}<option value="{{ _scur }}" selected>Custom ({{ _scur }}s)</option>{% endif %}
+          {% for label, secs in ttl_presets %}
+          <option value="{{ secs }}" {% if secs == _scur %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </section>
+
+    <div class="form-actions">
+      <button class="btn btn-primary">Save caching settings</button>
+    </div>
+  </form>
+
+  {# ── Maintenance (separate POST forms, kept out of the settings form) ── #}
+  <section class="card">
+    <div class="card-head">
+      <h2>Maintenance</h2>
+      <span class="muted smaller">Current state and one-click cache actions.</span>
+    </div>
+
+    <div class="fe-cache-stats">
+      <div class="fe-cache-stat">
+        <div class="fe-cache-stat-k">Cache version</div>
+        <div class="fe-cache-stat-v">{{ site.media_cache_version }}</div>
+      </div>
+      <div class="fe-cache-stat">
+        <div class="fe-cache-stat-k">Last cleared</div>
+        <div class="fe-cache-stat-v">{% if site.media_cache_cleared_at %}{{ site.media_cache_cleared_at | fmt_site_local }}{% else %}Never{% endif %}</div>
+      </div>
+      <div class="fe-cache-stat">
+        <div class="fe-cache-stat-k">Generated thumbnails</div>
+        <div class="fe-cache-stat-v">{{ thumb_count }} · {{ thumb_size }}</div>
+      </div>
+    </div>
+
+    <div class="fe-cache-action">
+      <form method="post" action="{{ url_for('main.frontend_caching_clear') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn">Clear image cache now</button>
+      </form>
+      <span class="muted small">Advances the version token so every visitor refetches images on their next visit. Use after a bulk image change or if something looks stale.</span>
+    </div>
+
+    <div class="fe-cache-action">
+      <form method="post" action="{{ url_for('main.frontend_caching_thumbnails_clear') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn">Rebuild thumbnails</button>
+      </form>
+      <span class="muted small">Deletes the {{ thumb_count }} generated thumbnail file{{ '' if thumb_count == 1 else 's' }} on disk; they regenerate automatically the next time each is requested.</span>
+    </div>
+  </section>
+
+  </div>
+</div>
+{% endblock %}

@@ -7,7 +7,18 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.2.2 — 2026-05-21 (latest) — Frontend backups capture more, dashboard polish
+## 2.3.0 — 2026-05-21 (latest) — Image & asset caching for a faster public site
+
+Your public site now lets returning visitors **keep images and styling in their browser cache** instead of re-downloading everything on every visit — so pages load noticeably faster the second time around — without ever showing stale content.
+
+- **New Caching panel** under **Web Frontend → Caching**. Turn image caching on/off, choose how long browsers may keep images (default 7 days), and manage everything from one place.
+- **Edits still appear instantly.** Every image has a hidden version stamp; when you upload or replace an image, the stamp changes and visitors get the new image right away — no waiting for the cache to expire.
+- **Your CSS/JavaScript are cached too**, and refresh automatically on every update you deploy, so visitors are never stuck on old styling.
+- **One-click controls**: *Clear image cache now* forces every visitor to refetch images on their next visit (handy after a bulk change), and *Rebuild thumbnails* clears the generated thumbnail files. The panel also shows the current cache version, when it was last cleared, and how much thumbnail data is on disk.
+- **Nothing dynamic is affected** — pages, the live-meeting bar, forms, search, and the admin area always render fresh. Only images and static styling are cached.
+- Caching is **on by default**, so you get the speed-up immediately; flip the toggle off any time if you'd rather not cache.
+
+## 2.2.2 — 2026-05-21 — Frontend backups capture more, dashboard polish
 
 Two improvements:
 

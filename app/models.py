@@ -807,6 +807,32 @@ class SiteSetting(db.Model):
     # Public visibility: when False (but module is enabled), signed-in editors
     # and admins can still preview while the public root redirects to login.
     frontend_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    # ── Frontend asset caching (managed from Web Frontend → Caching) ──
+    # Master switch. When on, image/static responses get long-lived
+    # public Cache-Control so returning visitors serve them straight from
+    # the browser/Cloudflare cache instead of re-downloading every visit.
+    # Freshness is handled by a cache-bust token (?v=) appended to asset
+    # URLs — see app/imgcache.py — so changes still appear immediately.
+    media_cache_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    # max-age (seconds) for images. Default 7 days.
+    media_cache_max_age = db.Column(db.Integer, nullable=False, default=604800)
+    # Add `immutable` to image responses (skip revalidation entirely until
+    # the URL token changes). Safe because every cached image URL carries
+    # the bust token.
+    media_cache_immutable = db.Column(db.Boolean, nullable=False, default=True)
+    # Also long-cache /static CSS/JS/font assets. These are busted by the
+    # app build-id (changes on every deploy), so it's always safe.
+    media_cache_static_assets = db.Column(db.Boolean, nullable=False, default=True)
+    # max-age (seconds) for /static assets. Default 30 days.
+    media_cache_static_max_age = db.Column(db.Integer, nullable=False, default=2592000)
+    # Auto-advance the bust token whenever an image is uploaded/replaced so
+    # visitors pick up the change without waiting for the cache to expire.
+    media_cache_autobump = db.Column(db.Boolean, nullable=False, default=True)
+    # Monotonic cache-bust counter. Appended as ?v= to image URLs; bumped
+    # on image change (when autobump on) and by the "Clear cache" button.
+    media_cache_version = db.Column(db.Integer, nullable=False, default=1)
+    # When the admin last cleared the cache (manual bump). Display only.
+    media_cache_cleared_at = db.Column(db.DateTime)
     frontend_title = db.Column(db.String(200))
     frontend_tagline = db.Column(db.String(500))
     frontend_tagline_enabled = db.Column(db.Boolean, nullable=False, default=True)

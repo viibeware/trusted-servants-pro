@@ -48,6 +48,10 @@
                 {% if request.endpoint == 'main.frontend_design' %}selected{% endif %}>
           Design
         </option>
+        <option value="{{ url_for('main.frontend_caching') }}"
+                {% if request.endpoint == 'main.frontend_caching' %}selected{% endif %}>
+          Caching
+        </option>
       </optgroup>
       <optgroup label="Structure">
         <option value="{{ url_for('main.frontend_header') }}"
@@ -120,6 +124,10 @@
       <a href="{{ url_for('main.frontend_design') }}"
          class="fe-subnav-link {% if request.endpoint == 'main.frontend_design' %}active{% endif %}">
         {{ icon('sliders') }}<span>Design</span>
+      </a>
+      <a href="{{ url_for('main.frontend_caching') }}"
+         class="fe-subnav-link {% if request.endpoint == 'main.frontend_caching' %}active{% endif %}">
+        {{ icon('zap') }}<span>Caching</span>
       </a>
     </div>
 
