@@ -6,6 +6,22 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.2.2] — 2026-05-21
+
+### Fixed — Frontend export now carries per-page OG overrides + story dates
+
+The scoped frontend bundle serialises `Page` / `Story` rows with explicit field lists that had drifted from the models, silently dropping two admin-editable, public-facing fields on export/import:
+
+- **`Page.og_title` / `og_description` / `og_image_filename`** — per-page Open Graph (social-share) overrides set in the page editor. The OG image is now also collected so it ships in the bundle's `assets/`.
+- **`Story.published_at`** — the public "posted on" timestamp; without it, imported stories reset their date to the import time.
+
+Both are now exported and restored. Bundle `format_version` bumped 4 → 5; older bundles still import (the new fields fall back to model defaults). Also corrected the asset-collection comment to match actual behaviour (every ref is kept; the zip step skips names with no file on disk, so regex false-positives never ship and real refs never drop) and simplified the now-redundant `final_assets` loop. Verified with an isolated export → fresh-install import round-trip: pages (incl. OG), stories (incl. `published_at`), settings, and referenced assets reproduce verbatim. The whole-site export was already drift-proof (full DB via `VACUUM INTO`).
+
+### Changed — Dashboard + sidebar polish
+
+- **Dashboard drag handles**: the three macro opt-out widgets (Your role / server metrics, Currently online, Access requests) rendered their handle as an absolute top-left chip, a different size/offset/position from every other widget. They now render the handle inline at the start of their own title row (`.dash-drag-handle--in-head`), reproducing the macro handle exactly (in-flow, 22px brand grip). Removed the dead "inset for absolute chip" padding rules.
+- **Sidebar**: Watchtower quicknav icon bumped to 16px (Web/View stay 14px); Notifications & Search button gap tightened 10px → 8px; the Web button's live-status dot now reuses the Currently-online widget's emerald pulsing ping to signal "frontend module enabled and public".
+
 ## [2.2.1] — 2026-05-20
 
 ### Changed — Footer builder converged onto the page block builder

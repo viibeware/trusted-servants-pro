@@ -7,7 +7,14 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.2.1 — 2026-05-20 (latest) — Footer builder now matches the page builder
+## 2.2.2 — 2026-05-21 (latest) — Frontend backups capture more, dashboard polish
+
+Two improvements:
+
+- **Frontend backups are now complete.** A frontend bundle now includes each page's **social-share settings** (the Open Graph title, description, and image you set per page) and each story's **publication date**. Previously these were quietly left out, so importing a bundle on another install lost the social cards and reset story dates to the import day. Importing an older bundle still works — the new fields just fall back to defaults. (The full-site backup already captured everything.)
+- **Dashboard & sidebar polish.** The drag handles on the *Your role*, *Currently online*, and *Access requests* widgets now match the size, spacing, and position of every other widget's handle. In the sidebar, the Watchtower icon is slightly larger, the Notifications/Search spacing is tidied, and the **Web** button now shows the same green pulsing dot as the *Currently online* panel when your public site is live.
+
+## 2.2.1 — 2026-05-20 — Footer builder now matches the page builder
 
 The Footer admin has been rebuilt to work exactly like the content-page / homepage builder, instead of its own separate interface:
 
