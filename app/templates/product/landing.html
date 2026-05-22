@@ -50,7 +50,7 @@
   <header class="pp-nav">
     <div class="pp-wrap pp-nav-in">
       <a class="pp-brand" href="{{ url_for('product.welcome') }}" aria-label="Trusted Servants Pro home">
-        <span class="pp-brand-mark" aria-hidden="true">TS</span>
+        <img class="pp-brand-mark" src="{{ url_for('static', filename='img/apple-touch-icon_tspro.png') }}" alt="" width="34" height="34">
         <span class="pp-brand-name">Trusted Servants Pro</span>
       </a>
       <nav class="pp-nav-cta">
@@ -103,7 +103,7 @@
       <div class="pp-section-head pp-reveal">
         <span class="pp-eyebrow">Two surfaces, one app</span>
         <h2>A polished <span class="pp-grad">public site</span>, and the backend to run it.</h2>
-        <p>Members get a fast, themeable website. Trusted servants get a friendly admin area with roles, audit logs, and backups. The demo lets you walk through both.</p>
+        <p>Members get a fast, themeable website. Trusted servants get a friendly admin area with roles, audit logs, and backups.</p>
       </div>
 
       <div class="pp-split pp-reveal">
@@ -119,8 +119,8 @@
           <p style="margin-top:1.4rem"><a class="pp-btn pp-btn-ghost" href="{{ DEMO_SITE }}">See the public site →</a></p>
         </div>
         <div class="pp-split-media">
-          {{ shot('fe-events.png', 'meridianrecovery.example/events', 'Public events page') }}
           {{ shot('fe-home.png', 'meridianrecovery.example', 'The public fellowship homepage') }}
+          {{ shot('fe-events.png', 'meridianrecovery.example/events', 'Public events page') }}
         </div>
       </div>
 
@@ -146,7 +146,7 @@
     <div class="pp-wrap">
       <div class="pp-section-head pp-reveal">
         <span class="pp-eyebrow">A look inside</span>
-        <h2>Run <span class="pp-grad">every part</span> of your portal from one admin.</h2>
+        <h2>Run <span class="pp-grad">every part</span> of your website from one admin.</h2>
         <p>Pages and design, meetings and schedules, visitor analytics and security — powerful where it needs to be, gentle for the volunteers who keep it running.</p>
       </div>
       <div class="pp-showcase pp-stagger pp-reveal">
@@ -163,7 +163,7 @@
     <div class="pp-wrap">
       <div class="pp-section-head pp-reveal">
         <span class="pp-eyebrow">Everything in the box</span>
-        <h2>One portal. <span class="pp-grad">Every tool</span> your fellowship needs.</h2>
+        <h2>One app. <span class="pp-grad">Every tool</span> your fellowship needs.</h2>
         <p>Each module is independently toggleable, so you ship exactly the site your fellowship wants — nothing more.</p>
       </div>
       <div class="pp-features pp-stagger pp-reveal">
@@ -198,57 +198,88 @@
       <div class="pp-section-head pp-reveal">
         <span class="pp-eyebrow">Own your stack</span>
         <h2>Deploy it yourself <span class="pp-grad">in minutes</span>.</h2>
-        <p>No SaaS lock-in, no per-seat pricing — a single Flask app backed by SQLite. Pick the path that fits: a one-liner for any Docker host, or the turnkey installer for a production server with HTTPS.</p>
+        <p>No SaaS lock-in, no per-seat pricing — a single Flask app backed by SQLite. Use the turnkey installer for a production server with automatic HTTPS, or Docker Compose to run it on any machine.</p>
       </div>
 
       <div class="pp-deploy-paths pp-reveal">
-        <!-- Option A: Docker Compose -->
+        <!-- Option A: one-command installer -->
         <div class="pp-deploy-card">
-          <span class="pp-kicker">Option A · any machine</span>
-          <h3>Docker Compose</h3>
-          <p>One container, one SQLite file. Perfect for a laptop, a homelab, or any VPS.</p>
-          <ol class="pp-steps-ol">
-            <li>Install Docker, then clone the repo and <code>cd</code> in.</li>
-            <li>Generate a secret key into <code>.env</code>.</li>
-            <li>Build &amp; start — that's the whole install.</li>
-            <li>Open <code>http://localhost:8090</code> and sign in with <code>admin / admin</code> (change it from Settings → Users).</li>
+          <span class="pp-kicker">Option A · production + HTTPS</span>
+          <h3>One-command installer</h3>
+          <p>The turnkey path for a public server: it installs Docker, writes a hardened Compose file, generates your secret key, and configures Caddy for automatic Let's Encrypt TLS — then keeps the image up to date.</p>
+          <ol class="pp-deploy-steps">
+            <li>
+              <span class="pp-step-h">Provision a server</span>
+              <p>Spin up a fresh <b>Ubuntu 24.04 LTS</b> box on any provider (DigitalOcean, Hetzner, Lightsail, or bare metal). 1 vCPU / 1 GB RAM handles most fellowships. SSH in as root or a sudo user.</p>
+              <div class="pp-code"><pre><span class="g">$</span> ssh root@your-server-ip</pre></div>
+            </li>
+            <li>
+              <span class="pp-step-h">Point your domain at it</span>
+              <p>For a real certificate, add a DNS <b>A record</b> for your hostname pointing to the server's public IP. On Cloudflare, set it to <b>“DNS only” (grey cloud)</b> during install so the TLS challenge can complete. No domain? Skip this and the installer issues a self-signed cert.</p>
+              <div class="pp-code"><pre><span class="c"># DNS A record</span>
+portal.yourfellowship.org   <span class="p">→</span>   203.0.113.10</pre></div>
+            </li>
+            <li>
+              <span class="pp-step-h">Run the installer</span>
+              <p>One command does the rest. Pipe it straight from GitHub — or clone the repo first if you'd like to read the script before running it.</p>
+              <div class="pp-code"><pre><span class="g">$</span> curl -fsSL https://raw.githubusercontent.com/\
+viibeware/trusted-servants-pro/main/install.sh | sudo bash</pre></div>
+            </li>
+            <li>
+              <span class="pp-step-h">Answer two prompts</span>
+              <p>Enter your <b>domain</b> (press Enter to skip for a self-signed cert) and a <b>contact email</b> for renewal notices. It then pulls the image and starts everything in 2–5 minutes. Prefer no prompts? Pass the answers inline instead.</p>
+              <div class="pp-code"><pre><span class="c"># interactive prompts</span>
+Domain (blank = self-signed): portal.yourfellowship.org
+Contact email: you@yourfellowship.org
+
+<span class="c"># …or fully non-interactive</span>
+<span class="g">$</span> sudo TSP_DOMAIN=portal.yourfellowship.org \
+       TSP_ACME_EMAIL=you@yourfellowship.org \
+       TSP_ADMIN_PASSWORD='a-strong-password' bash install.sh</pre></div>
+            </li>
+            <li>
+              <span class="pp-step-h">Sign in &amp; secure it</span>
+              <p>Open the URL the installer prints, sign in with the seeded admin, and <b>change the password immediately</b> from Settings → Users.</p>
+              <div class="pp-code"><pre><span class="p">→</span> https://portal.yourfellowship.org
+   user: <span class="g">admin</span>   ·   pass: <span class="g">admin</span>   <span class="c"># change this now</span></pre></div>
+            </li>
           </ol>
-          <div class="pp-code"><pre><span class="c"># 1 + 2 — clone and set a signing secret</span>
-<span class="g">$</span> git clone https://github.com/viibeware/trusted-servants-pro.git
-<span class="g">$</span> cd trusted-servants-pro
-<span class="g">$</span> echo "TSP_SECRET_KEY=$(openssl rand -hex 32)" &gt; .env
-
-<span class="c"># 3 — build &amp; run</span>
-<span class="g">$</span> docker compose up -d --build
-
-<span class="c"># 4 — it's live</span>
-<span class="p">→</span> http://localhost:8090        <span class="c"># public site</span>
-<span class="p">→</span> http://localhost:8090/tspro  <span class="c"># admin backend</span></pre></div>
         </div>
 
-        <!-- Option B: installer -->
+        <!-- Option B: Docker Compose -->
         <div class="pp-deploy-card">
-          <span class="pp-kicker">Option B · production + HTTPS</span>
-          <h3>One-command installer</h3>
-          <p>A fresh Ubuntu 24.04 server gets Docker, Caddy (auto Let's Encrypt TLS), a random secret, and auto-updates.</p>
-          <ol class="pp-steps-ol">
-            <li>Point your domain's <code>A</code> record at the server's public IP (needed for a real cert; Cloudflare users: grey-cloud / DNS-only during install).</li>
-            <li>SSH in and run the installer (pipe from GitHub, or clone first to read it).</li>
-            <li>Answer two prompts: <b>domain</b> (blank = self-signed) and a <b>contact email</b> for renewals.</li>
-            <li>It pulls the image, starts everything, and prints your URL. Sign in with <code>admin / admin</code> and change it immediately.</li>
+          <span class="pp-kicker">Option B · any machine</span>
+          <h3>Docker Compose</h3>
+          <p>The quickest way to run it anywhere — a laptop, a homelab, or any VPS. One container, one SQLite file.</p>
+          <ol class="pp-deploy-steps">
+            <li>
+              <span class="pp-step-h">Check Docker is installed</span>
+              <p>You only need Docker Engine and the Compose plugin. Confirm both are available before you start.</p>
+              <div class="pp-code"><pre><span class="g">$</span> docker --version && docker compose version</pre></div>
+            </li>
+            <li>
+              <span class="pp-step-h">Get the code</span>
+              <p>Clone the repository and move into the project directory.</p>
+              <div class="pp-code"><pre><span class="g">$</span> git clone https://github.com/viibeware/trusted-servants-pro.git
+<span class="g">$</span> cd trusted-servants-pro</pre></div>
+            </li>
+            <li>
+              <span class="pp-step-h">Set a secret key</span>
+              <p>Trusted Servants Pro signs session cookies with this. Generate a random value into a <code>.env</code> file.</p>
+              <div class="pp-code"><pre><span class="g">$</span> echo "TSP_SECRET_KEY=$(openssl rand -hex 32)" &gt; .env</pre></div>
+            </li>
+            <li>
+              <span class="pp-step-h">Build &amp; start</span>
+              <p>One command builds the image and launches the container in the background on port 8090.</p>
+              <div class="pp-code"><pre><span class="g">$</span> docker compose up -d --build</pre></div>
+            </li>
+            <li>
+              <span class="pp-step-h">Open it</span>
+              <p>Visit the public site and the admin backend, sign in, and change the admin password.</p>
+              <div class="pp-code"><pre><span class="p">→</span> http://localhost:8090         <span class="c"># public site</span>
+<span class="p">→</span> http://localhost:8090/tspro   <span class="c"># admin (admin / admin)</span></pre></div>
+            </li>
           </ol>
-          <div class="pp-code"><pre><span class="c"># 2 — run on the server (root/sudo)</span>
-<span class="g">$</span> curl -fsSL https://raw.githubusercontent.com/\
-viibeware/trusted-servants-pro/main/install.sh | sudo bash
-
-<span class="c"># …or non-interactive (skip the prompts):</span>
-<span class="g">$</span> sudo TSP_DOMAIN=portal.example.org \
-       TSP_ACME_EMAIL=you@example.org \
-       TSP_ADMIN_PASSWORD='a-strong-password' \
-       bash install.sh
-
-<span class="c"># 4 — live over TLS</span>
-<span class="p">→</span> https://portal.example.org</pre></div>
         </div>
       </div>
     </div>

@@ -129,7 +129,7 @@
 .pp-nav { position: sticky; top: 0; z-index: 40; backdrop-filter: blur(14px); background: linear-gradient(to bottom, var(--nav-top), var(--nav-bot)); border-bottom: 1px solid var(--line); }
 .pp-nav-in { display: flex; align-items: center; justify-content: space-between; padding: 0.8rem 0; gap: 1rem; }
 .pp-brand { display: inline-flex; align-items: center; gap: 0.6rem; }
-.pp-brand-mark { width: 34px; height: 34px; border-radius: 9px; flex: none; display: grid; place-items: center; font-family: var(--body); font-weight: 800; font-size: 0.92rem; letter-spacing: 0.01em; color: #fff; background: linear-gradient(135deg, var(--brand), var(--teal)); box-shadow: 0 6px 18px rgba(99,102,241,0.35); }
+.pp-brand-mark { width: 34px; height: 34px; border-radius: 9px; flex: none; display: block; object-fit: cover; box-shadow: 0 0 0 1px var(--line), 0 6px 18px rgba(99,102,241,0.22); }
 .pp-brand-name { font-family: "Inter", var(--body); font-weight: 600; font-size: 1.12rem; letter-spacing: -0.01em; color: var(--text); white-space: nowrap; }
 .pp-nav-cta { display: flex; align-items: center; gap: 0.6rem; }
 .pp-themetoggle { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; transition: background .2s ease; }
@@ -241,11 +241,15 @@
 .pp-deploy-card .pp-code, .pp-deploy-card .pp-code pre { min-width: 0; max-width: 100%; }
 .pp-deploy-card h3 { margin: 0.55rem 0 0; font-size: 1.5rem; }
 .pp-deploy-card > p { color: var(--muted); margin: 0.6rem 0 0; font-size: 0.95rem; }
-.pp-steps-ol { counter-reset: d; list-style: none; margin: 1.2rem 0 1.3rem; padding: 0; display: grid; gap: 0.85rem; }
-.pp-steps-ol li { position: relative; padding-left: 2.1rem; color: var(--text); font-size: 0.95rem; }
-.pp-steps-ol li::before { counter-increment: d; content: counter(d); position: absolute; left: 0; top: -1px; width: 1.5rem; height: 1.5rem; border-radius: 999px; display: grid; place-items: center; font-family: var(--mono); font-size: 0.78rem; color: var(--teal-on); background: linear-gradient(100deg, var(--teal), var(--cyan)); }
-.pp-steps-ol li code { font-family: var(--mono); font-size: 0.82em; background: var(--panel-2); padding: 0.05rem 0.35rem; border-radius: 5px; }
-.pp-code { border-radius: 14px; border: 1px solid var(--line); overflow: hidden; background: #05071a; box-shadow: var(--shot-shadow); margin-top: auto; }
+/* verbose, numbered deploy steps — each with its own code box */
+.pp-deploy-steps { counter-reset: d; list-style: none; margin: 1.4rem 0 0; padding: 0; display: grid; gap: 1.5rem; }
+.pp-deploy-steps > li { position: relative; padding-left: 2.5rem; }
+.pp-deploy-steps > li::before { counter-increment: d; content: counter(d); position: absolute; left: 0; top: 0; width: 1.75rem; height: 1.75rem; border-radius: 999px; display: grid; place-items: center; font-family: var(--mono); font-size: 0.82rem; color: var(--teal-on); background: linear-gradient(100deg, var(--teal), var(--cyan)); }
+.pp-deploy-steps .pp-step-h { display: block; font-weight: 700; color: var(--text); padding-top: 0.18rem; }
+.pp-deploy-steps p { color: var(--muted); font-size: 0.92rem; margin: 0.35rem 0 0.7rem; }
+.pp-deploy-steps code { font-family: var(--mono); font-size: 0.82em; background: var(--panel-2); padding: 0.05rem 0.35rem; border-radius: 5px; }
+.pp-deploy-steps .pp-code { margin: 0; box-shadow: none; }
+.pp-code { border-radius: 14px; border: 1px solid var(--line); overflow: hidden; background: #05071a; box-shadow: var(--shot-shadow); }
 .pp-code pre { margin: 0; padding: 1.2rem 1.3rem; font-family: var(--mono); font-size: 0.82rem; line-height: 1.85; color: #c8cdf5; overflow-x: auto; white-space: pre; }
 .pp-code .c { color: #6b73a8; }
 .pp-code .g { color: var(--teal); }
