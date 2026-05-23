@@ -209,10 +209,11 @@ def _before_request():
     sid = session.get("demo_sid")
     if not sid:
         # Don't spin up a session for visitors who are only on the product
-        # marketing pages (or cookieless asset probes) — serve those from
-        # golden. Entering the demo at /demo (or any deeper app URL) is what
-        # creates the visitor's private session.
-        if path.startswith("/static/") or path in ("/", "/welcome", "/favicon.ico"):
+        # marketing pages, the docs, or the feature-request endpoint (none of
+        # which touch the DB) — serve those from golden. Entering the demo at
+        # /demo (or any deeper app URL) is what creates the private session.
+        if (path.startswith("/static/") or path.startswith("/docs")
+                or path in ("/", "/welcome", "/favicon.ico", "/feature-request")):
             _local.db_path = GOLDEN_DB_PATH
             _local.upload_dir = GOLDEN_UPLOAD_DIR
             return None

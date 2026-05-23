@@ -1,0 +1,76 @@
+{#- SPDX-License-Identifier: AGPL-3.0-or-later
+   Floating "Feature request" button + modal. Rendered only when the widget is
+   configured (SMTP + recipient via env — see app/feature_request.py). Include
+   once near the end of <body>; it pulls in its own JS (and Turnstile when a
+   site key is set). -#}
+{% if feature_request_enabled %}
+<button class="pp-fr-fab" type="button" data-fr-open aria-haspopup="dialog" aria-label="Submit a feature request">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg>
+  <span>Feature request</span>
+</button>
+
+<div class="pp-fr-modal" data-fr-modal aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="ppFrTitle">
+  <div class="pp-fr-panel">
+    <button class="pp-fr-close" type="button" data-fr-close aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <div class="pp-fr-head">
+      <span class="pp-eyebrow">We're listening</span>
+      <h2 id="ppFrTitle">Request a feature</h2>
+      <p>Tell us what would make Trusted Servants Pro better for your fellowship. Contact details are optional — but help if we have questions.</p>
+    </div>
+
+    <form class="pp-fr-form" data-fr-form novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {# Honeypot: hidden from people, tempting to bots. Submissions that fill it are dropped. #}
+      <div class="pp-fr-hp" aria-hidden="true">
+        <label>Company<input type="text" name="company" tabindex="-1" autocomplete="off"></label>
+      </div>
+
+      <div class="pp-fr-grid">
+        <label class="pp-fr-field">
+          <span class="pp-fr-label">Name <em>optional</em></span>
+          <input type="text" name="name" maxlength="120" autocomplete="name">
+        </label>
+        <label class="pp-fr-field">
+          <span class="pp-fr-label">Email <em>optional</em></span>
+          <input type="email" name="email" maxlength="200" autocomplete="email" inputmode="email">
+        </label>
+      </div>
+      <label class="pp-fr-field">
+        <span class="pp-fr-label">Phone <em>optional</em></span>
+        <input type="tel" name="phone" maxlength="40" autocomplete="tel" inputmode="tel">
+      </label>
+      <label class="pp-fr-field">
+        <span class="pp-fr-label">Feature request <em class="pp-fr-req">required</em></span>
+        <textarea name="feature" rows="5" maxlength="5000" required placeholder="Describe the feature you'd like to see, and how it would help…"></textarea>
+      </label>
+
+      {% if feature_request_turnstile_sitekey %}
+      <div class="pp-fr-turnstile" data-fr-turnstile data-sitekey="{{ feature_request_turnstile_sitekey }}"></div>
+      {% endif %}
+
+      <div class="pp-fr-foot">
+        <p class="pp-fr-msg" data-fr-msg role="status" aria-live="polite"></p>
+        <button class="pp-btn pp-btn-primary" type="submit" data-fr-submit>
+          <span class="pp-fr-submit-label">Send request</span>
+        </button>
+      </div>
+    </form>
+
+    <div class="pp-fr-done" data-fr-done hidden>
+      <div class="pp-fr-done-ic" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+      </div>
+      <h3>Thank you!</h3>
+      <p>Your feature request has been sent. We read every one.</p>
+      <button class="pp-btn pp-btn-ghost" type="button" data-fr-close>Close</button>
+    </div>
+  </div>
+</div>
+
+{% if feature_request_turnstile_sitekey %}
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=ppFrTurnstileReady" async defer></script>
+{% endif %}
+<script src="{{ url_for('static', filename='js/feature_request.js') }}" defer></script>
+{% endif %}

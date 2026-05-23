@@ -71,3 +71,7 @@ def _splash():
 def register(app):
     app.register_blueprint(bp)
     app.before_request(_splash)
+    from . import docs as _docs
+    _docs.register(app)
+    from . import feature_request as _fr
+    _fr.register(app)

@@ -42,6 +42,24 @@ services:
       # How long an idle visitor session is kept before the janitor reclaims
       # its private DB + uploads (minutes).
       - TSP_DEMO_SESSION_TTL_MIN=90
+      # ── Feature-request widget (marketing homepage + docs) ────────────────
+      # The floating "Feature request" button appears once SMTP is configured
+      # AND a recipient is set; submissions are emailed (nothing is stored).
+      # Set real values in the .env file next to this compose file — anything
+      # left blank stays blank, and the widget stays hidden until SMTP +
+      # TSP_FEATURE_REQUEST_TO are present.
+      - TSP_SMTP_HOST=${TSP_SMTP_HOST:-}
+      - TSP_SMTP_PORT=${TSP_SMTP_PORT:-}
+      - TSP_SMTP_USERNAME=${TSP_SMTP_USERNAME:-}
+      - TSP_SMTP_PASSWORD=${TSP_SMTP_PASSWORD:-}
+      - TSP_SMTP_FROM_EMAIL=${TSP_SMTP_FROM_EMAIL:-}
+      - TSP_SMTP_FROM_NAME=${TSP_SMTP_FROM_NAME:-Trusted Servants Pro}
+      - TSP_SMTP_SECURITY=${TSP_SMTP_SECURITY:-starttls}   # none | starttls | ssl
+      - TSP_FEATURE_REQUEST_TO=${TSP_FEATURE_REQUEST_TO:-}
+      # Cloudflare Turnstile — optional bot protection. Leave blank to disable;
+      # set both keys to show the widget and verify submissions server-side.
+      - TSP_TURNSTILE_SITE_KEY=${TSP_TURNSTILE_SITE_KEY:-}
+      - TSP_TURNSTILE_SECRET_KEY=${TSP_TURNSTILE_SECRET_KEY:-}
     volumes:
       # Golden state (seeded DB + uploads) + per-session copies live here.
       # Remove this volume to fully reset the demo to a fresh seed:

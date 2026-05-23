@@ -1,0 +1,36 @@
+{#- SPDX-License-Identifier: AGPL-3.0-or-later — docs overview / landing. -#}
+{% extends "product/docs_base.html" %}
+{% block title %}Documentation{% endblock %}
+{% block meta_desc %}Guides and how-tos for installing, configuring, and operating Trusted Servants Pro — the self-hosted web platform for recovery fellowships.{% endblock %}
+{% block docs_class %}pp-docs-noaside{% endblock %}
+
+{% block doc_content %}
+<header class="pp-docs-head">
+  <span class="pp-eyebrow">Documentation</span>
+  <h1>Everything you need to run <span class="pp-grad">Trusted&nbsp;Servants&nbsp;Pro</span>.</h1>
+  <p class="pp-docs-lede">Step-by-step guides for installing, configuring, and operating your portal. New here? Start with the <a href="{{ url_for('docs.article', slug='installation') }}">installation guide</a>, or jump straight in with <a href="{{ url_for('docs.article', slug='quick-start') }}">Quick&nbsp;Start</a>.</p>
+  <button class="pp-btn pp-btn-ghost pp-docs-head-search" type="button" data-docs-search>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+    Search the documentation
+    <kbd>/</kbd>
+  </button>
+</header>
+
+{% for group in nav %}
+<section class="pp-docs-cat">
+  <h2 class="pp-docs-cat-h">{{ group.category }}</h2>
+  <div class="pp-docs-cards">
+    {% for g in group.guides %}
+    <a class="pp-docs-card" href="{{ url_for('docs.article', slug=g.slug) }}">
+      <span class="pp-docs-card-ic">{{ doc_icon(g.icon) }}</span>
+      <span class="pp-docs-card-body">
+        <span class="pp-docs-card-t">{{ g.title }}</span>
+        <span class="pp-docs-card-d">{{ g.summary }}</span>
+      </span>
+      <svg class="pp-docs-card-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,43 @@
+{#- SPDX-License-Identifier: AGPL-3.0-or-later — a single documentation guide. -#}
+{% extends "product/docs_base.html" %}
+{% block title %}{{ guide.title }}{% endblock %}
+{% block meta_desc %}{{ guide.summary }}{% endblock %}
+
+{%- macro render_toc(tokens) -%}
+<ul>
+  {% for t in tokens %}
+  <li>
+    <a href="#{{ t.id }}" data-toc-link="{{ t.id }}">{{ t.name }}</a>
+    {%- if t.children %}{{ render_toc(t.children) }}{% endif -%}
+  </li>
+  {% endfor %}
+</ul>
+{%- endmacro -%}
+
+{% block doc_content %}
+<nav class="pp-docs-crumb" aria-label="Breadcrumb">
+  <a href="{{ url_for('docs.index') }}">Docs</a>
+  <span aria-hidden="true">/</span>
+  <span>{{ guide.category }}</span>
+</nav>
+
+<header class="pp-docs-arthead">
+  <span class="pp-eyebrow">{{ guide.category }}</span>
+  <h1>{{ guide.title }}</h1>
+  {% if guide.summary %}<p class="pp-docs-lede">{{ guide.summary }}</p>{% endif %}
+  <p class="pp-docs-meta">{{ guide.reading_min }} min read</p>
+</header>
+
+<article class="pp-doc-article">
+  {{ guide.html | safe }}
+</article>
+{% endblock %}
+
+{% block doc_toc %}
+{% if guide.toc %}
+<div class="pp-docs-toc-inner" data-toc>
+  <p class="pp-docs-toc-h">On this page</p>
+  {{ render_toc(guide.toc) }}
+</div>
+{% endif %}
+{% endblock %}
