@@ -129,7 +129,7 @@ FOOTER_BLOCK_CATALOG = [
     {"key": "spacer",        "name": "Spacer",         "icon": "move-vertical",
      "desc": "Vertical breathing room between adjacent blocks."},
     {"key": "powered_by",    "name": "Powered by",     "icon": "github",
-     "desc": "Static \"Powered by Trusted Servants Pro\" attribution linking the project's GitHub."},
+     "desc": "Static \"Powered by Trusted Servants Pro\" attribution linking to gettspro.com."},
     {"key": "admin_login",   "name": "Admin login",    "icon": "log-in",
      "desc": "Pill-style link to the admin sign-in page. Authenticated users get redirected straight to the dashboard."},
 ]

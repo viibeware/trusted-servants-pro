@@ -6,6 +6,12 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.5.1] — 2026-05-23
+
+### Changed — "Powered by" footer block links to gettspro.com
+
+The footer builder's **Powered by** attribution block now links to `https://gettspro.com` instead of the project's GitHub repo (`templates/frontend/footers/blocks/_powered_by.html`). The block's description in the footer builder palette was updated to match (`app/frontend.py`).
+
 ## [2.5.0] — 2026-05-22
 
 ### Added — Popups: site-wide modal popups built with the page builder
