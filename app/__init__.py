@@ -994,6 +994,7 @@ def create_app():
     # public base template inlines on <body>.
     from .design import (
         design_css_vars as _design_css_vars,
+        neobrutal_hero_css_vars as _neobrutal_hero_css_vars,
         resolve_design as _resolve_design,
         derive_dark_color as _derive_dark_color,
         DESIGN_FIELDS as _DESIGN_FIELDS,
@@ -1008,6 +1009,7 @@ def create_app():
         THEME_DEFAULTS as _DESIGN_THEME_DEFAULTS,
     )
     app.jinja_env.globals["design_css_vars"] = _design_css_vars
+    app.jinja_env.globals["neobrutal_hero_css_vars"] = _neobrutal_hero_css_vars
     app.jinja_env.globals["resolve_design"] = _resolve_design
     app.jinja_env.globals["derive_dark_color"] = _derive_dark_color
     app.jinja_env.globals["design_fields"] = _DESIGN_FIELDS

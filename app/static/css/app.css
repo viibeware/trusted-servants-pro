@@ -72,6 +72,15 @@
   src: url("../fonts/lora/Lora-Variable.woff2") format("woff2-variations"),
        url("../fonts/lora/Lora-Variable.woff2") format("woff2");
 }
+/* Self-hosted Archivo Black (SIL OFL) — heavy grotesque display used by the
+   Neobrutal theme for chunky headings / nav / buttons. Single weight. */
+@font-face {
+  font-family: 'Archivo Black';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/archivo-black/ArchivoBlack-Regular.woff2") format("woff2");
+}
 
 :root {
   --bg: #f6f7fb;

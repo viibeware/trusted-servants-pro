@@ -1,0 +1,403 @@
+/* ============================================================================
+   THEME · Neobrutal (neobrutalism)
+   Loaded only when SiteSetting.frontend_theme == "neobrutal" (see base.html).
+   Scoped to body[data-fe-theme="neobrutal"]. Colourful flat surfaces, thick
+   black borders, hard offset drop-shadows, chunky Archivo Black headings, and
+   controls that "press" on click. Defaults to light; the dark companion keeps
+   the bright blocks on a near-black canvas. Colours + radius come from the
+   design tokens; this file paints the borders, hard shadows, and chrome.
+   ========================================================================== */
+
+body[data-fe-theme="neobrutal"] {
+  --nb-ink:      #111111;   /* borders / shadows / text on bright surfaces */
+  --nb-paper:    #faf4e6;   /* light canvas */
+  --nb-paper-dk: #18161f;   /* dark canvas */
+  --nb-yellow:   #ffd23f;
+  --nb-pink:     #ff4d8d;
+  --nb-cyan:     #8fe3ef;
+  --nb-lav:      #c9b8ff;
+  --nb-lime:     #c2f24a;
+  --nb-cream:    #f7f3e8;   /* text on dark canvas */
+  --nb-bw:       3px;       /* border width */
+  --nb-shadow:    5px 5px 0 0 var(--nb-ink);
+  --nb-shadow-sm: 3px 3px 0 0 var(--nb-ink);
+  --nb-shadow-lg: 8px 8px 0 0 var(--nb-ink);
+  --nb-ease:     cubic-bezier(.2,.7,.2,1);
+  /* Legacy non-tokenised accents → bold palette. */
+  --fe-accent:          #ff4d8d;
+  --fe-accent-2:        #ffd23f;
+  --fe-accent-3:        #8fe3ef;
+  --fe-recovery-blue:   #ff4d8d;
+  --fe-recovery-blue-2: #ffd23f;
+}
+
+/* ---- Dark companion palette -------------------------------------------- */
+html[data-theme="dark"] body[data-fe-theme="neobrutal"],
+body[data-fe-theme="neobrutal"].fe-footer-force-dark {
+  --fe-dm-surface:        #211d2c;
+  --fe-dm-surface-soft:   rgba(255,255,255,0.06);
+  --fe-dm-border:         #111111;
+  --fe-dm-border-hover:   #111111;
+  --fe-dm-text-strong:    var(--fe-color-text-dark, #f7f3e8);
+  --fe-dm-text:           var(--fe-color-text-dark, #f7f3e8);
+  --fe-dm-text-muted:     #b3a9c9;
+  --fe-dm-link-hover:     #ff8fb9;
+  /* Bright primary button in dark mode (not the default 40%-black mix). */
+  --fe-dm-btn-primary-bg:       var(--fe-color-btn-primary-bg, #ff4d8d);
+  --fe-dm-btn-primary-bg-hover: var(--fe-color-btn-primary-hover-bg, #ff2d77);
+  --fe-dm-btn-primary-text:       #111111;
+  --fe-dm-btn-primary-text-hover: #111111;
+}
+
+/* ===== Atmosphere — flat canvas + faint dot grid ======================== */
+html[data-theme="light"] body[data-fe-theme="neobrutal"] { background: var(--nb-paper); }
+html[data-theme="dark"] body[data-fe-theme="neobrutal"] { background: var(--fe-color-surface-dark, #18161f); }
+body[data-fe-theme="neobrutal"]::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image: radial-gradient(var(--nb-ink) 1.4px, transparent 1.4px);
+  background-size: 26px 26px; opacity: 0.06;
+}
+html[data-theme="dark"] body[data-fe-theme="neobrutal"]::after {
+  background-image: radial-gradient(#ffffff 1.4px, transparent 1.4px); opacity: 0.05;
+}
+body[data-fe-theme="neobrutal"] .fe-page,
+body[data-fe-theme="neobrutal"] .fe-section { background: transparent; }
+
+/* ===== Type + section heads — chunky sticker headline =================== */
+body[data-fe-theme="neobrutal"] .fe-section { padding-top: 72px; padding-bottom: 72px; }
+body[data-fe-theme="neobrutal"] .fe-section:has(.fe-hero) { padding-top: 0; }
+body[data-fe-theme="neobrutal"] .fe-meeting-detail { padding-top: 6rem; }
+/* Drop the global navy inter-section divider. */
+body[data-fe-theme="neobrutal"] .fe-section + .fe-section,
+html[data-theme="dark"] body[data-fe-theme="neobrutal"] .fe-section + .fe-section { border-top: 0; }
+
+body[data-fe-theme="neobrutal"] .fe-section-head { position: relative; }
+body[data-fe-theme="neobrutal"] .fe-section-head::after { display: none; }
+body[data-fe-theme="neobrutal"] .fe-section-head h2 {
+  display: inline-block;
+  font-family: var(--fe-font-heading); text-transform: uppercase;
+  letter-spacing: 0.005em; line-height: 1.1; color: var(--nb-ink) !important;
+  -webkit-text-fill-color: var(--nb-ink);
+  background: var(--nb-yellow);
+  border: var(--nb-bw) solid var(--nb-ink); border-radius: 6px;
+  box-shadow: var(--nb-shadow-sm);
+  padding: 6px 16px; margin-bottom: 8px;
+}
+body[data-fe-theme="neobrutal"] .fe-section-head p {
+  font-family: var(--fe-font-body); font-weight: 600; color: var(--nb-ink);
+}
+html[data-theme="dark"] body[data-fe-theme="neobrutal"] .fe-section-head p { color: var(--nb-cream); }
+
+/* ===== Hero — bold colour block ======================================== */
+body[data-fe-theme="neobrutal"] .fe-hero { overflow: hidden; position: relative; }
+body[data-fe-theme="neobrutal"] .fe-hero > .fe-dynbg,
+body[data-fe-theme="neobrutal"] .fe-hero > .fe-hero-particles { display: none !important; }
+body[data-fe-theme="neobrutal"] .fe-hero-blob { opacity: 0; }
+body[data-fe-theme="neobrutal"] .fe-hero {
+  background: var(--nb-lav) !important;
+  border-bottom: var(--nb-bw) solid var(--nb-ink);
+}
+/* Geometric backdrop: a faint graph grid + bold black-outlined shapes scattered
+   to the edges (the neobrutal hero signature). Content is lifted above via the
+   z-index on the hero's direct children. */
+body[data-fe-theme="neobrutal"] .fe-hero > * { position: relative; z-index: 1; }
+body[data-fe-theme="neobrutal"] .fe-hero::before {
+  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    radial-gradient(circle 92px at var(--nb-s1-x, 13%) var(--nb-s1-y, 24%), var(--nb-pink) 0 86px, var(--nb-ink) 86px 92px, transparent 92px),
+    radial-gradient(circle 56px at var(--nb-s2-x, 88%) var(--nb-s2-y, 17%), var(--nb-cyan) 0 50px, var(--nb-ink) 50px 56px, transparent 56px),
+    radial-gradient(circle 72px at var(--nb-s3-x, 91%) var(--nb-s3-y, 83%), var(--nb-lime) 0 66px, var(--nb-ink) 66px 72px, transparent 72px),
+    radial-gradient(circle 40px at var(--nb-s4-x, 21%) var(--nb-s4-y, 86%), var(--nb-yellow) 0 34px, var(--nb-ink) 34px 40px, transparent 40px),
+    repeating-linear-gradient(0deg, rgba(17,17,17,0.13) 0 2px, transparent 2px 48px),
+    repeating-linear-gradient(90deg, rgba(17,17,17,0.13) 0 2px, transparent 2px 48px);
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat, repeat;
+}
+body[data-fe-theme="neobrutal"] .fe-hero::after {
+  content: ""; position: absolute; z-index: 0; pointer-events: none;
+  width: 116px; height: 116px; right: var(--nb-sq-right, 7%); bottom: -34px;
+  background: var(--nb-yellow); border: var(--nb-bw) solid var(--nb-ink);
+  transform: rotate(var(--nb-sq-rot, 12deg));
+}
+body[data-fe-theme="neobrutal"] .fe-hero-heading {
+  background-image: none !important; -webkit-text-fill-color: var(--nb-ink);
+  color: var(--nb-ink); text-transform: uppercase; letter-spacing: -0.01em;
+  /* Force the chunky display face — the hero's own font picker would otherwise
+     leave the admin's serif headline in place. */
+  font-family: var(--fe-font-heading) !important;
+}
+body[data-fe-theme="neobrutal"] .fe-hero-sub {
+  font-family: var(--fe-font-body) !important; font-weight: 600; color: var(--nb-ink) !important;
+}
+body[data-fe-theme="neobrutal"] .fe-hero-eyebrow {
+  background: var(--nb-pink); color: var(--nb-ink);
+  border: var(--nb-bw) solid var(--nb-ink); border-radius: 4px;
+  box-shadow: var(--nb-shadow-sm);
+  text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; font-size: 0.7rem;
+}
+
+/* ===== Cards — thick border + hard shadow + lift on hover =============== */
+body[data-fe-theme="neobrutal"] .fe-card-primary,
+body[data-fe-theme="neobrutal"] .fe-card-secondary,
+body[data-fe-theme="neobrutal"] .fe-meeting-card,
+body[data-fe-theme="neobrutal"] .fe-mlist-card,
+body[data-fe-theme="neobrutal"] .fe-feature-card,
+body[data-fe-theme="neobrutal"] .fe-event-row,
+body[data-fe-theme="neobrutal"] .fe-faq-item,
+body[data-fe-theme="neobrutal"] .fe-events-card,
+body[data-fe-theme="neobrutal"] .fe-events-mag-hero,
+body[data-fe-theme="neobrutal"] .fe-announcements-card,
+body[data-fe-theme="neobrutal"] .fe-library-item,
+body[data-fe-theme="neobrutal"] .fe-fellowships-card {
+  border: var(--nb-bw) solid var(--nb-ink) !important;
+  box-shadow: var(--nb-shadow);
+  transition: transform 110ms var(--nb-ease), box-shadow 110ms var(--nb-ease);
+}
+body[data-fe-theme="neobrutal"] .fe-card-primary:hover,
+body[data-fe-theme="neobrutal"] .fe-card-secondary:hover,
+body[data-fe-theme="neobrutal"] .fe-meeting-card:hover,
+body[data-fe-theme="neobrutal"] .fe-mlist-card:hover,
+body[data-fe-theme="neobrutal"] .fe-feature-card:hover,
+body[data-fe-theme="neobrutal"] .fe-event-row:hover,
+body[data-fe-theme="neobrutal"] .fe-events-card:hover,
+body[data-fe-theme="neobrutal"] .fe-announcements-card:hover,
+body[data-fe-theme="neobrutal"] .fe-library-item:hover,
+body[data-fe-theme="neobrutal"] .fe-fellowships-card:hover {
+  transform: translate(-3px, -3px);
+  box-shadow: var(--nb-shadow-lg);
+}
+/* Feature icon tiles become bold stickers. */
+body[data-fe-theme="neobrutal"] .fe-feature-icon,
+body[data-fe-theme="neobrutal"] .fe-faq-summary-icon,
+body[data-fe-theme="neobrutal"] .fe-inclusion-icon {
+  background: var(--nb-cyan) !important; color: var(--nb-ink) !important;
+  border: var(--nb-bw) solid var(--nb-ink); box-shadow: var(--nb-shadow-sm); border-radius: 6px;
+}
+/* Card titles ride the chunky display face. */
+body[data-fe-theme="neobrutal"] .fe-meeting-card-title,
+body[data-fe-theme="neobrutal"] .fe-mlist-card-title,
+body[data-fe-theme="neobrutal"] .fe-event-title,
+body[data-fe-theme="neobrutal"] .fe-event-title a,
+body[data-fe-theme="neobrutal"] .fe-events-card-title,
+body[data-fe-theme="neobrutal"] .fe-announcements-card-title,
+body[data-fe-theme="neobrutal"] .fe-library-item-title,
+body[data-fe-theme="neobrutal"] .fe-fellowships-card-title,
+body[data-fe-theme="neobrutal"] .fe-feature-card h3 {
+  font-family: var(--fe-font-heading); letter-spacing: 0;
+}
+
+/* ----- Bright cards keep BLACK text in dark mode too -------------------
+   The cards stay colourful in dark mode, so their text must stay ink — the
+   site-wide "Text — Darkmode" token would otherwise turn it cream on yellow.
+   Re-pin the text vars to ink for the card subtree (with !important to beat
+   the body-level token redefine). */
+html[data-theme="dark"] body[data-fe-theme="neobrutal"] :is(
+  .fe-card-primary, .fe-card-secondary, .fe-meeting-card, .fe-mlist-card,
+  .fe-feature-card, .fe-event-row, .fe-faq-item, .fe-events-card,
+  .fe-events-mag-hero, .fe-announcements-card, .fe-library-item,
+  .fe-fellowships-card, .fe-footer-location-card) {
+  --fe-color-text: var(--nb-ink) !important;
+  --fe-dm-text: var(--nb-ink) !important;
+  --fe-dm-text-strong: var(--nb-ink) !important;
+  --fe-text-dark-active: var(--nb-ink) !important;
+  color: var(--nb-ink) !important;
+}
+
+/* ===== Meeting-type badges — bold stickers ============================= */
+body[data-fe-theme="neobrutal"] .fe-meeting-type-online,
+body[data-fe-theme="neobrutal"] .fe-recovery-meeting-type-online,
+body[data-fe-theme="neobrutal"] .fe-meeting-type-in_person,
+body[data-fe-theme="neobrutal"] .fe-meeting-type-hybrid,
+body[data-fe-theme="neobrutal"] .fe-recovery-meeting-type-hybrid {
+  border: 2px solid var(--nb-ink) !important; border-radius: 4px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--nb-ink) !important;
+}
+body[data-fe-theme="neobrutal"] .fe-meeting-type-online,
+body[data-fe-theme="neobrutal"] .fe-recovery-meeting-type-online { background: var(--nb-cyan) !important; }
+body[data-fe-theme="neobrutal"] .fe-meeting-type-in_person { background: var(--nb-lime) !important; }
+body[data-fe-theme="neobrutal"] .fe-meeting-type-hybrid,
+body[data-fe-theme="neobrutal"] .fe-recovery-meeting-type-hybrid { background: var(--nb-yellow) !important; }
+
+/* ===== Buttons — hard shadow, press on click =========================== */
+body[data-fe-theme="neobrutal"] .fe-btn-primary,
+body[data-fe-theme="neobrutal"] .fe-th-nav-cta,
+body[data-fe-theme="neobrutal"] .fe-btn-secondary,
+body[data-fe-theme="neobrutal"] .fe-btn-ghost,
+body[data-fe-theme="neobrutal"] .fe-btn-yellow,
+body[data-fe-theme="neobrutal"] .fe-btn-custom {
+  border: var(--nb-bw) solid var(--nb-ink) !important;
+  box-shadow: var(--nb-shadow-sm);
+  font-family: var(--fe-font-heading); text-transform: uppercase;
+  letter-spacing: 0.03em; font-weight: 400;
+  transition: transform 90ms var(--nb-ease), box-shadow 90ms var(--nb-ease),
+              background 120ms var(--nb-ease) !important;
+}
+body[data-fe-theme="neobrutal"] .fe-btn-primary:hover,
+body[data-fe-theme="neobrutal"] .fe-th-nav-cta:hover,
+body[data-fe-theme="neobrutal"] .fe-btn-secondary:hover,
+body[data-fe-theme="neobrutal"] .fe-btn-ghost:hover,
+body[data-fe-theme="neobrutal"] .fe-btn-yellow:hover,
+body[data-fe-theme="neobrutal"] .fe-btn-custom:hover {
+  transform: translate(-2px, -2px); box-shadow: var(--nb-shadow) !important;
+}
+body[data-fe-theme="neobrutal"] .fe-btn-primary:active,
+body[data-fe-theme="neobrutal"] .fe-th-nav-cta:active,
+body[data-fe-theme="neobrutal"] .fe-btn-secondary:active,
+body[data-fe-theme="neobrutal"] .fe-btn-ghost:active,
+body[data-fe-theme="neobrutal"] .fe-btn-yellow:active,
+body[data-fe-theme="neobrutal"] .fe-btn-custom:active {
+  transform: translate(2px, 2px); box-shadow: 1px 1px 0 0 var(--nb-ink) !important;
+}
+/* Dark mode: keep the primary button bright pink + ink text. */
+html[data-theme="dark"] body[data-fe-theme="neobrutal"] .fe-btn-primary,
+html[data-theme="dark"] body[data-fe-theme="neobrutal"] .fe-th-nav-cta,
+html[data-theme="dark"] body[data-fe-theme="neobrutal"] .fe-page .fe-hero-cta .fe-btn-primary,
+html[data-theme="dark"] body[data-fe-theme="neobrutal"] .fe-meeting-card-actions .fe-btn-primary {
+  background: var(--fe-color-btn-primary-bg, var(--nb-pink)) !important;
+  color: #111111 !important; border-color: var(--nb-ink) !important;
+}
+html[data-theme="dark"] body[data-fe-theme="neobrutal"] .fe-btn-secondary,
+html[data-theme="dark"] body[data-fe-theme="neobrutal"] .fe-btn-ghost {
+  background: #ffffff !important; color: #111111 !important;
+}
+
+/* ===== Header — flat bar, thick black bottom border ==================== */
+html[data-theme="light"] body[data-fe-theme="neobrutal"] .fe-header-themed {
+  background: var(--nb-yellow); border-bottom: var(--nb-bw) solid var(--nb-ink);
+}
+html[data-theme="dark"] body[data-fe-theme="neobrutal"] .fe-header-themed {
+  background: #211d2c; border-bottom: var(--nb-bw) solid var(--nb-ink);
+}
+body[data-fe-theme="neobrutal"] .fe-th-brand-name {
+  font-family: var(--fe-font-heading); text-transform: uppercase; letter-spacing: 0;
+}
+body[data-fe-theme="neobrutal"] .fe-th-nav-link:not(.fe-th-nav-cta) {
+  font-family: var(--fe-font-body); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.02em; font-size: 0.8rem;
+  border-radius: 4px; border: 2px solid transparent;
+}
+html[data-theme="light"] body[data-fe-theme="neobrutal"] .fe-th-nav-link:not(.fe-th-nav-cta) { color: var(--nb-ink); }
+body[data-fe-theme="neobrutal"] .fe-th-nav-link:not(.fe-th-nav-cta):hover,
+body[data-fe-theme="neobrutal"] .fe-th-nav-link:not(.fe-th-nav-cta).mega-active {
+  background: var(--nb-pink) !important; color: var(--nb-ink) !important;
+  border-color: var(--nb-ink);
+}
+html[data-theme="dark"] body[data-fe-theme="neobrutal"] .fe-th-menu-btn span { background: var(--nb-cream); }
+@media (max-width: 880px) {
+  html[data-theme="dark"] body[data-fe-theme="neobrutal"] .fe-th-nav { background: #211d2c; }
+}
+
+/* ===== Utility bar — bold strip ======================================== */
+html[data-theme="light"] body[data-fe-theme="neobrutal"] .fe-utility-bar:not(.is-live) {
+  background: var(--nb-ink) !important; color: var(--nb-cream) !important;
+  border-bottom: var(--nb-bw) solid var(--nb-ink);
+}
+html[data-theme="dark"] body[data-fe-theme="neobrutal"] .fe-utility-bar:not(.is-live) {
+  background: #000000 !important; color: var(--nb-cream) !important;
+  border-bottom: var(--nb-bw) solid var(--nb-ink);
+}
+body[data-fe-theme="neobrutal"] .fe-utility-bar:not(.is-live) a:hover { color: var(--nb-yellow); }
+body[data-fe-theme="neobrutal"] .fe-utility-bar:not(.is-live) .fe-theme-toggle,
+body[data-fe-theme="neobrutal"] .fe-utility-bar:not(.is-live) .fe-utility-search-btn,
+body[data-fe-theme="neobrutal"] .fe-utility-bar:not(.is-live) .fe-utility-btn,
+body[data-fe-theme="neobrutal"] .fe-utility-bar:not(.is-live) .fe-utility-container--collapsed {
+  background: rgba(255,255,255,0.14) !important; color: var(--nb-cream) !important;
+}
+
+/* ===== Mega menu — flat panel, thick border, hard shadow ============== */
+body[data-fe-theme="neobrutal"] .fe-megamenu-themed {
+  background-color: var(--nb-cyan); color: var(--nb-ink);
+  border: var(--nb-bw) solid var(--nb-ink); border-top: var(--nb-bw) solid var(--nb-ink);
+  box-shadow: var(--nb-shadow);
+}
+body[data-fe-theme="neobrutal"] .fe-megamenu-themed .fe-megamenu-link { color: var(--nb-ink); font-weight: 600; border-radius: 4px; }
+body[data-fe-theme="neobrutal"] .fe-megamenu-themed .fe-megamenu-link:hover { background: var(--nb-pink); color: var(--nb-ink); }
+body[data-fe-theme="neobrutal"] .fe-megamenu-themed .fe-megamenu-block-title,
+body[data-fe-theme="neobrutal"] .fe-megamenu-themed .fe-megamenu-heading {
+  color: var(--nb-ink); font-family: var(--fe-font-heading) !important; text-transform: uppercase;
+}
+body[data-fe-theme="neobrutal"] .fe-megamenu-themed .fe-megamenu-block-btn {
+  color: var(--nb-ink); background: var(--nb-yellow);
+  border: 2px solid var(--nb-ink); box-shadow: var(--nb-shadow-sm);
+}
+body[data-fe-theme="neobrutal"] .fe-megamenu-themed .fe-megamenu-block-section-line { background: var(--nb-ink); opacity: 1; }
+
+/* ===== Footer — dark slab, thick top border, colour accents =========== */
+body[data-fe-theme="neobrutal"] .fe-footer {
+  background-color: #15131c !important; background-image: none !important;
+  border-top: var(--nb-bw) solid var(--nb-ink);
+}
+body[data-fe-theme="neobrutal"] .fe-footer-particles,
+body[data-fe-theme="neobrutal"] .fe-footer-bg-effects { display: none !important; }
+body[data-fe-theme="neobrutal"] .fe-footer,
+body[data-fe-theme="neobrutal"] .fe-footer p,
+body[data-fe-theme="neobrutal"] .fe-footer li,
+body[data-fe-theme="neobrutal"] .fe-footer a { color: var(--nb-cream); }
+body[data-fe-theme="neobrutal"] .fe-footer a:hover,
+body[data-fe-theme="neobrutal"] .fe-footer-secondary-nav a:hover,
+body[data-fe-theme="neobrutal"] .fe-footer-location-website:hover { color: var(--nb-yellow); }
+body[data-fe-theme="neobrutal"] .fe-footer-locations-heading,
+body[data-fe-theme="neobrutal"] .fe-footer-contact-heading,
+body[data-fe-theme="neobrutal"] .fe-footer-name,
+body[data-fe-theme="neobrutal"] .fe-footer-col-title {
+  font-family: var(--fe-font-heading) !important; color: var(--nb-yellow); text-transform: uppercase;
+}
+/* Location cards become bright stickers on the dark footer. */
+body[data-fe-theme="neobrutal"] .fe-footer-location-card {
+  background: var(--nb-yellow); border: var(--nb-bw) solid var(--nb-ink);
+  box-shadow: var(--nb-shadow-sm); color: var(--nb-ink);
+}
+body[data-fe-theme="neobrutal"] .fe-footer-location-card:hover {
+  /* Re-assert the bright surface — the shared force-dark hover rule darkens
+     the card to near-black, which buried the (black) text. Neobrutal's hover
+     feedback is the lift + bigger hard shadow, not a colour change. */
+  background: var(--nb-yellow) !important;
+  border-color: var(--nb-ink) !important;
+  transform: translate(-2px,-2px); box-shadow: var(--nb-shadow);
+}
+body[data-fe-theme="neobrutal"] .fe-footer-location-name,
+body[data-fe-theme="neobrutal"] .fe-footer-location-addr,
+body[data-fe-theme="neobrutal"] .fe-footer-location-note { color: var(--nb-ink) !important; }
+body[data-fe-theme="neobrutal"] .fe-footer-location-icon {
+  background: var(--nb-pink); color: var(--nb-ink); border: 2px solid var(--nb-ink); border-radius: 4px;
+}
+body[data-fe-theme="neobrutal"] .fe-footer-location-directions {
+  background: #ffffff; color: var(--nb-ink) !important; border: 2px solid var(--nb-ink); box-shadow: var(--nb-shadow-sm);
+}
+
+/* ===== Meetings-list filter rail ====================================== */
+body[data-fe-theme="neobrutal"] .fe-mlist-day-section-heading { font-family: var(--fe-font-heading); text-transform: uppercase; }
+body[data-fe-theme="neobrutal"] .fe-mlist-day-pill { border: 2px solid var(--nb-ink) !important; border-radius: 4px; font-weight: 700; }
+body[data-fe-theme="neobrutal"] .fe-mlist-day-pill.is-active { background: var(--nb-pink) !important; color: var(--nb-ink) !important; box-shadow: var(--nb-shadow-sm); }
+body[data-fe-theme="neobrutal"] .fe-mlist-rail-search input { border: var(--nb-bw) solid var(--nb-ink) !important; border-radius: 6px; }
+
+/* ===== Meeting DETAIL page ============================================= */
+body[data-fe-theme="neobrutal"] .fe-meeting-detail,
+body[data-fe-theme="neobrutal"] .fe-contact-section,
+body[data-fe-theme="neobrutal"] .fe-page-dynbg-host { background: transparent !important; }
+body[data-fe-theme="neobrutal"] .fe-meeting-detail > .fe-dynbg,
+body[data-fe-theme="neobrutal"] .fe-contact-section > .fe-dynbg,
+body[data-fe-theme="neobrutal"] .fe-page-dynbg-host > .fe-dynbg { display: none !important; }
+body[data-fe-theme="neobrutal"] .fe-meeting-detail-card,
+body[data-fe-theme="neobrutal"] .fe-meeting-extended-card,
+body[data-fe-theme="neobrutal"] .fe-meeting-resources {
+  border: var(--nb-bw) solid var(--nb-ink) !important; box-shadow: var(--nb-shadow);
+}
+body[data-fe-theme="neobrutal"] .fe-meeting-detail-head h1 {
+  font-family: var(--fe-font-heading); text-transform: uppercase; color: var(--nb-ink);
+}
+html[data-theme="dark"] body[data-fe-theme="neobrutal"] .fe-meeting-detail-head h1 { color: var(--nb-cream); }
+body[data-fe-theme="neobrutal"] .fe-meeting-detail-card h3,
+body[data-fe-theme="neobrutal"] .fe-meeting-resources h3,
+body[data-fe-theme="neobrutal"] .fe-meeting-extended-title {
+  font-family: var(--fe-font-heading); text-transform: uppercase;
+}
+
+/* ===== Container panels — keep dark-mode on the theme surface ========== */
+html[data-theme="dark"] body[data-fe-theme="neobrutal"] [style*="--tsp-bg-dm"] {
+  background-color: var(--fe-color-surface-dark, #18161f) !important;
+}
+
+@media (max-width: 768px) {
+  body[data-fe-theme="neobrutal"] .fe-section { padding-top: 52px; padding-bottom: 52px; }
+}

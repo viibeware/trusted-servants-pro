@@ -67,6 +67,14 @@ FONTS = [
         "stack": "'Lora', 'Fraunces', Georgia, 'Times New Roman', serif",
         "kind": "serif",
     },
+    {
+        # Self-hosted heavy grotesque display (see @font-face in app.css).
+        # The Neobrutal theme's chunky heading / nav / button face.
+        "key": "archivo-black",
+        "name": "Archivo Black",
+        "stack": "'Archivo Black', 'Arial Black', system-ui, sans-serif",
+        "kind": "display",
+    },
 ]
 FONTS_BY_KEY = {f["key"]: f for f in FONTS}
 
@@ -107,6 +115,11 @@ THEME_DEFAULTS = {
     "terminal": {
         "heading": "mono",
         "body":    "mono",
+    },
+    # Neobrutal — chunky Archivo Black display headings over an Inter body.
+    "neobrutal": {
+        "heading": "archivo-black",
+        "body":    "inter",
     },
 }
 

@@ -6,6 +6,20 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.6.1] — 2026-05-24
+
+### Added — Neobrutal theme
+
+A seventh frontend theme: **neobrutalism** — colourful flat surfaces (yellow / pink / cyan / lime), thick black borders, hard offset drop-shadows (no blur), chunky Archivo Black headings, and controls that "press" on click (translate + shadow shrink). Styles every region — header, mega menu, homepage, footer, list/detail pages — in both light and dark; in dark mode the canvas goes near-black while the bright blocks stay colourful with their text pinned to ink for legibility (`app/static/css/themes/neobrutal.css`).
+
+- **Geometric hero backdrop** — a faint graph grid plus bold black-outlined shapes (circles + a tilted square) scattered to the corners, drawn entirely in CSS on the hero's `::before` / `::after`.
+- **Randomised on each load** — `neobrutal_hero_css_vars(site)` (`app/design.py`, registered as a Jinja global and injected onto `<body>` in `frontend/base.html`) emits fresh random positions per request, so the primitives re-scatter on every refresh. Each shape roams a generous region within its own corner so the centred headline always stays clear; the square's rotation randomises too. No JavaScript — server-rendered, so no flash.
+- Newly vendored font: **Archivo Black** (`app/static/fonts/archivo-black/`). Registered in the font catalog + theme registries (`fonts.py`, `frontend.py`) with full design tokens (`design.py`, default light mode).
+
+### Fixed
+
+- Neobrutal footer location cards no longer darken to near-black on hover (the shared force-dark hover rule was burying the black card text) — the hover now re-asserts the bright surface; its feedback is the lift + larger hard shadow.
+
 ## [2.6.0] — 2026-05-24
 
 ### Added — Four new frontend themes (Modern Dark, Cyberpunk, Sanctuary, Terminal)

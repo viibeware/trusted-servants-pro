@@ -700,6 +700,93 @@ THEME_DEFAULTS = {
         "text_size_base":     "0.95rem",
         "text_line_height":   "1.6",
     },
+    "neobrutal": {
+        # Neobrutalism: colourful flat surfaces, thick black borders, hard
+        # offset shadows, chunky Archivo Black headings. Defaults to light; a
+        # dark companion keeps the bright blocks on a near-black canvas.
+        # (Borders + hard shadows are painted by the theme CSS; the tokens
+        # carry the bold palette + radius.)
+        "color_brand":        "#ff4d8d",
+        "color_accent":       "#ffd23f",
+        "color_surface":      "#faf4e6",
+        "color_surface_alt":  "#f0e9d6",
+        "color_surface_dark": "#17151f",
+        "color_border":       "#111111",
+        "color_text":         "#15110a",
+        "color_text_dark":    "#f7f3e8",
+        "color_text_soft":    "#6b6152",
+        "color_link":         "#d6006e",
+        "color_link_hover":   "#a8005a",
+        "color_nav_link":          "#15110a",
+        "color_nav_link_hover":    "#d6006e",
+        "color_megamenu_link":       "#15110a",
+        "color_megamenu_link_hover": "#d6006e",
+        "color_btn_primary_bg":         "#ff4d8d",
+        "color_btn_primary_hover_bg":   "#ff2d77",
+        "color_btn_primary_text":       "#111111",
+        "color_btn_secondary_bg":       "#ffffff",
+        "color_btn_secondary_hover_bg": "#ffe14d",
+        "color_btn_secondary_text":     "#111111",
+        "color_btn_primary_border":         "#111111",
+        "color_btn_primary_hover_border":   "#111111",
+        "color_btn_secondary_border":       "#111111",
+        "color_btn_secondary_hover_border": "#111111",
+        "color_card_primary_bg":          "#ffd23f",
+        "color_card_primary_bg_dark":     "#ffd23f",
+        "color_card_primary_border":      "#111111",
+        "color_card_primary_border_dark": "#111111",
+        "color_card_secondary_bg":          "#8fe3ef",
+        "color_card_secondary_bg_dark":     "#8fe3ef",
+        "color_card_secondary_border":      "#111111",
+        "color_card_secondary_border_dark": "#111111",
+        "color_card_primary_hover_border":   "#111111",
+        "color_card_secondary_hover_border": "#111111",
+
+        "card_primary_border_width":     "1",
+        "card_primary_shadow":           "none",
+        "card_primary_hover_shadow":     "none",
+        "card_primary_shadow_color":      "#111111",
+        "card_primary_shadow_color_dark": "#111111",
+        "card_primary_transition":       "fast",
+        "card_primary_hover_transform":  "none",
+
+        "card_secondary_border_width":    "1",
+        "card_secondary_shadow":          "none",
+        "card_secondary_hover_shadow":    "none",
+        "card_secondary_shadow_color":      "#111111",
+        "card_secondary_shadow_color_dark": "#111111",
+        "card_secondary_transition":      "fast",
+        "card_secondary_hover_transform": "none",
+
+        "section_gap":        "xl",
+        "container_max_px":   1400,
+        "container_pad_desktop": "5vw",
+        "container_pad_mobile":  "5vw",
+        "card_radius":        "md",
+        "card_shadow":        "none",
+
+        "btn_radius":         "md",
+        "btn_padding_x":      "26px",
+        "btn_padding_y":      "13px",
+        "btn_primary_border_width":         "1",
+        "btn_primary_hover_border_width":   "1",
+        "btn_secondary_border_width":       "1",
+        "btn_secondary_hover_border_width": "1",
+        "btn_weight":         "700",
+        "btn_text_transform": "uppercase",
+        "btn_decoration":     "none",
+        "btn_shadow":           "off",
+        "btn_hover_transform":  "off",
+        "btn_hover_glow":       "off",
+
+        "link_decoration":       "none",
+        "link_decoration_hover": "underline",
+        "megamenu_link_decoration":       "none",
+        "megamenu_link_decoration_hover": "none",
+
+        "text_size_base":     "1.0625rem",
+        "text_line_height":   "1.6",
+    },
 }
 
 
@@ -1153,3 +1240,30 @@ def design_css_vars(site):
         )
 
     return " ".join(parts)
+
+
+def neobrutal_hero_css_vars(site):
+    """Per-request random positions for the Neobrutal hero's geometric
+    primitives. Returns a CSS custom-property string when the active theme is
+    Neobrutal (empty otherwise), so each page load scatters the shapes anew.
+    Each shape roams a generous region in its own corner so the centred
+    headline always stays clear of them.
+
+    Consumed by neobrutal.css's ``.fe-hero::before`` (four outlined circles)
+    and ``::after`` (the tilted square) via ``var(--nb-s*-*, <default>)`` — the
+    defaults keep a sensible static layout if this ever returns empty.
+    """
+    if not site or (getattr(site, "frontend_theme", "") or "") != "neobrutal":
+        return ""
+    import random
+    def p(lo, hi):
+        return f"{random.randint(lo, hi)}%"
+    parts = [
+        f"--nb-s1-x: {p(5, 20)}",  f"--nb-s1-y: {p(12, 42)}",
+        f"--nb-s2-x: {p(80, 94)}", f"--nb-s2-y: {p(8, 30)}",
+        f"--nb-s3-x: {p(80, 94)}", f"--nb-s3-y: {p(68, 90)}",
+        f"--nb-s4-x: {p(8, 28)}",  f"--nb-s4-y: {p(70, 92)}",
+        f"--nb-sq-right: {p(4, 14)}",
+        f"--nb-sq-rot: {random.randint(-18, 18)}deg",
+    ]
+    return "; ".join(parts) + ";"

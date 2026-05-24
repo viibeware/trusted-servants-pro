@@ -7,7 +7,17 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.6.0 — 2026-05-24 (latest) — New site themes + a deeper dark-mode toolkit
+## 2.6.1 — 2026-05-24 (latest) — Neobrutal theme
+
+A bold new **Neobrutal** theme joins the lineup under **Web Frontend → Design → Theme**.
+
+- **Neobrutalism**, done properly: colourful flat blocks (yellow, pink, cyan, lime), thick black borders, chunky **hard drop-shadows**, big **Archivo Black** headings, and buttons that visibly **press in** when you click them.
+- It styles your whole site — header, menus, homepage, footer, every page — in both light and dark. In dark mode the page goes near-black while the bright cards keep popping.
+- The **hero gets a geometric backdrop** — a faint grid with bold outlined shapes — and those shapes **re-scatter to new spots on every page refresh**, so the homepage feels alive without ever covering your headline.
+
+Also fixed: the Neobrutal footer's location cards no longer turn black on hover.
+
+## 2.6.0 — 2026-05-24 — New site themes + a deeper dark-mode toolkit
 
 Your public site gains **four new ready-made themes** plus much finer control over dark mode and the mega menu.
 

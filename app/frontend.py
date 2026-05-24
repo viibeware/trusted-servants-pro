@@ -110,6 +110,12 @@ HEADER_TEMPLATES = [
         "description": "A TUI status bar — near-black mono header with a phosphor-green underline, monospace nav, and a green command-style call-to-action. Styled by the active theme.",
         "partial": "frontend/headers/themed.html",
     },
+    {
+        "key": "neobrutal",
+        "name": "Neobrutal",
+        "description": "A bold neobrutalist bar — flat colour, thick black border, chunky Archivo Black logotype + nav, and a hard-shadowed call-to-action that presses on click. Styled by the active theme.",
+        "partial": "frontend/headers/themed.html",
+    },
 ]
 
 # Each prebuilt footer's "shape" expressed as a synthetic block list, used
@@ -252,6 +258,12 @@ MEGAMENU_TEMPLATES = [
         "description": "Full-width near-black panel with a phosphor-green rule, monospace links prefixed like command output, and a green hover state. Styled by the active theme.",
         "partial": "frontend/megamenus/themed.html",
     },
+    {
+        "key": "neobrutal",
+        "name": "Neobrutal",
+        "description": "Full-width flat-colour panel with a thick black border + hard offset shadow and chunky links that get a colour-block highlight on hover. Styled by the active theme.",
+        "partial": "frontend/megamenus/themed.html",
+    },
 ]
 
 THEMES = [
@@ -288,6 +300,12 @@ THEMES = [
         "name": "Terminal",
         "description": "A utilitarian command line — near-black canvas, phosphor-green accents, all-monospace type, flat boxy panels with visible borders, zero radius, prompt-prefixed headings and a blinking cursor. Defaults to dark mode; the light toggle is a clean printout paper. Cascades to every region.",
         "default_mode": "dark",
+    },
+    {
+        "key": "neobrutal",
+        "name": "Neobrutal",
+        "description": "Neobrutalism — colourful flat surfaces (yellow / pink / cyan), thick black borders, hard offset drop-shadows, chunky Archivo Black headings, and buttons that 'press' on click. Bold, high-contrast, playful. Defaults to light mode; the dark companion keeps the bright blocks on a near-black canvas. Cascades to every region.",
+        "default_mode": "light",
     },
 ]
 

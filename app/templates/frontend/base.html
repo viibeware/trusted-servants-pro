@@ -115,8 +115,11 @@
 {% set _fe_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
 {% set _font_vars = font_css_vars(site) %}
 {% set _design_vars = design_css_vars(site) %}
+{# Per-request random positions for the Neobrutal hero's geometric shapes
+   (empty string for every other theme) — re-scattered on each page load. #}
+{% set _nb_hero_vars = neobrutal_hero_css_vars(site) %}
 {%- set _footer_bg = (site.frontend_footer_bg_mode if site else 'dark') or 'dark' -%}
-<body class="frontend-body{% if _footer_bg == 'dark' %} fe-footer-force-dark{% endif %}" data-fe-theme="{{ _fe_theme }}" style="{{ _font_vars }} {{ _design_vars }}">
+<body class="frontend-body{% if _footer_bg == 'dark' %} fe-footer-force-dark{% endif %}" data-fe-theme="{{ _fe_theme }}" style="{{ _font_vars }} {{ _design_vars }} {{ _nb_hero_vars }}">
 {% if site and not site.frontend_enabled and current_user.is_authenticated and current_user.can_edit_frontend() %}
 <div class="fe-admin-preview-bar" role="status">
   <div class="fe-container fe-admin-preview-inner">
