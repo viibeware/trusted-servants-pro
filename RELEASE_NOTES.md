@@ -7,7 +7,27 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.5.0 — 2026-05-22 (latest) — Popups you build like a page
+## 2.6.0 — 2026-05-24 (latest) — New site themes + a deeper dark-mode toolkit
+
+Your public site gains **four new ready-made themes** plus much finer control over dark mode and the mega menu.
+
+- **Four new themes** under **Web Frontend → Design → Theme**, alongside Classic and Recovery Blue — each styles your whole site (header, menus, homepage, footer, every page) in both light and dark:
+  - **Modern Dark** — a sleek deep-indigo "mission control" look with a soft aurora glow and teal/cyan buttons.
+  - **Cyberpunk** — a neon-grid, near-black look in cyan/magenta with sharp edges and a techno typeface.
+  - **Sanctuary** — a warm, calm sand-and-sage palette with a friendly serif.
+  - **Terminal** — a green-on-black, all-monospace "command line" look with a blinking cursor.
+- **Themes remember their settings.** When you switch themes, the one you're leaving is saved automatically and the one you return to comes back exactly how you left it. The theme switcher now lets you choose **Return to last saved state** or **Reset to default** before applying — and those buttons stay visible no matter how far you scroll the theme list.
+- **The mega menu, leveled up** (Web Frontend → Navigation → Mega menu appearance):
+  - Give it a **dynamic background** — the same animated backdrops you can already use on the hero and pages.
+  - Set **separate background and text colours for light and dark mode**.
+  - A **blend slider** mixes between your background colour and the dynamic background.
+  - A **“Render dark in light mode”** switch keeps a dark panel behind light text.
+  - Its **headings, links, and buttons** now all follow your chosen text colour.
+- **New “Text — Darkmode” colour** on the Design page sets your site's dark-mode text everywhere at once.
+- **Recovery Blue** now has a **frosted-glass header** and frosted footer cards.
+- Plus a long list of dark-mode polish so colours stay consistent across cards, menus, buttons, and the homepage in every theme.
+
+## 2.5.0 — 2026-05-22 — Popups you build like a page
 
 You can now create **popups** — modal windows that appear over your public site — using the **same drag-and-drop builder you already use for pages**.
 

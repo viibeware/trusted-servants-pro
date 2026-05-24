@@ -1,0 +1,108 @@
+{# Generic "themed" mega-menu — shared by every alternate theme. Full-width
+   panel that drops under the header; reuses the same inner block classes as
+   the recovery-blue menu (so every link kind — link / title / section /
+   search / button / admin_login — keeps working) but wraps them in
+   .fe-megamenu-themed, which the active theme skins via
+   static/css/themes/<key>.css. Expects `ni` (FrontendNavItem) in scope. #}
+{% macro _icon_style(color, size) -%}
+  {%- set _parts = [] -%}
+  {%- if color %}{% set _ = _parts.append('color: ' ~ color) %}{% endif -%}
+  {%- if size %}{% set _ = _parts.append('--icon-size: ' ~ size ~ 'px') %}{% endif -%}
+  {%- if _parts %} style="{{ _parts|join('; ') }};"{% endif -%}
+{%- endmacro %}
+{% set _mega_bl = (site.frontend_mega_radius_bl if site else 18) %}
+{% set _mega_br = (site.frontend_mega_radius_br if site else 18) %}
+{% set _panel_fade = (site is none) or site.frontend_megamenu_panel_fade %}
+{% set _panel_fade_ms = (site.frontend_megamenu_panel_fade_ms if site and site.frontend_megamenu_panel_fade_ms is not none else 200) %}
+{# Optional dynamic background for the panel (admin: Navigation → Mega menu
+   appearance). When set, the panel becomes a dynbg-host and its solid skin
+   steps aside so the animated backdrop shows through behind the links. #}
+{%- set _mm_key = (site.frontend_mega_bg_dynamic_key if site else None) -%}
+{%- set _mm_cfg = dynbg_decode(site.frontend_mega_bg_dynbg_config_json if site else None) -%}
+{%- set _mm_dynbg_active = _mm_key or _mm_cfg.overlay -%}
+{%- set _mm_force_dark = _mm_dynbg_active and site and site.frontend_mega_bg_dynbg_dark -%}
+{%- set _mm_blend = site.frontend_mega_bg_dynbg_blend if site and site.frontend_mega_bg_dynbg_blend is not none else 100 -%}
+{%- set _mm_dynbg_vars = (dynbg_colors_css(dynbg_resolve_colors(_mm_cfg), _mm_cfg) ~ ' ' ~ dynbg_resolve_positions(_mm_cfg, _mm_key)) | trim -%}
+<div class="fe-megamenu fe-megamenu-themed{% if _panel_fade %} fe-megamenu-panel-fade{% endif %}{% if _mm_dynbg_active %} fe-dynbg-host fe-megamenu-has-dynbg{% endif %}{% if _mm_force_dark %} fe-megamenu-force-dark{% endif %}"
+     data-megamenu-panel="{{ ni.id }}" aria-hidden="true"
+     style="border-bottom-left-radius: {{ _mega_bl }}px;
+            border-bottom-right-radius: {{ _mega_br }}px;
+            --fe-mm-fade-ms: {{ _panel_fade_ms }}ms;{% if _mm_dynbg_active %} {{ _mm_dynbg_vars }}; --fe-mm-dynbg-blend: {{ '%.2f'|format(_mm_blend / 100) }};{% endif %}">
+  {% if _mm_dynbg_active %}
+  {% with dynbg_key=_mm_key, dynbg_config=(site.frontend_mega_bg_dynbg_config_json if site else None) %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}
+  {% endif %}
+  <div class="fe-megamenu-inner">
+    {% for col in ni.columns[:3] %}
+    <div class="fe-megamenu-col">
+      <div class="fe-megamenu-blocks">
+        {% for link in col.links %}
+          {% set _k = link.kind or 'link' %}
+          {% set _tgt = ' target="_blank" rel="noopener"' if link.open_in_new_tab else '' %}
+          {% if _k == 'title' %}
+            <h4 class="fe-megamenu-block-title">{{ link.label }}</h4>
+          {% elif _k == 'section' %}
+            <div class="fe-megamenu-block-section">
+              <span class="fe-megamenu-block-section-line" aria-hidden="true"></span>
+              {% if link.label %}<span class="fe-megamenu-block-section-label">{{ link.label }}</span>{% endif %}
+              <span class="fe-megamenu-block-section-line" aria-hidden="true"></span>
+            </div>
+          {% elif _k == 'search' %}
+            <div class="fe-megamenu-search">
+              <span class="fe-megamenu-search-icon" aria-hidden="true">{{ icon('search') }}</span>
+              <input type="search" class="fe-megamenu-search-input"
+                     placeholder="{{ link.label }}" aria-label="{{ link.label }}"
+                     data-megamenu-search autocomplete="off">
+            </div>
+          {% elif _k == 'button' %}
+            {%- set _ft = ' data-fe-form-trigger="' ~ link.form_trigger ~ '"' if link.form_trigger else '' -%}
+            <a href="{{ link.url or '#' }}"{{ _tgt|safe }}{{ _ft|safe }}
+               class="fe-megamenu-block-btn fe-megamenu-block-btn-{{ link.button_style or 'pill' }}">
+              {% if link.icon_before %}<span class="fe-megamenu-icon"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before) }}</span>{% endif %}
+              <span>{{ link.label }}</span>
+              {% if link.icon_after %}<span class="fe-megamenu-icon"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>{% endif %}
+            </a>
+          {% elif _k == 'admin_login' %}
+            {%- set _btn_style = link.button_style or 'pill' -%}
+            {%- if current_user.is_authenticated -%}
+            <div class="fe-megamenu-block-authrow">
+              <a href="{{ url_for('main.index') }}"
+                 class="fe-megamenu-block-btn fe-megamenu-block-btn-{{ _btn_style }} fe-megamenu-block-btn--admin-auth">
+                <span class="fe-megamenu-icon"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before or 'layout-grid') }}</span>
+                <span>Back to TS Pro dashboard</span>
+              </a>
+              <a href="{{ url_for('auth.logout', next=url_for('frontend.index')) }}"
+                 class="fe-megamenu-block-btn fe-megamenu-block-btn-{{ _btn_style }} fe-megamenu-block-btn--admin-auth fe-megamenu-block-btn--logout">
+                <span class="fe-megamenu-icon">{{ icon('log-out') }}</span>
+                <span>Logout</span>
+              </a>
+            </div>
+            {%- else -%}
+            <a href="{{ url_for('auth.login') }}"
+               class="fe-megamenu-block-btn fe-megamenu-block-btn-{{ _btn_style }} fe-megamenu-block-btn--admin-auth">
+              <span class="fe-megamenu-icon"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before or 'log-in') }}</span>
+              <span>Login</span>
+            </a>
+            {%- endif -%}
+          {% else %}
+            {% set _link_cls = 'fe-megamenu-link' %}
+            {% set _link_style = '' %}
+            {% if link.override_color and link.custom_color %}
+              {% set _link_cls = _link_cls ~ ' fe-megamenu-link-colored' %}
+              {% set _link_style = '--link-color-light: ' ~ link.custom_color ~ '; --link-color-dark: ' ~ (link.custom_color | dark_variant) ~ ';' %}
+            {% endif %}
+            {%- set _href = link.url or '#' -%}
+            {%- set _ft = ' data-fe-form-trigger="' ~ link.form_trigger ~ '"' if link.form_trigger else '' -%}
+            {%- set _is_external = _href and (_href.startswith('http://') or _href.startswith('https://') or _href.startswith('mailto:') or _href.startswith('tel:')) -%}
+            <a href="{{ _href }}"{{ _tgt|safe }}{{ _ft|safe }} class="{{ _link_cls }}"{% if _link_style %} style="{{ _link_style }}"{% endif %}>
+              {% if link.icon_before %}<span class="fe-megamenu-icon fe-megamenu-icon-before"{{ _icon_style(link.icon_before_color, link.icon_before_size)|safe }}>{{ icon(link.icon_before) }}</span>{% endif %}
+              <span class="fe-megamenu-label">{{ link.label }}</span>
+              {% if link.icon_after %}<span class="fe-megamenu-icon fe-megamenu-icon-after"{{ _icon_style(link.icon_after_color, link.icon_after_size)|safe }}>{{ icon(link.icon_after) }}</span>{% endif %}
+              <span class="fe-megamenu-chevron{% if _is_external %} fe-megamenu-chevron--external{% endif %}" aria-hidden="true">{{ icon('external-link' if _is_external else 'chevron-right') }}</span>
+            </a>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>

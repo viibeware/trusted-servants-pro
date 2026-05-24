@@ -1,0 +1,66 @@
+{# Generic "themed" header — shared by every alternate theme (modern-dark,
+   cyberpunk, sanctuary, …). Renders the admin's nav_items with full mega-menu
+   wiring (data-megamenu / .fe-megaparent), a brand logotype, and a mobile
+   hamburger. The utility bar is rendered ABOVE this header by base.html (this
+   theme key is not 'recovery-blue', so base includes it). Structure lives in
+   frontend.css under .fe-header-themed / .fe-th-*; the active theme's skin
+   (colours, glass, glow) comes from static/css/themes/<key>.css scoped to
+   body[data-fe-theme]. #}
+{% set _header_full = site and site.frontend_header_width_mode == 'full' %}
+{% set _header_max = (site.frontend_header_max_width if site else 1240) or 1240 %}
+{% set _header_pct = (site.frontend_header_padding_pct if site else 5) or 0 %}
+{% set _header_h = (site.frontend_header_height if site else 76) or 76 %}
+{% set _fe_logo = site and site.frontend_logo_filename %}
+{% set _fe_logo_w = (site.frontend_logo_width if site else 40) or 40 %}
+<header class="fe-header-themed{% if _header_full %} fe-header-themed-full{% endif %}" id="fe-header"
+        style="--fe-header-h: {{ _header_h }}px;">
+  {# Utility bar lives INSIDE the sticky header so it scrolls + hides with it
+     (base.html skips rendering it above for this partial). #}
+  {% include "frontend/_utility_bar.html" %}
+  <div class="fe-header-themed-inner{% if not _header_full %} fe-container{% endif %}"
+       {% if _header_full %}style="padding-left: {{ _header_pct }}%; padding-right: {{ _header_pct }}%; min-height: {{ _header_h }}px;"{% else %}style="max-width: {{ _header_max }}px; min-height: {{ _header_h }}px;"{% endif %}>
+    <a class="fe-th-brand" href="{{ url_for('frontend.index') }}">
+      {% if _fe_logo %}
+      <img src="{{ url_for('public.site_frontend_logo') }}" alt="{{ frontend_title }}"
+           class="fe-th-logo" style="width: {{ _fe_logo_w }}px; height: auto;">
+      {% else %}
+      <span class="fe-th-brand-name">{{ frontend_title }}</span>
+      {% endif %}
+    </a>
+    <nav class="fe-th-nav" aria-label="Primary">
+      {% if nav_items %}
+        {% for ni in nav_items %}
+          {% set _has_mm = ni.has_megamenu and ni.columns %}
+          {% set _href = ni.url or url_for('frontend.submission_form') if ni.form_trigger == 'submission' else (ni.url or '#') %}
+          {% set _tgt = ' target="_blank" rel="noopener"' if ni.open_in_new_tab else '' %}
+          {%- set _ft = ' data-fe-form-trigger="' ~ ni.form_trigger ~ '"' if ni.form_trigger else '' -%}
+          {% if ni.style == 'button' or ni.style == 'button-rounded' %}
+            <a href="{{ _href }}"{{ _tgt|safe }}{{ _ft|safe }} class="fe-th-nav-link fe-th-nav-cta{% if _has_mm %} fe-megaparent{% endif %}"
+               {% if _has_mm %}data-megamenu="{{ ni.id }}"{% endif %}>{{ ni.label or '' }}{% if _has_mm %}<span class="fe-nav-caret">{{ icon('chevron-down') }}</span>{% endif %}</a>
+          {% elif ni.style == 'two-line' %}
+            <a href="{{ _href }}"{{ _tgt|safe }}{{ _ft|safe }} class="fe-th-nav-link fe-th-nav-twoline{% if _has_mm %} fe-megaparent{% endif %}"
+               {% if _has_mm %}data-megamenu="{{ ni.id }}"{% endif %}>
+              <span class="fe-th-nav-twoline-lead">{{ ni.line1 or '' }}</span>
+              <span class="fe-th-nav-twoline-cta">{{ ni.line2 or '' }}{% if _has_mm %}<span class="fe-nav-caret">{{ icon('chevron-down') }}</span>{% endif %}</span>
+            </a>
+          {% else %}
+            <a href="{{ _href }}"{{ _tgt|safe }}{{ _ft|safe }} class="fe-th-nav-link{% if _has_mm %} fe-megaparent{% endif %}"
+               {% if _has_mm %}data-megamenu="{{ ni.id }}"{% endif %}>{{ ni.label or '' }}{% if _has_mm %}<span class="fe-nav-caret">{{ icon('chevron-down') }}</span>{% endif %}</a>
+          {% endif %}
+        {% endfor %}
+      {% else %}
+        <a href="{{ url_for('frontend.index') }}#meetings" class="fe-th-nav-link">Meetings</a>
+        <a href="{{ url_for('frontend.index') }}#about" class="fe-th-nav-link">About</a>
+        <a href="{{ url_for('frontend.index') }}#contact" class="fe-th-nav-link">Help</a>
+        {% if current_user.is_authenticated %}
+        <a href="{{ url_for('main.index') }}" class="fe-th-nav-link fe-th-nav-cta">Dashboard</a>
+        {% else %}
+        <a href="{{ url_for('auth.login') }}" class="fe-th-nav-link fe-th-nav-cta">Sign in</a>
+        {% endif %}
+      {% endif %}
+    </nav>
+    <button type="button" class="fe-th-menu-btn" id="fe-menu-btn" aria-label="Toggle menu">
+      <span></span><span></span>
+    </button>
+  </div>
+</header>

@@ -537,7 +537,14 @@ body.fe-megamenu-open .fe-menu-btn span:last-child {
         --fe-recovery-ink: #0f172a; --fe-recovery-ink-soft: #475569; }
 .fe-header-recovery {
   position: sticky; top: 0; z-index: 40;
-  background: #fff; border-bottom: 1px solid #e5e9f0;
+  /* Frosted glass (brought over from Modern Dark): a translucent surface with
+     a blur+saturate backdrop so page content shows softly through on scroll.
+     The inner .fe-recovery-main is transparent so this frost reads through it;
+     the utility bar keeps its own (opaque) colour on top. */
+  background: rgba(255,255,255,0.72);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  border-bottom: 1px solid rgba(15,23,42,0.06);
   box-shadow: 0 1px 0 rgba(15,23,42,0.03);
   transition: transform 220ms ease;
 }
@@ -574,7 +581,7 @@ html:not([data-theme="dark"]) .fe-theme-toggle-moon { display: inline-flex; }
 html[data-theme="dark"]           .fe-theme-toggle-sun  { display: inline-flex; }
 
 /* Main row */
-.fe-recovery-main { background: #fff; }
+.fe-recovery-main { background: transparent; }
 .fe-recovery-main-inner { display: flex; align-items: center; justify-content: space-between;
   gap: 24px; min-height: var(--fe-header-h, 72px); }
 
@@ -888,7 +895,7 @@ body.fe-megamenu-open .fe-recovery-menu-btn span:last-child {
 }
 
 /* ===== DCCMA Footer ===== */
-.fe-footer-recovery { background: #0a1026; color: #cbd5e1; font-size: 0.9375rem;
+.fe-footer-recovery { background: #0a1026; color: var(--fe-text-dark-active, #cbd5e1); font-size: 0.9375rem;
   line-height: 1.6; }
 .fe-footer-recovery-locations { background: #0b1429; padding: 48px 0 32px; border-bottom: 1px solid rgba(255,255,255,0.06); }
 .fe-footer-recovery-heading { font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -903,7 +910,7 @@ body.fe-megamenu-open .fe-recovery-menu-btn span:last-child {
 .fe-footer-recovery-loc:hover { background: rgba(255,255,255,0.08); transform: translateY(-2px); }
 .fe-footer-recovery-loc-name { font-weight: 700; font-size: 0.875rem; letter-spacing: 0.08em;
   color: #fff; margin-bottom: 10px; }
-.fe-footer-recovery-loc-addr { color: #cbd5e1; font-size: 0.9375rem; line-height: 1.5; }
+.fe-footer-recovery-loc-addr { color: var(--fe-text-dark-active, #cbd5e1); font-size: 0.9375rem; line-height: 1.5; }
 .fe-footer-recovery-loc-note { color: rgba(203,213,225,0.65); font-size: 0.8125rem; margin-top: 6px; }
 .fe-footer-recovery-loc-world .fe-footer-recovery-loc-note { color: var(--fe-recovery-blue-2); font-weight: 600; }
 
@@ -1445,7 +1452,7 @@ html[data-theme="dark"] body[data-fe-theme="recovery-blue"] .fe-btn-ghost:hover 
   letter-spacing: -0.02em; color: #fff;
 }
 .fe-contact-body {
-  font-size: 1.0625rem; line-height: 1.65; color: #cbd5e1;
+  font-size: 1.0625rem; line-height: 1.65; color: var(--fe-text-dark-active, #cbd5e1);
   margin-bottom: 28px;
 }
 .fe-contact-body > :first-child { margin-top: 0; }
@@ -1465,7 +1472,7 @@ html[data-theme="dark"] body[data-fe-theme="recovery-blue"] .fe-btn-ghost:hover 
   font-size: 1.375rem; font-weight: 700; margin: 4px 0 10px;
   letter-spacing: -0.015em; font-family: var(--fe-font-heading);
 }
-.fe-contact-lines { color: #cbd5e1; font-size: 0.9375rem; }
+.fe-contact-lines { color: var(--fe-text-dark-active, #cbd5e1); font-size: 0.9375rem; }
 .fe-contact-lines a { color: #fff; text-decoration: none; }
 .fe-contact-lines a:hover { color: var(--fe-accent-2); }
 
@@ -1831,15 +1838,27 @@ body.fe-footer-force-dark .fe-footer-location-card {
 html[data-theme="dark"] .fe-footer-location-card:hover,
 body.fe-footer-force-dark .fe-footer-location-card:hover {
   background: rgba(0, 0, 0, 0.36);
-  border-color: rgba(122, 163, 255, 0.55);
+  border-color: var(--fe-dm-border-hover, rgba(122, 163, 255, 0.55));
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
-html[data-theme="dark"] .fe-footer-location-name { color: #e2e8f0; }
-html[data-theme="dark"] .fe-footer-location-addr { color: #cbd5e1; }
+/* Frosted glass footer cards for Recovery Blue (brought over from Modern
+   Dark): a light translucent surface + the shared backdrop blur reads as
+   bright glass over the navy footer, instead of the default dark box. */
+body[data-fe-theme="recovery-blue"] .fe-footer-location-card {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+body[data-fe-theme="recovery-blue"] .fe-footer-location-card:hover {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+}
+html[data-theme="dark"] .fe-footer-location-name { color: var(--fe-text-dark-active, #e2e8f0); }
+html[data-theme="dark"] .fe-footer-location-addr { color: var(--fe-text-dark-active, #cbd5e1); }
 html[data-theme="dark"] .fe-footer-location-note { color: #94a3b8; }
 html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-location-name { color: #ffffff; }
-html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-location-addr { color: #f1f5f9; }
-html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-location-note { color: #cbd5e1; }
+html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-location-addr { color: var(--fe-text-dark-active, #f1f5f9); }
+html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-location-note { color: var(--fe-text-dark-active, #cbd5e1); }
 
 /* ----- Contact section block ----- */
 .fe-footer-contact-grid {
@@ -1857,10 +1876,10 @@ html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-location-note
 .fe-footer-contact-body p { margin: 0 0 0.5em; }
 .fe-footer-contact-body p:last-child { margin: 0; }
 .fe-footer-contact-body a { color: var(--fe-color-link, var(--fe-accent)); }
-html[data-theme="dark"] .fe-footer-contact-pane h3.fe-footer-contact-heading { color: #e2e8f0; }
-html[data-theme="dark"] .fe-footer-contact-body { color: #cbd5e1; }
+html[data-theme="dark"] .fe-footer-contact-pane h3.fe-footer-contact-heading { color: var(--fe-text-dark-active, #e2e8f0); }
+html[data-theme="dark"] .fe-footer-contact-body { color: var(--fe-text-dark-active, #cbd5e1); }
 html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-contact-pane h3.fe-footer-contact-heading { color: #ffffff; }
-html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-contact-body { color: #f1f5f9; }
+html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-contact-body { color: var(--fe-text-dark-active, #f1f5f9); }
 
 /* ----- Custom variant — rows + columns dispatcher ----- */
 .fe-footer-custom .fe-footer-custom-stack {
@@ -1925,16 +1944,16 @@ body.fe-footer-force-dark .fe-footer-custom .fe-footer-block-divider { border-to
 /* Dark mode (page is dark) — text colors are DIMMED so the footer
    reads as a quiet, low-contrast band against the all-dark page. */
 html[data-theme="dark"] .fe-footer {
-  background: #0b1026; border-top-color: #1f2a44; color: #cbd5e1;
+  background: #0b1026; border-top-color: #1f2a44; color: var(--fe-text-dark-active, #cbd5e1);
 }
-html[data-theme="dark"] .fe-footer-name { color: #e2e8f0; }
+html[data-theme="dark"] .fe-footer-name { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-footer-tagline,
 html[data-theme="dark"] .fe-footer-link-list a,
 html[data-theme="dark"] .fe-footer-secondary-nav a,
 html[data-theme="dark"] .fe-footer-copy { color: #94a3b8; }
 html[data-theme="dark"] .fe-footer-link-list a:hover,
-html[data-theme="dark"] .fe-footer-secondary-nav a:hover { color: #e2e8f0; }
-html[data-theme="dark"] .fe-footer-col-title { color: #cbd5e1; }
+html[data-theme="dark"] .fe-footer-secondary-nav a:hover { color: var(--fe-text-dark-active, #e2e8f0); }
+html[data-theme="dark"] .fe-footer-col-title { color: var(--fe-text-dark-active, #cbd5e1); }
 html[data-theme="dark"] .fe-footer-bottom { border-top-color: #1f2a44; }
 html[data-theme="dark"] .fe-footer-social a {
   background: #131a33; border-color: transparent; color: #94a3b8;
@@ -1956,13 +1975,13 @@ html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-name { color:
 html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-tagline,
 html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-link-list a,
 html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-secondary-nav a,
-html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-copy { color: #f1f5f9; }
+html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-copy { color: var(--fe-text-dark-active, #f1f5f9); }
 html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-link-list a:hover,
 html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-secondary-nav a:hover { color: #ffffff; }
 html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-col-title { color: #ffffff; }
 html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-bottom { border-top-color: #1f2a44; }
 html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-social a {
-  background: #131a33; border-color: transparent; color: #f1f5f9;
+  background: #131a33; border-color: transparent; color: var(--fe-text-dark-active, #f1f5f9);
 }
 html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-social a:hover {
   background: #7aa3ff; color: #0b1026;
@@ -2039,6 +2058,17 @@ html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-social a:hove
               transform var(--fe-mm-fade-ms, 180ms) cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 body.fe-megamenu-open { overflow: hidden; }
+/* Mega-menu dynamic background: clip the animated backdrop to the panel's
+   rounded corners. The .fe-dynbg-host base already paints content above the
+   .fe-dynbg layer; the host is the panel itself for recovery-blue/themed and
+   the inner card for classic. */
+.fe-megamenu.fe-megamenu-has-dynbg,
+.fe-megamenu-classic-card.fe-megamenu-has-dynbg { overflow: hidden; }
+/* Background ↔ dynamic blend: the dynbg layer is painted over the panel's
+   solid background colour at the admin-chosen opacity (0 = just the colour,
+   1 = just the dynbg). The dynbg's own animations still run; only its overall
+   strength scales. */
+.fe-megamenu-has-dynbg .fe-dynbg { opacity: var(--fe-mm-dynbg-blend, 1); }
 /* On mobile the mega menu covers the full viewport width edge-to-edge, so the
    inline bottom-radius from the admin appearance controls looks out of place.
    Flush the bottom corners; top corners are already 0 on DCCMA (flush to the
@@ -2114,7 +2144,7 @@ html[data-theme="dark"] .fe-megamenu-link-colored { color: var(--link-color-dark
 .fe-megamenu-search-input::placeholder { color: #94a3b8; }
 .fe-megamenu-search-input::-webkit-search-cancel-button { cursor: pointer; }
 html[data-theme="dark"] .fe-megamenu-search {
-  background: #1e293b; color: #e2e8f0; border-color: #334155;
+  background: #1e293b; color: var(--fe-text-dark-active, #e2e8f0); border-color: #334155;
 }
 html[data-theme="dark"] .fe-megamenu-search-icon { color: #94a3b8; }
 html[data-theme="dark"] .fe-megamenu-search-input::placeholder { color: #64748b; }
@@ -2308,7 +2338,7 @@ html[data-theme="dark"] .fe-megamenu-classic-link-colored:hover { color: var(--l
 }
 .fe-megamenu-classic-search-input::placeholder { color: #94a3b8; }
 html[data-theme="dark"] .fe-megamenu-classic-search {
-  background: #1e293b; color: #e2e8f0; border-color: #334155;
+  background: #1e293b; color: var(--fe-text-dark-active, #e2e8f0); border-color: #334155;
 }
 html[data-theme="dark"] .fe-megamenu-classic-search-icon { color: #94a3b8; }
 html[data-theme="dark"] .fe-megamenu-classic-search-input::placeholder { color: #64748b; }
@@ -2370,7 +2400,9 @@ html[data-theme="dark"] .fe-megamenu-classic-search-input::placeholder { color: 
     border-top: 1px solid rgba(15,23,42,0.08); padding-top: 18px; margin-top: 18px; }
 }
 html[data-theme="dark"] .fe-megamenu-classic-card {
-  background: #131a33; color: #e2e8f0;
+  /* Dark-mode surface/text from the dedicated dark pickers; !important so they
+     beat the inline light base (which doubles as the blend base in dark too). */
+  background: var(--fe-mm-bg-dark, #131a33) !important; color: var(--fe-mega-fg-dark, #e2e8f0) !important;
   border-color: rgba(255,255,255,0.08);
   box-shadow: 0 20px 44px rgba(0,0,0,0.5), 0 2px 10px rgba(0,0,0,0.3);
 }
@@ -2385,25 +2417,36 @@ html[data-theme="dark"] .fe-megamenu-classic-link:hover {
    are applied as inline styles on the panel, so we use !important to swap
    in a consistent deep-navy panel when the frontend is in dark mode. */
 html[data-theme="dark"] .fe-megamenu-recovery-blue {
-  background: #131a33 !important;
-  color: #e2e8f0 !important;
+  /* Dark-mode panel surface + text come from the dedicated dark-mode colour
+     pickers (--fe-mm-bg-dark / --fe-mega-fg-dark). The solid surface doubles
+     as the blend base: when a dynamic background is set, its layer is drawn
+     over this colour at the chosen blend opacity. */
+  background: var(--fe-mm-bg-dark, #131a33) !important;
+  color: var(--fe-mega-fg-dark, #e2e8f0) !important;
   box-shadow: 0 24px 48px rgba(0,0,0,0.55), 0 4px 12px rgba(0,0,0,0.3);
 }
-html[data-theme="dark"] .fe-megamenu-recovery-blue .fe-megamenu-block-title { color: #f1f5f9; }
-html[data-theme="dark"] .fe-megamenu-recovery-blue .fe-megamenu-link:hover {
-  background: rgba(255,255,255,0.06);
+/* Recovery Blue mega menu: headings + buttons (including the admin "Back to TS
+   Pro dashboard" button) follow the configured Text colour in both modes — it
+   resolves to the dark-variant in dark mode via the panel `color` above. The
+   Logout pill keeps its distinct amber surface — excluded via :not(). */
+.fe-megamenu-recovery-blue .fe-megamenu-block-title { color: inherit; }
+.fe-megamenu-recovery-blue .fe-megamenu-block-btn:not(.fe-megamenu-block-btn--logout) {
+  color: inherit;
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+  background: color-mix(in srgb, currentColor 14%, transparent);
 }
-html[data-theme="dark"] .fe-megamenu-recovery-blue .fe-megamenu-block-btn {
-  background: rgba(255,255,255,0.08);
-  border-color: rgba(255,255,255,0.16);
-  color: #e2e8f0;
-}
-html[data-theme="dark"] .fe-megamenu-recovery-blue .fe-megamenu-block-btn:hover {
-  background: rgba(255,255,255,0.14);
+.fe-megamenu-recovery-blue .fe-megamenu-block-btn:not(.fe-megamenu-block-btn--logout):hover {
+  background: color-mix(in srgb, currentColor 24%, transparent);
 }
 html[data-theme="dark"] .fe-megamenu-recovery-blue .fe-megamenu-block-section-line {
   background: rgba(255,255,255,0.12);
 }
+/* "Render dark in light mode" (force-dark dynbg): switch text + links to the
+   dark-mode (lightened) variant too, so they stay legible over the dark dynbg
+   while the site itself is still in light mode. */
+.fe-megamenu-recovery-blue.fe-megamenu-force-dark { color: var(--fe-mega-fg-dark, #e2e8f0) !important; }
+.fe-megamenu-force-dark .fe-megamenu-link:not(.fe-megamenu-link-colored) { color: var(--fe-color-megamenu-link-dark, inherit); }
+.fe-megamenu-force-dark .fe-megamenu-link:hover:not(.fe-megamenu-link-colored) { color: var(--fe-color-megamenu-link-hover-dark, inherit); }
 
 /* Backdrop — blurs everything BELOW the header (main + footer). */
 .fe-megamenu-backdrop {
@@ -2480,7 +2523,41 @@ html[data-theme="dark"], body.fe-frontend-force-dark {
   --fe-dm-btn-primary-shadow:     0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
-html[data-theme="dark"] body.frontend-body { background: var(--fe-dm-page-bg); color: var(--fe-dm-text); }
+/* Re-resolve --fe-dm-page-bg ON THE BODY: the block above sets it on <html>,
+   where the body-level --fe-color-surface-dark token isn't visible, so it
+   fell back to the navy default. Redefining it here (on <body>, where the
+   token IS available) makes every consumer — the page bg AND descendant
+   containers that read --fe-dm-page-bg — pick up the active theme's
+   surface-dark colour instead of navy. */
+html[data-theme="dark"] body.frontend-body {
+  --fe-dm-page-bg: var(--fe-color-surface-dark, #0b1026);
+  /* Dark-mode text token: anywhere the "Text" token (--fe-color-text) is
+     consumed, swap it to the "Text — Darkmode" token site-wide. !important
+     beats the inline light value emitted on <body>; --fe-dm-text (the dark
+     palette's body-text var) is pointed at the same token so both text
+     systems honour the single dark-mode text control. */
+  --fe-color-text: var(--fe-color-text-dark, #e2e8f0) !important;
+  --fe-dm-text: var(--fe-color-text-dark, #e2e8f0);
+  /* Strong/heading dark text follows the same token (light mode has no
+     separate "strong" colour — headings there use the Text token too). */
+  --fe-dm-text-strong: var(--fe-color-text-dark, #f1f5f9);
+  /* Active dark-text channel: components that HARDCODE a neutral dark text
+     colour (#e2e8f0 / #f1f5f9 / #cbd5e1) reference this via
+     `color: var(--fe-text-dark-active, #origHex)`. It's defined ONLY in dark
+     mode, so in light mode those usages fall back to their original hex
+     (light mode is untouched); in dark mode they all follow the token. */
+  --fe-text-dark-active: var(--fe-color-text-dark, #e2e8f0);
+  background: var(--fe-dm-page-bg); color: var(--fe-dm-text);
+  /* Same fix for the derived dark primary-button colours: the <html> block
+     computes them via color-mix on --fe-color-btn-primary-bg, which isn't
+     visible at <html> (it's set on <body>) so it fell back to the blue
+     default. Re-resolve here on <body> so every dark primary surface —
+     buttons AND the events/announcements active tab — tracks the theme. */
+  --fe-dm-btn-primary-bg: color-mix(in srgb,
+                                    var(--fe-btn-bg, var(--fe-color-btn-primary-bg, #2e6bff)) 40%, #000);
+  --fe-dm-btn-primary-bg-hover: color-mix(in srgb,
+                                          var(--fe-btn-bg, var(--fe-color-btn-primary-bg, #2e6bff)) 60%, #000);
+}
 
 /* Classic header */
 html[data-theme="dark"] .fe-header { background: rgba(15, 23, 42, 0.72);
@@ -2488,7 +2565,7 @@ html[data-theme="dark"] .fe-header { background: rgba(15, 23, 42, 0.72);
 html[data-theme="dark"] .fe-header.fe-header-scrolled {
   background: rgba(11, 16, 38, 0.92); border-bottom-color: #1f2a44;
   box-shadow: 0 1px 0 rgba(0,0,0,0.4); }
-html[data-theme="dark"] .fe-brand { color: #e2e8f0; }
+html[data-theme="dark"] .fe-brand { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-nav a { color: #94a3b8; }
 html[data-theme="dark"] .fe-nav a:hover { color: #fff; background: #1e293b; }
 html[data-theme="dark"] .fe-nav-cta { background: var(--fe-recovery-blue, #0B5CFF); color: #fff !important; }
@@ -2496,9 +2573,9 @@ html[data-theme="dark"] .fe-nav-cta:hover { background: #3d6dff !important; }
 html[data-theme="dark"] .fe-menu-btn span { background: #e2e8f0; }
 
 /* DCCMA header (white → near-black) */
-html[data-theme="dark"] .fe-header-recovery { background: #0f172a;
-  border-bottom-color: #1f2a44; box-shadow: 0 1px 0 rgba(0,0,0,0.4); }
-html[data-theme="dark"] .fe-recovery-main { background: #0f172a; }
+html[data-theme="dark"] .fe-header-recovery { background: rgba(15,23,42,0.72);
+  border-bottom-color: rgba(255,255,255,0.08); box-shadow: 0 1px 0 rgba(0,0,0,0.4); }
+html[data-theme="dark"] .fe-recovery-main { background: transparent; }
 /* Utility strip dims to the same muted navy as the meeting-card "Join
    Zoom" button (#1e3a8a — Tailwind blue-900) so the bright #0B5CFF that
    lives on top of the header in light mode doesn't read as a glow bar
@@ -2506,8 +2583,8 @@ html[data-theme="dark"] .fe-recovery-main { background: #0f172a; }
    the link + phone copy; the white-alpha pill on the phone number works
    over any background tint. */
 html[data-theme="dark"] .fe-recovery-util { background: #1e3a8a; }
-html[data-theme="dark"] .fe-recovery-brand { color: #e2e8f0; }
-html[data-theme="dark"] .fe-recovery-nav-link { color: #e2e8f0; }
+html[data-theme="dark"] .fe-recovery-brand { color: var(--fe-text-dark-active, #e2e8f0); }
+html[data-theme="dark"] .fe-recovery-nav-link { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-recovery-nav-link:hover { color: #fff; background: #1e293b; }
 html[data-theme="dark"] .fe-recovery-nav-link.mega-active,
 html[data-theme="dark"] .fe-megaparent.mega-active { color: #fff; background: #1e293b; }
@@ -2517,7 +2594,12 @@ html[data-theme="dark"] .fe-recovery-nav-newcomer:hover,
 html[data-theme="dark"] .fe-recovery-nav-newcomer.mega-active { background: #1e293b; }
 html[data-theme="dark"] .fe-recovery-nav-portal { color: #94a3b8; }
 html[data-theme="dark"] .fe-recovery-menu-btn span { background: #e2e8f0; }
-html[data-theme="dark"] .fe-recovery-nav { background: #0f172a; border-bottom-color: #1f2a44; }
+/* The dark nav background belongs to the MOBILE dropdown panel only — on
+   desktop the nav row must stay transparent (an unscoped bg drew a navy box
+   behind the desktop nav links, especially visible over the frosted header). */
+@media (max-width: 880px) {
+  html[data-theme="dark"] .fe-recovery-nav { background: #0f172a; border-bottom-color: #1f2a44; }
+}
 
 /* Hero */
 html[data-theme="dark"] .fe-hero { background: linear-gradient(180deg, #0b1026 0%, #0f172a 100%); }
@@ -2554,7 +2636,7 @@ body.fe-frontend-force-dark .fe-hero-sub {
 }
 html[data-theme="dark"] .fe-hero-blob { opacity: 0.25; }
 html[data-theme="dark"] .fe-hero-eyebrow { background: rgba(81,100,255,0.18); color: #7aa3ff; }
-html[data-theme="dark"] .fe-btn-primary { background: #052566; color: #e2e8f0;
+html[data-theme="dark"] .fe-btn-primary { background: #052566; color: var(--fe-text-dark-active, #e2e8f0);
   box-shadow: var(--fe-btn-shadow, 0 8px 24px rgba(0,0,0,0.4)); }
 /* Hover: lighten the deep navy bg slightly so the press affordance
    reads on dark themes; keep the same #e2e8f0 label so contrast
@@ -2563,13 +2645,13 @@ html[data-theme="dark"] .fe-btn-primary { background: #052566; color: #e2e8f0;
    that would otherwise resolve to `#fff` via the design tokens. */
 html[data-theme="dark"] .fe-btn-primary:hover {
   background: color-mix(in srgb, #052566 80%, #fff 20%);
-  color: #e2e8f0;
+  color: var(--fe-text-dark-active, #e2e8f0);
 }
-html[data-theme="dark"] .fe-btn-ghost { background: transparent; color: #e2e8f0; border-color: #334155; }
+html[data-theme="dark"] .fe-btn-ghost { background: transparent; color: var(--fe-text-dark-active, #e2e8f0); border-color: #334155; }
 /* Same fix on the ghost variant: the inherited hover color
    resolves to ``#0f172a`` (dark slate) via the secondary-text token,
    which would disappear into the dark hover background. */
-html[data-theme="dark"] .fe-btn-ghost:hover { background: #1e293b; color: #e2e8f0; border-color: #94a3b8; }
+html[data-theme="dark"] .fe-btn-ghost:hover { background: #1e293b; color: var(--fe-text-dark-active, #e2e8f0); border-color: #94a3b8; }
 /* Meeting-card "Join Zoom Meeting" primary button — dark mode uses a
    muted navy-blue instead of the global light-on-dark primary. The base
    dark `.fe-btn-primary` is bright (#e2e8f0 / off-white) for max
@@ -2600,6 +2682,18 @@ html[data-theme="dark"] .frontend-body .fe-meeting-card-actions .fe-btn-primary:
   background: var(--fe-btn-bg, var(--fe-color-btn-primary-bg, var(--fe-ink)));
   color: var(--fe-btn-text, var(--fe-color-btn-primary-text, #fff));
   border-color: var(--fe-btn-bg, transparent);
+}
+/* Light-mode hover: darken to the primary hover-bg token so the hero CTA
+   matches .fe-btn-primary's hover. Falls back to an 88%-black mix of the
+   button's own colour when the admin uses a custom hero-button colour.
+   (Dark mode is handled by the html[data-theme="dark"] rules below.) */
+.fe-hero-cta .fe-btn-primary:hover,
+.fe-page .fe-hero-cta .fe-btn-primary:hover,
+.frontend-body .fe-hero-cta .fe-btn-primary:hover {
+  background: var(--fe-color-btn-primary-hover-bg,
+                  color-mix(in srgb, var(--fe-btn-bg, var(--fe-color-btn-primary-bg, var(--fe-ink))) 88%, black));
+  border-color: var(--fe-color-btn-primary-hover-bg,
+                    color-mix(in srgb, var(--fe-btn-bg, var(--fe-color-btn-primary-bg, var(--fe-ink))) 88%, black));
 }
 .fe-btn-icon { color: var(--fe-btn-icon-color, inherit); }
 /* Dark mode derives a darkened version of whatever colour the admin
@@ -2651,7 +2745,7 @@ html[data-theme="dark"] .fe-quick { background: #0b1026; }
 html[data-theme="dark"] .fe-quick-card {
   background: var(--fe-color-card-secondary-bg-dark, #131a33);
   border-color: var(--fe-color-card-secondary-border-dark, transparent);
-  color: #e2e8f0;
+  color: var(--fe-text-dark-active, #e2e8f0);
 }
 html[data-theme="dark"] .fe-quick-card:hover { background: #17203f; border-color: #1f2a44;
   box-shadow: 0 8px 28px rgba(0,0,0,0.4); }
@@ -2724,14 +2818,14 @@ body.fe-frontend-force-dark .fe-recovery-meeting-card:hover,
 body.fe-frontend-force-dark .fe-contact-card:hover,
 body.fe-frontend-force-dark .fe-inclusion-card:hover,
 body.fe-frontend-force-dark .fe-testimonial:hover {
-  border-color: rgba(122, 163, 255, 0.4);
+  border-color: var(--fe-dm-border-hover, rgba(122, 163, 255, 0.4));
 }
 html[data-theme="dark"] .fe-meeting-sched { color: #94a3b8; }
-html[data-theme="dark"] .fe-meeting-day { color: #e2e8f0; }
+html[data-theme="dark"] .fe-meeting-day { color: var(--fe-text-dark-active, #e2e8f0); }
 
 /* About */
 html[data-theme="dark"] .fe-about { background: #0b1026; }
-html[data-theme="dark"] .fe-about-body { color: #e2e8f0; }
+html[data-theme="dark"] .fe-about-body { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-about-pillar { background: #131a33; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
 html[data-theme="dark"] .fe-about-pillar p { color: #94a3b8; }
 
@@ -2746,18 +2840,18 @@ html[data-theme="dark"] .fe-contact-card { background: rgba(255,255,255,0.04); b
 html[data-theme="dark"] .fe-footer {
   background: #0b1026; border-top-color: #1f2a44;
 }
-html[data-theme="dark"] .fe-footer-name { color: #e2e8f0; }
+html[data-theme="dark"] .fe-footer-name { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-footer-tagline { color: #94a3b8; }
 html[data-theme="dark"] .fe-footer-links a { color: #94a3b8; }
 html[data-theme="dark"] .fe-footer-links a:hover { color: #fff; }
 html[data-theme="dark"] .fe-footer-copy { color: #64748b; }
-html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-links a { color: #f1f5f9; }
+html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-links a { color: var(--fe-text-dark-active, #f1f5f9); }
 html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-links a:hover { color: #ffffff; }
-html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-copy { color: #cbd5e1; }
+html:not([data-theme="dark"]) body.fe-footer-force-dark .fe-footer-copy { color: var(--fe-text-dark-active, #cbd5e1); }
 
 /* DCCMA homepage */
 html[data-theme="dark"] .fe-recovery-hero { background: #0b1026; border-bottom-color: #1f2a44; }
-html[data-theme="dark"] .fe-recovery-hero-h1 { color: #e2e8f0; }
+html[data-theme="dark"] .fe-recovery-hero-h1 { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-recovery-hero-lede { color: #94a3b8; }
 html[data-theme="dark"] .fe-recovery-threeup { background: #0f172a; border-bottom-color: #1f2a44; }
 html[data-theme="dark"] .fe-recovery-threeup-card {
@@ -2765,15 +2859,15 @@ html[data-theme="dark"] .fe-recovery-threeup-card {
   border-color: var(--fe-color-card-primary-border-dark, #1f2a44);
 }
 html[data-theme="dark"] .fe-recovery-threeup-card:hover { box-shadow: 0 10px 32px rgba(0,0,0,0.5); }
-html[data-theme="dark"] .fe-recovery-threeup-card h2 { color: #e2e8f0; }
+html[data-theme="dark"] .fe-recovery-threeup-card h2 { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-recovery-threeup-card p { color: #94a3b8; }
 html[data-theme="dark"] .fe-recovery-meetings { background: #0b1026; }
-html[data-theme="dark"] .fe-recovery-section-head h2 { color: #e2e8f0; }
+html[data-theme="dark"] .fe-recovery-section-head h2 { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-recovery-section-head p.muted { color: #94a3b8; }
 html[data-theme="dark"] .fe-recovery-meeting-card { background: #131a33; border-color: #1f2a44; }
-html[data-theme="dark"] .fe-recovery-meeting-card h3 { color: #e2e8f0; }
+html[data-theme="dark"] .fe-recovery-meeting-card h3 { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-recovery-meeting-sched { color: #94a3b8; }
-html[data-theme="dark"] .fe-recovery-meeting-sched .day { color: #e2e8f0; }
+html[data-theme="dark"] .fe-recovery-meeting-sched .day { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-recovery-fellowship { background: #13286b; }
 html[data-theme="dark"] .fe-recovery-helpline { background: #05081a; }
 
@@ -2892,7 +2986,7 @@ body.fe-frontend-force-dark .fe-split .fe-split-col {
   letter-spacing: -0.02em;
 }
 .fe-meetings-day-heading:first-of-type { margin-top: 0; }
-html[data-theme="dark"] .fe-meetings-day-heading { color: #e2e8f0; }
+html[data-theme="dark"] .fe-meetings-day-heading { color: var(--fe-text-dark-active, #e2e8f0); }
 .fe-meetings-empty {
   padding: 48px 0; text-align: center; font-size: 1.0625rem;
 }
@@ -2985,14 +3079,17 @@ html[data-theme="dark"] .fe-meetings-day-heading { color: #e2e8f0; }
 }
 /* Title link inherits the row colour and stays put on hover — the
    row-lift + box-shadow are the sole hover affordances. */
-html[data-theme="dark"] .fe-event-row { background: #131a33; border-color: #1f2a44; }
+html[data-theme="dark"] .fe-event-row {
+  background: var(--fe-color-card-primary-bg-dark, #131a33);
+  border-color: var(--fe-color-card-primary-border-dark, #1f2a44);
+}
 html[data-theme="dark"] .fe-event-row:hover { box-shadow: 0 10px 28px rgba(0,0,0,0.45); }
 /* Dark-mode title colour — the base rule pins ``color: var(--fe-color-text)``
    which the design tokens fix at a light-mode dark value, so without this
    override the title would render dark-on-dark. The summary ``muted`` class
    keeps its theme-aware colour via the existing dark-mode rule. */
 html[data-theme="dark"] .fe-event-title,
-html[data-theme="dark"] .fe-event-title a { color: #f1f5f9; }
+html[data-theme="dark"] .fe-event-title a { color: var(--fe-dm-text-strong, #f1f5f9); }
 /* Date stamp + thumbnail tile — both default to `--fe-color-surface-alt`
    (a light gray) which renders as near-white on the dark page. Override
    to a deep navy so the calendar element + thumb fit the night-sky
@@ -3001,11 +3098,12 @@ html[data-theme="dark"] .fe-event-title a { color: #f1f5f9; }
    it doesn't bleed into the dark surface. */
 html[data-theme="dark"] .fe-event-date,
 html[data-theme="dark"] .fe-event-thumb {
-  background: #0f1a35; border-color: #243056;
+  background: var(--fe-color-card-secondary-bg-dark, #0f1a35);
+  border-color: var(--fe-color-card-secondary-border-dark, #243056);
 }
-html[data-theme="dark"] .fe-event-date-month { color: #7aa3ff; }
-html[data-theme="dark"] .fe-event-date-day { color: #f1f5f9; }
-html[data-theme="dark"] .fe-event-date-year { color: #94a3b8; }
+html[data-theme="dark"] .fe-event-date-month { color: var(--fe-color-brand, #7aa3ff); }
+html[data-theme="dark"] .fe-event-date-day { color: var(--fe-dm-text-strong, #f1f5f9); }
+html[data-theme="dark"] .fe-event-date-year { color: var(--fe-dm-text-muted, #94a3b8); }
 
 /* Date stamp on the far left — month/day/year stacked */
 .fe-event-date {
@@ -3332,8 +3430,8 @@ html[data-theme="dark"] .fe-event-date-year { color: #94a3b8; }
 .fe-copy-btn.is-copied { background: #16a34a; color: #fff; border-color: #16a34a; }
 
 html[data-theme="dark"] .fe-meeting-detail { background: #0b1026; }
-html[data-theme="dark"] .fe-meeting-detail-head h1 { color: #f1f5f9; }
-html[data-theme="dark"] .fe-meeting-detail-desc { color: #e2e8f0; }
+html[data-theme="dark"] .fe-meeting-detail-head h1 { color: var(--fe-text-dark-active, #f1f5f9); }
+html[data-theme="dark"] .fe-meeting-detail-desc { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-meeting-detail-card,
 body.fe-frontend-force-dark .fe-meeting-detail-card {
   background: var(--fe-color-card-primary-bg-dark, #131a33);
@@ -3347,13 +3445,13 @@ html[data-theme="dark"] .fe-meeting-detail-card:hover,
 body.fe-frontend-force-dark .fe-meeting-detail-card:hover,
 html[data-theme="dark"] .fe-meeting-detail-grid > .fe-meeting-resources:hover,
 body.fe-frontend-force-dark .fe-meeting-detail-grid > .fe-meeting-resources:hover {
-  border-color: rgba(122, 163, 255, 0.4);
+  border-color: var(--fe-dm-border-hover, rgba(122, 163, 255, 0.4));
 }
 html[data-theme="dark"] .fe-meeting-detail-day,
 html[data-theme="dark"] .fe-meeting-detail-time,
-html[data-theme="dark"] .fe-meeting-detail-location { color: #e2e8f0; }
+html[data-theme="dark"] .fe-meeting-detail-location { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-meeting-detail-creds code {
-  background: #0f172a; color: #e2e8f0; border-color: #334155;
+  background: #0f172a; color: var(--fe-text-dark-active, #e2e8f0); border-color: #334155;
 }
 html[data-theme="dark"] .fe-copy-btn { border-color: #334155; }
 html[data-theme="dark"] .fe-meeting-detail-alert {
@@ -3744,12 +3842,12 @@ body.fe-frontend-force-dark .fe-event-detail-card .fe-btn-primary:hover {
 .fe-feature-body li { margin: 0.15em 0; }
 .fe-feature-body strong { color: var(--fe-ink); }
 html[data-theme="dark"] .fe-feature-body { color: #94a3b8; }
-html[data-theme="dark"] .fe-feature-body strong { color: #e2e8f0; }
+html[data-theme="dark"] .fe-feature-body strong { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-features { background: #0b1026; }
 html[data-theme="dark"] .fe-feature-card {
   background: var(--fe-color-card-secondary-bg-dark, #131a33);
   border-color: var(--fe-color-card-secondary-border-dark, transparent);
-  color: #e2e8f0;
+  color: var(--fe-text-dark-active, #e2e8f0);
 }
 html[data-theme="dark"] .fe-feature-card p { color: #94a3b8; }
 html[data-theme="dark"] .fe-feature-icon { background: rgba(81,100,255,0.18); color: #7aa3ff; }
@@ -3785,7 +3883,7 @@ html[data-theme="dark"] .fe-feature-icon { background: rgba(81,100,255,0.18); co
 .fe-stat-lbl { margin-top: 8px; color: var(--fe-ink-muted);
   font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.06em; }
 html[data-theme="dark"] .fe-stats-block { background: #0b1026; }
-html[data-theme="dark"] .fe-stat-num { color: #e2e8f0; }
+html[data-theme="dark"] .fe-stat-num { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-stat-lbl { color: #94a3b8; }
 
 .fe-testimonial-grid {
@@ -3804,7 +3902,7 @@ html[data-theme="dark"] .fe-stat-lbl { color: #94a3b8; }
 .fe-testimonial cite { font-style: normal; font-size: 0.85rem;
   color: var(--fe-ink-muted); }
 html[data-theme="dark"] .fe-testimonial { background: #131a33; border-color: transparent; }
-html[data-theme="dark"] .fe-testimonial p { color: #e2e8f0; }
+html[data-theme="dark"] .fe-testimonial p { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-testimonial cite { color: #94a3b8; }
 
 .fe-faq-list { display: flex; flex-direction: column; gap: 8px;
@@ -3986,12 +4084,12 @@ html[data-theme="dark"] .fe-faq-item {
    No Pro-Tips-specific overrides needed. */
 html[data-theme="dark"] .fe-faq-item:hover,
 html[data-theme="dark"] .fe-faq-item.is-open {
-  border-color: rgba(122, 163, 255, 0.4);
+  border-color: var(--fe-dm-border-hover, rgba(122, 163, 255, 0.4));
 }
-html[data-theme="dark"] .fe-faq-summary { color: #e2e8f0; }
+html[data-theme="dark"] .fe-faq-summary { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-faq-summary-icon { background: rgba(81,100,255,0.18); color: #7aa3ff; }
 html[data-theme="dark"] .fe-faq-body-inner { color: #94a3b8; }
-html[data-theme="dark"] .fe-faq-body-inner strong { color: #e2e8f0; }
+html[data-theme="dark"] .fe-faq-body-inner strong { color: var(--fe-text-dark-active, #e2e8f0); }
 
 /* ---------- Inclusion block ---------- */
 .fe-inclusion { padding: 56px 0; }
@@ -4053,9 +4151,9 @@ html[data-theme="dark"] .fe-inclusion-card {
   background: var(--fe-color-card-secondary-bg-dark, #131a33);
   border-color: var(--fe-color-card-secondary-border-dark, transparent);
 }
-html[data-theme="dark"] .fe-inclusion-heading { color: #e2e8f0; }
+html[data-theme="dark"] .fe-inclusion-heading { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-inclusion-body { color: #94a3b8; }
-html[data-theme="dark"] .fe-inclusion-body strong { color: #e2e8f0; }
+html[data-theme="dark"] .fe-inclusion-body strong { color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-inclusion-icon { background: rgba(81,100,255,0.18); color: #7aa3ff; }
 html[data-theme="dark"] .fe-inclusion-tag {
   background: rgba(122, 163, 255, 0.14); color: #cbd9ff;
@@ -4135,13 +4233,14 @@ html[data-theme="dark"] .fe-inclusion-tag {
   color: var(--fe-color-link, var(--fe-color-brand, var(--fe-accent)));
   font-weight: 600;
 }
-html[data-theme="dark"] .fe-meeting-resources { background: #131a33; border-color: transparent; }
+html[data-theme="dark"] .fe-meeting-resources { background: var(--fe-color-card-secondary-bg-dark, #131a33); border-color: var(--fe-color-card-secondary-border-dark, transparent); }
 /* Dark-mode parity: Files & Readings inside the Classic grid was
    previously hand-tinted #1a2247 (noticeably brighter blue) which made
    it stand out from its #131a33 sibling cards. Land them on the same
    shade so the row reads cohesively in dark mode too. */
 html[data-theme="dark"] .fe-meeting-detail-grid > .fe-meeting-resources {
-  background: #131a33; border-color: transparent;
+  background: var(--fe-color-card-secondary-bg-dark, #131a33);
+  border-color: var(--fe-color-card-secondary-border-dark, transparent);
 }
 
 /* ===========================================================================
@@ -4349,10 +4448,10 @@ html[data-theme="dark"] .fe-meeting-stack-action h2,
 html[data-theme="dark"] .fe-meeting-stack-prose,
 html[data-theme="dark"] .fe-meeting-stack-schedule h3,
 html[data-theme="dark"] .fe-meeting-stack-schedule-day,
-html[data-theme="dark"] .fe-meeting-stack-schedule-time { color: #f1f5f9; }
-html[data-theme="dark"] .fe-meeting-stack-creds code { background: #0b1026; color: #e2e8f0; }
+html[data-theme="dark"] .fe-meeting-stack-schedule-time { color: var(--fe-text-dark-active, #f1f5f9); }
+html[data-theme="dark"] .fe-meeting-stack-creds code { background: #0b1026; color: var(--fe-text-dark-active, #e2e8f0); }
 html[data-theme="dark"] .fe-meeting-stack-chip {
-  background: rgba(19, 26, 51, 0.85); color: #e2e8f0;
+  background: rgba(19, 26, 51, 0.85); color: var(--fe-text-dark-active, #e2e8f0);
   border-color: rgba(255,255,255,0.1);
 }
 
@@ -4479,14 +4578,14 @@ html[data-theme="dark"] .fe-meeting-mag-head h1,
 html[data-theme="dark"] .fe-meeting-mag-prose,
 html[data-theme="dark"] .fe-meeting-mag-side-day,
 html[data-theme="dark"] .fe-meeting-mag-side-time,
-html[data-theme="dark"] .fe-meeting-mag-side-addr { color: #f1f5f9; }
+html[data-theme="dark"] .fe-meeting-mag-side-addr { color: var(--fe-text-dark-active, #f1f5f9); }
 html[data-theme="dark"] .fe-meeting-mag-rule { background: #f1f5f9; opacity: 0.6; }
 html[data-theme="dark"] .fe-meeting-mag-side-card {
   background: var(--fe-color-card-secondary-bg-dark, #131a33);
   border-color: var(--fe-color-card-secondary-border-dark, transparent);
 }
 html[data-theme="dark"] .fe-meeting-mag-side-creds code {
-  background: #0b1026; color: #e2e8f0; border-color: rgba(255,255,255,0.08);
+  background: #0b1026; color: var(--fe-text-dark-active, #e2e8f0); border-color: rgba(255,255,255,0.08);
 }
 
 /* ===========================================================================
@@ -4580,8 +4679,8 @@ html[data-theme="dark"] .fe-meeting-mag-side-creds code {
 html[data-theme="dark"] .fe-meeting-min { background: #0b1026; }
 html[data-theme="dark"] .fe-meeting-min-head h1,
 html[data-theme="dark"] .fe-meeting-min-desc,
-html[data-theme="dark"] .fe-meeting-min-info dd { color: #f1f5f9; }
-html[data-theme="dark"] .fe-meeting-min-cred code { background: #131a33; color: #e2e8f0; }
+html[data-theme="dark"] .fe-meeting-min-info dd { color: var(--fe-text-dark-active, #f1f5f9); }
+html[data-theme="dark"] .fe-meeting-min-cred code { background: #131a33; color: var(--fe-text-dark-active, #e2e8f0); }
 
 /* ===========================================================================
    Event detail — Poster template
@@ -4755,8 +4854,8 @@ html[data-theme="dark"] .fe-event-poster-ticket-notch {
 html[data-theme="dark"] .fe-event-poster-ticket-day,
 html[data-theme="dark"] .fe-event-poster-ticket-val,
 html[data-theme="dark"] .fe-event-poster-prose,
-html[data-theme="dark"] .fe-event-poster-contact h3 { color: #f1f5f9; }
-html[data-theme="dark"] .fe-event-poster-ticket-creds code { background: #0b1026; color: #e2e8f0; }
+html[data-theme="dark"] .fe-event-poster-contact h3 { color: var(--fe-text-dark-active, #f1f5f9); }
+html[data-theme="dark"] .fe-event-poster-ticket-creds code { background: #0b1026; color: var(--fe-text-dark-active, #e2e8f0); }
 
 /* ===========================================================================
    Event detail — Timeline template
@@ -4901,10 +5000,10 @@ html[data-theme="dark"] .fe-event-time-day,
 html[data-theme="dark"] .fe-event-time-main h1,
 html[data-theme="dark"] .fe-event-time-meta li,
 html[data-theme="dark"] .fe-event-time-prose,
-html[data-theme="dark"] .fe-event-time-contact ul { color: #f1f5f9; }
+html[data-theme="dark"] .fe-event-time-contact ul { color: var(--fe-text-dark-active, #f1f5f9); }
 html[data-theme="dark"] .fe-event-time-creds { background: #131a33; }
 html[data-theme="dark"] .fe-event-time-creds code {
-  background: #0b1026; color: #e2e8f0; border-color: rgba(255,255,255,0.08);
+  background: #0b1026; color: var(--fe-text-dark-active, #e2e8f0); border-color: rgba(255,255,255,0.08);
 }
 
 /* ===========================================================================
@@ -4991,8 +5090,8 @@ html[data-theme="dark"] .fe-event-time-creds code {
 html[data-theme="dark"] .fe-event-min { background: #0b1026; }
 html[data-theme="dark"] .fe-event-min-head h1,
 html[data-theme="dark"] .fe-event-min-prose,
-html[data-theme="dark"] .fe-event-min-info dd { color: #f1f5f9; }
-html[data-theme="dark"] .fe-event-min-cred code { background: #131a33; color: #e2e8f0; }
+html[data-theme="dark"] .fe-event-min-info dd { color: var(--fe-text-dark-active, #f1f5f9); }
+html[data-theme="dark"] .fe-event-min-cred code { background: #131a33; color: var(--fe-text-dark-active, #e2e8f0); }
 
 /* Per-meeting extended-content blocks — admin-tunable Markdown panes
    that render below the schedule / zoom / files cards on every
@@ -5066,7 +5165,7 @@ body.fe-frontend-force-dark .fe-meeting-extended-card {
    lift + shadow have a colour cue to land against. */
 html[data-theme="dark"] .fe-meeting-extended-card:hover,
 body.fe-frontend-force-dark .fe-meeting-extended-card:hover {
-  border-color: rgba(122, 163, 255, 0.4);
+  border-color: var(--fe-dm-border-hover, rgba(122, 163, 255, 0.4));
 }
 html[data-theme="dark"] .fe-meeting-extended-body code,
 html[data-theme="dark"] .fe-meeting-extended-body pre {
@@ -5263,7 +5362,7 @@ html[data-theme="dark"] .fe-edit-shortcut:focus-visible {
    surface is visible against #0b1026. */
 html[data-theme="dark"] .fe-mlist-protips-head h2,
 body.fe-frontend-force-dark .fe-mlist-protips-head h2 {
-  color: #f1f5f9;
+  color: var(--fe-text-dark-active, #f1f5f9);
 }
 html[data-theme="dark"] .fe-mlist-protips-head p,
 body.fe-frontend-force-dark .fe-mlist-protips-head p {
@@ -5280,11 +5379,11 @@ body.fe-frontend-force-dark .fe-mlist-protips-inline .fe-protips-icon {
    inside the inline section. */
 html[data-theme="dark"] .fe-mlist-protips-inline .fe-faq-body-inner,
 body.fe-frontend-force-dark .fe-mlist-protips-inline .fe-faq-body-inner {
-  color: #cbd5e1;
+  color: var(--fe-text-dark-active, #cbd5e1);
 }
 html[data-theme="dark"] .fe-mlist-protips-inline .fe-faq-summary,
 body.fe-frontend-force-dark .fe-mlist-protips-inline .fe-faq-summary {
-  color: #f1f5f9;
+  color: var(--fe-text-dark-active, #f1f5f9);
 }
 
 @media (max-width: 900px) {
@@ -5569,12 +5668,12 @@ body.fe-frontend-force-dark .fe-mlist-card-alert {
 html[data-theme="dark"] .fe-mlist-rail-search input,
 body.fe-frontend-force-dark .fe-mlist-rail-search input {
   background: rgba(255, 255, 255, 0.06);
-  color: #f1f5f9;
+  color: var(--fe-text-dark-active, #f1f5f9);
 }
 html[data-theme="dark"] .fe-mlist-rail-search input:focus,
 body.fe-frontend-force-dark .fe-mlist-rail-search input:focus {
   background: rgba(255, 255, 255, 0.10);
-  border-color: rgba(122, 163, 255, 0.55);
+  border-color: var(--fe-dm-border-hover, rgba(122, 163, 255, 0.55));
 }
 html[data-theme="dark"] .fe-mlist-search-kbd,
 body.fe-frontend-force-dark .fe-mlist-search-kbd {
@@ -6275,7 +6374,7 @@ body.fe-frontend-force-dark .fe-mlist-card {
    directory + Pro Tips share one hover treatment in dark mode. */
 html[data-theme="dark"] .fe-mlist-card:hover,
 body.fe-frontend-force-dark .fe-mlist-card:hover {
-  border-color: rgba(122, 163, 255, 0.4);
+  border-color: var(--fe-dm-border-hover, rgba(122, 163, 255, 0.4));
 }
 html[data-theme="dark"] .fe-mlist-toolbar,
 html[data-theme="dark"] .fe-mlist-week-col {
@@ -6462,7 +6561,7 @@ body.fe-search-open { overflow: hidden; }
 html[data-theme="dark"] .fe-search-modal-panel,
 body.fe-frontend-force-dark .fe-search-modal-panel {
   background: #131a33;
-  color: #e2e8f0;
+  color: var(--fe-text-dark-active, #e2e8f0);
   border-color: rgba(255, 255, 255, 0.08);
 }
 html[data-theme="dark"] .fe-search-modal-input-row,
@@ -6474,7 +6573,7 @@ html[data-theme="dark"] .fe-search-modal-foot kbd,
 body.fe-frontend-force-dark .fe-search-modal-kbd,
 body.fe-frontend-force-dark .fe-search-modal-foot kbd {
   background: rgba(255, 255, 255, 0.10);
-  color: #cbd5e1;
+  color: var(--fe-text-dark-active, #cbd5e1);
 }
 html[data-theme="dark"] .fe-search-modal-hint code,
 body.fe-frontend-force-dark .fe-search-modal-hint code {
@@ -8682,7 +8781,7 @@ body.fe-frontend-force-dark .fe-submission-card {
 }
 html[data-theme="dark"] .fe-submission-card:hover,
 body.fe-frontend-force-dark .fe-submission-card:hover {
-  border-color: rgba(122, 163, 255, 0.4);
+  border-color: var(--fe-dm-border-hover, rgba(122, 163, 255, 0.4));
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
 }
 html[data-theme="dark"] .fe-submission-modal-panel,
@@ -9394,8 +9493,10 @@ html[data-theme="dark"] .fe-pp {
   --fe-dm-bg:           #0e111b;
   --fe-dm-surface:      #131a2c;
   --fe-dm-border:       #1f2a40;
-  --fe-dm-text:         #cbd5e1;
-  --fe-dm-text-strong:  #f1f5f9;
+  /* Body + strong text follow the "Text — Darkmode" token so page-builder
+     content (homepage + all pages) honours the single dark-text control. */
+  --fe-dm-text:         var(--fe-color-text-dark, #cbd5e1);
+  --fe-dm-text-strong:  var(--fe-color-text-dark, #f1f5f9);
   --fe-dm-text-soft:    #94a3b8;
   --fe-dm-link:         #93c5fd;
 }
@@ -10009,11 +10110,13 @@ body.fe-frontend-force-dark .fe-contact-eyebrow {
   66%      { transform: translate(-30px, 30px) scale(0.95); }
 }
 html[data-theme="dark"] .fe-dynbg-aurora-blobs,
-body.fe-frontend-force-dark .fe-dynbg-aurora-blobs {
+body.fe-frontend-force-dark .fe-dynbg-aurora-blobs,
+.fe-megamenu-force-dark .fe-dynbg-aurora-blobs {
   background: var(--fe-color-bg, #0b1220);
 }
 html[data-theme="dark"] .fe-dynbg-aurora-blobs .fe-dynbg-blob,
-body.fe-frontend-force-dark .fe-dynbg-aurora-blobs .fe-dynbg-blob {
+body.fe-frontend-force-dark .fe-dynbg-aurora-blobs .fe-dynbg-blob,
+.fe-megamenu-force-dark .fe-dynbg-aurora-blobs .fe-dynbg-blob {
   opacity: 0.65;
 }
 
@@ -10056,11 +10159,13 @@ body.fe-frontend-force-dark .fe-dynbg-aurora-blobs .fe-dynbg-blob {
   opacity: 0.7;
 }
 html[data-theme="dark"] .fe-dynbg-mesh-gradient,
-body.fe-frontend-force-dark .fe-dynbg-mesh-gradient {
+body.fe-frontend-force-dark .fe-dynbg-mesh-gradient,
+.fe-megamenu-force-dark .fe-dynbg-mesh-gradient {
   background: var(--fe-color-bg, #0b1220);
 }
 html[data-theme="dark"] .fe-dynbg-mesh-gradient .fe-dynbg-mesh,
-body.fe-frontend-force-dark .fe-dynbg-mesh-gradient .fe-dynbg-mesh {
+body.fe-frontend-force-dark .fe-dynbg-mesh-gradient .fe-dynbg-mesh,
+.fe-megamenu-force-dark .fe-dynbg-mesh-gradient .fe-dynbg-mesh {
   opacity: 0.4;
 }
 
@@ -10095,11 +10200,13 @@ body.fe-frontend-force-dark .fe-dynbg-mesh-gradient .fe-dynbg-mesh {
   100% { transform: translate(5%, 3%); }
 }
 html[data-theme="dark"] .fe-dynbg-aurora-bands,
-body.fe-frontend-force-dark .fe-dynbg-aurora-bands {
+body.fe-frontend-force-dark .fe-dynbg-aurora-bands,
+.fe-megamenu-force-dark .fe-dynbg-aurora-bands {
   background: var(--fe-color-bg, #0b1220);
 }
 html[data-theme="dark"] .fe-dynbg-aurora-bands .fe-dynbg-band,
-body.fe-frontend-force-dark .fe-dynbg-aurora-bands .fe-dynbg-band {
+body.fe-frontend-force-dark .fe-dynbg-aurora-bands .fe-dynbg-band,
+.fe-megamenu-force-dark .fe-dynbg-aurora-bands .fe-dynbg-band {
   opacity: 0.7;
 }
 
@@ -10162,6 +10269,17 @@ body:not(.fe-frontend-force-dark) html:not([data-theme="dark"]) .fe-dynbg-starfi
   filter: invert(1) hue-rotate(180deg);
   opacity: 0.35;
 }
+/* Mega-menu force-dark: starfield defaults to its dark (deep-space) look, so
+   re-assert that base even in light mode (the light swap above would
+   otherwise win on the same specificity). */
+.fe-megamenu-force-dark .fe-dynbg-starfield {
+  background:
+    radial-gradient(ellipse 120% 80% at 50% 0%,
+      color-mix(in srgb, var(--_db-c1) 18%, transparent),
+      transparent 70%),
+    var(--fe-color-bg, #07101e);
+}
+.fe-megamenu-force-dark .fe-dynbg-starfield .fe-dynbg-stars { filter: none; opacity: 1; }
 
 /* ── dotted-grid ─── subtle dot lattice */
 .fe-dynbg-dotted-grid {
@@ -10177,11 +10295,13 @@ body:not(.fe-frontend-force-dark) html:not([data-theme="dark"]) .fe-dynbg-starfi
   opacity: 0.5;
 }
 html[data-theme="dark"] .fe-dynbg-dotted-grid,
-body.fe-frontend-force-dark .fe-dynbg-dotted-grid {
+body.fe-frontend-force-dark .fe-dynbg-dotted-grid,
+.fe-megamenu-force-dark .fe-dynbg-dotted-grid {
   background: var(--fe-color-bg, #0b1220);
 }
 html[data-theme="dark"] .fe-dynbg-dotted-grid .fe-dynbg-dots,
-body.fe-frontend-force-dark .fe-dynbg-dotted-grid .fe-dynbg-dots {
+body.fe-frontend-force-dark .fe-dynbg-dotted-grid .fe-dynbg-dots,
+.fe-megamenu-force-dark .fe-dynbg-dotted-grid .fe-dynbg-dots {
   background-image: radial-gradient(
     circle at 1px 1px,
     color-mix(in srgb, #ffffff 28%, transparent) 1px,
@@ -10200,11 +10320,13 @@ body.fe-frontend-force-dark .fe-dynbg-dotted-grid .fe-dynbg-dots {
     transparent 1px 14px);
 }
 html[data-theme="dark"] .fe-dynbg-diagonal-lines,
-body.fe-frontend-force-dark .fe-dynbg-diagonal-lines {
+body.fe-frontend-force-dark .fe-dynbg-diagonal-lines,
+.fe-megamenu-force-dark .fe-dynbg-diagonal-lines {
   background: var(--fe-color-bg, #0b1220);
 }
 html[data-theme="dark"] .fe-dynbg-diagonal-lines .fe-dynbg-lines,
-body.fe-frontend-force-dark .fe-dynbg-diagonal-lines .fe-dynbg-lines {
+body.fe-frontend-force-dark .fe-dynbg-diagonal-lines .fe-dynbg-lines,
+.fe-megamenu-force-dark .fe-dynbg-diagonal-lines .fe-dynbg-lines {
   background-image: repeating-linear-gradient(
     135deg,
     color-mix(in srgb, #ffffff 9%, transparent) 0 1px,
@@ -10221,11 +10343,13 @@ body.fe-frontend-force-dark .fe-dynbg-diagonal-lines .fe-dynbg-lines {
   mix-blend-mode: multiply;
 }
 html[data-theme="dark"] .fe-dynbg-noise-paper,
-body.fe-frontend-force-dark .fe-dynbg-noise-paper {
+body.fe-frontend-force-dark .fe-dynbg-noise-paper,
+.fe-megamenu-force-dark .fe-dynbg-noise-paper {
   background: var(--fe-color-bg, #14181f);
 }
 html[data-theme="dark"] .fe-dynbg-noise-paper .fe-dynbg-noise,
-body.fe-frontend-force-dark .fe-dynbg-noise-paper .fe-dynbg-noise {
+body.fe-frontend-force-dark .fe-dynbg-noise-paper .fe-dynbg-noise,
+.fe-megamenu-force-dark .fe-dynbg-noise-paper .fe-dynbg-noise {
   opacity: 0.4;
   mix-blend-mode: screen;
 }
@@ -10266,11 +10390,13 @@ body.fe-frontend-force-dark .fe-dynbg-noise-paper .fe-dynbg-noise {
   inset: auto;
 }
 html[data-theme="dark"] .fe-dynbg-spotlight,
-body.fe-frontend-force-dark .fe-dynbg-spotlight {
+body.fe-frontend-force-dark .fe-dynbg-spotlight,
+.fe-megamenu-force-dark .fe-dynbg-spotlight {
   background: var(--fe-color-bg, #0b1220);
 }
 html[data-theme="dark"] .fe-dynbg-spotlight .fe-dynbg-spot,
-body.fe-frontend-force-dark .fe-dynbg-spotlight .fe-dynbg-spot {
+body.fe-frontend-force-dark .fe-dynbg-spotlight .fe-dynbg-spot,
+.fe-megamenu-force-dark .fe-dynbg-spotlight .fe-dynbg-spot {
   opacity: 0.7;
 }
 
@@ -10314,7 +10440,8 @@ body.fe-frontend-force-dark .fe-dynbg-spotlight .fe-dynbg-spot {
   background-image: url("data:image/svg+xml;utf8,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
 }
 html[data-theme="dark"] .fe-dynbg-overlay-noise-grain,
-body.fe-frontend-force-dark .fe-dynbg-overlay-noise-grain {
+body.fe-frontend-force-dark .fe-dynbg-overlay-noise-grain,
+.fe-megamenu-force-dark .fe-dynbg-overlay-noise-grain {
   /* Same grain reads quieter against dark backgrounds, so flip to a
      blend mode that lifts the texture against deep tones rather than
      bumping the alpha (which would look noisy on light theme). */
@@ -10333,7 +10460,8 @@ body.fe-frontend-force-dark .fe-dynbg-overlay-noise-grain {
   );
 }
 html[data-theme="dark"] .fe-dynbg-overlay-scanlines,
-body.fe-frontend-force-dark .fe-dynbg-overlay-scanlines {
+body.fe-frontend-force-dark .fe-dynbg-overlay-scanlines,
+.fe-megamenu-force-dark .fe-dynbg-overlay-scanlines {
   background: repeating-linear-gradient(
     0deg,
     transparent,
@@ -10354,7 +10482,8 @@ body.fe-frontend-force-dark .fe-dynbg-overlay-scanlines {
       rgba(0, 0, 0, 0.025) 1px 2px);
 }
 html[data-theme="dark"] .fe-dynbg-overlay-linen,
-body.fe-frontend-force-dark .fe-dynbg-overlay-linen {
+body.fe-frontend-force-dark .fe-dynbg-overlay-linen,
+.fe-megamenu-force-dark .fe-dynbg-overlay-linen {
   background:
     repeating-linear-gradient(0deg,
       transparent 0 1px,
@@ -10371,7 +10500,8 @@ body.fe-frontend-force-dark .fe-dynbg-overlay-linen {
     rgba(0, 0, 0, 0.18) 100%);
 }
 html[data-theme="dark"] .fe-dynbg-overlay-vignette,
-body.fe-frontend-force-dark .fe-dynbg-overlay-vignette {
+body.fe-frontend-force-dark .fe-dynbg-overlay-vignette,
+.fe-megamenu-force-dark .fe-dynbg-overlay-vignette {
   background: radial-gradient(ellipse at center,
     transparent 40%,
     rgba(0, 0, 0, 0.45) 100%);
@@ -10388,7 +10518,8 @@ body.fe-frontend-force-dark .fe-dynbg-overlay-vignette {
       rgba(0, 0, 0, 0.04) 4px 5px);
 }
 html[data-theme="dark"] .fe-dynbg-overlay-crosshatch,
-body.fe-frontend-force-dark .fe-dynbg-overlay-crosshatch {
+body.fe-frontend-force-dark .fe-dynbg-overlay-crosshatch,
+.fe-megamenu-force-dark .fe-dynbg-overlay-crosshatch {
   background:
     repeating-linear-gradient(45deg,
       transparent 0 4px,
@@ -10408,7 +10539,8 @@ body.fe-frontend-force-dark .fe-dynbg-overlay-crosshatch {
   opacity: 0.4;
 }
 html[data-theme="dark"] .fe-dynbg-overlay-dot-weave,
-body.fe-frontend-force-dark .fe-dynbg-overlay-dot-weave {
+body.fe-frontend-force-dark .fe-dynbg-overlay-dot-weave,
+.fe-megamenu-force-dark .fe-dynbg-overlay-dot-weave {
   background-image: radial-gradient(
     circle at 1px 1px,
     rgba(255, 255, 255, 0.22) 1px,
@@ -11523,4 +11655,130 @@ body.fe-popup-open { overflow: hidden; }
 }
 @media (min-width: 769px) {
   .fe-popup-no-desktop { display: none !important; }
+}
+
+/* ========================================================================
+   THEMED REGIONS — shared structure for the alternate themes
+   (modern-dark, cyberpunk, sanctuary, terminal).
+   This block carries only LAYOUT + behaviour (sticky, responsive, the
+   hamburger → dropdown, the mega-menu grid). Each theme's *skin* (colours,
+   glass, glow, type) lives in static/css/themes/<key>.css scoped to
+   body[data-fe-theme="<key>"]. Colours here resolve through the design
+   tokens so an unskinned themed header still renders legibly.
+   ======================================================================== */
+.fe-header-themed {
+  position: sticky; top: 0; z-index: 40; width: 100%;
+  background: var(--fe-color-surface, #fff);
+  border-bottom: 1px solid var(--fe-color-border, #e2e8f0);
+  transition: transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              background 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+}
+.fe-header-themed.fe-header-hidden { transform: translateY(-100%); }
+.fe-header-themed-inner {
+  display: flex; align-items: center; gap: 24px;
+  margin: 0 auto; width: 100%;
+}
+.fe-th-brand { display: inline-flex; align-items: center; gap: 10px;
+  text-decoration: none; color: var(--fe-color-text, #0f172a);
+  margin-right: auto; flex: 0 0 auto; }
+.fe-th-logo { display: block; }
+.fe-th-brand-name { font-family: var(--fe-font-heading);
+  font-weight: 700; font-size: 1.35rem; letter-spacing: -0.01em;
+  color: inherit; }
+.fe-th-nav { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.fe-th-nav-link {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 9px 14px; border-radius: 10px;
+  font-size: 0.975rem; font-weight: 600; text-decoration: none;
+  color: var(--fe-color-nav-link, #0f172a);
+  transition: color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+.fe-th-nav-link:hover, .fe-th-nav-link.mega-active {
+  color: var(--fe-color-nav-link-hover, var(--fe-color-brand));
+  text-decoration: none;
+}
+/* Dark mode: themed-header nav links default to the dark-mode text colour so
+   they don't render dark-on-dark — the --fe-color-nav-link token is tuned for
+   the theme's LIGHT header. The :not(.fe-th-nav-cta) guard preserves the CTA
+   pill's own colour; per-theme CSS can still override. */
+html[data-theme="dark"] .fe-th-nav-link:not(.fe-th-nav-cta) { color: var(--fe-dm-text, #e2e8f0); }
+.fe-th-nav-link .fe-nav-caret { display: inline-flex; transition: transform 160ms ease; }
+.fe-th-nav-link .fe-nav-caret .icon { width: 16px; height: 16px; }
+.fe-th-nav-link.mega-active .fe-nav-caret { transform: rotate(180deg); }
+.fe-th-nav-twoline { flex-direction: column; align-items: flex-start;
+  line-height: 1.1; gap: 1px; padding-top: 6px; padding-bottom: 6px; }
+.fe-th-nav-twoline-lead { font-size: 0.7rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
+.fe-th-nav-twoline-cta { display: inline-flex; align-items: center; gap: 4px; }
+/* CTA pill — follows the FULL primary-button token set (bg, border, radius,
+   weight, text-transform, drop-shadow, hover transform + glow) so it behaves
+   exactly like .fe-btn-primary; each theme can still re-skin it in its file. */
+.fe-th-nav-cta {
+  background: var(--fe-color-btn-primary-bg, var(--fe-color-brand));
+  color: var(--fe-color-btn-primary-text, #fff) !important;
+  border-width: var(--fe-btn-primary-border-width, 1px);
+  border-style: solid;
+  border-color: var(--fe-color-btn-primary-border, var(--fe-color-btn-primary-bg, transparent));
+  border-radius: var(--fe-btn-radius, 999px);
+  padding: 10px 20px; margin-left: 8px;
+  font-weight: var(--fe-btn-weight, 600);
+  text-transform: var(--fe-btn-text-transform, none);
+  box-shadow: var(--fe-btn-shadow, 0 8px 20px rgba(15, 23, 42, 0.18));
+  transition: transform 160ms ease, box-shadow 200ms ease,
+              background 160ms ease, border-color 160ms ease;
+}
+.fe-th-nav-cta:hover {
+  background: var(--fe-color-btn-primary-hover-bg,
+                  color-mix(in srgb, var(--fe-color-btn-primary-bg, var(--fe-color-brand)) 88%, black));
+  color: var(--fe-color-btn-primary-text, #fff) !important;
+  border-width: var(--fe-btn-primary-hover-border-width, var(--fe-btn-primary-border-width, 1px));
+  border-color: var(--fe-color-btn-primary-hover-border,
+                    var(--fe-color-btn-primary-border, var(--fe-color-btn-primary-bg, transparent)));
+  transform: var(--fe-btn-hover-transform, translateY(-1px));
+  box-shadow: var(--fe-btn-hover-glow, 0 10px 28px rgba(81, 100, 255, 0.32));
+}
+/* Hamburger — hidden on desktop. Two bars cross into an X when the mobile
+   dropdown is open (#fe-header.fe-nav-open, toggled by base.html JS). */
+.fe-th-menu-btn { display: none; flex: 0 0 auto;
+  width: 42px; height: 42px; border: 0; background: transparent;
+  cursor: pointer; position: relative; border-radius: 10px; }
+.fe-th-menu-btn span { position: absolute; left: 11px; right: 11px; height: 2px;
+  background: var(--fe-color-text, #0f172a); border-radius: 2px;
+  transition: transform 200ms ease, opacity 200ms ease; }
+.fe-th-menu-btn span:first-child { top: 17px; }
+.fe-th-menu-btn span:last-child  { bottom: 17px; }
+.fe-header-themed.fe-nav-open .fe-th-menu-btn span:first-child { transform: translateY(4px) rotate(45deg); }
+.fe-header-themed.fe-nav-open .fe-th-menu-btn span:last-child  { transform: translateY(-4px) rotate(-45deg); }
+
+@media (max-width: 880px) {
+  .fe-th-menu-btn { display: block; }
+  .fe-th-nav {
+    display: none; position: absolute; left: 0; right: 0;
+    top: var(--fe-header-h, 76px);
+    flex-direction: column; align-items: stretch; gap: 2px;
+    padding: 12px 5vw 20px;
+    background: var(--fe-color-surface, #fff);
+    border-bottom: 1px solid var(--fe-color-border, #e2e8f0);
+    box-shadow: 0 24px 40px rgba(0,0,0,0.18);
+    max-height: calc(100vh - var(--fe-header-h, 76px));
+    overflow-y: auto;
+  }
+  .fe-header-themed.fe-nav-open .fe-th-nav { display: flex; }
+  .fe-th-nav-link { width: 100%; padding: 12px 14px; }
+  .fe-th-nav-twoline { align-items: flex-start; }
+  .fe-th-nav-cta { margin-left: 0; margin-top: 6px; justify-content: center; }
+}
+
+/* Themed mega-menu — inherits all positioning + open/close from the base
+   .fe-megamenu rules above; this only sets the panel grid behaviour and a
+   neutral skin. Each theme overrides the surface/border in its file. */
+.fe-megamenu-themed { --fe-mm-link-base: 1.05rem; --fe-mm-heading-base: 1.5rem;
+  background: var(--fe-color-surface-dark, #0b1026);
+  color: var(--fe-color-megamenu-link, #fff); }
+.fe-megamenu-themed .fe-megamenu-inner {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+@media (max-width: 880px) {
+  .fe-megamenu-themed { border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important; }
+  .fe-megamenu-themed .fe-megamenu-inner { grid-template-columns: 1fr; gap: 20px; }
 }

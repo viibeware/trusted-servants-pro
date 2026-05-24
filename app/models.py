@@ -1103,6 +1103,13 @@ class SiteSetting(db.Model):
     # template_* fields above act as overrides when the user picks a layout
     # different from the active theme on a specific page.
     frontend_theme = db.Column(db.String(64), nullable=False, default="classic")
+    # Per-theme saved state. JSON map of theme_key -> snapshot of the
+    # theme-stateful SiteSetting fields (design tokens, fonts, default mode,
+    # per-template settings, mega-menu colours). On theme switch the outgoing
+    # theme's state is snapshotted here and the incoming theme's saved state
+    # restored, so returning to a theme brings back how it was left. The
+    # theme switcher modal exposes Reset-to-default and Return-to-last-state.
+    frontend_theme_states_json = db.Column(db.Text)
     # Default appearance mode for first-time visitors: 'light', 'dark',
     # or 'system' (follows the visitor's OS preference). A returning
     # visitor's localStorage choice always wins over this default.
@@ -1152,6 +1159,22 @@ class SiteSetting(db.Model):
     frontend_mega_text_color = db.Column(db.String(16), nullable=False, default="#ffffff")
     frontend_mega_radius_bl = db.Column(db.Integer, nullable=False, default=18)
     frontend_mega_radius_br = db.Column(db.Integer, nullable=False, default=18)
+    # Optional dynamic background for the mega-menu panel (same dynbg system as
+    # the hero / pages). When a key is set, the panel renders the animated
+    # backdrop behind its links and the solid bg-colour above steps aside.
+    frontend_mega_bg_dynamic_key = db.Column(db.String(64))
+    frontend_mega_bg_dynbg_config_json = db.Column(db.Text)
+    # Render the mega-menu dynamic background in its dark variant even when the
+    # site is in light mode (so a dark panel sits behind light mega-menu text).
+    frontend_mega_bg_dynbg_dark = db.Column(db.Boolean, nullable=False, default=False)
+    # Independent dark-mode mega-menu colours. When unset, the renderer falls
+    # back to a sensible dark surface + the auto dark_variant of the light text.
+    frontend_mega_bg_color_dark = db.Column(db.String(16))
+    frontend_mega_text_color_dark = db.Column(db.String(16))
+    # Blend between the solid background colour (0) and the dynamic background
+    # (100). Implemented as the dynbg layer's opacity over the solid colour, so
+    # the admin can dial the effect from "just the colour" to "just the dynbg".
+    frontend_mega_bg_dynbg_blend = db.Column(db.Integer, nullable=False, default=100)
     # Staggered reveal animation when the mega menu opens (titles/links/buttons
     # fade in one after the other with a small slide + rotate).
     frontend_megamenu_animate = db.Column(db.Boolean, nullable=False, default=True)

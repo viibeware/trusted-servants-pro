@@ -376,6 +376,11 @@
         }
       }
       field.classList.remove('fe-design-field--overridden');
+      // Programmatic .value changes don't fire input/change, so the save bar
+      // (and any other form-level dirty tracker) never sees the reset. Dispatch
+      // bubbling events as if the admin had edited the field by hand.
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      field.dispatchEvent(new Event('change', { bubbles: true }));
     });
   });
   // Color picker flips the gating checkbox on automatically (same pattern

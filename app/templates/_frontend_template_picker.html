@@ -32,7 +32,11 @@
           <button type="button" class="icon-btn" data-close>{{ icon('x') }}</button>
         </div>
         <div class="modal-body">
+          {% if radio_name == 'frontend_theme' %}
+          <p class="muted small">Pick a theme. Switching <strong>auto-saves</strong> the current theme's look and <strong>restores</strong> the new theme's last saved state, so returning to a theme brings it back exactly how you left it. Your pages, blocks, and footer content are never changed.</p>
+          {% else %}
           <p class="muted small">Pick a layout. Settings and content are shared across templates.</p>
+          {% endif %}
           <div class="template-library-grid">
             {% for t in templates %}
             <label class="template-card{% if active == t.key %} active{% endif %}">
@@ -74,9 +78,27 @@
             {% endfor %}
           </div>
         </div>
+        {# Theme picker only: the "when applying" mode chooser is pulled OUT of
+           the scrolling body and pinned above the footer, so it (and the Apply
+           button below it) stay visible no matter how far the card list scrolls. #}
+        {% if radio_name == 'frontend_theme' %}
+        <fieldset class="fe-theme-mode">
+          <legend class="muted smaller">When applying the selected theme</legend>
+          <label class="fe-theme-mode-opt">
+            <input type="radio" name="restore_mode" value="last" checked>
+            <span><strong>Return to last saved state</strong>
+              <span class="muted smaller">Bring the theme back exactly how you last left it — colours, fonts, and per-template settings. Falls back to its defaults if you've never customised it.</span></span>
+          </label>
+          <label class="fe-theme-mode-opt">
+            <input type="radio" name="restore_mode" value="default">
+            <span><strong>Reset to default</strong>
+              <span class="muted smaller">Start the theme fresh from its built-in defaults, clearing your customisations for it. Your pages, blocks, and footer content are not affected.</span></span>
+          </label>
+        </fieldset>
+        {% endif %}
         <div class="modal-foot">
           <button type="button" class="btn" data-close>Cancel</button>
-          <button type="submit" class="btn btn-primary">Use this template</button>
+          <button type="submit" class="btn btn-primary">{% if radio_name == 'frontend_theme' %}Apply theme{% else %}Use this {{ label|lower }}{% endif %}</button>
         </div>
       </form>
     </div>

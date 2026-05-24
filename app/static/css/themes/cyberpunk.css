@@ -1,0 +1,638 @@
+/* ============================================================================
+   THEME · Cyberpunk ("Neon Grid")
+   Loaded only when SiteSetting.frontend_theme == "cyberpunk" (see base.html).
+   Scoped to body[data-fe-theme="cyberpunk"]. Near-black HUD canvas, perspective
+   grid + scanlines, neon cyan/magenta, sharp zero-radius edges, glitch
+   monospace headings, neon-framed panels. Defaults to dark mode; a light
+   companion is provided for the visitor sun/moon toggle.
+   ========================================================================== */
+
+body[data-fe-theme="cyberpunk"] {
+  --cy-bg:      #05060f;
+  --cy-bg-2:    #0a0c1a;
+  --cy-panel:   #0a0c1a;
+  --cy-cyan:    #00eaff;
+  --cy-magenta: #ff2d95;
+  --cy-yellow:  #f7ff3c;
+  --cy-text:    #d7e6ff;
+  --cy-muted:   #7f8bb6;
+  --cy-line:    rgba(0,234,255,0.22);
+  --cy-line-mag:rgba(255,45,149,0.22);
+  /* Mode-aware heading colours — dark ink on light surfaces (light mode),
+     swapped to neon-on-near-black in the dark-mode block below. */
+  --cy-head:       #0b1020;   /* section / hero / detail headings */
+  --cy-card-title: #0e7490;   /* card + detail sub-titles (deep teal) */
+}
+
+/* ---- Dark-mode palette (the default for this theme) --------------------- */
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"],
+body[data-fe-theme="cyberpunk"].fe-footer-force-dark {
+  --fe-dm-surface:        #0a0c1a;
+  --fe-dm-surface-soft:   rgba(0,234,255,0.05);
+  --fe-dm-border:         #18234a;
+  --fe-dm-border-hover:   var(--cy-magenta);
+  --fe-dm-text-strong:    var(--fe-color-text-dark, #ffffff);
+  --fe-dm-text:           var(--fe-color-text-dark, #d7e6ff);
+  --fe-dm-text-muted:     #7f8bb6;
+  --fe-dm-link-hover:     var(--cy-cyan);
+}
+/* Heading colours flip on the PAGE mode only (not footer-force-dark, which
+   is present on every page and would otherwise drag the dark heading colour
+   into light mode). */
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] {
+  --cy-head:       #d7e6ff;   /* headings go light on the dark canvas */
+  --cy-card-title: #00eaff;   /* sub-titles go neon cyan on dark cards */
+}
+
+/* ===== Atmosphere — grid floor + scanlines =============================== */
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] {
+  background:
+    radial-gradient(120% 80% at 50% -10%, #0b1030 0%, transparent 55%),
+    radial-gradient(100% 70% at 50% 120%, #1a0626 0%, transparent 55%),
+    var(--cy-bg);
+}
+/* Perspective-ish grid — flat neon grid that fades toward the centre via a
+   radial mask so it reads as a horizon/HUD floor. Fixed behind content. */
+body[data-fe-theme="cyberpunk"]::before {
+  content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(0,234,255,0.10) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,45,149,0.07) 1px, transparent 1px);
+  background-size: 46px 46px, 46px 46px;
+  -webkit-mask-image: radial-gradient(120% 100% at 50% 0%, #000 0%, transparent 78%);
+          mask-image: radial-gradient(120% 100% at 50% 0%, #000 0%, transparent 78%);
+  opacity: 0.9;
+}
+/* Scanlines — fine horizontal lines + a soft animated sweep band. */
+body[data-fe-theme="cyberpunk"]::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(0,0,0,0.16) 0 1px, transparent 1px 3px);
+  opacity: 0.5;
+}
+html[data-theme="light"] body[data-fe-theme="cyberpunk"]::before { opacity: 0.5; }
+html[data-theme="light"] body[data-fe-theme="cyberpunk"]::after  { opacity: 0.12; }
+
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-page,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-section { background: transparent; }
+
+/* ===== Structure — HUD bands, left-anchored section labels =============== */
+body[data-fe-theme="cyberpunk"] .fe-section { padding-top: 72px; padding-bottom: 72px; }
+/* The hero supplies its own internal padding, so the section wrapping it
+   must not add the band's top padding — otherwise the hero floats a band's
+   height below the header. Scoped to hero sections only (NOT first-child,
+   which would also catch the meeting-detail page). */
+body[data-fe-theme="cyberpunk"] .fe-section:has(.fe-hero) { padding-top: 0; }
+/* Meeting detail page — its own top breathing room below the header. */
+body[data-fe-theme="cyberpunk"] .fe-meeting-detail { padding-top: 6rem; }
+/* (No `.fe-section + .fe-section` divider — `.fe-section` is also used by
+   side-by-side blocks inside row containers, where a top-border renders as
+   a stray half-width line. Vertical spacing carries the rhythm instead.) */
+/* Section headings sit LEFT, tagged with a neon bar — a HUD label, distinct
+   from the other themes' centred heads. Generous padding so the label has
+   room to breathe (the side-by-side Today's Meetings / Upcoming Events
+   columns looked cramped without it). */
+body[data-fe-theme="cyberpunk"] .fe-section-head {
+  text-align: left; max-width: none; margin-left: 0; margin-right: 0;
+  margin-bottom: 32px;
+  padding: 12px 0 14px 22px;
+  border-left: 3px solid var(--cy-cyan);
+}
+body[data-fe-theme="cyberpunk"] .fe-section-head h2 {
+  font-family: var(--fe-font-heading);
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--cy-head);
+  margin-bottom: 10px; line-height: 1.15;
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-section-head h2 {
+  text-shadow: 0 0 18px rgba(0,234,255,0.30);
+}
+body[data-fe-theme="cyberpunk"] .fe-section-head p { color: var(--cy-muted); margin: 0; }
+
+/* Type system: Orbitron (geometric sci-fi) steps up for the big display
+   headlines; everything else heading-level rides the Chakra Petch heading
+   token set in fonts.py. */
+body[data-fe-theme="cyberpunk"] .fe-hero-heading,
+body[data-fe-theme="cyberpunk"] .fe-section-head h2,
+body[data-fe-theme="cyberpunk"] .fe-meeting-detail-head h1 {
+  font-family: 'Orbitron', 'Chakra Petch', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+}
+
+/* ===== Hero — synthwave neon scene ======================================
+   Replaces the recovery-blue dynamic background + particle starfield with a
+   cyberpunk scene: deep sky, a magenta horizon "sun" glow, and a receding
+   neon grid floor. The admin's hero dynbg/particles are hidden (config kept,
+   just not shown on this theme). */
+body[data-fe-theme="cyberpunk"] .fe-hero { overflow: hidden; }
+body[data-fe-theme="cyberpunk"] .fe-hero > .fe-dynbg,
+body[data-fe-theme="cyberpunk"] .fe-hero > .fe-hero-particles { display: none !important; }
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-hero-blob { opacity: 0; }
+
+/* Dark mode — full synthwave scene. Horizon sits ~2/3 down from the top;
+   the grid floor fills the bottom third and fades up into the horizon line. */
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-hero {
+  background:
+    radial-gradient(110% 75% at 50% 67%, rgba(255,45,149,0.40), transparent 55%),
+    radial-gradient(90% 78% at 50% 0%, rgba(0,234,255,0.14), transparent 60%),
+    linear-gradient(180deg, #06091a 0%, #0b0718 58%, #160b22 100%) !important;
+}
+/* Receding neon grid floor — bigger cells + thicker lines so they stay
+   continuous under the perspective tilt (thin lines compress into sub-pixel
+   fragments near the horizon). The front edge is pushed below the hero and
+   clipped by overflow:hidden, so only the far edge needs a fade — up into
+   the horizon line. */
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-hero::before {
+  content: ""; position: absolute; left: -25%; right: -25%; bottom: 0; height: 48%;
+  background-image:
+    linear-gradient(rgba(0,234,255,0.9) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(0,234,255,0.8) 2px, transparent 2px);
+  background-size: 84px 84px;
+  transform: perspective(560px) rotateX(54deg);
+  transform-origin: bottom center;
+  /* Fade only the far edge (top) up into the horizon line; the near edge sits
+     at the hero's bottom. A taller box + gentler tilt lets the lines reach
+     higher up toward the horizon. */
+  -webkit-mask-image: linear-gradient(transparent 0%, #000 34%);
+          mask-image: linear-gradient(transparent 0%, #000 34%);
+  opacity: 0.6; pointer-events: none; z-index: 0;
+}
+/* Glowing horizon line ~2/3 down from the top where the grid meets the sky. */
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-hero::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 33%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cy-cyan) 30%, var(--cy-magenta) 70%, transparent);
+  box-shadow: 0 0 26px 5px rgba(255,45,149,0.5);
+  opacity: 0.9; pointer-events: none; z-index: 0;
+}
+/* Light mode — lighter neon grid + soft glows (headline stays dark). */
+html[data-theme="light"] body[data-fe-theme="cyberpunk"] .fe-hero {
+  background:
+    radial-gradient(120% 90% at 50% 84%, rgba(255,45,149,0.12), transparent 55%),
+    linear-gradient(rgba(0,170,200,0.10) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(192,38,211,0.07) 1px, transparent 1px),
+    #eef0f6 !important;
+  background-size: auto, 44px 44px, 44px 44px, auto !important;
+  background-position: center, center top, center top, center !important;
+}
+body[data-fe-theme="cyberpunk"] .fe-hero-heading {
+  background-image: none !important;
+  -webkit-text-fill-color: var(--cy-head); color: var(--cy-head);
+  text-transform: uppercase; letter-spacing: 0.02em;
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-hero-heading {
+  text-shadow: 3px 0 var(--cy-magenta), -3px 0 var(--cy-cyan), 0 0 24px rgba(0,234,255,0.30);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-hero-sub { color: var(--cy-muted) !important; }
+/* The hero subheading carries the admin's per-hero font class
+   (.fe-hero-sub-inter by default) — force it onto the techno body
+   token so no Inter survives. */
+body[data-fe-theme="cyberpunk"] .fe-hero-sub { font-family: var(--fe-font-body) !important; }
+body[data-fe-theme="cyberpunk"] .fe-hero-eyebrow {
+  background: rgba(255,45,149,0.14); color: var(--cy-magenta);
+  border: 1px solid var(--cy-magenta); border-radius: 0;
+  text-transform: uppercase; letter-spacing: 0.18em; font-size: 0.7rem;
+  font-family: var(--fe-font-heading);
+}
+
+/* ===== Neon-framed panels (sharp, scanline fill, top accent bar) ========= */
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-card-primary,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-card-secondary,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-meeting-card,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-mlist-card,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-feature-card,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-event-row,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-faq-item {
+  border-radius: 0 !important;
+  border: 1px solid var(--cy-line);
+  background-color: rgba(10,12,26,0.82);
+  background-image:
+    linear-gradient(90deg, var(--cy-cyan), var(--cy-magenta)),
+    repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 1px, transparent 1px 3px);
+  background-size: 100% 2px, 100% 100%;
+  background-repeat: no-repeat, repeat;
+  background-position: top, 0 0;
+  box-shadow: 0 0 0 1px rgba(0,234,255,0.06) inset;
+  transition: border-color 120ms linear, box-shadow 120ms linear, transform 120ms linear;
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-card-primary:hover,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-card-secondary:hover,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-meeting-card:hover,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-mlist-card:hover,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-feature-card:hover,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-event-row:hover {
+  transform: translateY(-2px);
+  border-color: var(--cy-magenta);
+  box-shadow: 0 0 0 1px var(--cy-magenta) inset, 0 0 26px -4px rgba(255,45,149,0.5);
+}
+/* Events block — date stamp + thumbnail tiles go sharp + neon. */
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-event-date,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-event-thumb {
+  border-radius: 0; background: rgba(0,234,255,0.06); border-color: var(--cy-line);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-event-date-month { color: var(--cy-magenta); }
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-event-date-day,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-event-title,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-event-title a { color: var(--cy-text); }
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-mlist-card-dur-chip,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-event-attr-online { border-radius: 0; }
+
+/* ===== Events list + Announcements list — sharp neon (all layouts) ===== */
+/* Square every card / cover / tab / pill across the events + announcements
+   layouts (cards, overview/magazine, timeline, calendar, omni). */
+body[data-fe-theme="cyberpunk"] .fe-events-card,
+body[data-fe-theme="cyberpunk"] .fe-events-card-cover,
+body[data-fe-theme="cyberpunk"] .fe-events-card-date,
+body[data-fe-theme="cyberpunk"] .fe-events-tl-card,
+body[data-fe-theme="cyberpunk"] .fe-events-tl-card-link,
+body[data-fe-theme="cyberpunk"] .fe-events-tl-cover,
+body[data-fe-theme="cyberpunk"] .fe-events-tl-date,
+body[data-fe-theme="cyberpunk"] .fe-events-tl-year,
+body[data-fe-theme="cyberpunk"] .fe-events-mag-hero,
+body[data-fe-theme="cyberpunk"] .fe-events-mag-hero-tag,
+body[data-fe-theme="cyberpunk"] .fe-events-cal,
+body[data-fe-theme="cyberpunk"] .fe-events-omni-tabs,
+body[data-fe-theme="cyberpunk"] .fe-events-omni-tab,
+body[data-fe-theme="cyberpunk"] .fe-events-omni-archive,
+body[data-fe-theme="cyberpunk"] .fe-events-omni-archive-inner,
+body[data-fe-theme="cyberpunk"] .fe-announcements-card,
+body[data-fe-theme="cyberpunk"] .fe-announcements-card-cover { border-radius: 0 !important; }
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-events-card,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-events-tl-card,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-events-mag-hero,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-announcements-card {
+  border: 1px solid var(--cy-line);
+  background-color: rgba(10,12,26,0.82);
+  background-image:
+    linear-gradient(90deg, var(--cy-cyan), var(--cy-magenta)),
+    repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 1px, transparent 1px 3px);
+  background-size: 100% 2px, 100% 100%;
+  background-repeat: no-repeat, repeat;
+  background-position: top, 0 0;
+  transition: border-color 120ms linear, box-shadow 120ms linear, transform 120ms linear;
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-events-card:hover,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-events-tl-card:hover,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-events-mag-hero:hover,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-announcements-card:hover {
+  transform: translateY(-2px); border-color: var(--cy-magenta);
+  box-shadow: 0 0 0 1px var(--cy-magenta) inset, 0 0 26px -4px rgba(255,45,149,0.5);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-events-card-date {
+  background: rgba(0,234,255,0.06); border-color: var(--cy-line);
+}
+body[data-fe-theme="cyberpunk"] .fe-events-card-date-month,
+body[data-fe-theme="cyberpunk"] .fe-events-tl-date-month { color: var(--cy-magenta); }
+body[data-fe-theme="cyberpunk"] .fe-events-card-title,
+body[data-fe-theme="cyberpunk"] .fe-events-tl-card-title,
+body[data-fe-theme="cyberpunk"] .fe-announcements-card-title {
+  font-family: var(--fe-font-heading); text-transform: uppercase; letter-spacing: 0.03em;
+}
+
+/* ===== Literature Library + Fellowships cards — sharp neon ============= */
+body[data-fe-theme="cyberpunk"] .fe-library-item,
+body[data-fe-theme="cyberpunk"] .fe-library-thumb,
+body[data-fe-theme="cyberpunk"] .fe-library-item-cat,
+body[data-fe-theme="cyberpunk"] .fe-library-ftype,
+body[data-fe-theme="cyberpunk"] .fe-fellowships-card,
+body[data-fe-theme="cyberpunk"] .fe-fellowships-card-chip,
+body[data-fe-theme="cyberpunk"] .fe-fellowships-compact-pills { border-radius: 0 !important; }
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-library-item,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-fellowships-card {
+  border: 1px solid var(--cy-line);
+  background-color: rgba(10,12,26,0.82);
+  background-image:
+    linear-gradient(90deg, var(--cy-cyan), var(--cy-magenta)),
+    repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 1px, transparent 1px 3px);
+  background-size: 100% 2px, 100% 100%;
+  background-repeat: no-repeat, repeat;
+  background-position: top, 0 0;
+  transition: border-color 120ms linear, box-shadow 120ms linear, transform 120ms linear;
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-library-item:hover,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-fellowships-card:hover {
+  transform: translateY(-2px); border-color: var(--cy-magenta);
+  box-shadow: 0 0 0 1px var(--cy-magenta) inset, 0 0 26px -4px rgba(255,45,149,0.5);
+}
+body[data-fe-theme="cyberpunk"] .fe-library-item-title,
+body[data-fe-theme="cyberpunk"] .fe-fellowships-card-title {
+  font-family: var(--fe-font-heading); text-transform: uppercase; letter-spacing: 0.03em;
+}
+
+/* ===== Catch-all: uniformly sharp corners ==============================
+   Cyberpunk is zero-radius everywhere. Rather than chase every per-page
+   layout class, square the common card / media / panel / chip patterns
+   across all content pages (blog, stories, archive, site index, etc.).
+   Scoped to this theme only; radius-only so it can't affect layout. */
+body[data-fe-theme="cyberpunk"] [class*="-card"],
+body[data-fe-theme="cyberpunk"] [class*="-cover"],
+body[data-fe-theme="cyberpunk"] [class*="-thumb"],
+body[data-fe-theme="cyberpunk"] [class*="-tile"],
+body[data-fe-theme="cyberpunk"] [class*="-panel"],
+body[data-fe-theme="cyberpunk"] [class*="-chip"],
+body[data-fe-theme="cyberpunk"] [class*="-pill"] { border-radius: 0 !important; }
+
+/* ===== Meetings-list filter rail — neon HUD console ====================== */
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-mlist-rail-search input {
+  border-radius: 0; background: rgba(0,234,255,0.05);
+  border: 1px solid var(--cy-line); color: var(--cy-text);
+  font-family: var(--fe-font-heading); letter-spacing: 0.02em;
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-mlist-rail-search input:focus {
+  background: rgba(0,234,255,0.10); border-color: var(--cy-cyan);
+  box-shadow: 0 0 16px -4px var(--cy-cyan);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-mlist-search-kbd {
+  border-radius: 0; background: rgba(255,45,149,0.14); color: var(--cy-magenta);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-mlist-day-section-heading {
+  font-family: var(--fe-font-heading); text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--cy-cyan);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-mlist-day-pill {
+  border-radius: 0; font-family: var(--fe-font-heading);
+  text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.8rem;
+  border: 1px solid transparent; color: var(--cy-muted);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-mlist-day-pill:hover {
+  background: rgba(0,234,255,0.08); color: var(--cy-text); border-color: var(--cy-line);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-mlist-day-pill.is-active {
+  background: rgba(255,45,149,0.12); border-color: var(--cy-magenta); color: #fff;
+  box-shadow: -2px 0 14px -4px var(--cy-magenta);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-mlist-day-count {
+  border-radius: 0; background: rgba(0,234,255,0.12); color: var(--cy-cyan);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-mlist-day-pill.is-active .fe-mlist-day-count {
+  background: rgba(255,45,149,0.25); color: #fff;
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-page .fe-mlist-rail-link,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .frontend-body .fe-mlist-rail-link {
+  border-radius: 0; color: var(--cy-muted);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-page .fe-mlist-rail-link:hover {
+  background: rgba(0,234,255,0.08); color: var(--cy-cyan); border-color: var(--cy-line);
+}
+/* Square neon icon tiles inside feature cards. */
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-feature-icon {
+  border-radius: 0; color: var(--cy-cyan);
+  background: rgba(0,234,255,0.10); border: 1px solid var(--cy-line);
+  box-shadow: 0 0 14px -4px var(--cy-cyan);
+}
+
+/* ===== Buttons — sharp neon ============================================== */
+body[data-fe-theme="cyberpunk"] .fe-btn-primary,
+body[data-fe-theme="cyberpunk"] .fe-th-nav-cta,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-btn-primary,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-page .fe-hero-cta .fe-btn-primary {
+  border-radius: 0 !important;
+  background: var(--cy-magenta) !important; color: #05060f !important;
+  border: 1px solid var(--cy-magenta) !important;
+  font-family: var(--fe-font-heading); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  box-shadow: 0 0 18px -2px rgba(255,45,149,0.6);
+}
+body[data-fe-theme="cyberpunk"] .fe-btn-primary:hover,
+body[data-fe-theme="cyberpunk"] .fe-th-nav-cta:hover,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-btn-primary:hover {
+  background: var(--cy-cyan) !important; border-color: var(--cy-cyan) !important;
+  box-shadow: 0 0 26px -2px rgba(0,234,255,0.75) !important;
+  transform: translateY(-1px);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-btn-ghost,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-btn-secondary {
+  border-radius: 0; background: transparent; color: var(--cy-cyan);
+  border: 1px solid var(--cy-cyan); text-transform: uppercase; letter-spacing: 0.06em;
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-btn-ghost:hover,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-btn-secondary:hover {
+  background: rgba(0,234,255,0.10); box-shadow: 0 0 18px -4px var(--cy-cyan);
+}
+/* Custom-coloured hero buttons (preset "yellow" + admin "custom") — keep
+   their colour, but match the theme: square corners, mono uppercase, and a
+   neon glow in the button's own colour instead of the soft drop-shadow. */
+body[data-fe-theme="cyberpunk"] .fe-btn-yellow,
+body[data-fe-theme="cyberpunk"] .fe-btn-custom {
+  border-radius: 0 !important;
+  font-family: var(--fe-font-heading);
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
+  border: 1px solid rgba(255,255,255,0.22) !important;
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-btn-yellow {
+  box-shadow: 0 0 22px -2px rgba(234,179,8,0.65) !important;
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-btn-yellow:hover {
+  box-shadow: 0 0 30px 0 rgba(234,179,8,0.85) !important; transform: translateY(-1px);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-btn-custom {
+  box-shadow: 0 0 22px -2px var(--btn-bg, var(--fe-btn-bg, rgba(0,234,255,0.6))) !important;
+}
+
+/* ===== Header — near-black with a glowing neon underline ================= */
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-header-themed {
+  background: rgba(5,6,15,0.88);
+  border-bottom: 1px solid;
+  border-image: linear-gradient(90deg, var(--cy-cyan), var(--cy-magenta)) 1;
+  box-shadow: 0 0 22px -6px rgba(0,234,255,0.5);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-th-brand,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-th-brand-name {
+  color: var(--cy-text); font-family: var(--fe-font-heading); letter-spacing: 0.04em;
+}
+/* Header nav links — TEXT ONLY in every state (no filled box on hover / when
+   a mega menu is open). Hover is a colour shift + neon glow instead. The
+   :not(.fe-th-nav-cta) guard keeps the magenta CTA pill intact — it shares
+   the .fe-th-nav-link class but must keep its background. */
+body[data-fe-theme="cyberpunk"] .fe-th-nav-link:not(.fe-th-nav-cta) {
+  font-family: var(--fe-font-heading);
+  text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.82rem;
+  border-radius: 0; background: transparent !important;
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-th-nav-link:not(.fe-th-nav-cta) { color: var(--cy-muted); }
+body[data-fe-theme="cyberpunk"] .fe-th-nav-link:not(.fe-th-nav-cta):hover,
+body[data-fe-theme="cyberpunk"] .fe-th-nav-link:not(.fe-th-nav-cta).mega-active {
+  background: transparent !important;
+  color: var(--cy-card-title);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-th-nav-link:not(.fe-th-nav-cta):hover,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-th-nav-link:not(.fe-th-nav-cta).mega-active {
+  color: var(--cy-card-title);
+  text-shadow: 0 0 12px rgba(0,234,255,0.55);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-th-menu-btn span { background: var(--cy-cyan); }
+/* Dark nav background is ONLY for the mobile dropdown panel — on desktop
+   the nav must stay transparent (an unscoped bg here drew a dark box behind
+   all the nav items). */
+@media (max-width: 880px) {
+  html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-th-nav { background: rgba(5,6,15,0.98); }
+}
+
+/* ===== Utility bar — near-black neon strip in BOTH modes ================
+   The admin's idle palette (a bright blue) is written inline on the bar, so
+   without this it bleeds through in light mode. Forced to the dark HUD strip
+   in both light and dark so it always reads as a cyberpunk status bar. */
+body[data-fe-theme="cyberpunk"] .fe-utility-bar:not(.is-live) {
+  background: rgba(5,6,15,0.95) !important; color: var(--cy-muted) !important;
+  border-bottom: 1px solid var(--cy-line-mag);
+}
+body[data-fe-theme="cyberpunk"] .fe-utility-bar:not(.is-live) a { color: var(--cy-muted); }
+body[data-fe-theme="cyberpunk"] .fe-utility-bar:not(.is-live) a:hover { color: var(--cy-cyan); }
+
+/* ===== Mega menu — neon HUD panel ======================================= */
+body[data-fe-theme="cyberpunk"] .fe-megamenu-themed {
+  background: rgba(7,9,20,0.96); color: var(--cy-text);
+  border: 1px solid var(--cy-line); border-top: 2px solid var(--cy-magenta);
+  background-image: linear-gradient(rgba(0,234,255,0.06) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(255,45,149,0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+body[data-fe-theme="cyberpunk"] .fe-megamenu-themed .fe-megamenu-block-title {
+  color: var(--cy-cyan); font-family: var(--fe-font-heading);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+body[data-fe-theme="cyberpunk"] .fe-megamenu-themed .fe-megamenu-link,
+body[data-fe-theme="cyberpunk"] .fe-megamenu-themed .fe-megamenu-block-btn,
+body[data-fe-theme="cyberpunk"] .fe-megamenu-themed .fe-megamenu-search-input {
+  font-family: var(--fe-font-heading); border-radius: 0;
+  letter-spacing: 0.02em;
+}
+body[data-fe-theme="cyberpunk"] .fe-megamenu-themed .fe-megamenu-link:hover {
+  background: rgba(255,45,149,0.12); color: #fff;
+}
+body[data-fe-theme="cyberpunk"] .fe-megamenu-themed .fe-megamenu-block-section-line { background: var(--cy-magenta); opacity: 0.5; }
+
+/* ===== Footer — same neon grid as the mega menu ========================
+   The admin's footer background (sinewave + particle overlay) is dropped on
+   this theme in favour of the mega-menu's neon grid. The sinewave is painted
+   inline by JS and particles are a canvas overlay, so the grid is forced with
+   !important and the overlay layers are hidden. The admin's footer-bg config
+   is preserved — it just isn't shown while Cyberpunk is active. */
+body[data-fe-theme="cyberpunk"] .fe-footer {
+  background-color: #07091a !important;
+  /* Brighter than the mega-menu panel's grid because the footer is fully
+     opaque (the menu reads its grid partly through its translucent panel
+     over the page grid; the footer has no such bleed-through). */
+  background-image:
+    linear-gradient(rgba(0,234,255,0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,45,149,0.055) 1px, transparent 1px) !important;
+  background-size: 42px 42px !important;
+  background-position: center top !important;
+  /* The sinewave's `background` shorthand also set background-repeat:no-repeat,
+     so the grid only painted one tile — force it to tile. */
+  background-repeat: repeat !important;
+  border-top: 1px solid;
+  border-image: linear-gradient(90deg, var(--cy-cyan), var(--cy-magenta)) 1;
+}
+body[data-fe-theme="cyberpunk"] .fe-footer-bg-effects,
+body[data-fe-theme="cyberpunk"] .fe-footer-particles { display: none !important; }
+body[data-fe-theme="cyberpunk"] .fe-footer a:hover { color: var(--cy-cyan); }
+
+/* Footer content — HUD headings, neon-framed sharp location cards. The
+   footer is dark in both modes (forced above), so these are un-scoped. */
+body[data-fe-theme="cyberpunk"] .fe-footer-locations-heading,
+body[data-fe-theme="cyberpunk"] .fe-footer-contact-heading {
+  color: var(--cy-cyan); text-transform: uppercase; letter-spacing: 0.08em;
+  text-shadow: 0 0 14px rgba(0,234,255,0.30);
+}
+body[data-fe-theme="cyberpunk"] .fe-footer-location-card {
+  border-radius: 0;
+  border: 1px solid var(--cy-line);
+  background-color: rgba(10,12,26,0.62);
+  background-image:
+    linear-gradient(90deg, var(--cy-cyan), var(--cy-magenta)),
+    repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 1px, transparent 1px 3px);
+  background-size: 100% 2px, 100% 100%;
+  background-repeat: no-repeat, repeat;
+  background-position: top, 0 0;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+body[data-fe-theme="cyberpunk"] .fe-footer-location-card:hover {
+  border-color: var(--cy-magenta); transform: translateY(-2px);
+  box-shadow: 0 0 0 1px var(--cy-magenta) inset, 0 0 22px -6px rgba(255,45,149,0.5);
+}
+body[data-fe-theme="cyberpunk"] .fe-footer-location-icon {
+  border-radius: 0; color: var(--cy-cyan);
+  background: rgba(0,234,255,0.10); border: 1px solid var(--cy-line);
+}
+body[data-fe-theme="cyberpunk"] .fe-footer-location-name {
+  font-family: var(--fe-font-heading); text-transform: uppercase;
+  letter-spacing: 0.04em; color: #fff;
+}
+body[data-fe-theme="cyberpunk"] .fe-footer-location-directions {
+  border-radius: 0; border: 1px solid var(--cy-cyan); color: var(--cy-cyan);
+  font-family: var(--fe-font-heading); text-transform: uppercase; letter-spacing: 0.04em;
+}
+body[data-fe-theme="cyberpunk"] .fe-footer-location-directions:hover {
+  background: rgba(0,234,255,0.12); color: #fff;
+}
+body[data-fe-theme="cyberpunk"] .fe-footer-name { font-family: var(--fe-font-heading); letter-spacing: 0.03em; }
+body[data-fe-theme="cyberpunk"] .fe-footer-secondary-nav a:hover,
+body[data-fe-theme="cyberpunk"] .fe-footer-location-website:hover { color: var(--cy-cyan); }
+
+/* No Inter anywhere on this theme: a few classes hardcode the Inter stack
+   directly (footer + mega-menu headings) — re-point them at the techno
+   heading token. Everything else inherits the Chakra Petch body/heading
+   roles set in fonts.py. */
+body[data-fe-theme="cyberpunk"] .fe-footer-locations-heading,
+body[data-fe-theme="cyberpunk"] .fe-footer-contact-heading,
+body[data-fe-theme="cyberpunk"] .fe-megamenu-heading,
+body[data-fe-theme="cyberpunk"] .fe-megamenu-block-title {
+  font-family: var(--fe-font-heading) !important;
+}
+
+/* ===== Meeting DETAIL page — sharp neon panels + mono titles =========== */
+/* Replace the admin's per-template dynamic background with the theme's own:
+   hide the .fe-dynbg layer so the neon grid + dark canvas show through. */
+body[data-fe-theme="cyberpunk"] .fe-meeting-detail,
+body[data-fe-theme="cyberpunk"] .fe-contact-section,
+body[data-fe-theme="cyberpunk"] .fe-page-dynbg-host { background: transparent !important; }
+body[data-fe-theme="cyberpunk"] .fe-meeting-detail > .fe-dynbg,
+body[data-fe-theme="cyberpunk"] .fe-contact-section > .fe-dynbg,
+body[data-fe-theme="cyberpunk"] .fe-page-dynbg-host > .fe-dynbg { display: none !important; }
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-meeting-detail-card,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-meeting-extended-card,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-meeting-resources {
+  border-radius: 0 !important;
+  border: 1px solid var(--cy-line);
+  background-color: rgba(10,12,26,0.82);
+  background-image:
+    linear-gradient(90deg, var(--cy-cyan), var(--cy-magenta)),
+    repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 1px, transparent 1px 3px);
+  background-size: 100% 2px, 100% 100%;
+  background-repeat: no-repeat, repeat;
+  background-position: top, 0 0;
+  transition: border-color 120ms linear, box-shadow 120ms linear, transform 120ms linear;
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-meeting-detail-card:hover,
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-meeting-detail-grid > .fe-meeting-resources:hover {
+  transform: translateY(-2px);
+  border-color: var(--cy-magenta);
+  box-shadow: 0 0 0 1px var(--cy-magenta) inset, 0 0 26px -4px rgba(255,45,149,0.5);
+}
+/* Meeting name — monospace, uppercase, neon. */
+body[data-fe-theme="cyberpunk"] .fe-meeting-detail-head h1 {
+  font-family: var(--fe-font-heading);
+  text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.12;
+  color: var(--cy-head);
+}
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-meeting-detail-head h1 {
+  text-shadow: 0 0 22px rgba(0,234,255,0.35);
+}
+/* Sub-card titles (Schedule / Location / Zoom / Files & Readings, extended). */
+body[data-fe-theme="cyberpunk"] .fe-meeting-detail-card h3,
+body[data-fe-theme="cyberpunk"] .fe-meeting-resources h3,
+body[data-fe-theme="cyberpunk"] .fe-meeting-extended-title {
+  font-family: var(--fe-font-heading);
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--cy-card-title);
+}
+/* Logo + alert lose their rounding. */
+body[data-fe-theme="cyberpunk"] .fe-meeting-detail-head-logo .fe-meeting-logo,
+body[data-fe-theme="cyberpunk"] .fe-meeting-detail-alert { border-radius: 0; }
+/* Zoom credential chips read as a terminal readout. */
+html[data-theme="dark"] body[data-fe-theme="cyberpunk"] .fe-meeting-detail-creds {
+  font-family: var(--fe-font-heading); color: var(--cy-cyan);
+}
+
+@media (max-width: 768px) {
+  body[data-fe-theme="cyberpunk"] .fe-section { padding-top: 52px; padding-bottom: 52px; }
+}

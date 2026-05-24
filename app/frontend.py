@@ -86,6 +86,30 @@ HEADER_TEMPLATES = [
         "description": "Fellowship-style two-row layout: a blue utility strip on top (helpline + hyperlist link), wide logotype on the left of the main row, and a row of primary nav links on the right. White-on-white with a soft hairline divider.",
         "partial": "frontend/headers/recovery-blue.html",
     },
+    {
+        "key": "modern-dark",
+        "name": "Modern Dark",
+        "description": "Glassy mission-control header — translucent dark bar that blurs the page behind it, wide logotype, primary nav with full-width mega menus, and a gradient call-to-action pill. Styled by the active theme.",
+        "partial": "frontend/headers/themed.html",
+    },
+    {
+        "key": "cyberpunk",
+        "name": "Cyberpunk",
+        "description": "Neon HUD header — near-black bar with a glowing cyan/magenta underline, monospace uppercase nav, and a sharp neon call-to-action. Styled by the active theme.",
+        "partial": "frontend/headers/themed.html",
+    },
+    {
+        "key": "sanctuary",
+        "name": "Sanctuary",
+        "description": "Warm cream header — soft sand bar with a hairline border, serif logotype, sage-green nav hovers, and a rounded sage call-to-action. Styled by the active theme.",
+        "partial": "frontend/headers/themed.html",
+    },
+    {
+        "key": "terminal",
+        "name": "Terminal",
+        "description": "A TUI status bar — near-black mono header with a phosphor-green underline, monospace nav, and a green command-style call-to-action. Styled by the active theme.",
+        "partial": "frontend/headers/themed.html",
+    },
 ]
 
 # Each prebuilt footer's "shape" expressed as a synthetic block list, used
@@ -204,6 +228,30 @@ MEGAMENU_TEMPLATES = [
         "description": "Full-width colored panel: bold bg color with rounded bottom corners, animated chevrons, and a hover-slide effect on each link.",
         "partial": "frontend/megamenus/recovery-blue.html",
     },
+    {
+        "key": "modern-dark",
+        "name": "Modern Dark",
+        "description": "Full-width glass panel with a soft aurora wash, gradient hairline divider, and chevron-slide links. Styled by the active theme.",
+        "partial": "frontend/megamenus/themed.html",
+    },
+    {
+        "key": "cyberpunk",
+        "name": "Cyberpunk",
+        "description": "Full-width neon panel — near-black with a glowing grid, cyan section rules, and magenta hover states on monospace links. Styled by the active theme.",
+        "partial": "frontend/megamenus/themed.html",
+    },
+    {
+        "key": "sanctuary",
+        "name": "Sanctuary",
+        "description": "Full-width warm cream panel with a soft shadow, sage section rules, and gentle sage hover states. Styled by the active theme.",
+        "partial": "frontend/megamenus/themed.html",
+    },
+    {
+        "key": "terminal",
+        "name": "Terminal",
+        "description": "Full-width near-black panel with a phosphor-green rule, monospace links prefixed like command output, and a green hover state. Styled by the active theme.",
+        "partial": "frontend/megamenus/themed.html",
+    },
 ]
 
 THEMES = [
@@ -217,7 +265,120 @@ THEMES = [
         "name": "Recovery Blue",
         "description": "Fellowship-style — blue utility strip, two-row header with wide logotype, fellowship-style copy, full-width mega menus. Picking this theme cascades to every section's layout.",
     },
+    {
+        "key": "modern-dark",
+        "name": "Modern Dark",
+        "description": "Mission-control aesthetic — deep-indigo canvas, animated aurora glow, film grain, teal→cyan gradient buttons, Fraunces display over Inter. Defaults to dark mode; the light/dark toggle still works. Cascades to every region.",
+        "default_mode": "dark",
+    },
+    {
+        "key": "cyberpunk",
+        "name": "Cyberpunk",
+        "description": "Neon-grid HUD — near-black canvas, scanlines + perspective grid, neon cyan/magenta, sharp zero-radius edges, corner-bracket cards, glitch monospace headings. Defaults to dark mode. Cascades to every region.",
+        "default_mode": "dark",
+    },
+    {
+        "key": "sanctuary",
+        "name": "Sanctuary",
+        "description": "Warm and calm — sand/cream canvas, sage-green + clay accents, Lora humanist-serif headings, soft rounded cards, airy editorial spacing. A grounded, supportive light theme. Defaults to light mode. Cascades to every region.",
+        "default_mode": "light",
+    },
+    {
+        "key": "terminal",
+        "name": "Terminal",
+        "description": "A utilitarian command line — near-black canvas, phosphor-green accents, all-monospace type, flat boxy panels with visible borders, zero radius, prompt-prefixed headings and a blinking cursor. Defaults to dark mode; the light toggle is a clean printout paper. Cascades to every region.",
+        "default_mode": "dark",
+    },
 ]
+
+# Theme key → the visitor light/dark default that best fits the theme.
+# `frontend_theme_save` applies this to `SiteSetting.frontend_default_theme`
+# so a dark-by-design theme greets first-time visitors in dark mode (the
+# visitor's own saved sun/moon choice still wins via localStorage). Themes
+# absent from this map leave the admin's existing default untouched.
+THEME_DEFAULT_MODE = {t["key"]: t["default_mode"] for t in THEMES if t.get("default_mode")}
+
+
+# ---------------------------------------------------------------------------
+# Per-theme saved state.
+#
+# Switching themes snapshots the OUTGOING theme's appearance fields into
+# SiteSetting.frontend_theme_states_json (keyed by theme), then restores the
+# INCOMING theme's saved snapshot — so returning to a theme brings back how it
+# was left. A theme with no snapshot yet starts from its built-in defaults.
+# The theme switcher modal also exposes an explicit Reset-to-default and
+# Return-to-last-state for the active theme.
+#
+# THEME_STATE_FIELDS is deliberately just the "appearance" fields (design
+# tokens, fonts, default mode, per-template settings, mega-menu colours) so a
+# snapshot is small and a switch never disturbs CONTENT (pages, blocks, footer
+# content all live in their own columns and are untouched).
+# ---------------------------------------------------------------------------
+THEME_STATE_FIELDS = [
+    "frontend_design_json",
+    "frontend_fonts_json",
+    "frontend_default_theme",
+    "frontend_template_settings_json",
+    "frontend_mega_bg_color",
+    "frontend_mega_text_color",
+    "frontend_mega_radius_bl",
+    "frontend_mega_radius_br",
+    "frontend_mega_bg_dynamic_key",
+    "frontend_mega_bg_dynbg_config_json",
+    "frontend_mega_bg_dynbg_dark",
+    "frontend_mega_bg_color_dark",
+    "frontend_mega_text_color_dark",
+    "frontend_mega_bg_dynbg_blend",
+]
+
+
+def load_theme_states(site):
+    """Parse the per-theme state map; returns {} on missing/invalid JSON."""
+    import json as _json
+    try:
+        return _json.loads(site.frontend_theme_states_json or "{}") or {}
+    except (ValueError, TypeError):
+        return {}
+
+
+def save_theme_states(site, states):
+    import json as _json
+    site.frontend_theme_states_json = _json.dumps(states)
+
+
+def snapshot_theme_state(site):
+    """Capture the current appearance-field values as a dict."""
+    return {f: getattr(site, f, None) for f in THEME_STATE_FIELDS}
+
+
+def apply_theme_state(site, state):
+    """Restore a previously-captured snapshot onto the SiteSetting."""
+    if not isinstance(state, dict):
+        return
+    for f in THEME_STATE_FIELDS:
+        if f in state:
+            setattr(site, f, state[f])
+
+
+def reset_theme_state(site, theme_key):
+    """Clear a theme's customisations back to its built-in defaults: drop the
+    override JSON blobs (so the design.py / fonts.py theme defaults take over),
+    set the visitor default mode to the theme's preferred one, and restore the
+    mega-menu colour columns to their model defaults."""
+    site.frontend_design_json = None
+    site.frontend_fonts_json = None
+    site.frontend_template_settings_json = None
+    site.frontend_default_theme = THEME_DEFAULT_MODE.get(theme_key, "system")
+    site.frontend_mega_bg_color = "#0B5CFF"
+    site.frontend_mega_text_color = "#ffffff"
+    site.frontend_mega_radius_bl = 18
+    site.frontend_mega_radius_br = 18
+    site.frontend_mega_bg_dynamic_key = None
+    site.frontend_mega_bg_dynbg_config_json = None
+    site.frontend_mega_bg_dynbg_dark = False
+    site.frontend_mega_bg_color_dark = None
+    site.frontend_mega_text_color_dark = None
+    site.frontend_mega_bg_dynbg_blend = 100
 
 HOMEPAGE_TEMPLATES = [
     {

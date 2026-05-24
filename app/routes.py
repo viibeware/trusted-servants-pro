@@ -6409,6 +6409,11 @@ def frontend_nav_appearance_save():
     fg = (request.form.get("frontend_mega_text_color") or "").strip()
     if _HEX.fullmatch(bg): s.frontend_mega_bg_color = bg
     if _HEX.fullmatch(fg): s.frontend_mega_text_color = fg
+    # Independent dark-mode colours.
+    bgd = (request.form.get("frontend_mega_bg_color_dark") or "").strip()
+    fgd = (request.form.get("frontend_mega_text_color_dark") or "").strip()
+    if _HEX.fullmatch(bgd): s.frontend_mega_bg_color_dark = bgd
+    if _HEX.fullmatch(fgd): s.frontend_mega_text_color_dark = fgd
     try:
         bl = int(request.form.get("frontend_mega_radius_bl") or 18)
         br = int(request.form.get("frontend_mega_radius_br") or 18)
@@ -6416,6 +6421,19 @@ def frontend_nav_appearance_save():
         bl, br = 18, 18
     s.frontend_mega_radius_bl = max(0, min(bl, 60))
     s.frontend_mega_radius_br = max(0, min(br, 60))
+    # Optional dynamic background for the mega-menu panel (same dynbg picker
+    # used by the hero / pages). normalize() gates the key against the catalog;
+    # _dynbg_config_from_form bundles the overlay + colours + flags into JSON.
+    from . import dynbg as _dynbg
+    s.frontend_mega_bg_dynamic_key = _dynbg.normalize(request.form.get("frontend_mega_bg_dynamic_key"))
+    s.frontend_mega_bg_dynbg_config_json = _dynbg_config_from_form(
+        request.form, "frontend_mega_bg_dynbg_config_json")
+    s.frontend_mega_bg_dynbg_dark = request.form.get("frontend_mega_bg_dynbg_dark") == "1"
+    try:
+        blend = int(request.form.get("frontend_mega_bg_dynbg_blend") or 100)
+    except ValueError:
+        blend = 100
+    s.frontend_mega_bg_dynbg_blend = max(0, min(blend, 100))
     s.frontend_megamenu_animate = request.form.get("frontend_megamenu_animate") == "1"
     try:
         ms = int(request.form.get("frontend_megamenu_animate_ms") or 320)
@@ -10108,20 +10126,77 @@ def frontend_custom_layout_delete(key):
 @bp.route("/frontend/theme-save", methods=["POST"])
 @admin_required
 def frontend_theme_save():
-    """Set the global visual theme. Propagates the chosen key to every
-    per-section template field so all four regions (header, footer,
-    homepage, mega menu) match the theme."""
-    from .frontend import THEMES
+    """Apply a visual theme, with per-theme state persistence.
+
+    Form fields:
+      • ``frontend_theme`` — the theme to apply (defaults to the current one,
+        so the modal can also re-apply a mode to the active theme).
+      • ``restore_mode`` — ``last`` (default) restores the chosen theme's last
+        saved state; ``default`` applies its built-in defaults.
+
+    State model: switching AWAY from a theme snapshots its appearance fields
+    so it can be returned to later; the current theme is also snapshotted the
+    first time the switcher is ever used, so its look is never unrecoverable.
+    Restoring a theme that was never customised falls back to its built-in
+    defaults (so one theme's overrides never bleed into another).
+
+    Cascades the chosen key to the header + mega-menu, and to the footer /
+    homepage only when the theme ships a matching layout. Non-destructive:
+    only appearance fields are touched — page/popup ``blocks_json`` and footer
+    content are never changed.
+    """
+    from .frontend import (THEMES, THEME_DEFAULT_MODE,
+                           FOOTER_TEMPLATES, HOMEPAGE_TEMPLATES,
+                           load_theme_states, save_theme_states,
+                           snapshot_theme_state, apply_theme_state,
+                           reset_theme_state)
+    from .models import CustomLayout
     s = _get_site_setting()
+    cur = s.frontend_theme or "classic"
     key = (request.form.get("frontend_theme") or "").strip()
-    if key in {t["key"] for t in THEMES}:
+    if key not in {t["key"] for t in THEMES}:
+        key = cur
+    restore_mode = (request.form.get("restore_mode") or "last").strip()
+    if restore_mode not in ("last", "default"):
+        restore_mode = "last"
+    states = load_theme_states(s)
+    switching = (key != cur)
+
+    # Always remember the theme we're leaving (and capture the very first
+    # theme we touch) so a "Return to last saved state" later has something
+    # to come back to — and a Reset is always undoable.
+    if switching or cur not in states:
+        states[cur] = snapshot_theme_state(s)
+
+    if switching:
         s.frontend_theme = key
         s.frontend_header_template = key
-        s.frontend_footer_template = key
-        s.frontend_homepage_template = key
         s.frontend_megamenu_template = key
-        db.session.commit()
-        flash(f"Theme set to {key}", "success")
+        footer_keys = {t["key"] for t in FOOTER_TEMPLATES} | {
+            cl.key for cl in CustomLayout.query.filter_by(kind="footer").all()}
+        if key in footer_keys:
+            s.frontend_footer_template = key
+        homepage_keys = {t["key"] for t in HOMEPAGE_TEMPLATES} | {
+            cl.key for cl in CustomLayout.query.filter_by(kind="homepage").all()}
+        if key in homepage_keys:
+            s.frontend_homepage_template = key
+        if key in THEME_DEFAULT_MODE:
+            s.frontend_default_theme = THEME_DEFAULT_MODE[key]
+
+    if restore_mode == "default":
+        reset_theme_state(s, key)
+        flash(f"“{key}” applied with built-in defaults", "success")
+    else:  # "last"
+        if key in states:
+            apply_theme_state(s, states[key])
+            flash(f"“{key}” restored to its last saved state", "success")
+        else:
+            # Never visited → start from defaults so no other theme's
+            # overrides bleed in.
+            reset_theme_state(s, key)
+            flash(f"Theme set to “{key}”", "success")
+    save_theme_states(s, states)
+    db.session.commit()
     return redirect(_safe_referrer() or url_for("main.frontend_dashboard"))
 
 

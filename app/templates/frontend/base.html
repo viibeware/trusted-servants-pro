@@ -54,6 +54,14 @@
 {% if site and site.frontend_apple_touch_icon_name %}<meta name="apple-mobile-web-app-title" content="{{ site.frontend_apple_touch_icon_name }}">{% endif %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=app_build_id) }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/frontend.css', v=app_build_id) }}">
+{# Per-theme stylesheet — loaded only for the alternate themes (classic +
+   recovery-blue live in frontend.css). The file is static/css/themes/<key>.css
+   and is scoped under body[data-fe-theme="<key>"]; one conditional link
+   serves every alternate theme. #}
+{%- set _head_theme = (site.frontend_theme if site else 'classic') or 'classic' -%}
+{% if _head_theme not in ('classic', 'recovery-blue') %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/themes/' ~ _head_theme ~ '.css', v=app_build_id) }}">
+{% endif %}
 {# Admin-added custom fonts. Both upload and google sources are served
    entirely from this server — Google CSS is pre-fetched at add time and
    rewritten to reference local binaries, so nothing leaks to fonts.google.com
@@ -137,10 +145,12 @@
   {% endif %}
 {% endmacro %}
 
-{# Recovery Blue's header partial includes the utility bar itself so the
-   bar sits inside the sticky header element. Other themes render it
-   here, above the (separately sticky) header. #}
-{% if header_template_key != 'recovery-blue' %}
+{# Recovery Blue AND the shared "themed" header partial include the utility
+   bar themselves so the bar sits INSIDE the sticky header element (and hides
+   with it past 100vh). Only the Classic header renders it here, above the
+   separately-sticky header. #}
+{% if header_template_key != 'recovery-blue'
+      and header_template_partial != 'frontend/headers/themed.html' %}
   {% include "frontend/_utility_bar.html" %}
 {% endif %}
 

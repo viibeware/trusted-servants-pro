@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_frontend_template_picker.html" import template_picker %}
+{% from "_dynbg_picker.html" import dynbg_trigger with context %}
 {% set _active_mm = (site.frontend_megamenu_template if site else 'recovery-blue') or 'recovery-blue' %}
 {% set _active_theme = (site.frontend_theme if site else 'classic') or 'classic' %}
 {% block heading %}Navigation{% endblock %}
@@ -71,11 +72,53 @@
       <form class="form" method="post" action="{{ url_for('main.frontend_nav_appearance_save') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="alert-bar-color-row">
-          <label>Background color
+          <label>Background color <span class="muted smaller">· light mode</span>
             <input type="color" name="frontend_mega_bg_color" value="{{ site.frontend_mega_bg_color or '#0B5CFF' }}">
           </label>
-          <label>Text color
+          <label>Text color <span class="muted smaller">· light mode</span>
             <input type="color" name="frontend_mega_text_color" value="{{ site.frontend_mega_text_color or '#ffffff' }}">
+          </label>
+        </div>
+        <div class="alert-bar-color-row">
+          <label>Background color <span class="muted smaller">· dark mode</span>
+            <input type="color" name="frontend_mega_bg_color_dark" value="{{ site.frontend_mega_bg_color_dark or '#131a33' }}">
+          </label>
+          <label>Text color <span class="muted smaller">· dark mode</span>
+            <input type="color" name="frontend_mega_text_color_dark" value="{{ site.frontend_mega_text_color_dark or ((site.frontend_mega_text_color or '#ffffff') | dark_variant) }}">
+          </label>
+        </div>
+        <div class="mega-dynbg-row">
+          <span class="muted small">Dynamic background
+            <span class="muted smaller">— optional animated backdrop behind the panel. When set, the background colour above steps aside so the effect shows through.</span></span>
+          {{ dynbg_trigger(field_name='frontend_mega_bg_dynamic_key',
+                           current=(site.frontend_mega_bg_dynamic_key if site else None),
+                           config_field='frontend_mega_bg_dynbg_config_json',
+                           config=(site.frontend_mega_bg_dynbg_config_json if site else None),
+                           button_id='mega-dynbg-trigger',
+                           label='Choose a dynamic background…') }}
+        </div>
+        <li class="special-page-row" style="list-style:none; margin-top: 12px;">
+          <div class="special-page-info">
+            <div class="u-name">Render dark in light mode</div>
+            <p class="muted small">Forces the dynamic background's dark variant even when the site is in light mode, so a dark panel sits behind light mega-menu text. Only applies when a dynamic background is set above.</p>
+          </div>
+          <label class="mode-toggle" title="Toggle dark dynamic background in light mode">
+            <input type="checkbox" name="frontend_mega_bg_dynbg_dark" value="1"
+                   {% if site and site.frontend_mega_bg_dynbg_dark %}checked{% endif %}>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+          </label>
+        </li>
+        {% set _mm_blend = site.frontend_mega_bg_dynbg_blend if site and site.frontend_mega_bg_dynbg_blend is not none else 100 %}
+        <div class="mega-animate-speed-row">
+          <label class="mega-animate-speed-label">
+            <div class="mega-animate-speed-head">
+              <span>Background ↔ dynamic blend</span>
+              <output data-mm-blend-out>{{ _mm_blend }}%</output>
+            </div>
+            <input type="range" name="frontend_mega_bg_dynbg_blend"
+                   min="0" max="100" step="5" value="{{ _mm_blend }}"
+                   data-mm-blend-input>
+            <p class="muted smaller">0&nbsp;% = just the background colour · 100&nbsp;% = just the dynamic background. In between, the dynamic background blends over the colour. Only has an effect when a dynamic background is set.</p>
           </label>
         </div>
         <div class="alert-bar-icon-row">
@@ -356,6 +399,12 @@
     }
     wire('[data-mm-heading-input]', '[data-mm-heading-out]');
     wire('[data-mm-subheading-input]', '[data-mm-subheading-out]');
+    // Blend slider — plain N% (no "theme default" sentinel).
+    (function(){
+      const i = document.querySelector('[data-mm-blend-input]');
+      const o = document.querySelector('[data-mm-blend-out]');
+      if (i && o) i.addEventListener('input', () => { o.textContent = i.value + '%'; });
+    })();
   })();
 </script>
 {% endblock %}

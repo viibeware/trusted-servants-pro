@@ -1,0 +1,312 @@
+/* ============================================================================
+   THEME · Modern Dark ("Mission Control")
+   Loaded only when SiteSetting.frontend_theme == "modern-dark" (see base.html).
+   Scoped to body[data-fe-theme="modern-dark"] so it never leaks to other
+   themes. Deep-indigo canvas, diffuse aurora, film grain, teal→cyan gradient
+   CTAs, gradient-lit glass cards, Fraunces display over Inter. Defaults to dark
+   mode; a clean light companion is provided for the visitor sun/moon toggle.
+   ========================================================================== */
+
+body[data-fe-theme="modern-dark"] {
+  --md-ink:        #070a1f;
+  --md-ink-2:      #0c1130;
+  --md-brand:      #6366f1;
+  --md-brand-2:    #8b5cf6;
+  --md-teal:       #2dd4bf;
+  --md-cyan:       #38bdf8;
+  --md-text:       #eef0ff;
+  --md-muted:      #a3a9d4;
+  --md-line:       rgba(255,255,255,0.10);
+  --md-panel:      rgba(255,255,255,0.045);
+  --md-panel-2:    rgba(255,255,255,0.08);
+  --md-grad-cta:   linear-gradient(100deg, #2dd4bf, #38bdf8);
+  --md-grad-text:  linear-gradient(100deg, #ffffff 0%, #c7d2fe 44%, #2dd4bf 100%);
+  --md-grad-edge:  linear-gradient(120deg, rgba(99,102,241,0.9), rgba(45,212,191,0.8));
+  --md-ease:       cubic-bezier(.2,.7,.2,1);
+}
+
+/* ---- Dark-mode palette (the default for this theme) ---------------------- */
+html[data-theme="dark"] body[data-fe-theme="modern-dark"],
+body[data-fe-theme="modern-dark"].fe-footer-force-dark {
+  --fe-dm-surface:        #0c1130;
+  --fe-dm-surface-soft:   rgba(255,255,255,0.045);
+  --fe-dm-border:         #1d2747;
+  --fe-dm-border-hover:   rgba(45,212,191,0.55);
+  --fe-dm-text-strong:    var(--fe-color-text-dark, #ffffff);
+  --fe-dm-text:           var(--fe-color-text-dark, #eef0ff);
+  --fe-dm-text-muted:     #a3a9d4;
+  --fe-dm-link-hover:     #5cb4f7;
+}
+
+/* ===== Atmosphere — diffuse aurora + grain (no transform anim) ============
+   The aurora is three soft colour fields that bleed in from off-canvas
+   edges, so there's no defined "circle" anywhere. Only opacity animates
+   (cheap on the GPU); animating transform on a blurred fixed layer caused
+   the corner flicker, so it's gone. */
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] {
+  background:
+    radial-gradient(1200px 760px at 10% -12%, #161c47 0%, transparent 60%),
+    radial-gradient(1100px 720px at 100% -6%, #120f38 0%, transparent 55%),
+    var(--md-ink);
+}
+body[data-fe-theme="modern-dark"]::before {
+  content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background:
+    radial-gradient(58vmax 58vmax at 6% -12%, rgba(67,56,202,0.40), transparent 70%),
+    radial-gradient(54vmax 54vmax at 110% 10%, rgba(124,58,237,0.30), transparent 72%),
+    radial-gradient(52vmax 52vmax at 50% 122%, rgba(20,184,166,0.22), transparent 70%);
+  opacity: 0.85; will-change: opacity;
+  animation: md-aurora 22s var(--md-ease) infinite alternate;
+}
+@keyframes md-aurora { from { opacity: 0.65; } to { opacity: 0.95; } }
+body[data-fe-theme="modern-dark"]::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  opacity: 0.22; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+html[data-theme="light"] body[data-fe-theme="modern-dark"]::before { opacity: 0.22; }
+html[data-theme="light"] body[data-fe-theme="modern-dark"]::after  { opacity: 0.05; mix-blend-mode: multiply; }
+@media (prefers-reduced-motion: reduce) {
+  body[data-fe-theme="modern-dark"]::before { animation: none; opacity: 0.8; }
+}
+
+/* Sections stay transparent so the canvas shows between glass panels — in
+   BOTH modes (the .fe-features band ships a #fff light-mode background that
+   otherwise drew a white box around the "What is CMA" / "Additional Resources"
+   sections, breaking the canvas). */
+body[data-fe-theme="modern-dark"] .fe-page,
+body[data-fe-theme="modern-dark"] .fe-section,
+body[data-fe-theme="modern-dark"] .fe-features { background: transparent; }
+
+/* ===== Structure — mission-control rhythm ================================
+   Generous vertical breathing + a gradient hairline between top-level
+   sections (a recognisable rhythm distinct from the flat full-bleed
+   bands of the other themes). */
+body[data-fe-theme="modern-dark"] .fe-section { padding-top: 92px; padding-bottom: 92px; }
+/* The hero supplies its own internal padding — don't let the section band's
+   top padding push it below the header. Scoped to hero sections only so it
+   doesn't zero the meeting-detail page's top padding. */
+body[data-fe-theme="modern-dark"] .fe-section:has(.fe-hero) { padding-top: 0; }
+/* (No `.fe-section + .fe-section` divider — `.fe-section` is also used by
+   side-by-side blocks inside row containers, where a top-border renders as
+   a stray half-width line. Vertical spacing carries the rhythm instead.) */
+body[data-fe-theme="modern-dark"] .fe-features-grid { gap: 20px; }
+@media (max-width: 768px) {
+  body[data-fe-theme="modern-dark"] .fe-section { padding-top: 60px; padding-bottom: 60px; }
+}
+
+/* ===== Typography — gradient display headings + accent rule =============== */
+body[data-fe-theme="modern-dark"] .fe-section-head { position: relative; }
+body[data-fe-theme="modern-dark"] .fe-section-head h2 {
+  background: var(--md-grad-text);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  letter-spacing: -0.025em;
+}
+html[data-theme="light"] body[data-fe-theme="modern-dark"] .fe-section-head h2 {
+  background: linear-gradient(100deg, #0e1330 0%, #4338ca 60%, #0d9488 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+/* Signature: a short gradient rule centred under every section heading. */
+body[data-fe-theme="modern-dark"] .fe-section-head::after {
+  content: ""; display: block; width: 56px; height: 3px;
+  margin: 16px auto 0; border-radius: 3px; background: var(--md-grad-cta);
+  box-shadow: 0 0 16px rgba(45,212,191,0.5);
+}
+
+/* ===== Hero — its own teal/violet "mission-control" scene ================
+   Replaces the recovery-blue dynamic background + particle starfield (which
+   were still rendering through the old transparent hero, making it read as
+   recovery-blue) with a self-contained teal→violet→cyan glow mesh + a faint
+   theme-tinted starfield. The admin's hero dynbg/particles are hidden (config
+   kept, just not shown on this theme). */
+body[data-fe-theme="modern-dark"] .fe-hero { overflow: hidden; position: relative; }
+body[data-fe-theme="modern-dark"] .fe-hero > .fe-dynbg,
+body[data-fe-theme="modern-dark"] .fe-hero > .fe-hero-particles { display: none !important; }
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-hero-blob { opacity: 0; }
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-hero {
+  background:
+    radial-gradient(680px 460px at 20% 16%, rgba(45,212,191,0.26), transparent 60%),
+    radial-gradient(740px 520px at 84% 26%, rgba(139,92,246,0.30), transparent 62%),
+    radial-gradient(1000px 560px at 50% 122%, rgba(56,189,248,0.20), transparent 62%),
+    linear-gradient(180deg, #0a0f2b 0%, #0a0a22 100%) !important;
+}
+html[data-theme="light"] body[data-fe-theme="modern-dark"] .fe-hero {
+  background:
+    radial-gradient(620px 440px at 18% 20%, rgba(45,212,191,0.18), transparent 60%),
+    radial-gradient(680px 480px at 86% 26%, rgba(139,92,246,0.16), transparent 62%),
+    linear-gradient(180deg, #f6f7ff 0%, #eef1fb 100%) !important;
+}
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-hero-heading {
+  background-image: var(--md-grad-text) !important; letter-spacing: -0.03em;
+}
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-hero-sub { color: var(--md-muted) !important; }
+body[data-fe-theme="modern-dark"] .fe-hero-eyebrow {
+  background: rgba(45,212,191,0.14); color: #5fe3d0;
+  border: 1px solid rgba(45,212,191,0.34);
+  text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.7rem;
+}
+html[data-theme="light"] body[data-fe-theme="modern-dark"] .fe-hero-eyebrow { color: #0d9488; }
+
+/* ===== Gradient-lit glass cards ==========================================
+   The signature surface: translucent glass with a lit top edge + a faint
+   gradient ring that warms to teal on hover, plus a real lift. Targets the
+   tokenised cards AND the homepage/meeting/feature/faq cards. */
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-card-primary,
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-card-secondary,
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-meeting-card,
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-feature-card,
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-faq-item {
+  background: var(--md-panel);
+  border: 1px solid var(--md-line);
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  transition: transform 220ms var(--md-ease), box-shadow 220ms var(--md-ease),
+              border-color 220ms var(--md-ease), background 220ms var(--md-ease);
+}
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-card-primary:hover,
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-card-secondary:hover,
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-meeting-card:hover,
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-feature-card:hover {
+  transform: translateY(-4px);
+  background: var(--md-panel-2);
+  border-color: rgba(45,212,191,0.55);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.10),
+              0 0 0 1px rgba(45,212,191,0.22),
+              0 26px 60px -22px rgba(0,0,0,0.75);
+}
+/* Gradient icon chips inside feature cards. */
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-feature-icon {
+  background: linear-gradient(140deg, rgba(99,102,241,0.28), rgba(45,212,191,0.20));
+  border: 1px solid var(--md-line); color: var(--md-teal);
+}
+
+/* ===== Buttons — teal→cyan gradient with glow ============================ */
+body[data-fe-theme="modern-dark"] .fe-btn-primary,
+body[data-fe-theme="modern-dark"] .fe-th-nav-cta,
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-btn-primary,
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-page .fe-hero-cta .fe-btn-primary {
+  background: var(--md-grad-cta) !important;
+  color: #06241f !important; border: 0 !important; font-weight: 700;
+  box-shadow: 0 10px 30px rgba(45,212,191,0.30);
+}
+body[data-fe-theme="modern-dark"] .fe-btn-primary:hover,
+body[data-fe-theme="modern-dark"] .fe-th-nav-cta:hover,
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-btn-primary:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 16px 44px rgba(45,212,191,0.48) !important;
+  transform: translateY(-2px);
+}
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-btn-ghost,
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-btn-secondary {
+  background: var(--md-panel); color: var(--md-text);
+  border: 1px solid var(--md-line);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-btn-ghost:hover,
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-btn-secondary:hover {
+  background: var(--md-panel-2); border-color: var(--fe-dm-border-hover);
+}
+
+/* ===== Header — translucent glass with a gradient hairline =============== */
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-header-themed {
+  background: rgba(7,10,31,0.66);
+  border-bottom: 1px solid transparent;
+  box-shadow: 0 1px 0 rgba(99,102,241,0.22), 0 14px 40px -28px rgba(0,0,0,0.9);
+  -webkit-backdrop-filter: blur(18px) saturate(150%); backdrop-filter: blur(18px) saturate(150%);
+}
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-th-brand,
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-th-brand-name { color: var(--md-text); }
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-th-nav-link {
+  color: var(--md-muted); text-transform: uppercase; letter-spacing: 0.06em;
+  font-size: 0.82rem; font-weight: 600;
+}
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-th-nav-link:hover,
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-th-nav-link.mega-active {
+  color: #fff; background: rgba(255,255,255,0.06);
+}
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-th-menu-btn span { background: var(--md-text); }
+/* The dark nav background is ONLY for the mobile dropdown panel — on desktop
+   the nav must stay transparent (an unscoped bg here drew a dark navy box
+   behind all the desktop nav links). */
+@media (max-width: 880px) {
+  html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-th-nav { background: rgba(7,10,31,0.97); border-bottom-color: var(--md-line); }
+}
+
+/* ===== Utility bar — dark glass (admin idle palette is inline → !important) */
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-utility-bar:not(.is-live) {
+  background: rgba(7,10,31,0.80) !important; color: var(--md-muted) !important;
+  border-bottom-color: var(--md-line);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-utility-bar:not(.is-live) a { color: var(--md-muted); }
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-utility-bar:not(.is-live) a:hover { color: #fff; }
+
+/* ===== Mega menu — deep glass panel ====================================== */
+body[data-fe-theme="modern-dark"] .fe-megamenu-themed {
+  background: rgba(10,14,38,0.92); color: var(--md-text);
+  border: 1px solid var(--md-line); border-top: 0;
+  -webkit-backdrop-filter: blur(22px) saturate(150%); backdrop-filter: blur(22px) saturate(150%);
+}
+body[data-fe-theme="modern-dark"] .fe-megamenu-themed .fe-megamenu-block-title { color: #fff; }
+body[data-fe-theme="modern-dark"] .fe-megamenu-themed .fe-megamenu-link:hover { background: rgba(255,255,255,0.08); }
+body[data-fe-theme="modern-dark"] .fe-megamenu-themed .fe-megamenu-block-section-line { background: var(--md-teal); opacity: 0.4; }
+
+/* ===== Meeting detail page — show the theme atmosphere ================== */
+/* Drop the admin's per-template dynamic background so the aurora canvas
+   shows through the detail page instead. */
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-meeting-detail,
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-contact-section,
+html[data-theme="dark"] body[data-fe-theme="modern-dark"] .fe-page-dynbg-host { background: transparent !important; }
+body[data-fe-theme="modern-dark"] .fe-meeting-detail > .fe-dynbg,
+body[data-fe-theme="modern-dark"] .fe-contact-section > .fe-dynbg,
+body[data-fe-theme="modern-dark"] .fe-page-dynbg-host > .fe-dynbg { display: none !important; }
+
+/* ===== Footer — teal/violet glow panel + gradient rule ==================
+   Rebuilt away from the plain deep-navy slab (which read like recovery-blue):
+   a darker base lit by the theme's teal + violet glows, a teal→violet→cyan
+   gradient top rule, and theme-accent headings / icons / links. The admin's
+   footer sinewave + particle overlay is dropped (config kept, just not shown). */
+body[data-fe-theme="modern-dark"] .fe-footer {
+  background-color: #080b20 !important;
+  background-image:
+    radial-gradient(760px 480px at 12% 14%, rgba(99,102,241,0.24), transparent 62%),
+    radial-gradient(700px 460px at 88% 92%, rgba(45,212,191,0.16), transparent 60%) !important;
+  background-repeat: no-repeat, no-repeat !important;
+  background-position: center, center !important;
+  border-top: 2px solid transparent;
+  border-image: var(--md-grad-edge) 1;
+}
+body[data-fe-theme="modern-dark"] .fe-footer-particles,
+body[data-fe-theme="modern-dark"] .fe-footer-bg-effects { display: none !important; }
+body[data-fe-theme="modern-dark"] .fe-footer,
+body[data-fe-theme="modern-dark"] .fe-footer p,
+body[data-fe-theme="modern-dark"] .fe-footer li,
+body[data-fe-theme="modern-dark"] .fe-footer a { color: var(--md-text); }
+body[data-fe-theme="modern-dark"] .fe-footer a:hover,
+body[data-fe-theme="modern-dark"] .fe-footer-secondary-nav a:hover,
+body[data-fe-theme="modern-dark"] .fe-footer-location-website:hover { color: var(--md-teal); }
+body[data-fe-theme="modern-dark"] .fe-footer-locations-heading,
+body[data-fe-theme="modern-dark"] .fe-footer-contact-heading,
+body[data-fe-theme="modern-dark"] .fe-footer-name,
+body[data-fe-theme="modern-dark"] .fe-footer-col-title { color: #fff; }
+/* Location cards — glass, with a teal gradient icon chip. */
+body[data-fe-theme="modern-dark"] .fe-footer-location-card {
+  background: var(--md-panel); border: 1px solid var(--md-line);
+}
+body[data-fe-theme="modern-dark"] .fe-footer-location-card:hover {
+  background: var(--md-panel-2); border-color: var(--fe-dm-border-hover);
+}
+body[data-fe-theme="modern-dark"] .fe-footer-location-icon {
+  background: linear-gradient(140deg, rgba(99,102,241,0.30), rgba(45,212,191,0.22));
+  border: 1px solid var(--md-line); color: var(--md-teal);
+}
+body[data-fe-theme="modern-dark"] .fe-footer-location-name { color: #fff; }
+body[data-fe-theme="modern-dark"] .fe-footer-location-directions {
+  border: 1px solid var(--md-line); color: var(--md-text);
+}
+body[data-fe-theme="modern-dark"] .fe-footer-location-directions:hover {
+  background: var(--md-panel-2); border-color: var(--fe-dm-border-hover); color: #fff;
+}

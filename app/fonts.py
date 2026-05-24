@@ -32,6 +32,41 @@ FONTS = [
         "stack": "'Fraunces', 'Inter', Georgia, serif",
         "kind": "serif",
     },
+    {
+        # System monospace stack — no @font-face needed (resolves to
+        # whatever techno/mono face the visitor's OS ships). Used as a
+        # display accent by the Terminal theme; the admin can also pick
+        # it for any role from the Fonts picker.
+        "key": "mono",
+        "name": "Monospace",
+        "stack": "ui-monospace, 'JetBrains Mono', 'Fira Code', 'SF Mono', "
+                 "'Cascadia Code', Menlo, Consolas, monospace",
+        "kind": "mono",
+    },
+    {
+        # Self-hosted geometric sci-fi display (see @font-face in app.css).
+        # The Cyberpunk theme's big-headline face.
+        "key": "orbitron",
+        "name": "Orbitron",
+        "stack": "'Orbitron', 'Chakra Petch', ui-sans-serif, system-ui, sans-serif",
+        "kind": "display",
+    },
+    {
+        # Self-hosted squared techno UI face (see @font-face in app.css).
+        # The Cyberpunk theme's heading / nav / mega-menu face.
+        "key": "chakra-petch",
+        "name": "Chakra Petch",
+        "stack": "'Chakra Petch', ui-sans-serif, system-ui, 'Segoe UI', sans-serif",
+        "kind": "display",
+    },
+    {
+        # Self-hosted warm humanist serif (see @font-face in app.css).
+        # The Sanctuary theme's heading face.
+        "key": "lora",
+        "name": "Lora",
+        "stack": "'Lora', 'Fraunces', Georgia, 'Times New Roman', serif",
+        "kind": "serif",
+    },
 ]
 FONTS_BY_KEY = {f["key"]: f for f in FONTS}
 
@@ -49,6 +84,29 @@ THEME_DEFAULTS = {
     "recovery-blue": {
         "heading": "inter",
         "body":    "inter",
+    },
+    # Modern Dark — serif display (Fraunces) over Inter body, matching the
+    # tspro-demo marketing page the theme is modelled on.
+    "modern-dark": {
+        "heading": "fraunces",
+        "body":    "inter",
+    },
+    # Cyberpunk — all techno, no Inter anywhere: Chakra Petch for body +
+    # UI, Orbitron for the big display headlines (stepped up via theme CSS).
+    "cyberpunk": {
+        "heading": "chakra-petch",
+        "body":    "chakra-petch",
+    },
+    # Sanctuary — warm humanist serif headings (Lora) over Inter body.
+    "sanctuary": {
+        "heading": "lora",
+        "body":    "inter",
+    },
+    # Terminal — all-monospace TUI: the system mono stack for both roles, so
+    # every heading and line of body copy reads like terminal output.
+    "terminal": {
+        "heading": "mono",
+        "body":    "mono",
     },
 }
 

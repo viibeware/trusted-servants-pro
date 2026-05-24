@@ -35,6 +35,43 @@
        url("../fonts/fraunces/Fraunces-Variable-latin-ext.woff2") format("woff2");
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
+/* Self-hosted Orbitron (variable, SIL OFL) — geometric sci-fi display used
+   by the Cyberpunk theme for big headings. Latin subset only; lazy (the
+   browser fetches it only when a page actually uses the family). */
+@font-face {
+  font-family: 'Orbitron';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("../fonts/orbitron/Orbitron-Variable.woff2") format("woff2-variations"),
+       url("../fonts/orbitron/Orbitron-Variable.woff2") format("woff2");
+}
+/* Self-hosted Chakra Petch (SIL OFL) — squared techno UI face used by the
+   Cyberpunk theme for nav, mega menu, and card titles. Latin subset. */
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../fonts/chakra-petch/ChakraPetch-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/chakra-petch/ChakraPetch-700.woff2") format("woff2");
+}
+/* Self-hosted Lora (variable, SIL OFL) — warm humanist serif used by the
+   Sanctuary theme for headings. Latin subset; lazy. */
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("../fonts/lora/Lora-Variable.woff2") format("woff2-variations"),
+       url("../fonts/lora/Lora-Variable.woff2") format("woff2");
+}
 
 :root {
   --bg: #f6f7fb;
@@ -14050,3 +14087,19 @@ body.embed .backups-wrap {
 .fe-popup-trigger-card {
   border-left: 3px solid var(--accent, #2563eb);
 }
+
+/* Theme switcher — "when applying" mode chooser (Return to last state /
+   Reset to default). Rendered in the Site theme modal only, pinned as a band
+   between the scrolling card grid and the footer so it (and the Apply button)
+   stay visible however far the list scrolls — hence flex-shrink:0 + a full-
+   width top divider rather than a free-floating bordered box. */
+.fe-theme-mode { flex-shrink: 0; margin: 0;
+  border: 0; border-top: 1px solid var(--line, #e2e8f0); border-radius: 0;
+  padding: 12px 24px 14px; }
+.fe-theme-mode legend { padding: 0; }
+.fe-theme-mode-opt { display: flex; gap: 10px; align-items: flex-start;
+  padding: 9px 4px; cursor: pointer; }
+.fe-theme-mode-opt + .fe-theme-mode-opt { border-top: 1px solid var(--line, #e2e8f0); }
+.fe-theme-mode-opt input { margin-top: 4px; flex: 0 0 auto; }
+.fe-theme-mode-opt strong { display: block; margin-bottom: 2px; }
+.fe-theme-mode-opt .muted { display: block; }

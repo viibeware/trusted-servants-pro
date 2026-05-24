@@ -1,0 +1,265 @@
+/* ============================================================================
+   THEME · Sanctuary (warm light)
+   Loaded only when SiteSetting.frontend_theme == "sanctuary" (see base.html).
+   Scoped to body[data-fe-theme="sanctuary"]. Calm + organic: sand/cream
+   canvas, sage-green + clay accents, Lora humanist-serif headings, soft
+   rounded cards (token-driven), airy spacing. Defaults to light mode with a
+   warm dark companion. Cards/buttons inherit the warm palette from the design
+   tokens; this file adds the atmosphere, chrome, hero, and dynbg overrides.
+   ========================================================================== */
+
+body[data-fe-theme="sanctuary"] {
+  --sa-cream:     #faf6ee;
+  --sa-sand:      #f1e9da;
+  --sa-card:      #fffdf8;
+  --sa-sage:      #5e7d6a;
+  --sa-sage-deep: #496353;
+  --sa-clay:      #c07a4e;
+  --sa-ink:       #3a3127;
+  --sa-muted:     #7c6f5d;
+  --sa-line:      #e4d9c5;
+  --sa-ease:      cubic-bezier(.2,.7,.2,1);
+  /* Override the legacy (non-tokenised) accent vars — several elements,
+     notably the footer location icons, still read --fe-accent / the old
+     recovery-blue vars (#5164ff), which is what made the footer read blue. */
+  --fe-accent:          #5e7d6a;
+  --fe-accent-2:        #c07a4e;
+  --fe-accent-3:        #8a9b6e;
+  --fe-recovery-blue:   #5e7d6a;
+  --fe-recovery-blue-2: #c07a4e;
+}
+
+/* ---- Warm dark companion palette ---------------------------------------- */
+html[data-theme="dark"] body[data-fe-theme="sanctuary"],
+body[data-fe-theme="sanctuary"].fe-footer-force-dark {
+  --fe-dm-surface:        #2a2319;
+  --fe-dm-surface-soft:   rgba(255,255,255,0.045);
+  --fe-dm-border:         #3a3022;
+  --fe-dm-border-hover:   rgba(192,122,78,0.5);
+  --fe-dm-text-strong:    var(--fe-color-text-dark, #f5efe2);
+  --fe-dm-text:           var(--fe-color-text-dark, #ece3d2);
+  --fe-dm-text-muted:     #b8ab95;
+  --fe-dm-link-hover:     #a9c2b2;
+}
+
+/* ===== Atmosphere — warm paper canvas =================================== */
+html[data-theme="light"] body[data-fe-theme="sanctuary"] {
+  background:
+    radial-gradient(1100px 700px at 12% -10%, #f3ead9 0%, transparent 55%),
+    radial-gradient(900px 620px at 100% 0%, #f0ebd6 0%, transparent 52%),
+    var(--sa-cream);
+}
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] {
+  background:
+    radial-gradient(1100px 700px at 12% -10%, #2d251a 0%, transparent 55%),
+    var(--fe-color-surface-dark, #221d16);
+}
+/* Faint warm paper grain. */
+body[data-fe-theme="sanctuary"]::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  opacity: 0.05; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+html[data-theme="dark"] body[data-fe-theme="sanctuary"]::after { opacity: 0.08; mix-blend-mode: overlay; }
+
+/* Sections transparent so the warm canvas shows through. */
+body[data-fe-theme="sanctuary"] .fe-page,
+body[data-fe-theme="sanctuary"] .fe-section { background: transparent; }
+
+/* ===== Typography — warm serif heads + soft sage accent ================= */
+body[data-fe-theme="sanctuary"] .fe-section-head { position: relative; }
+body[data-fe-theme="sanctuary"] .fe-section-head h2 { letter-spacing: -0.01em; color: var(--sa-ink); }
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-section-head h2 { color: var(--fe-dm-text-strong); }
+body[data-fe-theme="sanctuary"] .fe-section-head p { color: var(--sa-muted); }
+body[data-fe-theme="sanctuary"] .fe-section-head::after {
+  content: ""; display: block; width: 48px; height: 3px; margin: 16px auto 0;
+  border-radius: 999px; background: var(--sa-sage);
+}
+
+/* ===== Hero — warm organic scene (replaces the recovery-blue dynbg) ===== */
+body[data-fe-theme="sanctuary"] .fe-hero { overflow: hidden; }
+body[data-fe-theme="sanctuary"] .fe-hero > .fe-dynbg,
+body[data-fe-theme="sanctuary"] .fe-hero > .fe-hero-particles { display: none !important; }
+body[data-fe-theme="sanctuary"] .fe-hero-blob { opacity: 0; }
+html[data-theme="light"] body[data-fe-theme="sanctuary"] .fe-hero {
+  background:
+    radial-gradient(520px 440px at 16% 28%, rgba(94,125,106,0.20), transparent 60%),
+    radial-gradient(560px 480px at 86% 66%, rgba(192,122,78,0.16), transparent 62%),
+    radial-gradient(760px 520px at 50% 118%, rgba(94,125,106,0.12), transparent 60%),
+    linear-gradient(180deg, #faf6ee 0%, #f3ead9 100%) !important;
+}
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-hero {
+  background:
+    radial-gradient(520px 440px at 16% 28%, rgba(94,125,106,0.24), transparent 60%),
+    radial-gradient(560px 480px at 86% 66%, rgba(192,122,78,0.20), transparent 62%),
+    linear-gradient(180deg, #221d16 0%, #2a2319 100%) !important;
+}
+body[data-fe-theme="sanctuary"] .fe-hero-heading {
+  background-image: none !important; -webkit-text-fill-color: currentColor;
+}
+html[data-theme="light"] body[data-fe-theme="sanctuary"] .fe-hero-heading { color: var(--sa-ink); }
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-hero-heading { color: var(--fe-dm-text-strong); }
+body[data-fe-theme="sanctuary"] .fe-hero-sub { font-family: var(--fe-font-body) !important; }
+html[data-theme="light"] body[data-fe-theme="sanctuary"] .fe-hero-sub { color: var(--sa-muted) !important; }
+body[data-fe-theme="sanctuary"] .fe-hero-eyebrow {
+  background: rgba(94,125,106,0.12); color: var(--sa-sage-deep);
+  border: 1px solid rgba(94,125,106,0.30);
+}
+
+/* ===== Buttons — sage primary (dark mode needs the warm override) ======= */
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-btn-primary,
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-page .fe-hero-cta .fe-btn-primary,
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-meeting-card-actions .fe-btn-primary {
+  background: var(--fe-color-btn-primary-bg, var(--sa-sage)) !important;
+  color: var(--fe-color-btn-primary-text, #faf6ee) !important;
+}
+/* Hover mirrors the rest selectors (matching specificity + :hover) so it wins,
+   and reads the hover-bg token so dark mode honours it like light mode. */
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-btn-primary:hover,
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-page .fe-hero-cta .fe-btn-primary:hover,
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-meeting-card-actions .fe-btn-primary:hover {
+  background: var(--fe-color-btn-primary-hover-bg, var(--sa-sage-deep)) !important;
+}
+/* (No custom .fe-btn-yellow shadow — it already follows the button-style
+   tokens, --fe-btn-shadow / --fe-btn-hover-transform / --fe-btn-hover-glow,
+   so the custom hero button matches the primary button's behaviour.) */
+
+/* ===== Header — warm cream glass ======================================= */
+html[data-theme="light"] body[data-fe-theme="sanctuary"] .fe-header-themed {
+  background: rgba(250,246,238,0.82); border-bottom: 1px solid var(--sa-line);
+  -webkit-backdrop-filter: blur(12px) saturate(120%); backdrop-filter: blur(12px) saturate(120%);
+}
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-header-themed {
+  background: rgba(34,29,22,0.85); border-bottom: 1px solid #3a3022;
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+body[data-fe-theme="sanctuary"] .fe-th-brand-name { font-weight: 600; }
+body[data-fe-theme="sanctuary"] .fe-th-nav-link:not(.fe-th-nav-cta):hover,
+body[data-fe-theme="sanctuary"] .fe-th-nav-link:not(.fe-th-nav-cta).mega-active { background: rgba(94,125,106,0.10); }
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-th-nav-link:not(.fe-th-nav-cta):hover,
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-th-nav-link:not(.fe-th-nav-cta).mega-active { background: rgba(94,125,106,0.18); }
+
+/* ===== Utility bar — warm sand strip (override the admin's blue) ======== */
+html[data-theme="light"] body[data-fe-theme="sanctuary"] .fe-utility-bar:not(.is-live) {
+  background: var(--sa-sand) !important; color: var(--sa-ink) !important;
+  border-bottom: 1px solid var(--sa-line);
+}
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-utility-bar:not(.is-live) {
+  background: #2a2319 !important; color: var(--fe-dm-text-muted) !important;
+  border-bottom: 1px solid #3a3022;
+}
+body[data-fe-theme="sanctuary"] .fe-utility-bar:not(.is-live) a:hover { color: var(--sa-sage); }
+/* Singleton utility buttons (search, theme toggle, GSR, pill buttons) ship
+   white chrome for dark bars — recolour them to match the warm bar. */
+html[data-theme="light"] body[data-fe-theme="sanctuary"] .fe-utility-bar:not(.is-live) .fe-theme-toggle,
+html[data-theme="light"] body[data-fe-theme="sanctuary"] .fe-utility-bar:not(.is-live) .fe-utility-search-btn,
+html[data-theme="light"] body[data-fe-theme="sanctuary"] .fe-utility-bar:not(.is-live) .fe-utility-btn,
+html[data-theme="light"] body[data-fe-theme="sanctuary"] .fe-utility-bar:not(.is-live) .fe-utility-container--collapsed {
+  background: rgba(58,49,39,0.07) !important; color: var(--sa-ink) !important;
+}
+html[data-theme="light"] body[data-fe-theme="sanctuary"] .fe-utility-bar:not(.is-live) .fe-theme-toggle:hover,
+html[data-theme="light"] body[data-fe-theme="sanctuary"] .fe-utility-bar:not(.is-live) .fe-utility-search-btn:hover,
+html[data-theme="light"] body[data-fe-theme="sanctuary"] .fe-utility-bar:not(.is-live) .fe-utility-btn:hover {
+  background: rgba(94,125,106,0.16) !important; color: var(--sa-sage-deep) !important;
+}
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-utility-bar:not(.is-live) .fe-theme-toggle,
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-utility-bar:not(.is-live) .fe-utility-search-btn,
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-utility-bar:not(.is-live) .fe-utility-btn,
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-utility-bar:not(.is-live) .fe-utility-container--collapsed {
+  background: rgba(231,221,201,0.12) !important; color: var(--fe-dm-text) !important;
+}
+
+/* ===== Mega menu — matches the footer: deep sage + organic texture ===== */
+body[data-fe-theme="sanctuary"] .fe-megamenu-themed {
+  background-color: #26312a;
+  background-image:
+    radial-gradient(720px 470px at 14% 16%, rgba(122,150,128,0.32), transparent 62%),
+    radial-gradient(640px 430px at 88% 86%, rgba(192,122,78,0.16), transparent 60%);
+  color: #e7ddc9;
+  border: 1px solid #3a4a3f; border-top: 2px solid var(--sa-clay);
+  box-shadow: 0 22px 50px rgba(0,0,0,0.30);
+}
+body[data-fe-theme="sanctuary"] .fe-megamenu-themed .fe-megamenu-link { color: #e7ddc9; }
+body[data-fe-theme="sanctuary"] .fe-megamenu-themed .fe-megamenu-link:hover { background: rgba(231,221,201,0.10); color: #fff; }
+body[data-fe-theme="sanctuary"] .fe-megamenu-themed .fe-megamenu-block-title { color: #f0e7d3; }
+body[data-fe-theme="sanctuary"] .fe-megamenu-themed .fe-megamenu-chevron,
+body[data-fe-theme="sanctuary"] .fe-megamenu-themed .fe-megamenu-icon { color: inherit; }
+body[data-fe-theme="sanctuary"] .fe-megamenu-themed .fe-megamenu-block-btn {
+  color: #e0a878; background: rgba(192,122,78,0.16); border-color: rgba(192,122,78,0.40);
+}
+body[data-fe-theme="sanctuary"] .fe-megamenu-themed .fe-megamenu-block-section-line { background: var(--sa-clay); opacity: 0.5; }
+body[data-fe-theme="sanctuary"] .fe-megamenu-themed .fe-megamenu-block-section-label { color: #cdbfa5; }
+
+/* ===== Footer — deep sage, warm elements ==============================
+   The footer is forced dark; recolour it to a deep forest-sage (the brand
+   colour) so it reads as Sanctuary, not the recovery-blue navy. */
+body[data-fe-theme="sanctuary"] .fe-footer {
+  background-color: #26312a !important;
+  background-image:
+    radial-gradient(720px 470px at 14% 16%, rgba(122,150,128,0.32), transparent 62%),
+    radial-gradient(640px 430px at 88% 86%, rgba(192,122,78,0.16), transparent 60%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='o'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5' numOctaves='3' stitchTiles='stitch'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.4'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23o)'/%3E%3C/svg%3E") !important;
+  background-size: auto, auto, 240px 240px !important;
+  background-repeat: no-repeat, no-repeat, repeat !important;
+  background-position: center, center, center !important;
+  background-blend-mode: normal, normal, soft-light !important;
+  border-top: 2px solid var(--sa-clay);
+}
+/* Drop the admin's footer particle/sinewave overlay for a clean sage panel. */
+body[data-fe-theme="sanctuary"] .fe-footer-particles,
+body[data-fe-theme="sanctuary"] .fe-footer-bg-effects { display: none !important; }
+body[data-fe-theme="sanctuary"] .fe-footer,
+body[data-fe-theme="sanctuary"] .fe-footer p,
+body[data-fe-theme="sanctuary"] .fe-footer li,
+body[data-fe-theme="sanctuary"] .fe-footer a { color: #e7ddc9; }
+body[data-fe-theme="sanctuary"] .fe-footer a:hover { color: var(--sa-clay); }
+body[data-fe-theme="sanctuary"] .fe-footer-locations-heading,
+body[data-fe-theme="sanctuary"] .fe-footer-contact-heading,
+body[data-fe-theme="sanctuary"] .fe-footer-name,
+body[data-fe-theme="sanctuary"] .fe-footer-col-title {
+  font-family: var(--fe-font-heading); color: #f0e7d3;
+}
+/* Location cards — warm translucent panel with a clay icon tile. */
+body[data-fe-theme="sanctuary"] .fe-footer-location-card {
+  background: rgba(255,248,235,0.06); border: 1px solid rgba(231,221,201,0.16);
+  border-radius: 14px;
+}
+body[data-fe-theme="sanctuary"] .fe-footer-location-card:hover {
+  background: rgba(255,248,235,0.10); border-color: rgba(192,122,78,0.5);
+}
+body[data-fe-theme="sanctuary"] .fe-footer-location-icon {
+  background: rgba(192,122,78,0.22); color: #e0a878;
+}
+body[data-fe-theme="sanctuary"] .fe-footer-location-name { color: #f0e7d3; }
+body[data-fe-theme="sanctuary"] .fe-footer-location-directions {
+  border: 1px solid rgba(231,221,201,0.3); color: #e7ddc9;
+}
+body[data-fe-theme="sanctuary"] .fe-footer-location-directions:hover {
+  background: rgba(192,122,78,0.18); border-color: var(--sa-clay); color: #fff;
+}
+
+/* ===== Dark-mode icon chips — retint from blue to sage ================
+   The feature / FAQ / inclusion icon tiles hardcode a recovery-blue tint in
+   dark mode; recolour them to the theme's sage. */
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-feature-icon,
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-faq-summary-icon,
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] .fe-inclusion-icon {
+  background: rgba(94,125,106,0.20); color: #a9c2b2;
+}
+
+/* ===== Container panels — keep dark-mode warm ==========================
+   A container's dark background is auto-derived from the admin's (cool) light
+   colour, which derives to navy — disconnected from the theme. Re-point any
+   dark container background to the warm card token so dark mode stays warm
+   instead of recovery-blue navy. */
+html[data-theme="dark"] body[data-fe-theme="sanctuary"] [style*="--tsp-bg-dm"] {
+  background-color: var(--fe-color-card-secondary-bg-dark, #2a2319) !important;
+}
+
+/* ===== Dynamic backgrounds → the warm theme canvas ===================== */
+body[data-fe-theme="sanctuary"] .fe-meeting-detail,
+body[data-fe-theme="sanctuary"] .fe-contact-section,
+body[data-fe-theme="sanctuary"] .fe-page-dynbg-host { background: transparent !important; }
+body[data-fe-theme="sanctuary"] .fe-meeting-detail > .fe-dynbg,
+body[data-fe-theme="sanctuary"] .fe-contact-section > .fe-dynbg,
+body[data-fe-theme="sanctuary"] .fe-page-dynbg-host > .fe-dynbg { display: none !important; }

@@ -6,6 +6,53 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.6.0] — 2026-05-24
+
+### Added — Four new frontend themes (Modern Dark, Cyberpunk, Sanctuary, Terminal)
+
+Beyond Classic and Recovery Blue, the Web Frontend now ships four complete themes, each styling every public region — header, mega menu, homepage, footer, and all list/detail pages — in both light and dark mode:
+
+- **Modern Dark** — deep-indigo "mission control" canvas with a diffuse aurora, film grain, teal→cyan gradient buttons, Fraunces display over Inter.
+- **Cyberpunk** — near-black neon-grid HUD with scanlines, cyan/magenta, sharp zero-radius edges, and Orbitron/Chakra Petch type.
+- **Sanctuary** — warm sand/cream canvas, sage-green + clay accents, Lora humanist serif, soft rounded cards.
+- **Terminal** — utilitarian command line: phosphor-green on near-black, all-monospace, flat boxy panels, prompt-prefixed headings + a blinking cursor.
+
+Themes apply non-destructively via theme-scoped CSS (`app/static/css/themes/<key>.css`) loaded only for the active theme — switching never rewrites page/block content. Shared `frontend/headers/themed.html` + `frontend/megamenus/themed.html` partials drive every alternate theme. Newly vendored fonts: Orbitron, Chakra Petch, Lora.
+
+### Added — Per-theme saved state
+
+Switching themes auto-saves the outgoing theme's appearance fields (design tokens, fonts, default mode, per-template settings, mega-menu colours) into the new `SiteSetting.frontend_theme_states_json` and restores the incoming theme's last state, so returning to a theme brings it back exactly as left. The theme switcher modal gained a **When applying** chooser — *Return to last saved state* / *Reset to default* — pinned as a fixed band so it and the Apply button stay visible as the theme grid scrolls.
+
+### Added — Mega-menu dynamic backgrounds, dark-mode colours, and blend
+
+- **Dynamic background** picker for the mega-menu panel (the same `dynbg` system the hero/pages use), rendered behind the links via an `fe-dynbg-host` panel and clipped to its rounded corners.
+- **Render dark in light mode** toggle — forces the dynbg's dark variant in light mode so a dark panel sits behind light text.
+- **Independent light/dark colour pickers** — separate background + text colours per mode.
+- **Background ↔ dynamic blend** slider — the dynbg layer's opacity over the solid colour (0 = colour only, 100 = dynbg only).
+- Mega-menu **headings, links, and buttons** (including the admin "Back to TS Pro dashboard" button) now obey the configured Text colour; the Logout pill keeps its distinct amber. Dark mode auto-lightens the text colour for legibility.
+
+New additive `SiteSetting` columns (all via `_migrate_sqlite`): `frontend_mega_bg_dynamic_key`, `frontend_mega_bg_dynbg_config_json`, `frontend_mega_bg_dynbg_dark`, `frontend_mega_bg_color_dark`, `frontend_mega_text_color_dark`, `frontend_mega_bg_dynbg_blend`.
+
+### Added — "Text — Darkmode" design token
+
+A new Colors token controls dark-mode text site-wide: anywhere the **Text** token is used, this value takes over in dark mode (body, headings, card/event titles, page-builder content). Hardcoded neutral dark-text colours (`#e2e8f0` / `#f1f5f9` / `#cbd5e1`) are routed through a `--fe-text-dark-active` channel defined only in dark mode, so light mode is untouched.
+
+### Changed — Recovery Blue: frosted-glass header + footer cards
+
+The Recovery Blue header is now a translucent frosted-glass bar (`backdrop-filter: blur + saturate`), and the footer location cards use a light frosted-glass surface — both light and dark. The desktop nav no longer draws a dark navy box behind its links (scoped to the mobile dropdown).
+
+### Fixed — Dark-mode token connections + Modern Dark polish
+
+- Hardcoded recovery-blue dark values now resolve through the active theme's dark tokens: card hover borders → `--fe-dm-border-hover`, the Files & Readings panel + events/announcements active tab + section dividers + meeting-type badges.
+- The derived dark primary-button colour is re-resolved on `<body>` so it tracks the theme instead of falling back to blue.
+- Themed-header nav links default to the dark-mode text colour (no more dark-on-dark).
+- Modern Dark: fresh teal/violet hero scene (dropping leftover recovery-blue particles), rebuilt footer, and removed the white box around the "What is CMA" / "Additional Resources" sections in light mode.
+- The Design page's per-token **Reset** now dispatches input/change events so the unsaved-changes save bar appears.
+
+### Backup
+
+Every new frontend setting scopes into the frontend export/import automatically (the field list is prefix-derived from `SiteSetting` columns); the `color_text_dark` token rides inside the exported `frontend_design_json`.
+
 ## [2.5.1] — 2026-05-23
 
 ### Changed — "Powered by" footer block links to gettspro.com
