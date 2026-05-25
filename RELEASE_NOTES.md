@@ -7,7 +7,13 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.7.2 — 2026-05-25 (latest) — Small refinements
+## 2.7.3 — 2026-05-25 (latest) — Phone formatting + a contact call-to-action
+
+- **Phone numbers look tidy automatically.** On the Recovery Contacts directory (and its PDF), numbers are formatted as you'd expect — `202-555-0100` for US/Canada (or `1-202-555-0100`), and the correct international style for numbers from other countries. People can still type however they like; only the display is cleaned up.
+- **A "Contact us" prompt on the Recovery Contacts page** — a short line (pulled from your Contact page settings) and a button that takes visitors to your contact form. On phones it appears neatly at the bottom of the page, below the sign-up form.
+- **Fixed:** on phones, the utility-bar buttons (like "Print List" and "Contact List") no longer wrap onto two lines.
+
+## 2.7.2 — 2026-05-25 — Small refinements
 
 - The signed-in admin button in your menus and footer now reads **"Return to dashboard"** (instead of "Back to TS Pro dashboard").
 - Tidier spacing between the two email-alert switches on the **Recovery Contacts** form settings, and clearer wording confirming the admin is emailed about a removal **only after** the person clicks their confirmation link — so a bad actor can never get someone taken off the list.

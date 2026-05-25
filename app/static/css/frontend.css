@@ -194,7 +194,7 @@ html[data-theme="dark"] .fe-megamenu-link:hover:not(.fe-megamenu-link-colored) {
   min-width: 0; }
 .fe-utility-link, .fe-utility-btn, .fe-utility-text, .fe-utility-icon-only {
   display: inline-flex; align-items: center; gap: 6px;
-  color: inherit; line-height: 1; }
+  color: inherit; line-height: 1; white-space: nowrap; }
 /* Wrap each item so the side flex-row centres them by their actual
    content edges. The default block-level wrapper inherits
    line-height: normal (~1.2), which adds invisible half-leading above
@@ -10020,6 +10020,35 @@ body.fe-frontend-force-dark .fe-contact-eyebrow {
 .fe-rc-contact-locked-note { font-style: italic; }
 
 .fe-rc-main { min-width: 0; }
+
+/* CTA below the directory cards — the top border is the divider. */
+.fe-rc-cta {
+  margin-top: 1.75rem;
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--fe-color-border, rgba(0, 0, 0, 0.1));
+  text-align: left;
+}
+.fe-rc-cta-text {
+  margin: 0 0 1rem;
+  color: var(--fe-ink-muted, #475569);
+  font-size: 1rem;
+}
+/* It's an <a>, so the frontend link colour would bury the button text —
+   force the primary-button text colour (matches .fe-rc-confirm-cta). */
+.fe-rc-cta-btn { padding: 11px 24px; color: var(--fe-color-btn-primary-text, #fff) !important; }
+/* Desktop shows the in-column CTA (under the cards); the mobile copy
+   (below the form) is hidden. At ≤880px the grid stacks to one column —
+   flip them so the CTA lands at the very bottom of the page. */
+.fe-rc-cta--mobile { display: none; }
+@media (max-width: 880px) {
+  .fe-rc-cta--desktop { display: none; }
+  .fe-rc-cta--mobile { display: block; }
+}
+html[data-theme="dark"] .fe-rc-cta,
+body.fe-frontend-force-dark .fe-rc-cta { border-top-color: var(--fe-dm-border); }
+html[data-theme="dark"] .fe-rc-cta-text,
+body.fe-frontend-force-dark .fe-rc-cta-text { color: var(--fe-dm-text-muted); }
+
 .fe-rc-main-head {
   display: flex;
   align-items: baseline;

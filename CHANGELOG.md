@@ -6,6 +6,17 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.7.3] — 2026-05-25
+
+### Added
+
+- **Phone numbers are formatted for display** on the public Recovery Contacts directory + PDF (stored values are untouched). North American numbers are hyphenated — `202-555-0100`, or `1-202-555-0100` with a leading 1 — and numbers carrying any other country code are rendered in that country's standard international style via libphonenumber (e.g. `+44 20 7946 0958`), even when the `+` was omitted. Unparseable/partial numbers show exactly as entered. New dependency: `phonenumbers` (`app/phone.py`, registered as the `phone_fmt` Jinja filter).
+- **"Contact us" call-to-action on the Recovery Contacts page** — a divider-topped section showing the Contact page's subheading and a button through to the public contact form. On desktop it sits under the directory cards; on mobile it moves to the bottom of the page, below the form. Only shown when the contact form is enabled.
+
+### Fixed
+
+- **Utility-bar button labels no longer wrap on mobile** — items like "Print List" / "Contact List" stay on one line (the bar is already a horizontal swipe strip), via `white-space: nowrap` on the utility-bar leaf items.
+
 ## [2.7.2] — 2026-05-25
 
 ### Changed

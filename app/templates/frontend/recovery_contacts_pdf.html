@@ -94,7 +94,7 @@
         {% if e.contact_enabled and not e.public_phone and not e.public_email %}
         <td class="c-contact" colspan="2">Contact through the site{% if contact_url %} — <a href="{{ contact_url }}"><b>{{ contact_url|replace('https://', '')|replace('http://', '') }}</b></a>{% endif %}</td>
         {% else %}
-        <td class="c-phone">{{ e.public_phone or '' }}{% if not e.public_phone %}<span class="muted">—</span>{% endif %}</td>
+        <td class="c-phone">{{ (e.public_phone|phone_fmt) or '' }}{% if not e.public_phone %}<span class="muted">—</span>{% endif %}</td>
         <td class="c-email">{{ e.public_email or '' }}{% if not e.public_email %}<span class="muted">—</span>{% endif %}</td>
         {% endif %}
       </tr>

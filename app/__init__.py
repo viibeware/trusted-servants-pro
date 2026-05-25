@@ -319,6 +319,13 @@ def create_app():
         h12 = h % 12 or 12
         return f"{h12}:{m:02d} {suffix}"
 
+    @app.template_filter("phone_fmt")
+    def phone_fmt(value):
+        """Display-only phone formatting — hyphenated NANP, international
+        style for other country codes. See app/phone.py."""
+        from .phone import format_phone
+        return format_phone(value)
+
     @app.template_filter("fmt_site_local")
     def fmt_site_local(value, fmt="%Y-%m-%d %H:%M %Z"):
         """Format a naive-UTC datetime in the site's configured timezone.

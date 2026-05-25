@@ -6,6 +6,20 @@
 {%- set _submit_label = (site.recovery_contacts_submit_label if site else None) or 'Add me to the list' -%}
 {% block title %}{{ _heading }} · {{ frontend_title }}{% endblock %}
 {% block content %}
+{# Contact-page CTA — the Contact page's subheading + a button through to the
+   public contact form. Rendered twice: once in the left column under the
+   directory (desktop) and once after the form (mobile); CSS shows the right
+   one per viewport. Only emitted when the contact form is enabled so the
+   button never lands on a 404. The `.fe-rc-cta` top border is the divider. #}
+{% macro rc_cta(variant) %}
+  {%- if site and site.contact_form_enabled %}
+  <div class="fe-rc-cta {{ variant }}">
+    <p class="fe-rc-cta-text">{{ (site.contact_form_subheading if site else None)
+        or 'Send the public information committee a note. Replies come straight to your email.' }}</p>
+    <a class="fe-submission-submit fe-rc-cta-btn" href="{{ url_for('frontend.contact') }}">Contact us</a>
+  </div>
+  {%- endif %}
+{% endmacro %}
 {# Recovery Contacts — a public directory of names + phone/email that visitors
    add themselves. Two-column shell inside the shared dynbg section (so
    dark-mode + design tokens flow through automatically): the LEFT column
@@ -73,7 +87,7 @@
               {% if e.public_phone %}
               <a class="fe-rc-item-contact" href="tel:{{ e.public_phone }}">
                 <span class="fe-rc-item-contact-icon" aria-hidden="true">{{ icon('phone') }}</span>
-                <span class="fe-rc-item-contact-val">{{ e.public_phone }}</span>
+                <span class="fe-rc-item-contact-val">{{ e.public_phone|phone_fmt }}</span>
               </a>
               {% endif %}
               {% if e.public_email %}
@@ -103,6 +117,9 @@
           <p>No one has been added yet — be the first to join the list.</p>
         </div>
         {% endif %}
+
+        {# Desktop: CTA sits under the directory cards (left column). #}
+        {{ rc_cta('fe-rc-cta--desktop') }}
       </div>
 
       {# ── Right column: optional intro + the submission form. #}
@@ -213,6 +230,9 @@
           </form>
         </div>
       </aside>
+
+      {# Mobile: CTA moves to the very bottom, below the form. #}
+      {{ rc_cta('fe-rc-cta--mobile') }}
 
     </div>
   </div>
