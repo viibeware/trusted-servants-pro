@@ -6,6 +6,21 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.8.2] — 2026-05-26
+
+### Added
+
+- **CSV export on Watchtower → Visitors.** New **Export CSV** button in the tab's top actions downloads the current window's metrics — daily traffic, top paths, top referrers, devices/browsers/OS — as a single CSV. Server-side aggregation reuses the same `visitor_metrics` helpers the page renders from, and the export honours the active **Unique visitors / Hits** mode so the export numbers match what was on screen.
+
+### Fixed
+
+- **Events auto-archive sweep was running on the server's UTC clock instead of the site-configured timezone.** `event_ends_at` is stored as naive site-local (parsed straight from the admin's HTML5 `datetime-local` input), but `_auto_archive_events` was building its cutoff from `datetime.utcnow().date()` — so an event ending at 9 pm Pacific would be flagged "past" any time after 1 am UTC the same day, and conversely a 2 am Eastern end-time wouldn't sweep until UTC midnight rolled past it. Cutoff is now `now_local_naive(site).date()`. Same fix applied to the four other places that gate on "is this event past?": `frontend._post_in_archive`, the `events_list` route, the `archive` route, `blocks.filtered_events`, and `search._events_source` + `search._archive_source`. Watchtower / visitor-metrics callers also use `datetime.utcnow().date()` but compare against UTC-stamped system rows so they're correct as-is and not touched.
+- **Watchtower → Visitors daily-traffic chart polish:** legend back on the right, donut grid lines up at all viewport widths, and hover tooltips now show the exact count + date on the daily chart and the full slice breakdown on the donuts.
+
+### Internal
+
+- **Video Streamer module parked under `archive/video_streamer/`** — full implementation (Flask routes, `flask-sock` WebSocket ingest, ffmpeg `StreamManager`, admin UI, public HLS viewer with `hls.js`, sidebar entry, file-upload source, browser-camera source) preserved as a self-contained archive plus an `integration.patch` capturing the seven touchpoints. Not on the active code path; the archive's README documents the restore recipe (`git apply` + four `mv`s) for a future release. SiteSetting columns and the `video_stream` table left in `_migrate_sqlite` history so an upgraded DB stays compatible if the module is reinstated.
+
 ## [2.8.1] — 2026-05-26
 
 ### Added

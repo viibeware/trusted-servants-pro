@@ -1,0 +1,703 @@
+{% extends "base.html" %}
+{% block title %}Video Streamer · Trusted Servants Pro{% endblock %}
+{% block heading %}Video Streamer{% endblock %}
+{% block top_actions %}
+<a class="btn" href="{{ url_for('public.videostreamer_view') }}" target="_blank" rel="noopener">
+  Open public viewer ↗
+</a>
+{% endblock %}
+{% block content %}
+
+<style>
+  .vs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start; }
+  @media (max-width: 900px) { .vs-grid { grid-template-columns: 1fr; } }
+  .vs-card { background: var(--card-bg, #fff); border: 1px solid var(--border, #e5e7eb);
+             border-radius: 12px; padding: 1.25rem 1.5rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+  .vs-card h2 { margin: 0 0 0.75rem; font-size: 1.05rem; font-weight: 600; }
+  .vs-status-pill { display: inline-flex; align-items: center; gap: 0.5rem;
+                    padding: 0.35rem 0.85rem; border-radius: 999px; font-weight: 600;
+                    font-size: 0.85rem; letter-spacing: 0.02em; }
+  .vs-status-pill::before { content: ""; display: inline-block; width: 0.65rem; height: 0.65rem;
+                            border-radius: 50%; background: currentColor; box-shadow: 0 0 0 0 currentColor;
+                            animation: vs-pulse 1.8s ease-out infinite; }
+  @keyframes vs-pulse { 0% { box-shadow: 0 0 0 0 currentColor; } 70% { box-shadow: 0 0 0 0.45rem transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+  .vs-status-pill.is-running { color: #16a34a; background: rgba(34,197,94,0.12); }
+  .vs-status-pill.is-stopped { color: #6b7280; background: rgba(107,114,128,0.12); animation: none; }
+  .vs-status-pill.is-stopped::before { animation: none; }
+  .vs-status-pill.is-error   { color: #dc2626; background: rgba(239,68,68,0.12); }
+  .vs-meta { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 1rem; margin-top: 0.85rem;
+             font-size: 0.9rem; }
+  .vs-meta dt { color: var(--muted, #6b7280); font-weight: 500; }
+  .vs-meta dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .vs-action { display: flex; gap: 0.75rem; margin-top: 1.1rem; flex-wrap: wrap;
+               align-items: center; }
+  /* The app's global .btn rule sets display:inline-block which beats
+     the UA [hidden]{display:none} on specificity. Force the hide. */
+  .vs-action [hidden], .vs-action [hidden] .btn { display: none !important; }
+  .vs-action form[hidden] { display: none !important; }
+  .vs-action .btn-lg { padding: 0.7rem 1.4rem; font-size: 0.95rem; font-weight: 600; }
+  .vs-action .btn-primary { background: linear-gradient(180deg, #5fb0ff 0%, #3d8de0 100%);
+                            border-color: transparent; color: #06121f;
+                            box-shadow: 0 6px 18px rgba(78,161,255,0.30); }
+  .vs-action .btn-primary:hover { background: linear-gradient(180deg, #6ebaff 0%, #4593e2 100%); }
+  .vs-action .btn-primary[disabled],
+  .vs-action .btn-danger[disabled] {
+    opacity: 0.45; cursor: not-allowed; box-shadow: none;
+    /* Drain the colored gradient to make "disabled" obvious — a faded
+       gradient still reads as actionable; flat grey reads as off. */
+    background: var(--card-bg, #e5e7eb) !important;
+    color: var(--muted, #6b7280) !important;
+    border: 1px solid var(--border, #d1d5db);
+  }
+  .vs-action .btn-primary[disabled]:hover,
+  .vs-action .btn-danger[disabled]:hover { background: var(--card-bg, #e5e7eb) !important; }
+  .vs-action .btn-danger { background: linear-gradient(180deg, #ff5070 0%, #d63a55 100%);
+                           border-color: transparent; color: #fff;
+                           box-shadow: 0 6px 18px rgba(214,58,85,0.30); }
+  .vs-action .btn-danger:hover { background: linear-gradient(180deg, #ff6080 0%, #df4a65 100%); }
+  .vs-action-hint { margin: 0.6rem 0 0; font-size: 0.85rem; color: var(--muted, #6b7280);
+                    line-height: 1.5; }
+  .vs-action-hint code { background: rgba(0,0,0,0.05); padding: 0.05rem 0.3rem; border-radius: 4px; }
+  .vs-form-save { display: flex; gap: 0.75rem; margin-top: 1.1rem; }
+  .vs-log { background: #0b1020; color: #cfd6e3; font-family: ui-monospace,Menlo,monospace;
+            font-size: 0.78rem; padding: 0.85rem 1rem; border-radius: 8px; max-height: 220px;
+            overflow-y: auto; white-space: pre-wrap; line-height: 1.45; }
+  .vs-log:empty::before { content: "No recent ffmpeg output."; color: #7a839a; font-style: italic; }
+  .vs-source-hint { font-size: 0.82rem; color: var(--muted, #6b7280); margin: 0.4rem 0 0; line-height: 1.45; }
+  .vs-source-hint code { background: rgba(0,0,0,0.05); padding: 0.05rem 0.3rem; border-radius: 4px; }
+  .vs-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .vs-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+  .vs-grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1rem; }
+  .vs-toggle-row { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+  .vs-toggle-row label { display: inline-flex; align-items: center; gap: 0.5rem; }
+  .vs-error { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.35);
+              color: #991b1b; padding: 0.65rem 0.85rem; border-radius: 8px; margin: 0.75rem 0;
+              font-size: 0.88rem; white-space: pre-wrap; }
+  .vs-upload-current { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+                       background: rgba(78,161,255,0.07); border: 1px solid rgba(78,161,255,0.18);
+                       border-radius: 8px; padding: 0.55rem 0.75rem; margin: 0.55rem 0 0.25rem;
+                       font-size: 0.88rem; }
+  .vs-upload-current b { font-weight: 600; margin-right: 0.25rem; }
+  .vs-browser-cam { margin-top: 1rem; padding: 1rem; border-radius: 12px;
+                    background: #0b1020; color: #e5e9f5;
+                    box-shadow: 0 4px 14px rgba(0,0,0,0.25); }
+  .vs-browser-cam video {
+    width: 100%; aspect-ratio: 16 / 9; background: #000;
+    border-radius: 10px; object-fit: cover;
+  }
+  .vs-cam-devices { display: flex; gap: 0.55rem; margin-top: 0.85rem; flex-wrap: wrap; }
+  .vs-cam-select { background: rgba(255,255,255,0.06); color: #e5e9f5;
+                   border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+                   padding: 0.45rem 0.65rem; min-width: 160px; max-width: 240px;
+                   font-size: 0.85rem; flex: 1 1 180px; }
+  .vs-cam-stats { display: flex; gap: 1.25rem; margin-top: 0.7rem; font-size: 0.85rem;
+                  color: rgba(229,233,245,0.7); font-variant-numeric: tabular-nums; }
+</style>
+
+<div class="vs-grid">
+
+  {# ── Status / control card ───────────────────────────────── #}
+  <section class="vs-card">
+    <h2>Stream status</h2>
+    <span id="vs-status-pill" class="vs-status-pill is-{{ stream.status }}">
+      <span id="vs-status-text">
+        {% if stream.status == 'running' %}Live{% elif stream.status == 'error' %}Error{% else %}Offline{% endif %}
+      </span>
+    </span>
+
+    <dl class="vs-meta">
+      <dt>Source</dt>
+      <dd>
+        {% if stream.source_path %}<code>{{ stream.source_type }}</code> · {{ stream.source_path }}
+        {% else %}<span class="muted">Not configured</span>{% endif %}
+      </dd>
+      <dt>Output</dt>
+      <dd>{{ stream.video_width }}×{{ stream.video_height }} @ {{ stream.framerate }} fps · {{ stream.bitrate_kbps }} kbps
+          {% if stream.include_audio %}+ audio{% else %}· video only{% endif %}</dd>
+      <dt>Process</dt>
+      <dd id="vs-pid">{% if snapshot.pid %}pid {{ snapshot.pid }}{% else %}—{% endif %}</dd>
+      <dt>Last started</dt>
+      <dd>{% if stream.last_started_at %}{{ stream.last_started_at|fmt_site_local('%Y-%m-%d %H:%M %Z') }}{% else %}—{% endif %}</dd>
+      <dt>Manifest</dt>
+      <dd>
+        {% if snapshot.manifest_exists %}
+          <a href="{{ url_for('public.videostreamer_manifest') }}" target="_blank" rel="noopener">stream.m3u8</a>
+        {% else %}<span class="muted">not yet written</span>{% endif %}
+      </dd>
+    </dl>
+
+    {% if stream.last_error %}
+    <div class="vs-error" id="vs-error">{{ stream.last_error }}</div>
+    {% endif %}
+
+    {# Camera preview block — VISUAL only, no buttons. Visible only
+       when source_type is 'browser'. The actual broadcast button
+       lives in the single `.vs-action` row below so the admin
+       always sees one primary action regardless of source type. #}
+    <div class="vs-browser-cam vs-source-browser-only"
+         {% if stream.source_type != 'browser' %}hidden{% endif %}>
+      <video id="vs-cam-preview" autoplay muted playsinline></video>
+      <div class="vs-cam-devices">
+        <select id="vs-cam-device" class="vs-cam-select" aria-label="Camera device"></select>
+        <select id="vs-cam-mic" class="vs-cam-select" aria-label="Microphone"></select>
+      </div>
+      <div class="vs-cam-stats" id="vs-cam-stats" hidden>
+        <span><b>Broadcasting:</b> <span id="vs-cam-elapsed">0s</span></span>
+        <span><b>Sent:</b> <span id="vs-cam-bytes">0 KB</span></span>
+      </div>
+    </div>
+
+    {# Single primary-action area. Exactly ONE button is visible at a
+       time:
+         - server-side sources (device/rtsp/http/file):
+             stopped → Start stream (submits to /start)
+             running → Stop stream (submits to /stop)
+         - browser source:
+             not capturing → Go Live (JS opens camera + WebSocket)
+             capturing     → Stop broadcasting (JS closes WebSocket)
+       The conditional visibility is driven by both server-side state
+       (initial render) and JS (post-load source-type changes + live
+       polling). All four buttons live in the same flex row so the
+       layout doesn't shift between source types. #}
+    {% set _is_running = (stream.status == 'running') %}
+    {% set _is_browser = (stream.source_type == 'browser') %}
+    <div class="vs-action" id="vs-action">
+      <form method="post" action="{{ url_for('main.video_streamer_start') }}"
+            class="vs-action-server vs-action-start"
+            {% if _is_browser or _is_running %}hidden{% endif %}>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-primary btn-lg"
+                {% if not stream.source_path %}disabled title="Configure a source first"{% endif %}>
+          ▶ Start stream
+        </button>
+      </form>
+      <form method="post" action="{{ url_for('main.video_streamer_stop') }}"
+            class="vs-action-server vs-action-stop"
+            {% if _is_browser or not _is_running %}hidden{% endif %}>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-danger btn-lg">■ Stop stream</button>
+      </form>
+      <button type="button" id="vs-cam-go"
+              class="btn btn-primary btn-lg vs-action-cam-go"
+              {% if not _is_browser %}hidden{% endif %}>● Go Live</button>
+      <button type="button" id="vs-cam-stop"
+              class="btn btn-danger btn-lg vs-action-cam-stop"
+              hidden>■ Stop broadcasting</button>
+    </div>
+    <p class="vs-action-hint" id="vs-action-hint"></p>
+
+    <h2 style="margin-top: 1.4rem;">ffmpeg output</h2>
+    <pre class="vs-log" id="vs-log">{% for line in snapshot.log_tail %}{{ line }}
+{% endfor %}</pre>
+  </section>
+
+  {# ── Configuration form ──────────────────────────────────── #}
+  <section class="vs-card">
+    <h2>Source &amp; encoding</h2>
+    <form method="post" action="{{ url_for('main.video_streamer_save') }}"
+          class="form" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <label>Source type
+        <select name="source_type" id="vs-source-type">
+          <option value="browser" {% if stream.source_type=='browser' %}selected{% endif %}>Browser camera (your webcam, broadcast from here)</option>
+          <option value="device"  {% if stream.source_type=='device' %}selected{% endif %}>Local device (v4l2 / OBS Virtual Cam)</option>
+          <option value="rtsp"    {% if stream.source_type=='rtsp' %}selected{% endif %}>RTSP URL (IP camera, OBS RTSP plugin)</option>
+          <option value="http"    {% if stream.source_type=='http' %}selected{% endif %}>HTTP URL (MJPEG / progressive)</option>
+          <option value="file"    {% if stream.source_type=='file' %}selected{% endif %}>Local file (looped, paced)</option>
+        </select>
+      </label>
+
+      {# File picker — shown only when the "file" source type is
+         selected. JS in the script below toggles the .vs-file-only
+         wrapper visibility on source-type change. #}
+      <div class="vs-file-only" data-show-when="file"
+           {% if stream.source_type != 'file' %}hidden{% endif %}>
+        <label>Upload video file
+          <input type="file" name="uploaded_video"
+                 accept="video/mp4,video/quicktime,video/x-matroska,video/webm,video/x-msvideo,video/mpeg,video/ogg">
+        </label>
+        {% if stream.uploaded_video_filename %}
+          <div class="vs-upload-current">
+            <span>
+              {{ icon('film') if icon else '' }}
+              <b>Current file:</b> {{ stream.uploaded_video_filename }}
+            </span>
+            <form method="post" action="{{ url_for('main.video_streamer_remove_upload') }}"
+                  style="display:inline" onsubmit="return confirm('Remove the uploaded video file? The stream will stop until you upload a replacement.')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm">Remove</button>
+            </form>
+          </div>
+        {% endif %}
+        <p class="vs-source-hint">Pick a video file from your computer (mp4, mov, mkv, webm, avi, m4v, mpeg, ogv). The file is stored on the server alongside other uploads. The stream loops it at real-time pace so the HLS clock matches wall-clock.</p>
+      </div>
+
+      <label>Source path / URL
+        <input type="text" name="source_path" value="{{ stream.source_path or '' }}"
+               placeholder="/dev/video0">
+      </label>
+      <p class="vs-source-hint" id="vs-source-hint"></p>
+
+      <label>Advanced input args <span class="muted small">(optional)</span>
+        <input type="text" name="source_input_args" value="{{ stream.source_input_args or '' }}"
+               placeholder="-framerate 30 -video_size 1920x1080">
+      </label>
+      <p class="vs-source-hint">Inserted before <code>-i</code> in the ffmpeg command. Useful for v4l2 size/framerate hints or input-specific timeouts.</p>
+
+      <div class="vs-grid-4" style="margin-top: 0.6rem;">
+        <label>Width
+          <input type="number" name="video_width" value="{{ stream.video_width }}" min="160" max="3840" step="2">
+        </label>
+        <label>Height
+          <input type="number" name="video_height" value="{{ stream.video_height }}" min="120" max="2160" step="2">
+        </label>
+        <label>Framerate
+          <input type="number" name="framerate" value="{{ stream.framerate }}" min="5" max="60">
+        </label>
+        <label>Bitrate (kbps)
+          <input type="number" name="bitrate_kbps" value="{{ stream.bitrate_kbps }}" min="200" max="20000" step="50">
+        </label>
+      </div>
+
+      <div class="vs-toggle-row">
+        <label><input type="checkbox" name="include_audio" value="1" {% if stream.include_audio %}checked{% endif %}> Include audio (AAC 128k)</label>
+        <label><input type="checkbox" name="auto_start" value="1" {% if stream.auto_start %}checked{% endif %}> Remember to auto-start on boot</label>
+      </div>
+
+      <h2 style="margin: 1.3rem 0 0.5rem;">Viewer page copy</h2>
+      <label>Stream title
+        <input type="text" name="stream_title" value="{{ stream.stream_title or '' }}"
+               placeholder="Live from Trusted Servants Pro">
+      </label>
+      <label>Description
+        <textarea name="stream_description" rows="3"
+                  placeholder="Brief description shown beneath the player.">{{ stream.stream_description or '' }}</textarea>
+      </label>
+      <label>Offline message
+        <input type="text" name="offline_message" value="{{ stream.offline_message or '' }}"
+               placeholder="The stream is currently offline. Check back soon.">
+      </label>
+
+      <div class="vs-form-save">
+        <button type="submit" class="btn btn-primary">Save settings</button>
+      </div>
+    </form>
+  </section>
+</div>
+
+<script>
+(function () {
+  const SOURCE_HINTS = {
+    "device": "Linux v4l2 device path. For OBS Virtual Cam, this is typically <code>/dev/video0</code>. The container must have the device passed in: add <code>devices: [\"/dev/video0:/dev/video0\"]</code> to docker-compose.yml.",
+    "rtsp":   "Full <code>rtsp://user:pass@host:port/path</code> URL. The OBS <i>RTSP Server</i> plugin is one way to point OBS at this backend.",
+    "http":   "Direct HTTP video URL — works with MJPEG streams from IP cameras, progressive MP4, or any source ffmpeg can read over HTTP.",
+    "file":   "Either upload a video file above, or type an absolute server path here (useful for files mounted into the container or ffmpeg test sources like <code>testsrc=size=640x360:rate=30</code> with advanced args <code>-f lavfi</code>).",
+  };
+  SOURCE_HINTS["browser"] = "Use your computer's webcam. Click <b>Go Live</b> below to start broadcasting. The stream is encoded on your computer (WebM/VP8) and reassembled to HLS on the server so anyone can watch it from the public viewer page.";
+
+  const ACTION_HINTS = {
+    "browser": "Click <b>Go Live</b> to grant camera access and broadcast from this browser. Viewers see the stream at <code>/videostreamer</code> after a 5–10 s HLS buffer warm-up.",
+    "device":  "Click <b>Start stream</b> — ffmpeg will read the configured device path and encode to HLS.",
+    "rtsp":    "Click <b>Start stream</b> — ffmpeg pulls the configured RTSP URL and re-broadcasts as HLS.",
+    "http":    "Click <b>Start stream</b> — ffmpeg pulls the configured HTTP URL and re-broadcasts as HLS.",
+    "file":    "Click <b>Start stream</b> — ffmpeg loops the uploaded file (or the server path) at real-time pace.",
+  };
+
+  const sel = document.getElementById("vs-source-type");
+  const hint = document.getElementById("vs-source-hint");
+  const actionHint = document.getElementById("vs-action-hint");
+  // Whether the SERVER currently believes the (non-browser) stream is
+  // running. Set from the template's initial render; updated by the
+  // status poller below so the Start ↔ Stop swap stays in sync with
+  // the actual ffmpeg state.
+  let isServerRunning = {{ 'true' if stream.status == 'running' else 'false' }};
+  // Whether the browser camera is currently broadcasting (JS-only;
+  // server can't see WS state of a peer worker reliably).
+  let isCamBroadcasting = false;
+
+  function applyActionButtons() {
+    const browserMode = (sel.value === "browser");
+    const startBtn = document.querySelector(".vs-action-start");
+    const stopBtn  = document.querySelector(".vs-action-stop");
+    const goBtn    = document.querySelector(".vs-action-cam-go");
+    const camStop  = document.querySelector(".vs-action-cam-stop");
+    if (browserMode) {
+      // Server-driven Start/Stop don't apply — hide them.
+      startBtn.hidden = true;
+      stopBtn.hidden = true;
+      // Both browser-cam buttons stay visible. Disabled state mirrors
+      // the live broadcast flag so the admin always sees the two
+      // operations on the preview, with the unavailable one greyed
+      // out instead of disappearing.
+      goBtn.hidden = false;
+      camStop.hidden = false;
+      goBtn.disabled = isCamBroadcasting;
+      camStop.disabled = !isCamBroadcasting;
+    } else {
+      goBtn.hidden = true;
+      camStop.hidden = true;
+      // Clear any leftover disabled state from a prior browser-mode
+      // visit so the next browser-mode swap starts clean.
+      goBtn.disabled = false;
+      camStop.disabled = false;
+      startBtn.hidden = isServerRunning;
+      stopBtn.hidden = !isServerRunning;
+    }
+  }
+
+  function applyConditionalSections() {
+    document.querySelectorAll(".vs-file-only").forEach(el => {
+      const want = el.dataset.showWhen;
+      el.hidden = (sel.value !== want);
+    });
+    // Camera preview block — visible only in browser mode.
+    document.querySelectorAll(".vs-browser-cam.vs-source-browser-only").forEach(el => {
+      el.hidden = (sel.value !== "browser");
+    });
+    applyActionButtons();
+  }
+  function applyHint() {
+    hint.innerHTML = SOURCE_HINTS[sel.value] || "";
+    if (actionHint) actionHint.innerHTML = ACTION_HINTS[sel.value] || "";
+  }
+  sel.addEventListener("change", () => {
+    applyHint();
+    applyConditionalSections();
+    // Preview lifecycle: switching INTO browser auto-attaches the
+    // camera; switching OUT releases it so the indicator light goes
+    // off and other apps can grab the device.
+    if (sel.value === "browser") {
+      ensurePreview();
+    } else {
+      teardownPreview();
+    }
+  });
+  applyHint();
+  applyConditionalSections();
+
+  // ── Browser-camera ingest ──────────────────────────────────
+  const camPreview = document.getElementById("vs-cam-preview");
+  const camGo      = document.getElementById("vs-cam-go");
+  const camStop    = document.getElementById("vs-cam-stop");
+  const camDevice  = document.getElementById("vs-cam-device");
+  const camMic     = document.getElementById("vs-cam-mic");
+  const camStats   = document.getElementById("vs-cam-stats");
+  const camElapsed = document.getElementById("vs-cam-elapsed");
+  const camBytes   = document.getElementById("vs-cam-bytes");
+  // The action-hint <p> below the primary button doubles as the
+  // browser-camera status surface (insecure-context warnings,
+  // permission errors, "broadcasting" affirmation, etc).
+  const camHint    = actionHint;
+
+  let camStream = null;
+  let camRecorder = null;
+  let camSocket = null;
+  let camBytesTotal = 0;
+  let camStartedAt = 0;
+  let camStatTimer = null;
+
+  function fmtBytes(n) {
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+    return (n / (1024 * 1024)).toFixed(2) + " MB";
+  }
+  function fmtElapsed(ms) {
+    const s = Math.floor(ms / 1000);
+    const mm = Math.floor(s / 60);
+    const ss = s % 60;
+    if (mm === 0) return s + "s";
+    return mm + "m " + String(ss).padStart(2, "0") + "s";
+  }
+
+  // Browsers gate camera/mic access to "secure contexts": HTTPS, file://,
+  // or localhost. On a LAN IP over HTTP, navigator.mediaDevices is
+  // undefined (or getUserMedia throws SecurityError). Detect early so
+  // the admin sees a clear message + workaround instead of an inert
+  // button.
+  const isSecure = window.isSecureContext;
+  const hostIsLocalhost = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+
+  function showInsecureContextHelp() {
+    const port = location.port || (location.protocol === "https:" ? "443" : "80");
+    const localUrl = "http://localhost:" + port + location.pathname;
+    camHint.innerHTML = (
+      "<b>Camera access is blocked here.</b> Your browser only allows " +
+      "webcam capture on a <i>secure context</i> — that means " +
+      "<code>https://</code>, <code>localhost</code>, or " +
+      "<code>127.0.0.1</code>. You're currently on " +
+      "<code>" + location.origin + "</code>.<br><br>" +
+      "<b>Quick fixes:</b><ul style='margin:0.4rem 0 0 1rem; padding:0;'>" +
+      "<li>If you're sitting at the Docker host, open " +
+      "<a href='" + localUrl + "' style='color:#5fb0ff'>" + localUrl + "</a> instead.</li>" +
+      "<li>For LAN / remote access, put the app behind a TLS proxy " +
+      "(Caddy / nginx / Cloudflare Tunnel). The bundled <code>install.sh</code> " +
+      "deploy already sets this up via Caddy.</li>" +
+      "<li>For a one-off test from another machine, an SSH tunnel works: " +
+      "<code>ssh -L 8090:localhost:8090 user@host</code> then visit " +
+      "<code>http://localhost:8090</code>.</li>" +
+      "</ul>"
+    );
+    camGo.disabled = true;
+    camGo.title = "Camera capture requires HTTPS or localhost";
+  }
+
+  async function refreshDevices(preferredVideoId, preferredAudioId) {
+    if (!isSecure && !hostIsLocalhost) {
+      showInsecureContextHelp();
+      return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+      camHint.innerHTML = "Your browser doesn't support <code>getUserMedia</code>. Use Chrome, Edge, Firefox, or Safari on macOS / iOS.";
+      camGo.disabled = true;
+      return;
+    }
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      camDevice.innerHTML = "";
+      camMic.innerHTML = "";
+      let vi = 0, ai = 0;
+      devices.forEach(d => {
+        if (d.kind === "videoinput") {
+          const opt = new Option(d.label || ("Camera " + (++vi)), d.deviceId);
+          if (preferredVideoId && d.deviceId === preferredVideoId) opt.selected = true;
+          camDevice.appendChild(opt);
+        } else if (d.kind === "audioinput") {
+          const opt = new Option(d.label || ("Microphone " + (++ai)), d.deviceId);
+          if (preferredAudioId && d.deviceId === preferredAudioId) opt.selected = true;
+          camMic.appendChild(opt);
+        }
+      });
+      if (!camDevice.options.length) {
+        camDevice.appendChild(new Option("No cameras detected", ""));
+        camDevice.disabled = true;
+      }
+      if (!camMic.options.length) {
+        camMic.appendChild(new Option("No microphones detected", ""));
+        camMic.disabled = true;
+      }
+    } catch (e) {
+      console.warn("enumerateDevices failed", e);
+    }
+  }
+
+  async function attachPreview(videoId, audioId) {
+    if (camStream) {
+      camStream.getTracks().forEach(t => t.stop());
+      camStream = null;
+    }
+    const constraints = {
+      video: videoId ? { deviceId: { exact: videoId } } : true,
+      audio: audioId ? { deviceId: { exact: audioId } } : true,
+    };
+    try {
+      camStream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (e) {
+      const name = e && e.name ? e.name : "";
+      if (name === "SecurityError" || name === "NotAllowedError" && !isSecure) {
+        showInsecureContextHelp();
+      } else if (name === "NotAllowedError") {
+        camHint.innerHTML = "<b>Permission denied.</b> Your browser blocked camera/microphone access. Open the browser's site settings for <code>" + location.origin + "</code> and allow Camera + Microphone, then click Go Live again.";
+      } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+        camHint.innerHTML = "<b>No matching camera/microphone found.</b> Pick different devices from the dropdowns above, or check that one is plugged in.";
+      } else {
+        camHint.innerHTML = "<b>Couldn't access camera/microphone:</b> " + (e && e.message ? e.message : e);
+      }
+      throw e;
+    }
+    camPreview.srcObject = camStream;
+    // Re-enumerate now that labels are unlocked by the permission grant.
+    await refreshDevices(videoId, audioId);
+  }
+
+  camDevice.addEventListener("change", () => {
+    // Re-attach if a preview is already showing OR if we're on
+    // browser source (auto-preview should track the dropdown picks).
+    if (camStream || sel.value === "browser") {
+      attachPreview(camDevice.value, camMic.value).catch(() => {});
+    }
+  });
+  camMic.addEventListener("change", () => {
+    if (camStream || sel.value === "browser") {
+      attachPreview(camDevice.value, camMic.value).catch(() => {});
+    }
+  });
+
+  // Auto-attach / release the preview based on whether browser source
+  // is active. Independent of broadcasting — the preview is always
+  // there while the admin is on browser mode so they can see what
+  // would be broadcast before clicking Go Live.
+  async function ensurePreview() {
+    if (sel.value !== "browser") return;
+    if (!isSecure && !hostIsLocalhost) return;  // insecure-context help already shown
+    if (camStream) return;  // already running
+    try {
+      await attachPreview(camDevice.value || null, camMic.value || null);
+    } catch (e) {
+      /* attachPreview's catch already populated the hint */
+    }
+  }
+  function teardownPreview() {
+    // Stop only when NOT actively broadcasting — pulling tracks
+    // mid-broadcast would kill the live stream. Broadcasting state
+    // owns the camera at that point and stopBroadcast() handles
+    // cleanup on its own.
+    if (isCamBroadcasting) return;
+    if (camStream) {
+      camStream.getTracks().forEach(t => t.stop());
+      camStream = null;
+      camPreview.srcObject = null;
+    }
+  }
+
+  function pickMimeType() {
+    const candidates = [
+      "video/webm;codecs=vp8,opus",
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8",
+      "video/webm",
+    ];
+    for (const m of candidates) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+    }
+    return "";
+  }
+
+  async function startBroadcast() {
+    camGo.disabled = true;
+    // The preview is normally already attached (auto-started when the
+    // admin lands on the page with browser source selected). If it
+    // isn't — e.g. an earlier permission denial that the admin then
+    // granted, or a teardown from switching tabs — grab it now so the
+    // broadcast has a stream to record from.
+    if (!camStream) {
+      try {
+        await attachPreview(camDevice.value || null, camMic.value || null);
+      } catch (e) {
+        applyActionButtons();  // re-enable Go Live
+        return;
+      }
+    }
+    const mime = pickMimeType();
+    if (!mime) {
+      camHint.innerHTML = "<b>Your browser can't encode WebM</b> — try Chrome, Edge, or Firefox.";
+      camGo.disabled = false;
+      return;
+    }
+    // Build a WebSocket URL using the live page's host so it works
+    // behind reverse proxies (the ws/wss scheme mirrors http/https).
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = proto + "//" + location.host + "/tspro/video-streamer/ws/ingest";
+    camSocket = new WebSocket(wsUrl);
+    camSocket.binaryType = "arraybuffer";
+    camBytesTotal = 0;
+    camStartedAt = Date.now();
+
+    camSocket.onopen = () => {
+      // Match the bitrate the admin chose so the form value isn't ignored.
+      const kbpsInput = document.querySelector('input[name="bitrate_kbps"]');
+      const kbps = Math.max(200, Math.min(parseInt(kbpsInput && kbpsInput.value || "2000", 10) || 2000, 20000));
+      camRecorder = new MediaRecorder(camStream, {
+        mimeType: mime,
+        videoBitsPerSecond: kbps * 1000,
+      });
+      camRecorder.ondataavailable = e => {
+        if (camSocket && camSocket.readyState === WebSocket.OPEN && e.data && e.data.size > 0) {
+          e.data.arrayBuffer().then(buf => {
+            try { camSocket.send(buf); camBytesTotal += buf.byteLength; }
+            catch (_) {}
+          });
+        }
+      };
+      camRecorder.start(250);  // emit a chunk every 250 ms
+      isCamBroadcasting = true;
+      applyActionButtons();
+      camStats.hidden = false;
+      camHint.innerHTML = "● <b>Broadcasting.</b> Open the public viewer in another tab to confirm. There's typically a 5–10 s delay before viewers see your stream — HLS buffers a few segments for smooth playback.";
+      camStatTimer = setInterval(() => {
+        camElapsed.textContent = fmtElapsed(Date.now() - camStartedAt);
+        camBytes.textContent = fmtBytes(camBytesTotal);
+      }, 500);
+    };
+    camSocket.onerror = () => {
+      camHint.innerHTML = "<b>WebSocket error.</b> Check the server logs and make sure the Video Streamer module is enabled.";
+    };
+    camSocket.onclose = () => stopBroadcast(false);
+  }
+
+  function stopBroadcast(closeSocket = true) {
+    if (camRecorder && camRecorder.state !== "inactive") {
+      try { camRecorder.stop(); } catch (e) {}
+    }
+    camRecorder = null;
+    if (closeSocket && camSocket && camSocket.readyState === WebSocket.OPEN) {
+      try { camSocket.close(); } catch (e) {}
+    }
+    // Don't tear down camStream here — the preview is independent of
+    // the broadcast, and the admin probably wants to glance at the
+    // camera before deciding to go live again. teardownPreview()
+    // is what releases the camera (only when switching off browser
+    // source, or on page unload).
+    isCamBroadcasting = false;
+    applyActionButtons();
+    camStats.hidden = true;
+    if (camStatTimer) { clearInterval(camStatTimer); camStatTimer = null; }
+    camHint.innerHTML = ACTION_HINTS["browser"];
+  }
+
+  camGo.addEventListener("click", startBroadcast);
+  camStop.addEventListener("click", () => stopBroadcast(true));
+  window.addEventListener("beforeunload", () => {
+    // Stop broadcasting cleanly + release the camera so the device
+    // indicator turns off when the admin closes/refreshes the tab.
+    stopBroadcast(true);
+    if (camStream) {
+      camStream.getTracks().forEach(t => t.stop());
+      camStream = null;
+    }
+  });
+
+  // Best-effort device enumeration on page load (will only show labels
+  // after the first permission grant), then auto-attach the preview
+  // when the saved source type is browser. ensurePreview is a no-op
+  // for other source types so this is safe to always call.
+  (async () => {
+    await refreshDevices();
+    await ensurePreview();
+  })();
+
+  // ── Live status poll ────────────────────────────────────────
+  const pill = document.getElementById("vs-status-pill");
+  const pillText = document.getElementById("vs-status-text");
+  const logEl = document.getElementById("vs-log");
+  const pidEl = document.getElementById("vs-pid");
+  const statusUrl = "{{ url_for('main.video_streamer_status_json') }}";
+
+  async function poll() {
+    try {
+      const r = await fetch(statusUrl, { credentials: "same-origin" });
+      if (!r.ok) return;
+      const j = await r.json();
+      pill.className = "vs-status-pill is-" + (j.status || "stopped");
+      pillText.textContent = j.status === "running" ? "Live"
+                         : j.status === "error"   ? "Error"
+                         : "Offline";
+      pidEl.textContent = j.pid ? ("pid " + j.pid) : "—";
+      if (Array.isArray(j.log_tail)) {
+        logEl.textContent = j.log_tail.join("\n");
+      }
+      // For non-browser sources, swap Start ↔ Stop in lockstep with
+      // the server-side ffmpeg lifecycle without needing a page reload
+      // (matters when ffmpeg crashes on its own, or when an admin
+      // session clicked Stop on a peer worker).
+      const nextRunning = (j.status === "running");
+      if (nextRunning !== isServerRunning) {
+        isServerRunning = nextRunning;
+        applyActionButtons();
+      }
+    } catch (e) { /* ignore transient poll failures */ }
+  }
+  setInterval(poll, 3000);
+})();
+</script>
+{% endblock %}

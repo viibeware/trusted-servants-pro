@@ -333,7 +333,7 @@ def filtered_events(events_settings, site=None):
     When the Posts module is disabled site-wide, returns an empty
     list — the public events block effectively disappears.
     """
-    from datetime import datetime
+    from .timezone import now_local_naive
     from .models import Post, SiteSetting
 
     if site is None:
@@ -343,7 +343,10 @@ def filtered_events(events_settings, site=None):
 
     s = {**EVENTS_DEFAULTS, **(events_settings or {})}
     cap = max(1, int(s.get("max_count") or 6))
-    now = datetime.utcnow()
+    # Site-local: ``event_ends_at`` is naive site-local (admin-typed),
+    # so "is this past?" must compare against the same wall clock or
+    # events disappear / linger by the UTC offset.
+    now = now_local_naive(site)
 
     rows = (Post.query
             .filter(Post.is_event.is_(True),

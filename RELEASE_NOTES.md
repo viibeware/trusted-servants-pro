@@ -7,7 +7,13 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.8.1 — 2026-05-26 (latest) — See who's hitting 404s and block them in one click
+## 2.8.2 — 2026-05-26 (latest) — Visitor metrics export + timezone fix for events
+
+- **Export visitor metrics to CSV.** A new **Export CSV** button on **Watchtower → Visitors** downloads everything in the current window — daily traffic, top paths, top referrers, devices/browsers/OS breakdowns — in one spreadsheet-friendly file. The export respects whichever **Unique visitors / Hits** mode you have selected so the numbers match what's on the page.
+- **Tooltips and chart polish on Watchtower → Visitors.** Hovering any bar in the daily-traffic chart now shows the exact count and date in a small tooltip. The legend on the chart is back to the right side, the Devices/Browsers/Operating systems donut grid lines up cleanly on every screen width, and hover states on the donut slices show the full breakdown.
+- **Fixed: events were sometimes auto-archiving on the wrong day.** The "cut off past events" sweep was using server-clock UTC instead of your fellowship's configured timezone, so an event ending at, say, 9 pm Pacific would either disappear early (UTC was already on the next day) or hang around in the live list past midnight local. The sweep now compares against site-local time, so events drop off at midnight in your timezone — same as you'd expect.
+
+## 2.8.1 — 2026-05-26 — See who's hitting 404s and block them in one click
 
 - **The 404s tab now shows who's actually hitting each dead URL.** Every row in **Top missing URLs** has a small "route" icon that opens an inline panel listing the IP addresses hitting that URL, how many times each, and when they last tried. The **Recent 404s** table got a **Source IP** column too.
 - **One-click block.** Beside each IP — both in the inline panel and in the Recent 404s table — there's a **Block** button that adds the IP to your Watchtower blocklist permanently. The ban reason auto-fills with the 404 path so it's obvious in the log later why you blocked them. Already-blocked IPs show a red "Blocked" chip instead of the button.

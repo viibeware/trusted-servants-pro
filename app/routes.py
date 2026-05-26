@@ -15435,19 +15435,28 @@ def _auto_archive_events():
     admins can sit on a draft indefinitely without it disappearing
     into the archive. Idempotent — safe to call on every list view.
 
+    Both cutoffs are computed in the site's configured timezone so
+    "today" and "now" mean what the admin sees on their wall clock,
+    not what the server happens to read in UTC. ``event_ends_at`` and
+    ``announcement_auto_archive_at`` are both parsed naive from the
+    HTML5 ``datetime-local`` input the admin types into, i.e. stored
+    as naive-site-local; comparing them against a naive-site-local
+    cutoff keeps the wall-clock semantics intact.
+
     Two separate cutoffs:
-      • Events compare to *midnight today* in the host clock — events
-        ending yesterday or earlier disappear at the start of today.
-      • Announcements compare to *now in site-local time* — admins
-        type the auto-archive deadline into a datetime-local input
-        (naive, site-local), so the value goes live the moment that
-        wall-clock arrives in the fellowship's timezone.
+      • Events compare to *midnight today site-local* — events
+        ending yesterday-or-earlier (in the fellowship's tz)
+        disappear at the start of today.
+      • Announcements compare to *now site-local* — admins set the
+        auto-archive deadline as a wall-clock time, so the value
+        goes live the moment that wall-clock arrives in the
+        fellowship's timezone.
     """
     from .timezone import now_local_naive
     site = _get_site_setting()
-    today = datetime.utcnow().date()
-    event_cutoff = datetime.combine(today, datetime.min.time())  # midnight today
-    announce_cutoff = now_local_naive(site)
+    now_local = now_local_naive(site)
+    event_cutoff = datetime.combine(now_local.date(), datetime.min.time())
+    announce_cutoff = now_local
     q = Post.query.filter(
         Post.is_archived.is_(False), Post.is_draft.is_(False),
     )

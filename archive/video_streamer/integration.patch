@@ -1,0 +1,663 @@
+diff --git a/Dockerfile b/Dockerfile
+index eda85b3..7f78405 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -5,6 +5,7 @@ WORKDIR /srv
+ RUN apt-get update && apt-get install -y --no-install-recommends \
+     build-essential \
+     libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
++    ffmpeg \
+     && rm -rf /var/lib/apt/lists/*
+ 
+ COPY requirements.txt .
+@@ -26,4 +27,11 @@ RUN mkdir -p /data/uploads
+ 
+ EXPOSE 8000
+ 
+-CMD ["gunicorn", "-b", "0.0.0.0:8000", "-w", "2", "--timeout", "120", "--access-logfile", "-", "run:app"]
++# Long timeout so Video Streamer WebSocket ingest sessions (browser
++# camera → server, via /tspro/video-streamer/ws/ingest) aren't killed
++# mid-broadcast. Gunicorn's --timeout fires when a worker has been on
++# the same "request" for that many seconds; WS connections are one
++# long-lived request so the default 120 s would cap broadcasts at
++# 2 min. An hour is plenty for typical use; the admin stops the
++# broadcast explicitly before then.
++CMD ["gunicorn", "-b", "0.0.0.0:8000", "-w", "2", "--timeout", "3600", "--access-logfile", "-", "run:app"]
+diff --git a/app/__init__.py b/app/__init__.py
+index 3184547..aebf177 100644
+--- a/app/__init__.py
++++ b/app/__init__.py
+@@ -15,6 +15,17 @@ login_manager = LoginManager()
+ login_manager.login_view = "auth.login"
+ login_manager.login_message_category = "warning"
+ csrf = CSRFProtect()
++# Flask-Sock: WebSocket support for the browser-camera ingest path on
++# the Video Streamer module. The route handler hijacks the WSGI socket
++# via `simple-websocket`, so this works with the existing sync gunicorn
++# workers — at the cost of tying up one worker per active connection.
++# The only WS in the app today is admin-only and effectively single-
++# connection (one admin broadcasting), so the tie-up is acceptable.
++try:
++    from flask_sock import Sock
++    sock = Sock()
++except ImportError:  # noqa: BLE001 — local dev without the dep
++    sock = None
+ 
+ 
+ def create_app():
+@@ -126,6 +137,8 @@ def create_app():
+     db.init_app(app)
+     login_manager.init_app(app)
+     csrf.init_app(app)
++    if sock is not None:
++        sock.init_app(app)
+ 
+     @app.template_filter("file_type")
+     def file_type(src):
+@@ -685,6 +698,17 @@ def create_app():
+     from .metrics import prime as _prime_metrics
+     _prime_metrics()
+ 
++    # Wire the video streamer manager to the live data directory.
++    # ffmpeg writes HLS segments under TSP_DATA_DIR/stream/. The
++    # singleton manager defaults to the env var when unconfigured;
++    # passing it through here keeps a custom TSP_DATA_DIR on app
++    # config in sync with the helper without environment plumbing.
++    try:
++        from . import video_streamer as _vse
++        _vse.get_manager().configure(app.config["DATA_DIR"])
++    except Exception:  # noqa: BLE001 — never block boot on the streamer
++        app.logger.exception("video_streamer manager configure failed")
++
+     from .icons import icon as _icon
+     app.jinja_env.globals["icon"] = _icon
+ 
+@@ -1600,6 +1624,8 @@ def _migrate_sqlite(app):
+                          ("stories_required_role", "VARCHAR(32) NOT NULL DEFAULT 'admin'"),
+                          ("trusted_servants_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+                          ("trusted_servants_required_role", "VARCHAR(32) NOT NULL DEFAULT 'admin'"),
++                         ("video_streamer_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
++                         ("video_streamer_required_role", "VARCHAR(32) NOT NULL DEFAULT 'admin'"),
+                          ("frontend_stories_list_template", "VARCHAR(64) NOT NULL DEFAULT 'paper-stack'"),
+                          ("frontend_stories_list_width_mode", "VARCHAR(16) NOT NULL DEFAULT 'boxed'"),
+                          ("frontend_stories_list_max_width", "INTEGER NOT NULL DEFAULT 1160"),
+@@ -2005,6 +2031,13 @@ def _migrate_sqlite(app):
+         ), {"left": _ub_left, "right": _ub_right})
+         app.logger.info("utility_bar seed rowcount=%s", _ub_res.rowcount)
+ 
++        # Video Streamer — new columns on the (existing) singleton row.
++        # The table itself is created by db.create_all on first boot;
++        # these entries cover upgrades that have an older video_stream
++        # row already.
++        for col, ddl in (("uploaded_video_filename", "VARCHAR(500)"),):
++            add("video_stream", col, ddl)
++
+ 
+ def _seed_homepage_page(app):
+     """Ensure there's a Page designated as the public `/` root.
+diff --git a/app/models.py b/app/models.py
+index 69c2bed..30ae4ea 100644
+--- a/app/models.py
++++ b/app/models.py
+@@ -1012,6 +1012,14 @@ class SiteSetting(db.Model):
+     # don't surface a new sidebar entry without an admin opting in.
+     trusted_servants_enabled = db.Column(db.Boolean, nullable=False, default=False)
+     trusted_servants_required_role = db.Column(db.String(32), nullable=False, default="admin")
++    # Video Streamer module — admin-configured live video stream at the
++    # public /videostreamer URL. Source can be a local v4l2 device
++    # (e.g. /dev/video0 for OBS Virtual Cam), an RTSP URL, an HTTP URL,
++    # or a local file path. The actual stream config + runtime status
++    # live on the dedicated VideoStream model below; these two columns
++    # are only the sidebar / module gate.
++    video_streamer_enabled = db.Column(db.Boolean, nullable=False, default=False)
++    video_streamer_required_role = db.Column(db.String(32), nullable=False, default="admin")
+     frontend_stories_list_template = db.Column(db.String(64), nullable=False, default="paper-stack")
+     frontend_stories_list_width_mode = db.Column(db.String(16), nullable=False, default="boxed")
+     frontend_stories_list_max_width = db.Column(db.Integer, nullable=False, default=1160)
+@@ -3196,3 +3204,65 @@ class FormSubmission(db.Model):
+     payload_json = db.Column(db.Text)
+     ip = db.Column(db.String(45))
+     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
++
++
++class VideoStream(db.Model):
++    """Singleton: video streamer source + runtime status.
++
++    One logical "stream" per portal — admin picks a source (v4l2 device,
++    RTSP URL, HTTP URL, or local file) and starts/stops it from the
++    Video Streamer admin page. The streaming engine (app/video_streamer.py)
++    spawns an ffmpeg subprocess that ingests the source and writes HLS
++    segments to ``$TSP_DATA_DIR/stream/``; the public ``/videostreamer``
++    viewer plays the manifest via hls.js.
++    """
++    __tablename__ = "video_stream"
++    id = db.Column(db.Integer, primary_key=True)
++    # Source configuration. ``source_type`` is one of: device | rtsp |
++    # http | file | browser. ``source_path`` is the literal path or
++    # URL passed to ffmpeg's input (we don't quote it — ffmpeg handles
++    # its own parsing). ``browser`` ignores source_path; the source is
++    # the admin's webcam piped in over a WebSocket. Empty/None means
++    # the stream isn't configured yet.
++    source_type = db.Column(db.String(16), nullable=False, default="device")
++    source_path = db.Column(db.String(1000))
++    # When the "Local file" source is fed by a browser-upload (rather
++    # than a path the admin types in), the UUID-prefixed filename
++    # stored under ``UPLOAD_FOLDER`` lives here. The save handler sets
++    # ``source_path`` to the file's absolute path so ffmpeg can find
++    # it without the admin re-typing anything.
++    uploaded_video_filename = db.Column(db.String(500))
++    # Optional extra ffmpeg input args (advanced; e.g. -framerate 30
++    # -video_size 1280x720). Inserted before -i in the command line.
++    source_input_args = db.Column(db.String(500))
++    # Output encoding knobs. Sane defaults that work for webcam / OBS
++    # Virtual Cam through 1080p. Bitrate is the H.264 video bitrate
++    # ffmpeg targets; framerate caps the output (lower than the source
++    # to save bandwidth on slow connections).
++    video_width = db.Column(db.Integer, nullable=False, default=1920)
++    video_height = db.Column(db.Integer, nullable=False, default=1080)
++    framerate = db.Column(db.Integer, nullable=False, default=30)
++    bitrate_kbps = db.Column(db.Integer, nullable=False, default=2000)
++    # Whether to include audio in the output stream. Some sources
++    # (silent webcams, video-only files) don't have an audio track —
++    # ffmpeg fails if we request one. Defaults off; admin opts in.
++    include_audio = db.Column(db.Boolean, nullable=False, default=False)
++    # Public viewer page copy.
++    stream_title = db.Column(db.String(200))
++    stream_description = db.Column(db.Text)
++    # Offline-poster message shown on the viewer page when no stream
++    # is running. Defaults to a generic "Stream is offline" line.
++    offline_message = db.Column(db.String(300))
++    # Auto-start when the module is enabled or the app boots. Off by
++    # default — the admin clicks Start to begin broadcasting.
++    auto_start = db.Column(db.Boolean, nullable=False, default=False)
++    # Runtime state. ``status`` is one of: stopped | starting | running |
++    # error. Updated by the StreamManager as the ffmpeg subprocess
++    # changes state. ``pid`` lets the admin page show the live process
++    # number; ``last_error`` carries the last failure message for
++    # display under the Start/Stop controls.
++    status = db.Column(db.String(16), nullable=False, default="stopped")
++    pid = db.Column(db.Integer)
++    last_started_at = db.Column(db.DateTime)
++    last_stopped_at = db.Column(db.DateTime)
++    last_error = db.Column(db.Text)
+diff --git a/app/routes.py b/app/routes.py
+index 6ad4cbb..de14b62 100644
+--- a/app/routes.py
++++ b/app/routes.py
+@@ -21,7 +21,7 @@ from .models import (db, User, Meeting, MeetingFile, MeetingSchedule, MeetingSch
+                      DAYS_OF_WEEK, INTERGROUP_LIBRARY_NAMES,
+                      BackupTarget, BackupRun, BACKUP_KINDS,
+                      TrustedServantSubscriber, TrustedServantBlast,
+-                     CustomForm, FormSubmission)
++                     CustomForm, FormSubmission, VideoStream)
+ 
+ INTERGROUP_DEFAULT_ACCOUNTS = [
+     ('Chair', 'chair@dccma.com'),
+@@ -2611,6 +2611,307 @@ def zoom_tech_toggle():
+     return redirect(_safe_referrer() or url_for("main.index"))
+ 
+ 
++# ─── Video Streamer ────────────────────────────────────────────────
++# Admin module for configuring + driving a live video stream that's
++# served from the public /videostreamer URL. Stream source / encoding /
++# runtime status live on the VideoStream singleton; the StreamManager
++# in app/video_streamer.py owns the ffmpeg subprocess.
++
++def _get_video_stream():
++    """Resolve (or lazily create) the singleton VideoStream row."""
++    vs = VideoStream.query.first()
++    if not vs:
++        vs = VideoStream()
++        db.session.add(vs)
++        db.session.commit()
++    return vs
++
++
++@bp.route("/settings/video-streamer-toggle", methods=["POST"])
++@admin_required
++def video_streamer_toggle():
++    s = _get_site_setting()
++    s.video_streamer_enabled = request.form.get("video_streamer_enabled") == "1"
++    db.session.commit()
++    flash("Video Streamer " + ("enabled" if s.video_streamer_enabled else "disabled"),
++          "success")
++    return redirect(_safe_referrer() or url_for("main.index"))
++
++
++@bp.route("/video-streamer")
++@login_required
++def video_streamer():
++    """Admin settings + control page for the live stream."""
++    from . import video_streamer as vse
++    s = _get_site_setting()
++    if not s.video_streamer_enabled:
++        abort(404)
++    _require_module_role("video_streamer_required_role")
++    vs = _get_video_stream()
++    vse.reconcile_status(vs)
++    try:
++        db.session.commit()
++    except Exception:
++        db.session.rollback()
++    snap = vse.get_manager().status_snapshot()
++    return render_template("video_streamer.html",
++                           site=s, stream=vs, snapshot=snap,
++                           source_types=vse.SOURCE_TYPES)
++
++
++_VIDEO_UPLOAD_EXTS = {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v", ".mpeg", ".mpg", ".ogv"}
++
++
++@bp.route("/video-streamer/save", methods=["POST"])
++@admin_required
++def video_streamer_save():
++    from . import video_streamer as vse
++    import uuid as _uuid
++    vs = _get_video_stream()
++    stype = (request.form.get("source_type") or "").strip().lower()
++    if stype not in vse.SOURCE_TYPES:
++        stype = "device"
++    vs.source_type = stype
++    vs.source_input_args = (request.form.get("source_input_args") or "").strip() or None
++    vs.stream_title = (request.form.get("stream_title") or "").strip() or None
++    vs.stream_description = (request.form.get("stream_description") or "").strip() or None
++    vs.offline_message = (request.form.get("offline_message") or "").strip() or None
++    vs.include_audio = request.form.get("include_audio") == "1"
++    vs.auto_start = request.form.get("auto_start") == "1"
++
++    # File upload for the "Local file" source. The picker is part of
++    # the same form so save handles both the metadata + the file in
++    # one shot. The uploaded file is stored UUID-prefixed in
++    # UPLOAD_FOLDER (same pattern every other module upload uses);
++    # the row's source_path is auto-populated with the absolute path
++    # so ffmpeg can read it without the admin re-typing anything.
++    uploaded = request.files.get("uploaded_video")
++    if uploaded and uploaded.filename:
++        original = secure_filename(uploaded.filename) or "video"
++        ext = os.path.splitext(original)[1].lower()
++        if ext not in _VIDEO_UPLOAD_EXTS:
++            flash(f"Unsupported video extension {ext!r}. Allowed: "
++                  + ", ".join(sorted(_VIDEO_UPLOAD_EXTS)), "danger")
++            return redirect(url_for("main.video_streamer"))
++        stored = f"{_uuid.uuid4().hex}{ext}"
++        dest = os.path.join(current_app.config["UPLOAD_FOLDER"], stored)
++        uploaded.save(dest)
++        # Drop the prior upload so the uploads dir doesn't grow each
++        # time the admin replaces the source file.
++        prior = vs.uploaded_video_filename
++        if prior and prior != stored:
++            old = os.path.join(current_app.config["UPLOAD_FOLDER"], prior)
++            try:
++                os.remove(old)
++            except OSError:
++                pass
++        vs.uploaded_video_filename = stored
++        vs.source_path = dest
++    else:
++        # No new upload — accept the text path field (preserves the
++        # advanced "type your own path / lavfi testsrc" workflow).
++        text_path = (request.form.get("source_path") or "").strip()
++        if stype == "file" and vs.uploaded_video_filename and not text_path:
++            # The user has a previously-uploaded file selected and
++            # left the text field blank — keep using the upload.
++            vs.source_path = os.path.join(
++                current_app.config["UPLOAD_FOLDER"], vs.uploaded_video_filename)
++        else:
++            vs.source_path = text_path or None
++
++    def _int_or(default, lo, hi):
++        try:
++            v = int(default)
++        except (TypeError, ValueError):
++            return None
++        return max(lo, min(v, hi))
++
++    w = _int_or(request.form.get("video_width") or "1280", 160, 3840)
++    h = _int_or(request.form.get("video_height") or "720", 120, 2160)
++    fps = _int_or(request.form.get("framerate") or "30", 5, 60)
++    br = _int_or(request.form.get("bitrate_kbps") or "2500", 200, 20000)
++    if w: vs.video_width = w
++    if h: vs.video_height = h
++    if fps: vs.framerate = fps
++    if br: vs.bitrate_kbps = br
++
++    db.session.commit()
++    flash("Video Streamer settings saved", "success")
++    return redirect(url_for("main.video_streamer"))
++
++
++@bp.route("/video-streamer/remove-upload", methods=["POST"])
++@admin_required
++def video_streamer_remove_upload():
++    """Drop the currently uploaded source file. Leaves the rest of
++    the configuration in place; the admin can pick a new file or
++    switch to a different source type."""
++    vs = _get_video_stream()
++    prior = vs.uploaded_video_filename
++    if prior:
++        full = os.path.join(current_app.config["UPLOAD_FOLDER"], prior)
++        try:
++            os.remove(full)
++        except OSError:
++            pass
++        vs.uploaded_video_filename = None
++        # Only clear source_path if it's still pointing at the now-
++        # deleted upload. An admin who typed a custom server path
++        # shouldn't have it wiped because they removed the upload.
++        if vs.source_path == full:
++            vs.source_path = None
++        db.session.commit()
++        flash("Uploaded video removed", "success")
++    return redirect(url_for("main.video_streamer"))
++
++
++@bp.route("/video-streamer/start", methods=["POST"])
++@admin_required
++def video_streamer_start():
++    from . import video_streamer as vse
++    vs = _get_video_stream()
++    ok, msg = vse.get_manager().start(vs)
++    if ok:
++        vs.status = "running"
++        vs.pid = vse.get_manager().current_pid()
++        vs.last_started_at = datetime.utcnow()
++        vs.last_error = None
++        flash(msg, "success")
++    else:
++        vs.status = "error"
++        vs.last_error = msg
++        flash(msg, "danger")
++    db.session.commit()
++    return redirect(url_for("main.video_streamer"))
++
++
++@bp.route("/video-streamer/stop", methods=["POST"])
++@admin_required
++def video_streamer_stop():
++    from . import video_streamer as vse
++    vs = _get_video_stream()
++    ok, msg = vse.get_manager().stop(vs)
++    vs.status = "stopped"
++    vs.pid = None
++    vs.last_stopped_at = datetime.utcnow()
++    db.session.commit()
++    flash(msg, "success" if ok else "danger")
++    return redirect(url_for("main.video_streamer"))
++
++
++@bp.route("/video-streamer/status.json")
++@login_required
++def video_streamer_status_json():
++    """Live-poll endpoint for the admin page's status pill + log tail."""
++    from . import video_streamer as vse
++    s = _get_site_setting()
++    if not s.video_streamer_enabled:
++        abort(404)
++    _require_module_role("video_streamer_required_role")
++    vs = _get_video_stream()
++    vse.reconcile_status(vs)
++    try:
++        db.session.commit()
++    except Exception:
++        db.session.rollback()
++    snap = vse.get_manager().status_snapshot()
++    return {
++        "status": vs.status,
++        "running": snap["running"],
++        "pid": snap["pid"],
++        "manifest_exists": snap["manifest_exists"],
++        "last_error": vs.last_error,
++        "log_tail": snap["log_tail"],
++    }
++
++
++# ── Browser-camera ingest WebSocket ────────────────────────────────
++# The admin's browser captures via getUserMedia, packs webm chunks with
++# MediaRecorder, and forwards each chunk as a binary WS frame here. We
++# spawn ffmpeg in pipe-input mode on the first frame and feed every
++# subsequent chunk into its stdin. When the WS closes (admin clicks
++# "Stop", or navigates away), we close stdin so ffmpeg flushes the
++# tail of the HLS playlist and exits cleanly.
++#
++# Auth: the WS handshake is a normal GET upgrade, so Flask-Login's
++# session cookie carries the user identity. We re-check admin role +
++# module-enabled inside the handler so a stale cookie can't grant
++# ingest after the module is turned off.
++
++def _register_video_streamer_ws():
++    """Wire the WS route only when flask-sock loaded successfully.
++    Kept in a function so the import-time decorator doesn't blow up
++    in environments where the optional dep isn't installed."""
++    from . import sock as _s
++    if _s is None:
++        return
++
++    @_s.route("/tspro/video-streamer/ws/ingest")
++    def video_streamer_ingest_ws(ws):
++        from . import video_streamer as vse
++        # Admin + module gate. The WS handshake already passed through
++        # the regular request pipeline, so current_user is populated.
++        s = _get_site_setting()
++        if not s or not s.video_streamer_enabled:
++            ws.close()
++            return
++        if not current_user.is_authenticated or not current_user.is_admin():
++            ws.close()
++            return
++
++        vs = _get_video_stream()
++        if vs.source_type != "browser":
++            # Don't silently turn on browser ingest while the row is
++            # configured for a different source — admin would be
++            # confused when the stream they set up disappears.
++            ws.close()
++            return
++
++        mgr = vse.get_manager()
++        ok, msg = mgr.start_pipe(vs)
++        if not ok:
++            try:
++                ws.send(f'{{"error": {msg!r}}}')
++            except Exception:
++                pass
++            ws.close()
++            return
++        vs.status = "running"
++        vs.pid = mgr.current_pid()
++        vs.last_started_at = datetime.utcnow()
++        vs.last_error = None
++        db.session.commit()
++
++        try:
++            while True:
++                data = ws.receive(timeout=30)
++                if data is None:
++                    # Client closed or timed out without sending a frame.
++                    break
++                if isinstance(data, (bytes, bytearray)):
++                    if not mgr.write_chunk(data):
++                        # ffmpeg died — surface a hint and break.
++                        try:
++                            ws.send('{"error": "ffmpeg exited unexpectedly"}')
++                        except Exception:
++                            pass
++                        break
++                # String frames are control messages — we don't define
++                # any yet, so ignore them silently.
++        finally:
++            mgr.close_pipe()
++            vs.status = "stopped"
++            vs.pid = None
++            vs.last_stopped_at = datetime.utcnow()
++            try:
++                db.session.commit()
++            except Exception:
++                db.session.rollback()
++
++
++_register_video_streamer_ws()
++
++
+ @bp.route("/settings/sidebar-save", methods=["POST"])
+ @admin_required
+ def sidebar_save():
+@@ -2712,6 +3013,7 @@ def module_role_save():
+         "frontend_module":   "frontend_module_required_role",
+         "trusted_servants":  "trusted_servants_required_role",
+         "recovery_contacts":        "recovery_contacts_required_role",
++        "video_streamer":    "video_streamer_required_role",
+     }
+     col = columns.get(module)
+     if col and role in ROLE_TIER_KEYS:
+@@ -17669,3 +17971,84 @@ def api_visitor_metrics_summary():
+     )
+ 
+ 
++# ── Public Video Streamer viewer ──────────────────────────────────
++# Served at the root (not under /tspro) so it can be shared with
++# unauthenticated viewers. The page only renders when the admin has
++# the module enabled; otherwise the route returns 404.
++
++def _videostreamer_active_stream():
++    """Return the (stream, site) tuple if the streamer is enabled, or
++    abort(404) so the route + manifest URLs disappear when the module
++    is off. Keeps the per-handler boilerplate small."""
++    s = _get_site_setting()
++    if not s or not s.video_streamer_enabled:
++        abort(404)
++    vs = VideoStream.query.first()
++    if not vs:
++        abort(404)
++    return (vs, s)
++
++
++@public_bp.route("/videostreamer")
++def videostreamer_view():
++    from . import video_streamer as vse
++    vs, s = _videostreamer_active_stream()
++    vse.reconcile_status(vs)
++    try:
++        db.session.commit()
++    except Exception:
++        db.session.rollback()
++    return render_template("videostreamer.html",
++                           site=s, stream=vs,
++                           manifest_url=url_for("public.videostreamer_manifest"))
++
++
++@public_bp.route("/videostreamer/stream.m3u8")
++def videostreamer_manifest():
++    from . import video_streamer as vse
++    vs, _site = _videostreamer_active_stream()
++    mgr = vse.get_manager()
++    path = mgr.manifest_path
++    if not os.path.exists(path):
++        abort(404)
++    resp = send_from_directory(mgr.stream_dir, "stream.m3u8",
++                               mimetype="application/vnd.apple.mpegurl")
++    # HLS manifests must NOT be cached — the live playlist is rewritten
++    # every segment, and stale caches break playback for late joiners.
++    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
++    resp.headers["Pragma"] = "no-cache"
++    resp.headers["Expires"] = "0"
++    return resp
++
++
++@public_bp.route("/videostreamer/<segname>")
++def videostreamer_segment(segname):
++    """Serve an HLS .ts segment. ffmpeg writes the manifest with
++    relative segment names (``seg_NNNNN.ts``) so the browser resolves
++    them against the manifest URL — meaning segments need to live at
++    ``/videostreamer/<basename>``, not under a subdirectory.
++
++    Paths are constrained to the ``seg_*.ts`` shape ffmpeg emits so
++    the route can't be coaxed into reading arbitrary files from the
++    stream directory. Flask's default string converter forbids slashes,
++    so directory traversal via ``..%2F`` is also blocked at routing
++    time — we double-check here as defense in depth."""
++    from . import video_streamer as vse
++    vs, _site = _videostreamer_active_stream()
++    if "/" in segname or ".." in segname or not segname.startswith("seg_") \
++            or not segname.endswith(".ts"):
++        abort(404)
++    mgr = vse.get_manager()
++    full = os.path.join(mgr.stream_dir, segname)
++    if not os.path.isfile(full):
++        abort(404)
++    resp = send_from_directory(mgr.stream_dir, segname,
++                               mimetype="video/MP2T")
++    # Segments are immutable once written (filenames are unique
++    # incrementing ints). A short cache window lets edge caches /
++    # the browser hold them while still allowing a fresh manifest
++    # to point at newer ones.
++    resp.headers["Cache-Control"] = "public, max-age=10"
++    return resp
++
++
+diff --git a/app/sidebar.py b/app/sidebar.py
+index ce92525..56cdf46 100644
+--- a/app/sidebar.py
++++ b/app/sidebar.py
+@@ -38,6 +38,7 @@ _MAIN_CATALOG = [
+     {"key": "blog",           "label": "Blog",                 "endpoint": "main.blog_index",     "active_kind": "prefix:main.blog_"},
+     {"key": "trusted_servants", "label": "Email List",         "endpoint": "main.trusted_servants_list", "active_kind": "prefix:main.trusted_servants"},
+     {"key": "recovery_contacts",     "label": "Recovery Contacts",    "endpoint": "main.recovery_contacts",     "active_kind": "prefix:main.recovery_contacts"},
++    {"key": "video_streamer", "label": "Video Streamer",       "endpoint": "main.video_streamer", "active_kind": "prefix:main.video_streamer"},
+     {"key": "web_frontend",   "label": "Web Frontend",         "endpoint": "main.frontend_dashboard", "active_kind": "prefix:main.frontend_"},
+ ]
+ 
+@@ -74,6 +75,7 @@ _DYNAMIC_SECTION_ITEMS = {
+     "blog":             "blog_required_role",
+     "trusted_servants": "trusted_servants_required_role",
+     "recovery_contacts":       "recovery_contacts_required_role",
++    "video_streamer":   "video_streamer_required_role",
+     "web_frontend":     "frontend_module_required_role",
+ }
+ 
+@@ -130,6 +132,9 @@ def _is_visible(key, site, user):
+     if key == "recovery_contacts":
+         return bool(site and getattr(site, "recovery_contacts_enabled", False)
+                     and user_meets_role(user, getattr(site, "recovery_contacts_required_role", "admin")))
++    if key == "video_streamer":
++        return bool(site and getattr(site, "video_streamer_enabled", False)
++                    and user_meets_role(user, getattr(site, "video_streamer_required_role", "admin")))
+     # Watchtower and Web Frontend both render as pinned sidebar-quicknav
+     # buttons above the search bar (see base.html). Hiding them from
+     # the regular catalog avoids two entry points for the same
+diff --git a/app/templates/base.html b/app/templates/base.html
+index 2010e70..2349847 100644
+--- a/app/templates/base.html
++++ b/app/templates/base.html
+@@ -1052,6 +1052,23 @@
+               <noscript><button class="btn btn-sm btn-primary">Save</button></noscript>
+             </form>
+           </li>
++          <li class="special-page-row">
++            <div class="special-page-info">
++              <div class="u-name">Video Streamer</div>
++              <p class="muted small">Live video stream at the public <code>/videostreamer</code> URL. Admins configure a source (local v4l2 device — for OBS Virtual Cam point at <code>/dev/video0</code>, an RTSP/HTTP URL, or a local file) and ffmpeg transcodes to HLS for the viewer page. When off, the sidebar entry disappears and the public viewer page returns 404; saved configuration is kept and reappears when re-enabled.</p>
++            </div>
++            {{ module_role_picker('video_streamer', site.video_streamer_required_role if site else 'admin') }}
++            <form method="post" action="{{ url_for('main.video_streamer_toggle') }}" class="special-page-toggle-form" data-refresh-sidebar="1">
++              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
++              <label class="mode-toggle" title="Enable Video Streamer">
++                <input type="checkbox" name="video_streamer_enabled" value="1"
++                       onchange="this.form.submit()"
++                       {% if site and site.video_streamer_enabled %}checked{% endif %}>
++                <span class="mode-track"><span class="mode-thumb"></span></span>
++              </label>
++              <noscript><button class="btn btn-sm btn-primary">Save</button></noscript>
++            </form>
++          </li>
+           <li class="special-page-row">
+             <div class="special-page-info">
+               <div class="u-name">Web Frontend module</div>
+diff --git a/requirements.txt b/requirements.txt
+index ba0a77a..b6041f9 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -18,3 +18,4 @@ paramiko==3.5.0
+ dropbox==12.0.2
+ croniter==2.0.7
+ phonenumbers==8.13.52
++flask-sock==0.7.0

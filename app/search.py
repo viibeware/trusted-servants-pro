@@ -244,12 +244,14 @@ def _events_source(site):
     """Built-in source: every upcoming, non-draft, non-archived event."""
     if not (site and getattr(site, "posts_enabled", True)):
         return []
-    from datetime import datetime
+    from .timezone import now_local_naive
     from .models import Post
     from .frontend import _post_url
 
     items = []
-    now = datetime.utcnow()
+    # event_ends_at is naive site-local; comparing in UTC would
+    # hide / show events by the host's UTC offset.
+    now = now_local_naive(site)
     events = (Post.query
               .filter(Post.is_event.is_(True),
                       Post.is_archived.is_(False),
@@ -313,12 +315,14 @@ def _archive_source(site):
     its archive_detail page via ``_post_url``."""
     if not (site and getattr(site, "posts_enabled", True)):
         return []
-    from datetime import datetime
+    from .timezone import now_local_naive
     from .models import Post
     from .frontend import _post_url
 
     items = []
-    now = datetime.utcnow()
+    # Naive site-local — matches the storage convention of
+    # event_ends_at (see _events_source for the same reasoning).
+    now = now_local_naive(site)
 
     # Past events: ended OR explicitly archived. Skip rows with no date
     # so we don't false-positive a brand-new event as archived.

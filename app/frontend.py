@@ -1433,15 +1433,22 @@ def _post_in_archive(post):
     """True when the post is in the unified /archive — either explicitly
     archived OR an event whose end-time has already passed (in case the
     auto-archive sweep hasn't run yet). Detail pages use this to flip
-    the back-link to "Archive" instead of the live list."""
+    the back-link to "Archive" instead of the live list.
+
+    ``event_ends_at`` is stored naive site-local (parsed from the HTML5
+    ``datetime-local`` input the admin types into), so "has it passed?"
+    must compare against site-local now, not UTC — otherwise an event
+    ending at 7 pm Pacific would look "passed" any time after 11 am UTC
+    that day."""
     if not post:
         return False
     if post.is_archived:
         return True
     if post.is_event:
-        from datetime import datetime
+        from .timezone import now_local_naive
+        from .models import SiteSetting
         ref = post.event_ends_at or post.event_starts_at
-        if ref and ref < datetime.utcnow():
+        if ref and ref < now_local_naive(SiteSetting.query.first()):
             return True
     return False
 
@@ -2968,9 +2975,11 @@ def events_list():
     # recent additions first regardless of when each event runs.
     # Past events still drop off so the public list stays "upcoming
     # only"; /archive is the home for ended events.
-    from datetime import datetime as _dt
+    from .timezone import now_local_naive
     from sqlalchemy import func as _sql_func
-    _now = _dt.utcnow()
+    # event_ends_at is naive site-local — compare in the same frame
+    # so events drop off at midnight local, not at midnight UTC.
+    _now = now_local_naive(site)
     _rows = (Post.query
              .filter(Post.is_event.is_(True),
                      Post.is_archived.is_(False),
@@ -3034,8 +3043,10 @@ def archive():
         abort(404)
     ctx = _frontend_context(site)
 
-    from datetime import datetime
-    now = datetime.utcnow()
+    from .timezone import now_local_naive
+    # event_ends_at is naive site-local — see _auto_archive_events
+    # for the canonical writeup.
+    now = now_local_naive(site)
 
     # Past events: ended OR is_archived. Skip the ones with no date.
     event_rows = (Post.query
