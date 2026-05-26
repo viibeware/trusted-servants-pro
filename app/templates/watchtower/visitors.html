@@ -3,6 +3,7 @@
 {% block heading %}Watchtower{% endblock %}
 {% block heading_help %}Anonymous traffic to the public web frontend. Signed-in users are excluded — these are real visitors.{% endblock %}
 {% block top_actions %}
+{% include "_metric_toggle.html" %}
 <form method="get" action="{{ url_for('main.watchtower_visitors') }}" class="wt-window-form">
   <label>
     <span class="visually-hidden">Window</span>
@@ -17,166 +18,215 @@
 {% block content %}
 {% include "watchtower/_tabs.html" %}
 
+{# ── KPI tiles ─────────────────────────────────────────────────────
+   Big number swaps via data-uniques / data-views on each value cell.
+   Labels and sub-lines have mode-specific siblings so they read
+   accurately for whichever metric is active. #}
 <section class="wt-kpi-grid wt-kpi-grid--four">
   <div class="wt-kpi wt-kpi--accent">
-    <div class="wt-kpi-label">Views · {{ window }}d</div>
-    <div class="wt-kpi-value">{{ '{:,}'.format(summary.views_window) }}</div>
-    <div class="wt-kpi-sub muted small">{{ '{:,}'.format(summary.uniques_window) }} unique</div>
-  </div>
-  <div class="wt-kpi">
-    <div class="wt-kpi-label">Today</div>
-    <div class="wt-kpi-value">{{ '{:,}'.format(summary.views_today) }}</div>
+    <div class="wt-kpi-label">
+      <span data-metric-mode="uniques">Unique visitors · {{ window }}d</span>
+      <span data-metric-mode="views">Hits · {{ window }}d</span>
+    </div>
+    <div class="wt-kpi-value"
+         data-uniques="{{ '{:,}'.format(summary.uniques_window) }}"
+         data-views="{{ '{:,}'.format(summary.views_window) }}">{{ '{:,}'.format(summary.uniques_window) }}</div>
     <div class="wt-kpi-sub muted small">
-      {% set diff = summary.views_today - summary.views_yesterday %}
-      {% if diff > 0 %}↑ {{ diff }} vs yesterday{% elif diff < 0 %}↓ {{ -diff }} vs yesterday{% else %}even with yesterday{% endif %}
+      <span data-metric-mode="uniques">{{ '{:,}'.format(summary.views_window) }} total hit{{ '' if summary.views_window == 1 else 's' }}
+        {% if summary.uniques_window and summary.views_window %}· {{ '%.1f'|format(summary.views_window / summary.uniques_window) }} hits/visitor{% endif %}
+      </span>
+      <span data-metric-mode="views">{{ '{:,}'.format(summary.uniques_window) }} unique visitor{{ '' if summary.uniques_window == 1 else 's' }}</span>
     </div>
   </div>
   <div class="wt-kpi">
-    <div class="wt-kpi-label">7-day uniques</div>
-    <div class="wt-kpi-value">{{ '{:,}'.format(summary.uniques_7d) }}</div>
-    <div class="wt-kpi-sub muted small">{{ '{:,}'.format(summary.views_7d) }} views</div>
+    <div class="wt-kpi-label">Today</div>
+    <div class="wt-kpi-value"
+         data-uniques="{{ '{:,}'.format(summary.uniques_today) }}"
+         data-views="{{ '{:,}'.format(summary.views_today) }}">{{ '{:,}'.format(summary.uniques_today) }}</div>
+    <div class="wt-kpi-sub muted small">
+      {% set diff = summary.views_today - summary.views_yesterday %}
+      <span data-metric-mode="views">
+        {% if diff > 0 %}↑ {{ diff }} vs yesterday{% elif diff < 0 %}↓ {{ -diff }} vs yesterday{% else %}even with yesterday{% endif %}
+      </span>
+      <span data-metric-mode="uniques">{{ '{:,}'.format(summary.views_today) }} hit{{ '' if summary.views_today == 1 else 's' }} today</span>
+    </div>
+  </div>
+  <div class="wt-kpi">
+    <div class="wt-kpi-label">Last 7 days</div>
+    <div class="wt-kpi-value"
+         data-uniques="{{ '{:,}'.format(summary.uniques_7d) }}"
+         data-views="{{ '{:,}'.format(summary.views_7d) }}">{{ '{:,}'.format(summary.uniques_7d) }}</div>
+    <div class="wt-kpi-sub muted small">
+      <span data-metric-mode="uniques">{{ '{:,}'.format(summary.views_7d) }} hit{{ '' if summary.views_7d == 1 else 's' }}</span>
+      <span data-metric-mode="views">{{ '{:,}'.format(summary.uniques_7d) }} unique visitor{{ '' if summary.uniques_7d == 1 else 's' }}</span>
+    </div>
   </div>
   <div class="wt-kpi">
     <div class="wt-kpi-label">Lifetime</div>
     <div class="wt-kpi-value">{{ '{:,}'.format(summary.total_views) }}</div>
-    <div class="wt-kpi-sub muted small">{% if summary.first_seen_at %}since {{ summary.first_seen_at.strftime('%b %d, %Y') }}{% else %}—{% endif %}</div>
+    <div class="wt-kpi-sub muted small">{% if summary.first_seen_at %}since {{ summary.first_seen_at.strftime('%b %d, %Y') }}{% else %}—{% endif %} · all-time hits</div>
   </div>
 </section>
 
-{# Headline traffic chart #}
-{% set chart_max = ((daily|map(attribute='views')|max) if daily else 1) or 1 %}
-<section class="card wt-chart-card">
+{# ── Daily traffic chart ───────────────────────────────────────────
+   Richer than the prior simple area chart: gridlines, y-axis ticks,
+   x-axis date labels, and hover dots that drive a floating tooltip.
+   Both series (views + uniques) are always plotted; the active
+   metric is the heavy solid line + filled area, the other is a thin
+   dashed reference. The two `<g data-metric-mode>` groups swap which
+   is dominant when the toggle flips. #}
+{% set chart_w = 960 %}
+{% set chart_h = 280 %}
+{% set chart_padding_left = 44 %}
+{% set chart_padding_right = 18 %}
+{% set chart_padding_top = 16 %}
+{% set chart_padding_bottom = 36 %}
+{% set inner_w = chart_w - chart_padding_left - chart_padding_right %}
+{% set inner_h = chart_h - chart_padding_top - chart_padding_bottom %}
+{% set view_max = (daily | map(attribute='views') | max) if daily else 0 %}
+{% set unique_max = (daily | map(attribute='uniques') | max) if daily else 0 %}
+{% set y_max_raw = view_max if view_max > unique_max else unique_max %}
+{% set y_max = (((y_max_raw // 5) + 1) * 5) if y_max_raw > 5 else 5 %}
+{% set point_count = daily | length %}
+{% set point_step = (inner_w / (point_count - 1)) if point_count > 1 else 0 %}
+
+<section class="card vm-chart-card">
   <div class="card-head">
-    <h2>Traffic · last {{ window }} days</h2>
-    <div class="muted smaller">
-      <span class="wt-chart-key wt-chart-key--views">Views</span>
-      <span class="wt-chart-key wt-chart-key--uniques">Uniques</span>
+    <h2>Traffic over time</h2>
+    <div class="vm-legend">
+      <span class="vm-legend-item"><span class="vm-legend-swatch vm-swatch-uniques"></span>Unique visitors</span>
+      <span class="vm-legend-item"><span class="vm-legend-swatch vm-swatch-views"></span>Hits</span>
     </div>
   </div>
   {% if daily %}
-  <div class="wt-chart-wrap">
-    <svg class="wt-chart wt-chart--tall" viewBox="0 0 900 240" preserveAspectRatio="none" role="img" aria-label="Visitor traffic">
+  <div class="vm-chart-wrap">
+    <svg class="vm-chart" viewBox="0 0 {{ chart_w }} {{ chart_h }}" preserveAspectRatio="none"
+         role="img" aria-label="Daily visitor traffic for the selected window">
       <defs>
-        <linearGradient id="wt-v-grad" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stop-color="rgba(59,130,246,0.45)"/>
-          <stop offset="100%" stop-color="rgba(59,130,246,0.02)"/>
+        <linearGradient id="wt-views-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="rgb(59,130,246)" stop-opacity="0.42"/>
+          <stop offset="60%" stop-color="rgb(59,130,246)" stop-opacity="0.14"/>
+          <stop offset="100%" stop-color="rgb(59,130,246)" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="wt-uniques-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="rgb(16,185,129)" stop-opacity="0.42"/>
+          <stop offset="60%" stop-color="rgb(16,185,129)" stop-opacity="0.14"/>
+          <stop offset="100%" stop-color="rgb(16,185,129)" stop-opacity="0"/>
         </linearGradient>
       </defs>
-      <line x1="0" y1="230" x2="900" y2="230" stroke="rgba(148,163,184,0.25)"/>
-      {% set n = daily|length %}
-      {% set step = 900 / (n - 1) if n > 1 else 0 %}
-      <path d="M 0 230
-        {%- for d in daily -%}
-          L {{ '%.1f'|format(loop.index0 * step) }} {{ '%.1f'|format(230 - (d.views / chart_max) * 210) }}
-        {%- endfor -%}
-        L 900 230 Z" fill="url(#wt-v-grad)"/>
-      <path d="M
-        {%- for d in daily -%}
-          {{ '%.1f'|format(loop.index0 * step) }},{{ '%.1f'|format(230 - (d.views / chart_max) * 210) }}{% if not loop.last %} L {% endif %}
-        {%- endfor -%}" fill="none" stroke="rgb(59,130,246)" stroke-width="2.5"/>
-      <path d="M
-        {%- for d in daily -%}
-          {{ '%.1f'|format(loop.index0 * step) }},{{ '%.1f'|format(230 - (d.uniques / chart_max) * 210) }}{% if not loop.last %} L {% endif %}
-        {%- endfor -%}" fill="none" stroke="rgb(16,185,129)" stroke-width="2" stroke-dasharray="5 4"/>
+
+      {# Gridlines + y-axis ticks #}
+      {% for i in range(0, 6) %}
+        {% set y = chart_padding_top + (inner_h * i / 5) %}
+        {% set tick_value = ((y_max * (5 - i)) // 5) %}
+        <line x1="{{ chart_padding_left }}" y1="{{ y }}" x2="{{ chart_w - chart_padding_right }}" y2="{{ y }}"
+              class="vm-grid-line"/>
+        <text x="{{ chart_padding_left - 8 }}" y="{{ y + 3 }}" text-anchor="end" class="vm-axis-tick">{{ tick_value }}</text>
+      {% endfor %}
+
+      {# Build both series once #}
+      {% set ns = namespace(area_v='', line_v='', area_u='', line_u='') %}
+      {% for d in daily %}
+        {% set x = chart_padding_left + (loop.index0 * point_step) %}
+        {% set vy = chart_padding_top + inner_h - (inner_h * d.views / y_max if y_max > 0 else 0) %}
+        {% set uy = chart_padding_top + inner_h - (inner_h * d.uniques / y_max if y_max > 0 else 0) %}
+        {% if loop.first %}
+          {% set ns.area_v = "M " ~ x ~ " " ~ (chart_padding_top + inner_h) ~ " L " ~ x ~ " " ~ vy %}
+          {% set ns.line_v = "M " ~ x ~ " " ~ vy %}
+          {% set ns.area_u = "M " ~ x ~ " " ~ (chart_padding_top + inner_h) ~ " L " ~ x ~ " " ~ uy %}
+          {% set ns.line_u = "M " ~ x ~ " " ~ uy %}
+        {% else %}
+          {% set ns.area_v = ns.area_v ~ " L " ~ x ~ " " ~ vy %}
+          {% set ns.line_v = ns.line_v ~ " L " ~ x ~ " " ~ vy %}
+          {% set ns.area_u = ns.area_u ~ " L " ~ x ~ " " ~ uy %}
+          {% set ns.line_u = ns.line_u ~ " L " ~ x ~ " " ~ uy %}
+        {% endif %}
+        {% if loop.last %}
+          {% set ns.area_v = ns.area_v ~ " L " ~ x ~ " " ~ (chart_padding_top + inner_h) ~ " Z" %}
+          {% set ns.area_u = ns.area_u ~ " L " ~ x ~ " " ~ (chart_padding_top + inner_h) ~ " Z" %}
+        {% endif %}
+      {% endfor %}
+
+      {# Active = uniques (default). Filled green area + solid bold green
+         line + thin dashed blue reference for hits. #}
+      <g data-metric-mode="uniques">
+        <path d="{{ ns.area_u }}" fill="url(#wt-uniques-fill)" stroke="none"/>
+        <path d="{{ ns.line_v }}" fill="none" stroke="rgb(59,130,246)" stroke-width="1.5"
+              stroke-dasharray="5 4" opacity="0.55"
+              stroke-linejoin="round" stroke-linecap="round"/>
+        <path d="{{ ns.line_u }}" fill="none" stroke="rgb(16,185,129)" stroke-width="2.5"
+              stroke-linejoin="round" stroke-linecap="round"/>
+      </g>
+      {# Active = hits. Mirror, swapped. #}
+      <g data-metric-mode="views">
+        <path d="{{ ns.area_v }}" fill="url(#wt-views-fill)" stroke="none"/>
+        <path d="{{ ns.line_u }}" fill="none" stroke="rgb(16,185,129)" stroke-width="1.5"
+              stroke-dasharray="5 4" opacity="0.55"
+              stroke-linejoin="round" stroke-linecap="round"/>
+        <path d="{{ ns.line_v }}" fill="none" stroke="rgb(59,130,246)" stroke-width="2.5"
+              stroke-linejoin="round" stroke-linecap="round"/>
+      </g>
+
+      {# Hover dots — one per day. JS positions the tooltip relative to
+         the wrap. Dots are always-visible (small) so the user can
+         tell where they can hover. #}
+      {% for d in daily %}
+        {% set x = chart_padding_left + (loop.index0 * point_step) %}
+        {% set vy = chart_padding_top + inner_h - (inner_h * d.views / y_max if y_max > 0 else 0) %}
+        <circle cx="{{ x }}" cy="{{ vy }}" r="3.5" class="vm-chart-dot"
+                data-day="{{ d.day }}" data-views="{{ d.views }}" data-uniques="{{ d.uniques }}"/>
+      {% endfor %}
+
+      {# X-axis day labels — show every Nth so the strip stays legible #}
+      {% set x_label_step = 1 if point_count <= 14 else (3 if point_count <= 30 else 7) %}
+      {% for d in daily %}
+        {% if loop.index0 % x_label_step == 0 or loop.last %}
+          {% set x = chart_padding_left + (loop.index0 * point_step) %}
+          <text x="{{ x }}" y="{{ chart_h - 14 }}" text-anchor="middle" class="vm-axis-tick">
+            {{ d.day[5:] }}
+          </text>
+        {% endif %}
+      {% endfor %}
     </svg>
+    <div class="vm-tooltip" id="wt-vm-tooltip" hidden></div>
   </div>
   {% else %}
-  <p class="muted">No visits recorded yet.</p>
+  <p class="muted vm-empty">No visits recorded yet.</p>
   {% endif %}
 </section>
 
-<div class="wt-two-col">
-  <section class="card">
-    {# Initial-visible row count and per-click reveal step for the
-       two expandable rank lists below. JS in app.js handles the
-       reveal animation — see `data-wt-expand*` markup contract. #}
-    {% set _INITIAL = 30 %}
-    {% set _STEP = 30 %}
-    <div class="card-head"><h2>Top paths</h2><span class="muted smaller" data-wt-expand-meta="vt-top-paths">{{ window }}d</span></div>
-    {% if not top_paths %}
-    <p class="muted">No data.</p>
-    {% else %}
-    {% set tp_max = (top_paths|map(attribute='count')|max) or 1 %}
-    <ul class="wt-rank-list wt-rank-list--expandable"
-        data-wt-expand="vt-top-paths"
-        data-step="{{ _STEP }}"
-        data-total="{{ top_paths|length }}">
-      {% for r in top_paths %}
-      <li class="wt-rank-row {% if loop.index0 >= _INITIAL %}wt-rank-row--hidden{% endif %}">
-        <div class="wt-rank-label mono small">{{ r.label }}</div>
-        <div class="wt-rank-bar"><span style="width: {{ (r.count / tp_max * 100)|round(0,'floor') }}%"></span></div>
-        <div class="wt-rank-count">{{ '{:,}'.format(r.count) }}</div>
-      </li>
-      {% endfor %}
-    </ul>
-    {% if top_paths|length > _INITIAL %}
-    <div class="wt-expand-foot">
-      <button type="button" class="btn btn-sm" data-wt-expand-btn="vt-top-paths">
-        Show {{ _STEP }} more {{ icon('chevron-down') }}
-      </button>
-    </div>
-    {% endif %}
-    {% endif %}
-  </section>
-
-  <section class="card">
-    <div class="card-head"><h2>Top referrers</h2><span class="muted smaller" data-wt-expand-meta="vt-top-referrers">{{ window }}d</span></div>
-    {% if not top_referrers %}
-    <p class="muted">No data.</p>
-    {% else %}
-    {% set tr_max = (top_referrers|map(attribute='count')|max) or 1 %}
-    <ul class="wt-rank-list wt-rank-list--expandable"
-        data-wt-expand="vt-top-referrers"
-        data-step="{{ _STEP }}"
-        data-total="{{ top_referrers|length }}">
-      {% for r in top_referrers %}
-      <li class="wt-rank-row {% if loop.index0 >= _INITIAL %}wt-rank-row--hidden{% endif %}">
-        <div class="wt-rank-label">{{ r.label }}</div>
-        <div class="wt-rank-bar"><span style="width: {{ (r.count / tr_max * 100)|round(0,'floor') }}%"></span></div>
-        <div class="wt-rank-count">{{ '{:,}'.format(r.count) }}</div>
-      </li>
-      {% endfor %}
-    </ul>
-    {% if top_referrers|length > _INITIAL %}
-    <div class="wt-expand-foot">
-      <button type="button" class="btn btn-sm" data-wt-expand-btn="vt-top-referrers">
-        Show {{ _STEP }} more {{ icon('chevron-down') }}
-      </button>
-    </div>
-    {% endif %}
-    {% endif %}
-  </section>
-</div>
-
+{# ── Hour of day ───────────────────────────────────────────────────
+   24-bar strip; bar heights swap based on metric mode. Per-mode max
+   is stashed on the container so JS can renormalise to that mode's
+   tallest hour. #}
+{% set hr_views_max = (hourly_views|map(attribute='count')|max) or 0 %}
+{% set hr_uniques_max = (hourly_uniques|map(attribute='count')|max) or 0 %}
 <section class="card">
-  <div class="card-head"><h2>Devices</h2><span class="muted smaller">{{ window }}d</span></div>
-  {% if not devices %}
-  <p class="muted">No device data yet.</p>
-  {% else %}
-  {% set dev_total = devices|sum(attribute='count') %}
-  <ul class="wt-rank-list wt-rank-list--inline">
-    {% for r in devices %}
-    <li class="wt-rank-row">
-      <div class="wt-rank-label">{{ r.label|title }}</div>
-      <div class="wt-rank-bar"><span style="width: {{ (r.count / dev_total * 100)|round(0,'floor') }}%"></span></div>
-      <div class="wt-rank-count">{{ '{:,}'.format(r.count) }} · {{ '%.0f'|format(r.count / dev_total * 100) }}%</div>
-    </li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-</section>
-
-{% set hr_max = (hourly|map(attribute='views')|max) if hourly else 0 %}
-<section class="card">
-  <div class="card-head"><h2>Hour of day</h2><span class="muted smaller">UTC · last {{ window if window <= 30 else 30 }}d</span></div>
-  {% if hr_max %}
-  <div class="wt-hourly">
-    {% for h in hourly %}
-    <div class="wt-hourly-col" title="{{ h.hour }}:00 · {{ h.views }} view{{ '' if h.views == 1 else 's' }}">
+  <div class="card-head">
+    <h2>Hour of day</h2>
+    <span class="muted smaller">UTC · last {{ hr_days }}d ·
+      <span data-metric-mode="uniques">unique visitors per hour</span>
+      <span data-metric-mode="views">hits per hour</span>
+    </span>
+  </div>
+  {% if hr_views_max or hr_uniques_max %}
+  <div class="wt-hourly"
+       data-hr-views-max="{{ hr_views_max }}"
+       data-hr-uniques-max="{{ hr_uniques_max }}">
+    {% for i in range(24) %}
+    {% set hv = hourly_views[i].count %}
+    {% set hu = hourly_uniques[i].count %}
+    <div class="wt-hourly-col"
+         data-uniques-title="{{ i }}:00 · {{ hu }} unique visitor{{ '' if hu == 1 else 's' }}"
+         data-views-title="{{ i }}:00 · {{ hv }} hit{{ '' if hv == 1 else 's' }}"
+         title="{{ i }}:00 · {{ hu }} unique visitor{{ '' if hu == 1 else 's' }}">
       <div class="wt-hourly-track">
-        <div class="wt-hourly-bar" style="height: {{ (h.views / hr_max * 100)|round(0,'floor') }}%;"></div>
+        <div class="wt-hourly-bar"
+             data-views="{{ hv }}"
+             data-uniques="{{ hu }}"
+             style="height: {{ ((hu / hr_uniques_max * 100)|round(0,'floor')) if hr_uniques_max else 0 }}%;"></div>
       </div>
-      <div class="wt-hourly-tick">{{ '%02d'|format(h.hour) }}</div>
+      <div class="wt-hourly-tick">{{ '%02d'|format(i) }}</div>
     </div>
     {% endfor %}
   </div>
@@ -184,5 +234,193 @@
   <p class="muted">Hour-of-day data appears once visits land.</p>
   {% endif %}
 </section>
+
+{# ── Devices / Browsers / Operating systems ───────────────────────
+   3-up donut grid, mirrored per metric mode. The wrapping
+   .metric-mode-group is `display: contents` so the donut cards
+   remain direct grid children when the active mode is visible. #}
+{% macro donut(items, title, hint, palette, units='visits') %}
+  {% set _total = items | sum(attribute='count') %}
+  <section class="card vm-donut-card">
+    <div class="card-head">
+      <h2>{{ title }}</h2>
+      <span class="muted smaller">{{ hint }}</span>
+    </div>
+    {% if _total > 0 %}
+    <div class="vm-donut-wrap">
+      <svg viewBox="0 0 160 160" class="vm-donut" role="img" aria-label="{{ title }}">
+        {% set ns = namespace(angle=0) %}
+        {% for it in items %}
+          {% set frac = it.count / _total %}
+          {% set arc_len = (frac * 100) %}
+          {% set color = palette[loop.index0 % palette|length] %}
+          <circle cx="80" cy="80" r="58" fill="none"
+                  stroke="{{ color }}" stroke-width="22"
+                  stroke-dasharray="{{ arc_len }} 100"
+                  stroke-dashoffset="-{{ ns.angle }}"
+                  pathLength="100"
+                  transform="rotate(-90 80 80)"/>
+          {% set ns.angle = ns.angle + arc_len %}
+        {% endfor %}
+        <text x="80" y="78" text-anchor="middle" class="vm-donut-total">{{ '{:,}'.format(_total) }}</text>
+        <text x="80" y="94" text-anchor="middle" class="vm-donut-sublabel">{{ units }}</text>
+      </svg>
+      <ul class="vm-legend-list">
+        {% for it in items %}
+          {% set color = palette[loop.index0 % palette|length] %}
+          <li>
+            <span class="vm-legend-swatch" style="background: {{ color }};"></span>
+            <span class="vm-legend-label">{{ it.label }}</span>
+            <span class="vm-legend-count muted smaller">{{ it.count }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% else %}
+    <p class="muted vm-empty">No data yet.</p>
+    {% endif %}
+  </section>
+{% endmacro %}
+
+{% set device_palette  = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'] %}
+{% set browser_palette = ['#0ea5e9', '#a855f7', '#22c55e', '#f97316', '#facc15', '#14b8a6', '#f472b6', '#94a3b8'] %}
+{% set os_palette      = ['#6366f1', '#06b6d4', '#10b981', '#fb923c', '#f43f5e', '#a3e635', '#d946ef', '#64748b'] %}
+
+<div class="vm-grid">
+  <div class="metric-mode-group" data-metric-mode="uniques">
+    {{ donut(devices_uniques, 'Devices', 'Phone, tablet, desktop · unique visitors · last ' ~ window ~ ' days', device_palette, 'visitors') }}
+    {{ donut(browsers_uniques, 'Browsers', 'Browser family · unique visitors · last ' ~ window ~ ' days', browser_palette, 'visitors') }}
+    {{ donut(os_uniques, 'Operating systems', 'OS family · unique visitors · last ' ~ window ~ ' days', os_palette, 'visitors') }}
+  </div>
+  <div class="metric-mode-group" data-metric-mode="views">
+    {{ donut(devices_views, 'Devices', 'Phone, tablet, desktop · hits · last ' ~ window ~ ' days', device_palette, 'hits') }}
+    {{ donut(browsers_views, 'Browsers', 'Browser family · hits · last ' ~ window ~ ' days', browser_palette, 'hits') }}
+    {{ donut(os_views, 'Operating systems', 'OS family · hits · last ' ~ window ~ ' days', os_palette, 'hits') }}
+  </div>
+</div>
+
+{# ── Top paths + Top referrers ────────────────────────────────────
+   Both lists render twice (one per metric mode) since the ordering
+   genuinely differs between hits and uniques. Each list is
+   independently expandable (`Show 30 more`). #}
+{% macro rank_list(rows, key, with_action=False) %}
+  {% set _INITIAL = 30 %}
+  {% set _STEP = 30 %}
+  {% set _max = (rows|map(attribute='count')|max) or 1 %}
+  <ul class="wt-rank-list {% if with_action %}wt-rank-list--with-action {% endif %}wt-rank-list--expandable"
+      data-wt-expand="{{ key }}"
+      data-step="{{ _STEP }}"
+      data-total="{{ rows|length }}">
+    {% for r in rows %}
+    <li class="wt-rank-row {% if loop.index0 >= _INITIAL %}wt-rank-row--hidden{% endif %}">
+      <div class="wt-rank-label {% if with_action %}mono small{% endif %}" title="{{ r.label }}">{{ r.label|truncate(80) }}</div>
+      <div class="wt-rank-bar"><span style="width: {{ (r.count / _max * 100)|round(0,'floor') }}%"></span></div>
+      <div class="wt-rank-count">{{ '{:,}'.format(r.count) }}</div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if rows|length > _INITIAL %}
+  <div class="wt-expand-foot">
+    <button type="button" class="btn btn-sm" data-wt-expand-btn="{{ key }}">
+      Show {{ _STEP }} more {{ icon('chevron-down') }}
+    </button>
+  </div>
+  {% endif %}
+{% endmacro %}
+
+<div class="wt-two-col">
+  <section class="card">
+    <div class="card-head">
+      <h2>Top paths</h2>
+      <span class="muted smaller">
+        <span data-metric-mode="uniques" data-wt-expand-meta="vt-top-paths-uniques">{{ window }}d · by unique visitor</span>
+        <span data-metric-mode="views" data-wt-expand-meta="vt-top-paths-views">{{ window }}d · by hit</span>
+      </span>
+    </div>
+    {% if not top_paths_uniques and not top_paths_views %}
+    <p class="muted">No data.</p>
+    {% else %}
+    <div data-metric-mode="uniques">{{ rank_list(top_paths_uniques, 'vt-top-paths-uniques') }}</div>
+    <div data-metric-mode="views">{{ rank_list(top_paths_views, 'vt-top-paths-views') }}</div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Top referrers</h2>
+      <span class="muted smaller">
+        <span data-metric-mode="uniques" data-wt-expand-meta="vt-top-referrers-uniques">{{ window }}d · by unique visitor</span>
+        <span data-metric-mode="views" data-wt-expand-meta="vt-top-referrers-views">{{ window }}d · by hit</span>
+      </span>
+    </div>
+    {% if not top_referrers_uniques and not top_referrers_views %}
+    <p class="muted">No data.</p>
+    {% else %}
+    <div data-metric-mode="uniques">{{ rank_list(top_referrers_uniques, 'vt-top-referrers-uniques') }}</div>
+    <div data-metric-mode="views">{{ rank_list(top_referrers_views, 'vt-top-referrers-views') }}</div>
+    {% endif %}
+  </section>
+</div>
+
+<script>
+// Hour-of-day bar heights renormalise to the active mode's max so the
+// tallest hour always reaches 100%. Hooks into the same metric-toggle
+// the shared app.js IIFE listens to.
+(function () {
+  const strip = document.querySelector('.wt-hourly[data-hr-views-max]');
+  if (!strip) return;
+  const maxes = {
+    views: parseFloat(strip.dataset.hrViewsMax) || 1,
+    uniques: parseFloat(strip.dataset.hrUniquesMax) || 1,
+  };
+  function apply(mode) {
+    const mx = maxes[mode] || 1;
+    strip.querySelectorAll('.wt-hourly-col').forEach(col => {
+      const bar = col.querySelector('.wt-hourly-bar');
+      const v = parseFloat(bar.dataset[mode]) || 0;
+      bar.style.height = ((v / mx) * 100).toFixed(1) + '%';
+      const t = col.dataset[mode + 'Title'];
+      if (t) col.setAttribute('title', t);
+    });
+  }
+  function currentMode() {
+    return document.documentElement.classList.contains('metric-mode-views')
+      ? 'views' : 'uniques';
+  }
+  apply(currentMode());
+  document.querySelectorAll('.metric-toggle button[data-metric]').forEach(btn => {
+    btn.addEventListener('click', () => apply(btn.dataset.metric));
+  });
+})();
+
+// Hover tooltip for the daily traffic chart. Floats relative to the
+// chart wrap so SVG↔HTML coordinates line up. Shows both metrics
+// regardless of toggle state — that's the point of the dual line.
+(function () {
+  const wrap = document.querySelector('.vm-chart-wrap');
+  if (!wrap) return;
+  const tip = wrap.querySelector('#wt-vm-tooltip');
+  const dots = wrap.querySelectorAll('.vm-chart-dot');
+  function show(e) {
+    const d = e.target;
+    const rect = wrap.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    tip.innerHTML =
+      '<div class="vm-tt-day">' + d.getAttribute('data-day') + '</div>' +
+      '<div class="vm-tt-row"><span class="vm-legend-swatch vm-swatch-uniques"></span>Unique <b>' + d.getAttribute('data-uniques') + '</b></div>' +
+      '<div class="vm-tt-row"><span class="vm-legend-swatch vm-swatch-views"></span>Hits <b>' + d.getAttribute('data-views') + '</b></div>';
+    tip.style.left = (x + 14) + 'px';
+    tip.style.top  = (y - 8)  + 'px';
+    tip.hidden = false;
+  }
+  function hide() { tip.hidden = true; }
+  dots.forEach(dot => {
+    dot.addEventListener('mouseenter', show);
+    dot.addEventListener('mousemove',  show);
+    dot.addEventListener('mouseleave', hide);
+  });
+})();
+</script>
 
 {% endblock %}

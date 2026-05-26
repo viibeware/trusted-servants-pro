@@ -498,6 +498,12 @@
    JS in the partial; styles live in frontend.css). #}
 {% include "frontend/_popups.html" %}
 
+{# Cookie / privacy compliance banner — renders only when the module
+   is enabled in admin. Self-contained partial (markup + CSS + JS).
+   Visitor-mode resolution + region inference happen server-side in
+   the frontend.py context processor. #}
+{% include "frontend/_cookie_consent.html" %}
+
 {% if site and site.turnstile_enabled and site.turnstile_site_key %}
 {# Loaded once for the page so the modal's Turnstile widget can
    render. The standalone /submissionform page loads its own copy

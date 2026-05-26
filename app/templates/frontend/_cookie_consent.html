@@ -1,0 +1,214 @@
+{# Site-wide cookie compliance banner. Rendered only when the module
+   is enabled (see frontend.py `_inject_cookie_compliance`); the
+   `cookie_compliance` dict in context already carries the resolved
+   mode + copy + policy URL. Self-contained: markup, scoped CSS, and
+   the consent-cookie JS all live here.
+
+   Cookie name: `tsp_cookie_consent`, value: `accepted` | `rejected`,
+   lifetime: `remember_days` (default 365). The pre-paint script in
+   the head reads the cookie before the body mounts so the banner
+   never flashes for visitors who've already answered. #}
+{% if cookie_compliance and cookie_compliance.enabled %}
+{% set cc = cookie_compliance %}
+<div class="tsp-cc-banner tsp-cc-banner--{{ cc.position }} tsp-cc-banner--mode-{{ cc.mode }}"
+     id="tsp-cookie-consent"
+     data-cc-mode="{{ cc.mode }}"
+     data-cc-remember-days="{{ cc.remember_days }}"
+     hidden role="region" aria-label="Cookie consent">
+  {% if cc.position == 'modal' %}<div class="tsp-cc-backdrop" aria-hidden="true"></div>{% endif %}
+  <div class="tsp-cc-panel">
+    <div class="tsp-cc-text">
+      <div class="tsp-cc-title">{{ cc.title }}</div>
+      <p class="tsp-cc-body">{{ cc.body }}</p>
+    </div>
+    <div class="tsp-cc-actions">
+      {% if cc.policy_url %}
+      <a class="tsp-cc-link" href="{{ cc.policy_url }}" rel="noopener">{{ cc.more_label }}</a>
+      {% endif %}
+      {% if cc.reject_label and cc.mode != 'notice' %}
+      <button type="button" class="tsp-cc-btn tsp-cc-btn--reject" data-cc-action="reject">{{ cc.reject_label }}</button>
+      {% endif %}
+      <button type="button" class="tsp-cc-btn tsp-cc-btn--accept" data-cc-action="accept">{{ cc.accept_label }}</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .tsp-cc-banner {
+    position: fixed; z-index: 1000;
+    color: #f8fafc;
+    font-family: inherit;
+    font-size: 0.92rem;
+    line-height: 1.45;
+  }
+  .tsp-cc-banner[hidden] { display: none; }
+
+  /* Anchor positions. The banner only PAINTS once its hidden attr is
+     removed by the JS below, but layout is established up-front to
+     avoid layout shift on reveal. */
+  .tsp-cc-banner--bottom-bar { left: 0; right: 0; bottom: 0; }
+  .tsp-cc-banner--bottom-left { left: 16px; bottom: 16px; max-width: 420px; }
+  .tsp-cc-banner--bottom-right { right: 16px; bottom: 16px; max-width: 420px; }
+  .tsp-cc-banner--modal {
+    inset: 0; display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .tsp-cc-banner--modal .tsp-cc-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(2px);
+  }
+
+  .tsp-cc-panel {
+    position: relative;
+    background: rgba(15, 23, 42, 0.96);
+    color: #f8fafc;
+    padding: 16px 20px;
+    border-top: 1px solid rgba(148, 163, 184, 0.18);
+    display: flex; align-items: center; gap: 20px;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.12);
+  }
+  .tsp-cc-banner--bottom-left .tsp-cc-panel,
+  .tsp-cc-banner--bottom-right .tsp-cc-panel,
+  .tsp-cc-banner--modal .tsp-cc-panel {
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 14px;
+    padding: 20px 22px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.32);
+  }
+  .tsp-cc-banner--modal .tsp-cc-panel {
+    max-width: 480px;
+    width: 100%;
+  }
+
+  .tsp-cc-text { flex: 1 1 auto; min-width: 0; }
+  .tsp-cc-title { font-weight: 700; font-size: 1rem; margin-bottom: 4px; }
+  .tsp-cc-body { margin: 0; color: rgba(248, 250, 252, 0.85); }
+
+  .tsp-cc-actions {
+    display: flex; align-items: center; gap: 10px;
+    flex: 0 0 auto; flex-wrap: wrap;
+  }
+  .tsp-cc-link {
+    color: rgba(248, 250, 252, 0.78);
+    text-decoration: underline;
+    text-decoration-color: rgba(248, 250, 252, 0.35);
+    font-weight: 500;
+    margin-right: 4px;
+  }
+  .tsp-cc-link:hover { color: #fff; text-decoration-color: #fff; }
+
+  .tsp-cc-btn {
+    appearance: none; -webkit-appearance: none;
+    border: 1px solid transparent; border-radius: 8px;
+    padding: 8px 16px;
+    font: inherit; font-weight: 600;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  }
+  .tsp-cc-btn--accept {
+    background: var(--brand, #3b82f6); color: #fff;
+  }
+  .tsp-cc-btn--accept:hover { background: color-mix(in srgb, var(--brand, #3b82f6) 88%, white); }
+  .tsp-cc-btn--reject {
+    background: transparent;
+    color: #f8fafc;
+    border-color: rgba(248, 250, 252, 0.32);
+  }
+  .tsp-cc-btn--reject:hover {
+    background: rgba(248, 250, 252, 0.08);
+    border-color: rgba(248, 250, 252, 0.6);
+  }
+
+  @media (max-width: 720px) {
+    .tsp-cc-banner--bottom-bar .tsp-cc-panel,
+    .tsp-cc-banner--bottom-left .tsp-cc-panel,
+    .tsp-cc-banner--bottom-right .tsp-cc-panel {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+    }
+    .tsp-cc-actions { justify-content: flex-end; }
+    .tsp-cc-banner--bottom-left,
+    .tsp-cc-banner--bottom-right {
+      left: 12px; right: 12px; bottom: 12px; max-width: none;
+    }
+  }
+</style>
+
+<script>
+// Cookie consent — reveal/dismiss + 1-year persistence in a single
+// first-party cookie (`tsp_cookie_consent`). Self-contained so this
+// partial drops into any frontend page without touching the head.
+//
+// Mode contract:
+//   notice  — banner shows until OK clicked; the cookie value is
+//             always "accepted" (the banner is informational, not
+//             a real choice).
+//   consent — banner shows until Accept or Reject; either click
+//             writes the choice + dismisses.
+//   strict  — same as consent visually, but the partial expects the
+//             site never sets non-essential cookies until the value
+//             is "accepted" (the gate is the absence of analytics/
+//             marketing client code, not anything this script does).
+//
+// Modal mode locks scroll until the visitor chooses.
+(function () {
+  const banner = document.getElementById('tsp-cookie-consent');
+  if (!banner) return;
+  const mode = banner.dataset.ccMode || 'notice';
+  const days = parseInt(banner.dataset.ccRememberDays, 10);
+  const remember = isFinite(days) && days > 0 ? days : 0;
+  const COOKIE = 'tsp_cookie_consent';
+
+  function readCookie(name) {
+    const m = document.cookie.match(new RegExp(
+      '(?:^|; )' + name.replace(/([.$?*|{}()\[\]\\\/\+^])/g, '\\$1') + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+  function writeCookie(name, value, days) {
+    let s = name + '=' + encodeURIComponent(value) + '; Path=/; SameSite=Lax';
+    if (days > 0) {
+      const d = new Date();
+      d.setTime(d.getTime() + days * 86400000);
+      s += '; Expires=' + d.toUTCString();
+    }
+    if (location.protocol === 'https:') s += '; Secure';
+    document.cookie = s;
+  }
+
+  const existing = readCookie(COOKIE);
+  if (existing === 'accepted' || existing === 'rejected') {
+    // Already answered; respect it (remember_days = 0 still re-prompts
+    // by virtue of the cookie having been a session cookie).
+    return;
+  }
+  banner.hidden = false;
+  if (banner.classList.contains('tsp-cc-banner--modal')) {
+    document.body.style.overflow = 'hidden';
+  }
+
+  function dismiss(choice) {
+    writeCookie(COOKIE, choice, remember);
+    banner.hidden = true;
+    document.body.style.overflow = '';
+    // Notify any listeners (e.g. analytics loaders that only fire on
+    // accept) so they can decide whether to mount.
+    document.dispatchEvent(new CustomEvent('tsp:cookie-consent', { detail: { choice: choice } }));
+  }
+
+  banner.querySelectorAll('[data-cc-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      // The data attr carries the verb (accept/reject) but the cookie
+      // value is the past-tense state (accepted/rejected) so the
+      // gate check at the top of the IIFE stays simple.
+      const value = btn.dataset.ccAction === 'reject' ? 'rejected' : 'accepted';
+      dismiss(value);
+    });
+  });
+})();
+</script>
+{% endif %}

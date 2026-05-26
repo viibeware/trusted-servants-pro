@@ -3857,6 +3857,10 @@ button.chip { font-family: inherit; }
 .sidebar-quicknav-btn:hover {
   background: var(--panel); color: var(--text);
   border-color: color-mix(in srgb, var(--brand) 35%, var(--border));
+  /* These are pill buttons, not body-text links — the global
+     `a:hover { text-decoration: underline }` would otherwise leak
+     an underline onto the label. */
+  text-decoration: none;
 }
 .sidebar-quicknav-btn.is-active {
   background: color-mix(in srgb, var(--brand) 12%, var(--panel-2));
@@ -12468,10 +12472,7 @@ body.pbe-is-palette-dragging .pbe-section-canvas {
   content: ""; display: inline-block; width: 12px; height: 3px; border-radius: 2px;
 }
 .wt-chart-key--views::before { background: rgb(59, 130, 246); }
-.wt-chart-key--uniques::before {
-  background: linear-gradient(90deg, rgb(16,185,129) 0 6px, transparent 6px 12px);
-  background-size: 8px 100%;
-}
+.wt-chart-key--uniques::before { background: rgb(16, 185, 129); }
 
 /* Two-column layout helper (suspicious IPs + recent activity, etc.) */
 .wt-two-col {
@@ -12595,6 +12596,82 @@ body.pbe-is-palette-dragging .pbe-section-canvas {
 }
 .wt-expand-foot .btn { display: inline-flex; align-items: center; gap: 6px; }
 .wt-expand-foot .icon { width: 14px; height: 14px; }
+
+/* Metric-mode toggle ─────────────────────────────────────────────────
+   Segmented pill control on the visitor-metrics pages (Watchtower
+   Visitors + Web Frontend → Metrics) that flips every count between
+   Unique visitors and Hits. The actual show/hide is driven by an
+   `html.metric-mode-*` class; the IIFE in app.js (`installMetricModeToggle`)
+   reads localStorage on load and toggles the class + each button's
+   `aria-pressed`. Each metric-bearing element wears either
+   `data-metric-mode="uniques"` or `data-metric-mode="views"` and the
+   rules below pair the visible side with the active mode. KPI tiles
+   that only need a single number swap can carry `data-uniques="..."`
+   and `data-views="..."` instead; JS swaps `textContent` in place. */
+.metric-toggle {
+  display: inline-flex; align-items: stretch;
+  background: var(--surface-2, color-mix(in srgb, var(--border) 35%, transparent));
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 0;
+  position: relative;
+}
+.metric-toggle button {
+  appearance: none; -webkit-appearance: none;
+  background: transparent; border: 0;
+  padding: 5px 14px;
+  font: inherit; font-size: 0.84rem; font-weight: 600;
+  color: var(--muted, #64748b);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.16s ease, background 0.16s ease;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.metric-toggle button:hover { color: var(--ink, #0f172a); }
+.metric-toggle button[aria-pressed="true"] {
+  background: var(--card, #fff);
+  color: var(--brand, #2563eb);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+.metric-toggle-help {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+  border-radius: 999px;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--muted, #64748b);
+  cursor: help;
+  margin-left: 6px;
+  position: relative;
+}
+.metric-toggle-help .icon { width: 14px; height: 14px; }
+.metric-toggle-help[data-tooltip]:hover::after,
+.metric-toggle-help[data-tooltip]:focus::after {
+  content: attr(data-tooltip);
+  position: absolute; top: calc(100% + 8px); right: 0;
+  background: var(--ink, #0f172a); color: white;
+  padding: 10px 12px; border-radius: 8px;
+  font-size: 0.78rem; font-weight: 400;
+  line-height: 1.45; text-align: left;
+  width: max-content; max-width: 320px;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+  z-index: 50;
+  white-space: normal;
+}
+
+/* Visibility rules: each metric-bearing element opts in by wearing
+   data-metric-mode="uniques" or "views". The opposite side is hidden
+   based on the html class. Default page state assumes uniques. */
+html:not(.metric-mode-views) [data-metric-mode="views"] { display: none !important; }
+html.metric-mode-views [data-metric-mode="uniques"] { display: none !important; }
+
+/* Transparent wrapper for grouping multiple metric-mode siblings
+   without disturbing the surrounding grid/flex layout (the wrapper
+   stops being a layout participant; its children remain direct
+   children of the parent grid). Hidden mode wins because the visibility
+   rule above carries `!important`. */
+.metric-mode-group { display: contents; }
 
 /* Hour-of-day bar strip ────────────────────────────────────────── */
 .wt-hourly {

@@ -162,6 +162,8 @@ FOOTER_BLOCK_CATALOG = [
      "desc": "Static \"Powered by Trusted Servants Pro\" attribution linking to gettspro.com."},
     {"key": "admin_login",   "name": "Admin login",    "icon": "log-in",
      "desc": "Pill-style link to the admin sign-in page. Authenticated users get redirected straight to the dashboard."},
+    {"key": "privacy_links", "name": "Privacy & cookies", "icon": "shield",
+     "desc": "Privacy policy link + a \"Cookie settings\" button that re-prompts the cookie banner. Both pieces appear only when the matching feature is configured under Web Frontend → Cookie Compliance."},
 ]
 
 
@@ -1312,6 +1314,53 @@ def _inject_popups():
     except Exception:
         popups = []
     return {"popups": popups}
+
+
+@bp.context_processor
+def _inject_cookie_compliance():
+    """Resolve the cookie-compliance state for the current visitor and
+    surface it to every frontend template (the banner partial pulls
+    from this). When the module is off, the resolved dict carries
+    `enabled: False` and the partial renders nothing. Region inference
+    runs per-request — never cached and never persisted."""
+    try:
+        from .models import SiteSetting, Page
+        from . import cookie_compliance as cc
+        site = SiteSetting.query.first()
+        if not site or not getattr(site, "cookie_compliance_enabled", False):
+            return {"cookie_compliance": {"enabled": False}}
+        configured = getattr(site, "cookie_compliance_mode", "notice") or "notice"
+        if getattr(site, "cookie_compliance_auto_region", True):
+            effective = cc.infer_visitor_mode(request.headers, configured)
+        else:
+            effective = configured
+        # Policy URL — internal Page wins over external URL when both set.
+        policy_url = None
+        if getattr(site, "cookie_compliance_policy_page_id", None):
+            page = Page.query.get(site.cookie_compliance_policy_page_id)
+            if page and page.is_published and not page.is_private:
+                policy_url = "/" + page.slug
+        if not policy_url and getattr(site, "cookie_compliance_policy_external_url", None):
+            policy_url = site.cookie_compliance_policy_external_url
+        return {"cookie_compliance": {
+            "enabled": True,
+            "mode": effective,
+            "configured_mode": configured,
+            "auto_region": getattr(site, "cookie_compliance_auto_region", True),
+            "position": getattr(site, "cookie_compliance_position", "bottom-bar") or "bottom-bar",
+            "title": getattr(site, "cookie_compliance_title", None) or "We use cookies",
+            "body": getattr(site, "cookie_compliance_body", None) or (
+                "This site uses cookies to function. With your permission "
+                "we also use cookies to understand how the site is used."),
+            "accept_label": getattr(site, "cookie_compliance_accept_label", None) or "Accept",
+            "reject_label": getattr(site, "cookie_compliance_reject_label", None) or (
+                "Reject non-essential" if effective != "notice" else ""),
+            "more_label": getattr(site, "cookie_compliance_more_label", None) or "Privacy policy",
+            "policy_url": policy_url,
+            "remember_days": getattr(site, "cookie_compliance_remember_days", None) or 365,
+        }}
+    except Exception:
+        return {"cookie_compliance": {"enabled": False}}
 
 
 def _page_og(site, title=None, description=None, image_url=None):

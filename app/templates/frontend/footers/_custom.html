@@ -17,6 +17,7 @@
      divider        → blocks/_divider.html
      spacer         → blocks/_spacer.html
      admin_login    → blocks/_admin_login.html
+     privacy_links  → blocks/_privacy_links.html
 #}
 {% from "frontend/footers/_footer_helpers.html" import footer_inner_attrs %}
 {% from "frontend/footers/_footer_bg.html" import footer_bg_class, footer_bg_style, footer_bg_data_attrs, footer_bg_inner %}
@@ -47,6 +48,7 @@
               {%- elif _t == 'spacer' %}{% include "frontend/footers/blocks/_spacer.html" %}
               {%- elif _t == 'powered_by' %}{% include "frontend/footers/blocks/_powered_by.html" %}
               {%- elif _t == 'admin_login' %}{% include "frontend/footers/blocks/_admin_login.html" %}
+              {%- elif _t == 'privacy_links' %}{% include "frontend/footers/blocks/_privacy_links.html" %}
               {%- endif %}
             {% endfor %}
           </div>

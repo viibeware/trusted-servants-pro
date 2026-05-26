@@ -79,43 +79,40 @@
         {% endcall %}
       {% endif %}
 
-      {# ── Visitor metrics overview bar lifted verbatim from
-         visitor_metrics.html — same vm-tiles markup so the same CSS
-         renders it. Wide variant so it spans the row. #}
+      {# ── Visitor metrics overview bar.
+         Full page lives at /tspro/watchtower/visitors since 2.7.6;
+         this widget shows the same `.vm-tiles` overview line tuned to
+         unique visitors (the more meaningful number for "how many
+         real people"). Hits remain visible as the sub-line so the
+         operator hasn't lost any data — just the emphasis flipped. #}
       {% if widget_key == 'fe-visitor-metrics' and current_user.fe_dash_show_visitor_metrics %}
         {% call dash_widget(key='fe-visitor-metrics', title='Visitor metrics — last ' ~ vm_window ~ ' days',
                              head_icon='bar-chart',
-                             view_all_url=url_for('main.visitor_metrics_page'),
+                             view_all_url=url_for('main.watchtower_visitors'),
                              view_all_label='Full metrics',
                              wide=True) %}
           {% if vm_summary %}
             <div class="vm-tiles">
               <div class="vm-tile vm-tile-accent">
-                <div class="vm-tile-label">Views · last {{ vm_window }}d</div>
-                <div class="vm-tile-value">{{ '{:,}'.format(vm_summary.views_window) }}</div>
+                <div class="vm-tile-label">Unique visitors · last {{ vm_window }}d</div>
+                <div class="vm-tile-value">{{ '{:,}'.format(vm_summary.uniques_window) }}</div>
                 <div class="vm-tile-sub muted smaller">
-                  <span class="vm-spark-inline" data-points="{% for d in vm_daily %}{{ d.views }}{% if not loop.last %},{% endif %}{% endfor %}" aria-hidden="true"></span>
+                  <span class="vm-spark-inline" data-points="{% for d in vm_daily %}{{ d.uniques }}{% if not loop.last %},{% endif %}{% endfor %}" aria-hidden="true"></span>
                 </div>
               </div>
               <div class="vm-tile">
-                <div class="vm-tile-label">Unique visitors · {{ vm_window }}d</div>
-                <div class="vm-tile-value">{{ '{:,}'.format(vm_summary.uniques_window) }}</div>
+                <div class="vm-tile-label">Hits · {{ vm_window }}d</div>
+                <div class="vm-tile-value">{{ '{:,}'.format(vm_summary.views_window) }}</div>
                 <div class="vm-tile-sub muted smaller">
                   {% if vm_summary.uniques_window and vm_summary.views_window %}
-                    {{ '%.1f'|format(vm_summary.views_window / vm_summary.uniques_window) }} views per visitor
+                    {{ '%.1f'|format(vm_summary.views_window / vm_summary.uniques_window) }} hits per visitor
                   {% else %}—{% endif %}
                 </div>
               </div>
               <div class="vm-tile">
-                <div class="vm-tile-label">Today</div>
-                <div class="vm-tile-value">{{ '{:,}'.format(vm_summary.views_today) }}</div>
-                <div class="vm-tile-sub muted smaller">
-                  {% set diff = vm_summary.views_today - vm_summary.views_yesterday %}
-                  {% if vm_summary.views_yesterday == 0 and vm_summary.views_today == 0 %}—
-                  {% elif diff > 0 %}<span class="vm-trend-up">↑ {{ diff }}</span> vs yesterday
-                  {% elif diff < 0 %}<span class="vm-trend-down">↓ {{ -diff }}</span> vs yesterday
-                  {% else %}even with yesterday{% endif %}
-                </div>
+                <div class="vm-tile-label">Visitors today</div>
+                <div class="vm-tile-value">{{ '{:,}'.format(vm_summary.uniques_today) }}</div>
+                <div class="vm-tile-sub muted smaller">{{ vm_summary.views_today }} hit{{ '' if vm_summary.views_today == 1 else 's' }} today</div>
               </div>
               <div class="vm-tile">
                 <div class="vm-tile-label">Yesterday</div>
@@ -123,9 +120,9 @@
                 <div class="vm-tile-sub muted smaller">{{ vm_summary.uniques_today }} unique today</div>
               </div>
               <div class="vm-tile">
-                <div class="vm-tile-label">Last 7 days</div>
-                <div class="vm-tile-value">{{ '{:,}'.format(vm_summary.views_7d) }}</div>
-                <div class="vm-tile-sub muted smaller">{{ '{:,}'.format(vm_summary.uniques_7d) }} unique visitors</div>
+                <div class="vm-tile-label">Visitors · 7d</div>
+                <div class="vm-tile-value">{{ '{:,}'.format(vm_summary.uniques_7d) }}</div>
+                <div class="vm-tile-sub muted smaller">{{ '{:,}'.format(vm_summary.views_7d) }} hit{{ '' if vm_summary.views_7d == 1 else 's' }}</div>
               </div>
             </div>
           {% else %}

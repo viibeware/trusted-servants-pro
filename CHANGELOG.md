@@ -6,6 +6,23 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.8.0] — 2026-05-26
+
+### Added
+
+- **Cookie Compliance module** — new "Cookie Compliance" entry under **Web Frontend → Setup** that runs a privacy/cookie banner on the public site. Module-level on/off toggle. Three prompt modes: **Notice** (informational, single dismiss), **Consent** (Accept / Reject equally prominent), and **Strict opt-in** (GDPR-compliant — non-essential cookies blocked until accept). Three regional quick-start presets (GDPR/UK GDPR, CCPA/CPRA, Generic) apply best-practice defaults — mode, copy, position — in one click. Auto-region inference (Cloudflare/Fastly/Vercel country headers + `Accept-Language` fallback) escalates EU/UK visitors to strict and California visitors to consent regardless of the configured mode (auto can only escalate, never relax). Banner copy is fully customizable (title, body, accept/reject/more labels, position: bottom-bar / bottom-left / bottom-right / modal). Visitor choice persists in a first-party `tsp_cookie_consent` cookie for a configurable lifetime (default 365 days, max 730, `SameSite=Lax`, `Secure` on HTTPS). Three **starter privacy policy generators** (GDPR / CCPA / Generic) create a fully-seeded Page and link it as the policy with one click — admin just fills in placeholder fields (organisation name, contact email, retention periods). 13 new `cookie_compliance_*` columns on `SiteSetting` with matching `_migrate_sqlite` entries; new module `app/cookie_compliance.py` owns region inference + presets + templates.
+- **Privacy & cookies footer block** — draggable from the footer builder palette. Renders a "Privacy policy" pill linking to whatever's configured under Cookie Compliance plus a "Cookie settings" pill that clears the consent cookie and re-prompts the banner so visitors can change their mind later. Both pills only render when the corresponding piece is configured — the block gracefully no-ops if dragged in before Cookie Compliance is set up.
+- **Unique visitors / Hits toggle** on the Watchtower **Visitors** tab and (then-renamed) Web Frontend Metrics page. Default emphasis switched from hits to **unique visitors** — the more meaningful number for "how many real people". Segmented pill toggle with a `?` tooltip explaining each mode; preference persists in `localStorage` and is restored before paint so the page never flashes the wrong side. Both sets pre-render server-side so the toggle flips instantly. KPI tiles, daily traffic chart, top paths, top referrers, devices, browsers, OS, and hour-of-day all swap their counts (and re-rank where applicable) when toggled.
+- **"Manage redirects" button** on the Watchtower **404s** tab top actions, links straight to `/tspro/frontend/redirects` so the admin can hop from spotting a 404 to managing redirects without navigating.
+
+### Changed
+
+- **Web Frontend Visitor Metrics page is now the Watchtower Visitors tab.** All panels (rich daily-traffic chart with hover tooltips, hour-of-day strip, Devices/Browsers/Operating systems donuts, expandable Top paths / Top referrers lists, summary KPI tiles) live in one place. `/tspro/frontend/metrics` 301-redirects to `/tspro/watchtower/visitors` with the query string preserved. The Web Frontend admin subnav's "Visitor Metrics" entry, the main `/tspro` dashboard widget's "Open metrics" button, and the Web Frontend dashboard widget's "Full metrics" button all link to the new home. Both dashboard widgets now show **unique visitors** as the headline (sub-line still surfaces hits + hits/visitor ratio); the sparkline in the Web Frontend widget switched from hits to uniques to match.
+
+### Fixed
+
+- **Sidebar quicknav pills (Web / View / Watchtower) no longer get an underline on hover.** They inherited an underline from the global `a:hover { text-decoration: underline }` rule because `.sidebar-quicknav-btn:hover` was setting bg/color/border but not `text-decoration`. Added the explicit override.
+
 ## [2.7.5] — 2026-05-26
 
 ### Added

@@ -1,0 +1,93 @@
+{# Privacy & cookies footer block.
+   Reads the cookie-compliance state injected by frontend.py's
+   `_inject_cookie_compliance` context processor:
+     - cookie_compliance.policy_url → optional link target
+     - cookie_compliance.enabled    → drives whether the "Cookie
+                                       settings" button is offered
+
+   No-ops gracefully when neither piece is configured (the admin
+   dragged the block in but hasn't set up Cookie Compliance yet).
+
+   The "Cookie settings" button clears the `tsp_cookie_consent`
+   cookie and either reveals an already-rendered banner OR reloads
+   so the next render shows it (e.g. on a page where the banner
+   never mounted because the visitor had previously dismissed it). #}
+{% set _cc = cookie_compliance or {} %}
+{% set _has_policy = _cc.get('policy_url') %}
+{% set _has_cookie_module = _cc.get('enabled') %}
+{% if _has_policy or _has_cookie_module %}
+<div class="fe-footer-block fe-footer-block-privacy-links">
+  {% if _has_policy %}
+  <a class="fe-footer-privacy-link" href="{{ _cc.policy_url }}">
+    {{ icon('shield') }}<span>{{ _cc.get('more_label') or 'Privacy policy' }}</span>
+  </a>
+  {% endif %}
+  {% if _has_cookie_module %}
+  <button type="button" class="fe-footer-privacy-link fe-footer-privacy-link--btn"
+          data-fe-cookie-settings
+          title="Reopen the cookie banner to change your choice">
+    {{ icon('settings') }}<span>Cookie settings</span>
+  </button>
+  {% endif %}
+</div>
+
+<style>
+  .fe-footer-block-privacy-links {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+  }
+  .fe-footer-privacy-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+    border-radius: 999px;
+    color: inherit; text-decoration: none;
+    font-size: 0.88rem; font-weight: 500;
+    background: transparent;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  }
+  .fe-footer-privacy-link:hover {
+    background: color-mix(in srgb, currentColor 8%, transparent);
+    border-color: color-mix(in srgb, currentColor 45%, transparent);
+    text-decoration: none;
+  }
+  .fe-footer-privacy-link .icon { width: 14px; height: 14px; flex: 0 0 auto; }
+  .fe-footer-privacy-link--btn {
+    font: inherit; font-size: 0.88rem; font-weight: 500;
+  }
+</style>
+
+<script>
+// Cookie-settings reopener. Clears the consent cookie (Path=/, same
+// site as the banner sets it) and either re-shows the existing
+// banner element OR reloads if the banner partial never rendered on
+// this page. Either way the visitor lands back at the choice.
+(function () {
+  document.querySelectorAll('[data-fe-cookie-settings]').forEach(btn => {
+    if (btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => {
+      // Expire the cookie. Path=/ matches the writer in
+      // frontend/_cookie_consent.html so we don't leave a stale copy
+      // behind that the banner check would re-accept.
+      document.cookie = 'tsp_cookie_consent=; Path=/; SameSite=Lax; ' +
+        'Expires=Thu, 01 Jan 1970 00:00:00 GMT' +
+        (location.protocol === 'https:' ? '; Secure' : '');
+      const banner = document.getElementById('tsp-cookie-consent');
+      if (banner) {
+        banner.hidden = false;
+        if (banner.classList.contains('tsp-cc-banner--modal')) {
+          document.body.style.overflow = 'hidden';
+        }
+        banner.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      } else {
+        // Banner partial isn't on this page (module probably toggled
+        // off after the last visit). Reload to pick up the current
+        // state; if the module's on, the banner will render fresh.
+        location.reload();
+      }
+    });
+  });
+})();
+</script>
+{% endif %}

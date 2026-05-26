@@ -27,8 +27,10 @@
               {% if request.endpoint == 'main.frontend_dashboard' %}selected{% endif %}>
         Overview
       </option>
-      <option value="{{ url_for('main.visitor_metrics_page') }}"
-              {% if request.endpoint == 'main.visitor_metrics_page' %}selected{% endif %}>
+      {# Visitor Metrics lives in Watchtower since 2.7.6 — this entry
+         is a cross-area jump-off so the operator doesn't have to
+         hunt for it from the Web Frontend admin. #}
+      <option value="{{ url_for('main.watchtower_visitors') }}">
         Visitor Metrics
       </option>
       <option value="{{ url_for('main.frontend_redirects') }}"
@@ -51,6 +53,10 @@
         <option value="{{ url_for('main.frontend_caching') }}"
                 {% if request.endpoint == 'main.frontend_caching' %}selected{% endif %}>
           Caching
+        </option>
+        <option value="{{ url_for('main.frontend_cookie_compliance') }}"
+                {% if request.endpoint == 'main.frontend_cookie_compliance' %}selected{% endif %}>
+          Cookie Compliance
         </option>
       </optgroup>
       <optgroup label="Structure">
@@ -106,8 +112,11 @@
        class="fe-subnav-link {% if request.endpoint == 'main.frontend_dashboard' %}active{% endif %}">
       {{ icon('layout-grid') }}<span>Overview</span>
     </a>
-    <a href="{{ url_for('main.visitor_metrics_page') }}"
-       class="fe-subnav-link {% if request.endpoint == 'main.visitor_metrics_page' %}active{% endif %}">
+    {# Visitor Metrics moved to Watchtower in 2.7.6. Keeping the
+       sidebar entry as a one-tap cross-link so the operator can
+       jump there from the Web Frontend admin without re-navigating. #}
+    <a href="{{ url_for('main.watchtower_visitors') }}"
+       class="fe-subnav-link">
       {{ icon('bar-chart') }}<span>Visitor Metrics</span>
     </a>
     <a href="{{ url_for('main.frontend_redirects') }}"
@@ -132,6 +141,10 @@
       <a href="{{ url_for('main.frontend_caching') }}"
          class="fe-subnav-link {% if request.endpoint == 'main.frontend_caching' %}active{% endif %}">
         {{ icon('zap') }}<span>Caching</span>
+      </a>
+      <a href="{{ url_for('main.frontend_cookie_compliance') }}"
+         class="fe-subnav-link {% if request.endpoint == 'main.frontend_cookie_compliance' %}active{% endif %}">
+        {{ icon('shield') }}<span>Cookie Compliance</span>
       </a>
     </div>
 

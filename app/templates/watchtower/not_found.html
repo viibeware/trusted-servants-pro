@@ -3,6 +3,10 @@
 {% block heading %}Watchtower{% endblock %}
 {% block heading_help %}Public-site URLs visitors hit that resolved to nothing — broken inbound links, mistyped addresses, and pages that moved without a redirect. Signed-in staff and admin (/tspro) paths are excluded.{% endblock %}
 {% block top_actions %}
+<a class="btn btn-sm" href="{{ url_for('main.frontend_redirects') }}"
+   title="Open the full Redirects admin page (Web Frontend → Redirects)">
+  {{ icon('arrow-right') }} Manage redirects
+</a>
 <form method="get" action="{{ url_for('main.watchtower_not_found') }}" class="wt-window-form">
   <label>
     <span class="visually-hidden">Window</span>

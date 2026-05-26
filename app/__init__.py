@@ -1523,6 +1523,20 @@ def _migrate_sqlite(app):
                          ("frontend_404_image_filename", "VARCHAR(500)"),
                          ("frontend_module_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("frontend_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+                         # Cookie & privacy compliance — see app/cookie_compliance.py
+                         # and SiteSetting.cookie_compliance_* commentary.
+                         ("cookie_compliance_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("cookie_compliance_mode", "VARCHAR(16) NOT NULL DEFAULT 'notice'"),
+                         ("cookie_compliance_auto_region", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("cookie_compliance_title", "VARCHAR(200)"),
+                         ("cookie_compliance_body", "TEXT"),
+                         ("cookie_compliance_accept_label", "VARCHAR(60)"),
+                         ("cookie_compliance_reject_label", "VARCHAR(60)"),
+                         ("cookie_compliance_more_label", "VARCHAR(60)"),
+                         ("cookie_compliance_position", "VARCHAR(16) NOT NULL DEFAULT 'bottom-bar'"),
+                         ("cookie_compliance_policy_page_id", "INTEGER REFERENCES page(id) ON DELETE SET NULL"),
+                         ("cookie_compliance_policy_external_url", "VARCHAR(500)"),
+                         ("cookie_compliance_remember_days", "INTEGER NOT NULL DEFAULT 365"),
                          # Which `Page` row renders at the public `/` root.
                          # Nullable for the brief window between column add
                          # and the auto-seed running; in normal operation

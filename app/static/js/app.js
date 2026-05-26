@@ -5041,3 +5041,52 @@
     });
   });
 })();
+
+// ── Metric mode toggle (Unique visitors ⇄ Hits) ────────────────────
+// Shared toggle for the Visitor Metrics + Watchtower Visitors pages.
+// Page renders both metric sides (views + uniques); JS just flips a
+// class on <html> and lets CSS show the right one. KPI tiles that
+// only carry a single number swap can use `data-uniques="..."` +
+// `data-views="..."` attributes — JS swaps textContent in place so
+// the page doesn't have to render the same tile twice.
+//
+// Default mode = "uniques" (the more meaningful number for reach;
+// hits are inflated by reloads and sub-resource navigations).
+// Preference persists in localStorage so it sticks across pages and
+// across sessions. The pre-paint apply (in the head of base.html)
+// reads localStorage before any markup mounts so the page never
+// flashes the wrong side.
+(function () {
+  const KEY = "tsp-metric-mode";
+  function getMode() {
+    const v = localStorage.getItem(KEY);
+    return v === "views" ? "views" : "uniques";
+  }
+  function applyMode(mode) {
+    document.documentElement.classList.toggle("metric-mode-views", mode === "views");
+    // Tile swaps — element holds both values in data attrs; show the active one.
+    document.querySelectorAll("[data-uniques][data-views]").forEach(el => {
+      el.textContent = el.dataset[mode] || "";
+    });
+    // Per-toggle aria-pressed state for the active button in each toggle.
+    document.querySelectorAll(".metric-toggle").forEach(group => {
+      group.querySelectorAll("button[data-metric]").forEach(btn => {
+        btn.setAttribute("aria-pressed",
+          btn.dataset.metric === mode ? "true" : "false");
+      });
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    if (!document.querySelector(".metric-toggle")) return;
+    applyMode(getMode());
+
+    document.querySelectorAll(".metric-toggle button[data-metric]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const mode = btn.dataset.metric;
+        localStorage.setItem(KEY, mode);
+        applyMode(mode);
+      });
+    });
+  });
+})();

@@ -807,6 +807,45 @@ class SiteSetting(db.Model):
     # Public visibility: when False (but module is enabled), signed-in editors
     # and admins can still preview while the public root redirects to login.
     frontend_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    # ── Cookie & privacy compliance (managed from Web Frontend → Cookie Compliance) ──
+    # Module gate. When False, no banner is rendered and the public site
+    # behaves as it did before the feature existed.
+    cookie_compliance_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    # Prompt behaviour. Trade-off ladder:
+    #   notice  — informational banner ("we use cookies"), one button to dismiss
+    #   consent — opt-in by default (Accept / Reject non-essential) with an
+    #             explicit choice required before the banner disappears
+    #   strict  — opt-in, AND non-essential cookies are blocked entirely until
+    #             accept is clicked. Closest to GDPR Article 7 (informed,
+    #             unambiguous, freely-given consent)
+    cookie_compliance_mode = db.Column(db.String(16), nullable=False, default="notice")
+    # When True, the server uses Accept-Language + CDN country headers to
+    # auto-pick a mode per visitor — EU/UK → strict, California (where
+    # detectable) → consent, else → the configured `cookie_compliance_mode`.
+    # The admin's choice is the floor: auto can only escalate, never relax.
+    cookie_compliance_auto_region = db.Column(db.Boolean, nullable=False, default=True)
+    # Banner copy. Defaults filled in at first load so admins see a sensible
+    # banner immediately even before they customise.
+    cookie_compliance_title = db.Column(db.String(200))
+    cookie_compliance_body = db.Column(db.Text)
+    cookie_compliance_accept_label = db.Column(db.String(60))
+    cookie_compliance_reject_label = db.Column(db.String(60))
+    cookie_compliance_more_label = db.Column(db.String(60))
+    # Where the banner anchors on screen. Values: bottom-bar (full-width
+    # strip), bottom-left, bottom-right, modal (centered backdrop).
+    cookie_compliance_position = db.Column(db.String(16), nullable=False, default="bottom-bar")
+    # Privacy policy link. Either an internal Page (preferred — admin can
+    # generate one with a click) or an external URL. Both nullable; the
+    # banner just hides the "More info" link when neither is set.
+    cookie_compliance_policy_page_id = db.Column(
+        db.Integer, db.ForeignKey('page.id', ondelete='SET NULL'),
+        nullable=True, index=True)
+    cookie_compliance_policy_external_url = db.Column(db.String(500))
+    # How long a remembered choice survives in the visitor's browser
+    # before they're prompted again. Default 365 days — long enough to
+    # respect their answer without violating common practice (most
+    # jurisdictions recommend re-prompting at least once a year).
+    cookie_compliance_remember_days = db.Column(db.Integer, nullable=False, default=365)
     # ── Frontend asset caching (managed from Web Frontend → Caching) ──
     # Master switch. When on, image/static responses get long-lived
     # public Cache-Control so returning visitors serve them straight from

@@ -32,6 +32,14 @@
     var t = null;
     try { t = localStorage.getItem('tsp-theme'); } catch(e){}
     if (t) document.documentElement.setAttribute('data-theme', t);
+    // Visitor-metrics + Watchtower pages render both Unique-visitors
+    // and Hits versions of every count; set the mode class on <html>
+    // before paint so the inactive side never flashes.
+    try {
+      if (localStorage.getItem('tsp-metric-mode') === 'views') {
+        document.documentElement.classList.add('metric-mode-views');
+      }
+    } catch(e){}
     try {
       if (sessionStorage.getItem('tsp-login-fade') === '1') {
         sessionStorage.removeItem('tsp-login-fade');

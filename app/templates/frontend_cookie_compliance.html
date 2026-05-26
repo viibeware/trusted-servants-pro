@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{% block heading %}Cookie Compliance{% endblock %}
+{% block heading_help %}Run a privacy + cookie compliance banner on the public site. Pick a regional preset, customise the copy, and (if you don't have one yet) generate a starter privacy policy with one click. The banner remembers each visitor's choice in their browser for {{ site.cookie_compliance_remember_days or 365 }} day{{ '' if (site.cookie_compliance_remember_days or 365) == 1 else 's' }} so they're not nagged on every visit.{% endblock %}
+{% block top_actions %}
+<a class="btn" href="{{ url_for('frontend.index') }}" target="_blank" rel="noopener">View frontend ↗</a>
+{% endblock %}
+{% block content %}
+<div class="fe-admin-layout">
+  {% include "_frontend_subnav.html" %}
+  <div class="fe-admin-main">
+
+  <style>
+    .cc-row { display: flex; align-items: center; justify-content: space-between;
+      gap: 1rem; padding: .85rem 0; border-top: 1px solid rgba(127,127,127,.18); }
+    .cc-row:first-of-type { border-top: 0; }
+    .cc-row-text { min-width: 0; }
+    .cc-row-label { font-weight: 600; }
+    .cc-row .mode-toggle { flex: 0 0 auto; }
+
+    .cc-mode-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 10px; }
+    .cc-mode-card { display: block; padding: 14px; border: 1px solid var(--border);
+      border-radius: 10px; background: var(--panel-2); cursor: pointer;
+      transition: border-color 120ms ease, background 120ms ease; }
+    .cc-mode-card:hover { border-color: color-mix(in srgb, var(--brand) 35%, var(--border)); }
+    .cc-mode-card input { position: absolute; opacity: 0; pointer-events: none; }
+    .cc-mode-card:has(input:checked) {
+      border-color: var(--brand);
+      background: color-mix(in srgb, var(--brand) 10%, var(--panel-2));
+    }
+    .cc-mode-card-title { font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+    .cc-mode-card-title .icon { width: 16px; height: 16px; }
+    .cc-mode-card-desc { font-size: .85rem; color: var(--muted); line-height: 1.45; }
+
+    .cc-preset-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+    .cc-preset-card { padding: 14px; border: 1px solid var(--border); border-radius: 10px;
+      background: var(--panel-2); display: flex; flex-direction: column; gap: 10px; }
+    .cc-preset-card h3 { font-size: 0.95rem; font-weight: 600; margin: 0; }
+    .cc-preset-card p { font-size: .85rem; color: var(--muted); line-height: 1.45; margin: 0; flex: 1; }
+    .cc-preset-card button { align-self: flex-start; }
+
+    .cc-policy-options { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 760px) { .cc-policy-options { grid-template-columns: 1fr; } }
+
+    .cc-field { display: block; margin-top: 14px; }
+    .cc-field-label { font-weight: 600; font-size: 0.92rem; }
+    .cc-field input[type=text],
+    .cc-field input[type=url],
+    .cc-field input[type=number],
+    .cc-field select,
+    .cc-field textarea {
+      display: block; width: 100%; margin-top: 4px;
+      padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+      background: var(--panel); color: var(--text);
+      font: inherit;
+    }
+    .cc-field textarea { min-height: 92px; resize: vertical; }
+    .cc-field .muted.smaller { display: block; margin-top: 4px; }
+
+    .cc-copy-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    @media (max-width: 760px) { .cc-copy-grid { grid-template-columns: 1fr; } }
+
+    .cc-disabled { opacity: 0.4; pointer-events: none; }
+  </style>
+
+  {# Quick-start presets — each "Apply preset" POSTs to its own
+     endpoint that overwrites mode + copy + position then redirects
+     back. Lives ABOVE the main settings form so the admin sees the
+     presets, applies one, then fine-tunes + saves the form below.
+     Doesn't touch the enabled flag or policy linkage — those stay
+     where the admin set them. #}
+  <section class="card">
+    <div class="card-head">
+      <h2>Quick-start by region</h2>
+      <span class="muted smaller">Apply best-practice defaults for a regulatory regime in one click. You can then tweak the copy below and Save. (Not legal advice — review the result before deploying.)</span>
+    </div>
+    <div class="cc-preset-grid" data-cc-group="region-preset">
+      {% for key, p in presets.items() %}
+      <div class="cc-preset-card">
+        <h3>{{ p.label }}</h3>
+        <p>{{ p.description }}</p>
+        <form method="post" action="{{ url_for('main.frontend_cookie_compliance_apply_preset') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="preset" value="{{ key }}">
+          <button type="submit" class="btn btn-sm">Apply preset</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# All settings live in ONE form so the bottom Save button commits
+     every change. The preset-apply / policy-generate cards above and
+     below are independent forms that POST elsewhere. #}
+  <form class="form" method="post" action="{{ url_for('main.frontend_cookie_compliance_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Compliance module</h2>
+        <span class="muted smaller">Toggle the banner on or off site-wide. When off, no banner is shown and no consent cookie is set.</span>
+      </div>
+
+      <div class="cc-row">
+        <div class="cc-row-text">
+          <div class="cc-row-label">Enable cookie compliance banner</div>
+          <div class="muted small">Renders a privacy banner on the public site until each visitor has made a choice. Their choice is remembered in their browser for {{ site.cookie_compliance_remember_days or 365 }} day{{ '' if (site.cookie_compliance_remember_days or 365) == 1 else 's' }}.</div>
+        </div>
+        <label class="mode-toggle">
+          <input type="checkbox" name="cookie_compliance_enabled" value="1" {% if site.cookie_compliance_enabled %}checked{% endif %}>
+          <span class="mode-track"><span class="mode-thumb"></span></span>
+        </label>
+      </div>
+
+      <div class="cc-row">
+        <div class="cc-row-text">
+          <div class="cc-row-label">Auto-adapt to visitor region</div>
+          <div class="muted small">When on, EU/UK visitors get the stricter GDPR opt-in flow and California visitors get a CCPA "do not sell or share" choice, regardless of the mode you pick below. Visitors outside those regions see your configured mode. Your chosen mode is the <em>floor</em> — auto can only escalate, never relax.</div>
+        </div>
+        <label class="mode-toggle">
+          <input type="checkbox" name="cookie_compliance_auto_region" value="1" {% if site.cookie_compliance_auto_region %}checked{% endif %}>
+          <span class="mode-track"><span class="mode-thumb"></span></span>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Prompt mode</h2>
+        <span class="muted smaller">How forcefully the banner asks for consent. <strong>Strict</strong> is required to meet GDPR.</span>
+      </div>
+      <div class="cc-mode-grid">
+        <label class="cc-mode-card">
+          <input type="radio" name="cookie_compliance_mode" value="notice"
+                 {% if site.cookie_compliance_mode == 'notice' %}checked{% endif %}>
+          <div class="cc-mode-card-title">{{ icon('info') }} Notice</div>
+          <div class="cc-mode-card-desc">Informational banner with a single dismiss button. Nothing is blocked. Lowest friction — good for sites that don't load third-party trackers.</div>
+        </label>
+        <label class="cc-mode-card">
+          <input type="radio" name="cookie_compliance_mode" value="consent"
+                 {% if site.cookie_compliance_mode == 'consent' %}checked{% endif %}>
+          <div class="cc-mode-card-title">{{ icon('check-circle') }} Consent</div>
+          <div class="cc-mode-card-desc">Explicit Accept / Reject. Both equally prominent. Reject hides non-essential cookies on this client.</div>
+        </label>
+        <label class="cc-mode-card">
+          <input type="radio" name="cookie_compliance_mode" value="strict"
+                 {% if site.cookie_compliance_mode == 'strict' %}checked{% endif %}>
+          <div class="cc-mode-card-title">{{ icon('shield') }} Strict opt-in</div>
+          <div class="cc-mode-card-desc">Non-essential cookies are <em>actively blocked</em> until Accept. Required by GDPR and recommended for any EU-facing site.</div>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Banner copy &amp; position</h2>
+        <span class="muted smaller">What the visitor reads when the banner appears. Leave a field blank to use the system default.</span>
+      </div>
+
+      <label class="cc-field">
+        <span class="cc-field-label">Position</span>
+        <select name="cookie_compliance_position">
+          {% for p in positions %}
+          <option value="{{ p }}" {% if site.cookie_compliance_position == p %}selected{% endif %}>{{ p }}</option>
+          {% endfor %}
+        </select>
+        <span class="muted smaller">Bottom-bar = full-width strip pinned to the bottom. Modal = centered with a dim backdrop, mandatory choice (only available in Strict mode).</span>
+      </label>
+
+      <label class="cc-field">
+        <span class="cc-field-label">Title</span>
+        <input type="text" name="cookie_compliance_title" maxlength="200"
+               value="{{ site.cookie_compliance_title or '' }}"
+               placeholder="We use cookies">
+      </label>
+
+      <label class="cc-field">
+        <span class="cc-field-label">Body</span>
+        <textarea name="cookie_compliance_body" maxlength="2000"
+                  placeholder="Short explanation of what cookies you use and why. The visitor's first impression — keep it human.">{{ site.cookie_compliance_body or '' }}</textarea>
+      </label>
+
+      <div class="cc-copy-grid">
+        <label class="cc-field">
+          <span class="cc-field-label">Accept button label</span>
+          <input type="text" name="cookie_compliance_accept_label" maxlength="60"
+                 value="{{ site.cookie_compliance_accept_label or '' }}"
+                 placeholder="Accept">
+        </label>
+        <label class="cc-field">
+          <span class="cc-field-label">Reject button label</span>
+          <input type="text" name="cookie_compliance_reject_label" maxlength="60"
+                 value="{{ site.cookie_compliance_reject_label or '' }}"
+                 placeholder="Reject non-essential">
+          <span class="muted smaller">Blank to hide the reject button (Notice mode only).</span>
+        </label>
+        <label class="cc-field">
+          <span class="cc-field-label">More-info link label</span>
+          <input type="text" name="cookie_compliance_more_label" maxlength="60"
+                 value="{{ site.cookie_compliance_more_label or '' }}"
+                 placeholder="Privacy policy">
+        </label>
+      </div>
+
+      <label class="cc-field" style="max-width: 280px;">
+        <span class="cc-field-label">Remember choice for (days)</span>
+        <input type="number" name="cookie_compliance_remember_days" min="0" max="730"
+               value="{{ site.cookie_compliance_remember_days or 365 }}">
+        <span class="muted smaller">0 = re-prompt every page load (useful for testing). 365 = the default. 730 (2 years) is the upper end of what most regulators accept.</span>
+      </label>
+    </section>
+
+    {# ── Privacy policy linkage ───────────────────────────── #}
+    <section class="card">
+      <div class="card-head">
+        <h2>Privacy policy</h2>
+        <span class="muted smaller">Link the banner's "More info" button to your privacy policy. Pick an existing Page, paste an external URL, or generate a starter policy below.</span>
+      </div>
+      <div class="cc-policy-options">
+        <label class="cc-field">
+          <span class="cc-field-label">Internal Page</span>
+          <select name="cookie_compliance_policy_page_id">
+            <option value="">— None —</option>
+            {% for p in pages %}
+            <option value="{{ p.id }}" {% if site.cookie_compliance_policy_page_id == p.id %}selected{% endif %}>
+              {{ p.title }} (/{{ p.slug }})
+            </option>
+            {% endfor %}
+          </select>
+          <span class="muted smaller">Preferred — links resolve through Pages so the URL survives slug renames.</span>
+        </label>
+        <label class="cc-field">
+          <span class="cc-field-label">External URL (alternative)</span>
+          <input type="url" name="cookie_compliance_policy_external_url" maxlength="500"
+                 value="{{ site.cookie_compliance_policy_external_url or '' }}"
+                 placeholder="https://example.org/privacy">
+          <span class="muted smaller">If both fields are set, the internal Page wins.</span>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      {# Class is `cc-form-actions` rather than `.form-actions` — the
+         global `body.has-fe-save-bar .fe-admin-main .form-actions { display: none }`
+         rule (in app.css) hides every inline form-actions block on
+         Web Frontend admin pages in favour of the floating save bar.
+         Cookie compliance has too much state for the dirty-detector
+         (radios + selects + textarea + multiple checkboxes) to track
+         comfortably, so we keep an explicit inline Save in view. #}
+      <div class="cc-form-actions" style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="submit" class="btn btn-primary">Save cookie compliance settings</button>
+      </div>
+    </section>
+  </form>
+
+  {# ── Starter-policy generator (separate form so generating doesn't
+     accidentally also save the in-progress settings form above) ── #}
+  <section class="card">
+    <div class="card-head">
+      <h2>Generate a starter privacy policy</h2>
+      <span class="muted smaller">Don't have a privacy policy yet? Pick a starter, and we'll create a new Page seeded with sensible boilerplate — then link it as your policy. You'll need to edit a few placeholders (organisation name, contact email, retention periods) before publishing.</span>
+    </div>
+    <div class="cc-preset-grid" data-cc-group="policy-template">
+      {% for t in policy_templates %}
+      <div class="cc-preset-card">
+        <h3>{{ t.label }}</h3>
+        <p>Creates a new Page with the standard sections and a banner-ready link target.</p>
+        <form method="post" action="{{ url_for('main.frontend_cookie_compliance_generate_policy') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="template" value="{{ t.key }}">
+          <button type="submit" class="btn btn-sm">Generate &amp; link</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  </div>
+</div>
+{% endblock %}

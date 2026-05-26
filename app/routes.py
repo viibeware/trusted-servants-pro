@@ -9035,6 +9035,150 @@ def frontend_caching_thumbnails_clear():
     return redirect(url_for("main.frontend_caching"))
 
 
+# ── Cookie & privacy compliance ───────────────────────────────────────
+
+_COOKIE_MODES = ("notice", "consent", "strict")
+_COOKIE_POSITIONS = ("bottom-bar", "bottom-left", "bottom-right", "modal")
+
+
+@bp.route("/frontend/cookie-compliance")
+@admin_required
+def frontend_cookie_compliance():
+    """Admin page for the cookie + privacy compliance banner. Lets the
+    admin enable the module, pick a prompt mode, customise the banner
+    copy + position, link a privacy policy (existing Page OR external
+    URL), and one-click apply a regional preset (GDPR / CCPA / generic).
+    See ``app/cookie_compliance.py`` for region inference + presets +
+    starter policy templates."""
+    from . import cookie_compliance as cc
+    s = _get_site_setting()
+    pages = (Page.query.filter(Page.is_published.is_(True))
+             .order_by(Page.title.asc()).all())
+    return render_template(
+        "frontend_cookie_compliance.html",
+        site=s, pages=pages,
+        presets=cc.REGION_PRESETS,
+        policy_templates=[{"key": k, "label": v[1]}
+                          for k, v in cc.POLICY_TEMPLATES.items()],
+        modes=_COOKIE_MODES,
+        positions=_COOKIE_POSITIONS,
+    )
+
+
+@bp.route("/frontend/cookie-compliance/save", methods=["POST"])
+@admin_required
+def frontend_cookie_compliance_save():
+    """Persist the cookie-compliance settings. Booleans default off when
+    their checkbox is absent from the POST. Enum fields are validated
+    against the small whitelists above; anything else falls back to the
+    current value so a bad form post can't poison the DB."""
+    s = _get_site_setting()
+    s.cookie_compliance_enabled = request.form.get("cookie_compliance_enabled") == "1"
+    mode = (request.form.get("cookie_compliance_mode") or "").strip()
+    if mode in _COOKIE_MODES:
+        s.cookie_compliance_mode = mode
+    s.cookie_compliance_auto_region = request.form.get("cookie_compliance_auto_region") == "1"
+    pos = (request.form.get("cookie_compliance_position") or "").strip()
+    if pos in _COOKIE_POSITIONS:
+        s.cookie_compliance_position = pos
+    s.cookie_compliance_title = (request.form.get("cookie_compliance_title") or "").strip()[:200] or None
+    s.cookie_compliance_body = (request.form.get("cookie_compliance_body") or "").strip() or None
+    s.cookie_compliance_accept_label = (request.form.get("cookie_compliance_accept_label") or "").strip()[:60] or None
+    s.cookie_compliance_reject_label = (request.form.get("cookie_compliance_reject_label") or "").strip()[:60] or None
+    s.cookie_compliance_more_label = (request.form.get("cookie_compliance_more_label") or "").strip()[:60] or None
+    # Privacy policy linkage: either pick an existing Page or paste an
+    # external URL. We allow both stored simultaneously (admin might want
+    # to switch back) but the banner prefers the internal Page when both
+    # are set — internal links survive site moves better.
+    page_id_raw = (request.form.get("cookie_compliance_policy_page_id") or "").strip()
+    if page_id_raw:
+        try:
+            pid = int(page_id_raw)
+            if Page.query.get(pid):
+                s.cookie_compliance_policy_page_id = pid
+        except ValueError:
+            pass
+    else:
+        s.cookie_compliance_policy_page_id = None
+    ext = (request.form.get("cookie_compliance_policy_external_url") or "").strip()
+    s.cookie_compliance_policy_external_url = ext[:500] or None
+    # Remember-days. Clamp to sane range — 0 disables persistence (banner
+    # re-prompts every page load, useful for testing); 730 (2 years) is
+    # the upper limit most regulators consider acceptable.
+    try:
+        days = int(request.form.get("cookie_compliance_remember_days") or "365")
+    except ValueError:
+        days = 365
+    s.cookie_compliance_remember_days = max(0, min(730, days))
+    db.session.commit()
+    flash("Cookie compliance settings saved.", "success")
+    return redirect(url_for("main.frontend_cookie_compliance"))
+
+
+@bp.route("/frontend/cookie-compliance/apply-preset", methods=["POST"])
+@admin_required
+def frontend_cookie_compliance_apply_preset():
+    """Stamp one of the region presets onto the current settings (mode,
+    auto-region flag, banner copy, position). Doesn't touch the
+    enabled flag or the policy linkage — those are intentional choices
+    the admin makes separately. Always followed by a hand-edit so the
+    admin can tailor wording to their own voice."""
+    from . import cookie_compliance as cc
+    key = (request.form.get("preset") or "").strip()
+    try:
+        preset = cc.get_preset(key)
+    except KeyError:
+        flash("Unknown preset.", "danger")
+        return redirect(url_for("main.frontend_cookie_compliance"))
+    s = _get_site_setting()
+    for col, val in preset["settings"].items():
+        setattr(s, col, val)
+    db.session.commit()
+    flash(f"Applied preset: {preset['label']}. Review the copy and click Save.", "success")
+    return redirect(url_for("main.frontend_cookie_compliance"))
+
+
+@bp.route("/frontend/cookie-compliance/generate-policy", methods=["POST"])
+@admin_required
+def frontend_cookie_compliance_generate_policy():
+    """Create a new Page seeded with one of the starter policy templates
+    and link it as the site's privacy policy. The admin will want to
+    edit the placeholders (organisation name, contact email, retention
+    periods) afterwards — the flash message says so."""
+    from . import cookie_compliance as cc
+    key = (request.form.get("template") or "").strip()
+    if key not in cc.POLICY_TEMPLATES:
+        flash("Unknown policy template.", "danger")
+        return redirect(url_for("main.frontend_cookie_compliance"))
+    s = _get_site_setting()
+    site_name = (s.frontend_title or "").strip() or None
+    title, slug_seed, blocks_json = cc.generate_policy(key, site_name=site_name)
+    # Slug uniqueness — bump with -2, -3, ... until no Page owns it.
+    base_slug = _normalize_slug(slug_seed) or "privacy-policy"
+    slug = base_slug
+    n = 2
+    while Page.query.filter_by(slug=slug).first():
+        slug = f"{base_slug}-{n}"
+        n += 1
+    page = Page(
+        slug=slug,
+        title=title,
+        blocks_json=blocks_json,
+        is_published=True,
+        is_private=False,
+    )
+    db.session.add(page)
+    db.session.flush()  # get page.id without losing the txn
+    s.cookie_compliance_policy_page_id = page.id
+    db.session.commit()
+    flash(
+        f"Generated starter policy page “{title}” (/{slug}) and linked "
+        "it as your privacy policy. Open it from Pages to fill in the "
+        "placeholders (organisation name, contact email, retention "
+        "periods).", "success")
+    return redirect(url_for("main.frontend_page_edit", page_id=page.id))
+
+
 @bp.route("/frontend/fonts-icons/save", methods=["POST"])
 @admin_required
 def frontend_fonts_icons_save():
@@ -10249,7 +10393,7 @@ _PAGE_LAYOUT_BLOCK_TYPES = {
 _FOOTER_BLOCK_TYPES = {
     "brand", "link_columns", "social_row", "secondary_nav", "copyright",
     "divider", "spacer", "meeting_locations", "contact_section",
-    "powered_by", "admin_login",
+    "powered_by", "admin_login", "privacy_links",
 }
 
 
@@ -14292,19 +14436,35 @@ def watchtower_visitors():
         window = max(7, min(365, int(request.args.get("window", 30))))
     except (TypeError, ValueError):
         window = 30
+    # We pre-compute both views + uniques sets so the client-side
+    # metric toggle (Unique visitors ⇄ Hits) can flip instantly
+    # without a round-trip. Rendering both sides server-side is cheap
+    # — these are small lists. Browser + OS breakdowns were folded in
+    # when /tspro/frontend/metrics was retired and its donuts moved
+    # here.
+    hourly_days = min(30, window)
     return render_template(
         "watchtower/visitors.html",
         active_tab="visitors",
         window=window,
+        hr_days=hourly_days,
         windows=(7, 14, 30, 60, 90, 180, 365),
         summary=vm.summary(days=window),
         daily=vm.daily_series(days=window),
-        hourly=vm.hourly_distribution(days=min(14, window)),
+        hourly_views=vm.hourly_distribution(days=hourly_days, metric="views"),
+        hourly_uniques=vm.hourly_distribution(days=hourly_days, metric="uniques"),
         # Big enough pool that the client-side "Show 30 more" expand
         # rarely runs out without paying for another round-trip.
-        top_paths=vm.top_paths(days=window, limit=300),
-        top_referrers=vm.top_referrers(days=window, limit=300),
-        devices=vm.device_breakdown(days=window),
+        top_paths_views=vm.top_paths(days=window, limit=300, metric="views"),
+        top_paths_uniques=vm.top_paths(days=window, limit=300, metric="uniques"),
+        top_referrers_views=vm.top_referrers(days=window, limit=300, metric="views"),
+        top_referrers_uniques=vm.top_referrers(days=window, limit=300, metric="uniques"),
+        devices_views=vm.device_breakdown(days=window, metric="views"),
+        devices_uniques=vm.device_breakdown(days=window, metric="uniques"),
+        browsers_views=vm.browser_breakdown(days=window, metric="views"),
+        browsers_uniques=vm.browser_breakdown(days=window, metric="uniques"),
+        os_views=vm.os_breakdown(days=window, metric="views"),
+        os_uniques=vm.os_breakdown(days=window, metric="uniques"),
     )
 
 
@@ -17321,26 +17481,15 @@ def _resolve_metrics_window(arg):
 @bp.route("/frontend/metrics")
 @admin_required
 def visitor_metrics_page():
-    """Admin visitor-metrics dashboard. Lifetime + window summary,
-    daily time-series, hour-of-day heat, plus top paths / referrers /
-    devices / browsers / OS. The page reads all data straight from
-    ``app/visitor_metrics.py``'s aggregators — keeping the route thin
-    so the heavy lifting is testable in isolation."""
-    from . import visitor_metrics as vm
-    window = _resolve_metrics_window(request.args.get("window"))
-    return render_template(
-        "visitor_metrics.html",
-        window=window,
-        windows=_METRICS_WINDOWS,
-        summary=vm.summary(days=window),
-        daily=vm.daily_series(days=window),
-        hourly=vm.hourly_distribution(days=min(window, 30)),
-        top_paths=vm.top_paths(days=window, limit=10),
-        top_referrers=vm.top_referrers(days=window, limit=10),
-        devices=vm.device_breakdown(days=window),
-        browsers=vm.browser_breakdown(days=window),
-        os_breakdown=vm.os_breakdown(days=window),
-    )
+    """Legacy redirect — the standalone Web Frontend Visitor Metrics
+    page was folded into the Watchtower Visitors tab so all traffic
+    insight lives in one place. The query string carries through so
+    bookmarked `?window=...` links keep working."""
+    qs = request.query_string.decode() if request.query_string else ""
+    target = url_for("main.watchtower_visitors")
+    if qs:
+        target = f"{target}?{qs}"
+    return redirect(target, code=301)
 
 
 @bp.route("/frontend/api/visitor-metrics/summary")

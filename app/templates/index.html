@@ -166,22 +166,26 @@
   {% endif %}
 
   {% if widget_key == 'visitor-metrics' and current_user.is_admin() and current_user.dash_show_visitor_metrics %}
+    {# Widget moved to Watchtower in 2.7.6: "Open metrics" now drops
+       the operator into the merged Watchtower Visitors tab. Headline
+       numbers also switched from hits to unique visitors — the more
+       useful number for "how many real people". #}
     {% call dash_widget(key='visitor-metrics', title='Frontend Visitor Metrics',
                          head_icon='bar-chart',
-                         view_all_url=url_for('main.visitor_metrics_page'),
+                         view_all_url=url_for('main.watchtower_visitors'),
                          view_all_label='Open metrics') %}
       <div class="vm-widget-card">
         <div class="vm-widget-stats">
           <div class="vm-widget-stat vm-widget-stat-accent">
-            <div class="vm-widget-stat-label">Today</div>
-            <div class="vm-widget-stat-value">{% if visitor_summary %}{{ '{:,}'.format(visitor_summary.views_today) }}{% else %}—{% endif %}</div>
+            <div class="vm-widget-stat-label">Visitors today</div>
+            <div class="vm-widget-stat-value">{% if visitor_summary %}{{ '{:,}'.format(visitor_summary.uniques_today) }}{% else %}—{% endif %}</div>
           </div>
           <div class="vm-widget-stat">
-            <div class="vm-widget-stat-label">Last 7 days</div>
-            <div class="vm-widget-stat-value">{% if visitor_summary %}{{ '{:,}'.format(visitor_summary.views_7d) }}{% else %}—{% endif %}</div>
+            <div class="vm-widget-stat-label">Visitors · 7d</div>
+            <div class="vm-widget-stat-value">{% if visitor_summary %}{{ '{:,}'.format(visitor_summary.uniques_7d) }}{% else %}—{% endif %}</div>
           </div>
           <div class="vm-widget-stat">
-            <div class="vm-widget-stat-label">Unique · 30d</div>
+            <div class="vm-widget-stat-label">Visitors · 30d</div>
             <div class="vm-widget-stat-value">{% if visitor_summary %}{{ '{:,}'.format(visitor_summary.uniques_30d) }}{% else %}—{% endif %}</div>
           </div>
         </div>

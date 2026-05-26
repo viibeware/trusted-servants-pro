@@ -1,0 +1,20 @@
+{# Segmented Unique visitors ⇄ Hits toggle used by the Visitor
+   Metrics + Watchtower Visitors pages. JS lives in app.js
+   (`installMetricModeToggle`); CSS in app.css under "Metric-mode
+   toggle". `aria-pressed` is set client-side from localStorage on
+   page load so the page never flashes the wrong button as active. #}
+<div class="metric-toggle" role="group" aria-label="Show metrics as">
+  <button type="button" data-metric="uniques" aria-pressed="true"
+          title="Count each visitor once per day (privacy-preserving hash of IP + browser)">
+    Unique visitors
+  </button>
+  <button type="button" data-metric="views" aria-pressed="false"
+          title="Count every page load, including reloads">
+    Hits
+  </button>
+</div>
+<button type="button" class="metric-toggle-help" tabindex="0"
+        aria-label="What do these mean?"
+        data-tooltip="Unique visitors: each person counted once per UTC day, using a daily-rotating one-way hash of their IP + browser (no identifying data stored). Hits: every individual page load — reloads, repeat visits, and back-button revisits all count separately.">
+  {{ icon('help-circle') }}
+</button>
