@@ -7,7 +7,14 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.7.3 — 2026-05-25 (latest) — Phone formatting + a contact call-to-action
+## 2.7.4 — 2026-05-26 (latest) — Recovery Contacts page styling + save-bar tidy-up
+
+- **Style the Recovery Contacts page from the Templates screen.** The public `/contactlist` page now shows up in **Web Frontend → Templates** like every other page, with its own appearance controls: heading, subheading, intro, container width, and the background/fonts/sizes Customize panel. These moved out of the Forms settings, which now focus on the form's plumbing — on/off, email alerts, button label, confirmation message, and bot protection.
+- **One save bar, not two.** Editing a template in its pop-up no longer shows a duplicate "Unsaved changes" bar inside the dialog — you'll just see the usual yellow save bar at the bottom of the screen, and the dialog stays open after you save.
+- **Fixed:** the "Contact us" button on the Recovery Contacts page no longer gets underlined when you hover over it.
+- **Tidied:** a little more space between paragraphs in the announcement cards on the Announcements page.
+
+## 2.7.3 — 2026-05-25 — Phone formatting + a contact call-to-action
 
 - **Phone numbers look tidy automatically.** On the Recovery Contacts directory (and its PDF), numbers are formatted as you'd expect — `202-555-0100` for US/Canada (or `1-202-555-0100`), and the correct international style for numbers from other countries. People can still type however they like; only the display is cleaned up.
 - **A "Contact us" prompt on the Recovery Contacts page** — a short line (pulled from your Contact page settings) and a button that takes visitors to your contact form. On phones it appears neatly at the bottom of the page, below the sign-up form.

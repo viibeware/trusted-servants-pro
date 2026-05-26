@@ -8551,10 +8551,14 @@ def frontend_form_contact():
 @admin_required
 def frontend_form_recovery_contacts():
     """Settings page for the public Recovery Contacts form. GET renders the
-    config form; POST persists the recovery_contacts_* SiteSetting columns that
-    drive the public page (visibility, notification recipient, page copy,
-    confirmation, and container width). The entries themselves are
-    reviewed/approved on the dedicated Recovery Contacts admin section
+    config form; POST persists the form-mechanic recovery_contacts_*
+    SiteSetting columns (visibility, admin alerts + recipient, submit-button
+    label, and the success message). Page look-and-feel — heading /
+    subheading / intro and container width — lives on the Templates page
+    (``frontend_recovery_contacts_template_save``) next to every other page
+    template, so it's intentionally NOT written here (saving this form must
+    not clobber those values). The entries themselves are reviewed/approved
+    on the dedicated Recovery Contacts admin section
     (``main.recovery_contacts``) — this page is configuration only."""
     s = _get_site_setting()
     if request.method == "POST":
@@ -8562,21 +8566,8 @@ def frontend_form_recovery_contacts():
         s.recovery_contacts_email_alerts = request.form.get("recovery_contacts_email_alerts") == "1"
         s.recovery_contacts_removal_alerts = request.form.get("recovery_contacts_removal_alerts") == "1"
         s.recovery_contacts_to = (request.form.get("recovery_contacts_to") or "").strip()[:500] or None
-        s.recovery_contacts_heading = (request.form.get("recovery_contacts_heading") or "").strip()[:200] or None
-        s.recovery_contacts_subheading = (request.form.get("recovery_contacts_subheading") or "").strip()[:500] or None
-        s.recovery_contacts_intro = (request.form.get("recovery_contacts_intro") or "").strip() or None
         s.recovery_contacts_submit_label = (request.form.get("recovery_contacts_submit_label") or "").strip()[:100] or None
         s.recovery_contacts_success_message = (request.form.get("recovery_contacts_success_message") or "").strip()[:500] or None
-        mode = (request.form.get("recovery_contacts_width_mode") or "boxed").strip()
-        s.recovery_contacts_width_mode = mode if mode in ("boxed", "full") else "boxed"
-        try:
-            s.recovery_contacts_max_width = max(640, min(2400, int(request.form.get("recovery_contacts_max_width") or 1160)))
-        except (ValueError, TypeError):
-            s.recovery_contacts_max_width = 1160
-        try:
-            s.recovery_contacts_padding_pct = max(0, min(20, int(request.form.get("recovery_contacts_padding_pct") or 5)))
-        except (ValueError, TypeError):
-            s.recovery_contacts_padding_pct = 5
         db.session.commit()
         flash("Recovery Contacts settings saved", "success")
         return redirect(url_for("main.frontend_form_recovery_contacts"))
@@ -8620,6 +8611,43 @@ def frontend_contact_template_save():
         s.contact_form_padding_pct = max(0, min(20, pad))
     db.session.commit()
     flash("Contact page saved", "success")
+    return redirect(url_for("main.frontend_templates"))
+
+
+@bp.route("/frontend/recovery-contacts-template/save", methods=["POST"])
+@admin_required
+def frontend_recovery_contacts_template_save():
+    """Persist the page-level look-and-feel for the public Recovery
+    Contacts page (/contactlist): heading / subheading / Markdown intro
+    plus the container-width controls. Mirrors
+    ``frontend_contact_template_save`` — the Forms admin keeps the
+    form-mechanic settings (visibility, alerts, recipient, submit label,
+    success message, bot protection); this surface is purely about how
+    the page looks, so it lives next to every other page template."""
+    s = _get_site_setting()
+    s.recovery_contacts_heading = (request.form.get("recovery_contacts_heading") or "").strip()[:200] or None
+    s.recovery_contacts_subheading = (request.form.get("recovery_contacts_subheading") or "").strip()[:500] or None
+    s.recovery_contacts_intro = (request.form.get("recovery_contacts_intro") or "").strip() or None
+    # Container-width controls — same shape/bounds as the contact +
+    # list endpoints. Width mode falls through to the model default on
+    # an out-of-range value; numeric inputs clamp to the schema bounds.
+    width = (request.form.get("recovery_contacts_width_mode") or "").strip()
+    if width in ("boxed", "full"):
+        s.recovery_contacts_width_mode = width
+    if "recovery_contacts_max_width" in request.form:
+        try:
+            max_w = int(request.form.get("recovery_contacts_max_width") or 1160)
+        except ValueError:
+            max_w = 1160
+        s.recovery_contacts_max_width = max(640, min(2400, max_w))
+    if "recovery_contacts_padding_pct" in request.form:
+        try:
+            pad = int(request.form.get("recovery_contacts_padding_pct") or 5)
+        except ValueError:
+            pad = 5
+        s.recovery_contacts_padding_pct = max(0, min(20, pad))
+    db.session.commit()
+    flash("Recovery Contacts page saved", "success")
     return redirect(url_for("main.frontend_templates"))
 
 
@@ -9333,6 +9361,11 @@ def frontend_templates():
                            # shape as everywhere else.
                            printlist_active_settings=template_settings(s, "printlist", "default"),
                            contact_active_settings=template_settings(s, "contact", "split"),
+                           # Recovery Contacts mirrors Contact: a single
+                           # rendering ('default' key) that still gets a
+                           # customize panel for UI uniformity, plus its own
+                           # page-level heading + container-width controls.
+                           recovery_contacts_active_settings=template_settings(s, "recovery_contacts", "default"),
                            site_index_templates=_by_name(SITE_INDEX_TEMPLATES),
                            site_index_active_key=site_index_key,
                            site_index_active_settings=template_settings(s, "site_index", site_index_key),
@@ -9383,6 +9416,7 @@ _TEMPLATE_KINDS = ("meeting", "event", "story", "blog_post",
                    "announcements_list", "archive",
                    "stories_list", "blog_list",
                    "literature_library", "printlist", "contact",
+                   "recovery_contacts",
                    "site_index", "fellowships_list", "submission_form")
 
 
@@ -9434,6 +9468,9 @@ def frontend_template_settings_save(kind, key):
             abort(404)
     elif kind == "contact":
         if key != "split":
+            abort(404)
+    elif kind == "recovery_contacts":
+        if key != "default":
             abort(404)
     s = _get_site_setting()
     raw = (s.frontend_template_settings_json or "").strip()

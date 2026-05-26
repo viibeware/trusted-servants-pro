@@ -72,22 +72,9 @@
 
       <section class="card">
         <div class="card-head">
-          <h2>Page copy</h2>
-          <span class="muted smaller">Heading, subheading, and intro shown above the directory + form. Leave a field blank to use its built-in default.</span>
+          <h2>Form behaviour</h2>
+          <span class="muted smaller">The submit button's label. Page copy (heading, subheading, intro) and container width now live on <a href="{{ url_for('main.frontend_templates') }}#fe-tplgrid-recovery-contacts">Web Frontend → Templates</a> alongside every other page's appearance settings.</span>
         </div>
-        <label>Page heading
-          <input type="text" name="recovery_contacts_heading" maxlength="200"
-                 value="{{ site.recovery_contacts_heading or '' }}" placeholder="Recovery Contacts">
-        </label>
-        <label>Subheading
-          <input type="text" name="recovery_contacts_subheading" maxlength="500"
-                 value="{{ site.recovery_contacts_subheading or '' }}"
-                 placeholder="Add yourself to the directory and reach other members directly.">
-        </label>
-        <label>Intro <span class="muted smaller">(Markdown supported)</span>
-          <textarea name="recovery_contacts_intro" rows="3"
-                    placeholder="Optional paragraph shown above the form.">{{ site.recovery_contacts_intro or '' }}</textarea>
-        </label>
         <label>Submit button label
           <input type="text" name="recovery_contacts_submit_label" maxlength="100"
                  value="{{ site.recovery_contacts_submit_label or '' }}" placeholder="Add me to the list">
@@ -103,29 +90,6 @@
           <textarea name="recovery_contacts_success_message" rows="2" maxlength="500"
                     placeholder="Thanks — your entry has been submitted and will appear once an admin approves it.">{{ site.recovery_contacts_success_message or '' }}</textarea>
         </label>
-      </section>
-
-      <section class="card">
-        <div class="card-head">
-          <h2>Layout</h2>
-          <span class="muted smaller">Container width for the public page. <b>Boxed</b> caps the content at a max width and centers it; <b>Full width</b> spans the viewport with side padding.</span>
-        </div>
-        <div class="rc-settings-grid">
-          <label>Container width
-            <select name="recovery_contacts_width_mode">
-              <option value="boxed" {% if (site.recovery_contacts_width_mode or 'boxed') == 'boxed' %}selected{% endif %}>Boxed</option>
-              <option value="full" {% if site.recovery_contacts_width_mode == 'full' %}selected{% endif %}>Full width</option>
-            </select>
-          </label>
-          <label>Max width (px, boxed)
-            <input type="number" name="recovery_contacts_max_width" min="640" max="2400" step="10"
-                   value="{{ site.recovery_contacts_max_width or 1160 }}">
-          </label>
-          <label>Side padding (%, full)
-            <input type="number" name="recovery_contacts_padding_pct" min="0" max="20" step="1"
-                   value="{{ site.recovery_contacts_padding_pct if site.recovery_contacts_padding_pct is not none else 5 }}">
-          </label>
-        </div>
       </section>
 
       <section class="card">

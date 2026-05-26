@@ -7638,6 +7638,7 @@ html:not([data-theme="dark"]) .fe-announcements-list a.fe-events-omni-archive {
 }
 .fe-announcements-card-fulltext > :first-child { margin-top: 0; }
 .fe-announcements-card-fulltext > :last-child  { margin-bottom: 0; }
+.fe-announcements-card-fulltext p { margin: 1.1em 0; }
 .fe-announcements-card-fulltext ul,
 .fe-announcements-card-fulltext ol {
   margin: 0.5em 0;
@@ -10036,6 +10037,14 @@ body.fe-frontend-force-dark .fe-contact-eyebrow {
 /* It's an <a>, so the frontend link colour would bury the button text —
    force the primary-button text colour (matches .fe-rc-confirm-cta). */
 .fe-rc-cta-btn { padding: 11px 24px; color: var(--fe-color-btn-primary-text, #fff) !important; }
+/* …and being an <a>, the generic `.fe-page a:hover` rule (specificity
+   0,2,1) would paint a hover underline that a plain button never gets.
+   Suppress it with the `.fe-page`/`.frontend-body` prefix so this beats
+   that rule — the button already telegraphs its hover via the lift. */
+.fe-page .fe-rc-cta-btn,
+.frontend-body .fe-rc-cta-btn,
+.fe-page .fe-rc-cta-btn:hover,
+.frontend-body .fe-rc-cta-btn:hover { text-decoration: none; }
 /* Desktop shows the in-column CTA (under the cards); the mobile copy
    (below the form) is hidden. At ≤880px the grid stacks to one column —
    flip them so the CTA lands at the very bottom of the page. */

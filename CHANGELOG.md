@@ -6,6 +6,21 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.7.4] — 2026-05-26
+
+### Added
+
+- **Recovery Contacts page template on Web Frontend → Templates** — the public `/contactlist` page now has its own card in the Templates list, modelled on the Contact page template and uniform with every other template: a "Directory + form" style card, the shared Customize panel (background / fonts / sizes), and page-level controls for the heading / subheading / Markdown intro plus container width. These appearance settings moved here out of the Forms admin (new `frontend_recovery_contacts_template_save` route; `recovery_contacts` registered as a template kind). The Forms page keeps the form mechanics (visibility, admin alerts + recipient, submit-button label, success message, bot protection) and links up to the new section — and no longer writes the moved fields, so saving it can't clobber them. No schema changes: reuses the existing `recovery_contacts_*` columns + `frontend_template_settings_json`.
+
+### Changed
+
+- **Template Edit modals show a single save bar.** Editing inside a template modal previously surfaced two "Unsaved changes" bars — the global yellow bar pinned to the page *and* a second one in the modal footer. The redundant in-modal bar is gone; modal edits now commit through the one global save bar (`#fe-save-bar`), which already stacks above the modal, batches every dirty section, and keeps the modal open after saving. Inline per-section Save buttons stay hidden inside the modal and a stray Enter routes through the global Save instead of a full-page reload.
+- **More breathing room between paragraphs** in the body text of announcement cards on the `/announcements` list (cards view) — `1.1em` paragraph margins, with the first/last paragraph still flush to the card edges.
+
+### Fixed
+
+- **"Contact us" button on the Recovery Contacts page no longer shows an underline on hover.** Being an `<a>` styled as a button, it was inheriting the generic frontend link-hover underline (`.fe-page a:hover`); a higher-specificity rule now suppresses it. (The Contact page's submit is a `<button>`, so it was never affected.)
+
 ## [2.7.3] — 2026-05-25
 
 ### Added

@@ -699,6 +699,121 @@
   </form>
 </section>
 
+{# ── Recovery Contacts page ──────────────────────────────────────
+   Single-template surface, same shape as Contact. The card is a
+   wayfinding affordance; the form mechanics (visibility, admin
+   alerts, submit-button label, success message, bot protection)
+   live on the dedicated Recovery Contacts forms page. Page copy
+   (heading / subheading / intro) and container width are configured
+   here so a page's appearance sits next to every other template. #}
+<section class="card fe-tplgrid-section" id="fe-tplgrid-recovery-contacts">
+  <div class="card-head">
+    <h2>Recovery Contacts (/contactlist)</h2>
+    <span class="muted smaller">Public self-serve directory where members add their own name + phone/email; entries stay hidden until an admin approves them. A live-searchable, PDF-exportable directory sits beside a Turnstile-protected submission form.</span>
+  </div>
+  <div class="fe-tplgrid">
+    <label class="fe-tplgrid-card active" style="cursor: default;">
+      <input type="radio" checked disabled>
+      <div class="fe-tplgrid-thumb fe-tplgrid-thumb-meetings-list" aria-hidden="true">
+        <span class="t-side">
+          <span></span><span></span><span></span><span></span>
+        </span>
+        <span class="t-main">
+          <span class="t-row"></span>
+          <span class="t-row"></span>
+          <span class="t-row"></span>
+        </span>
+      </div>
+      <div class="fe-tplgrid-info">
+        <div class="fe-tplgrid-name">
+          Directory + form
+          <span class="fe-tplgrid-badge">Active</span>
+        </div>
+        <div class="fe-tplgrid-desc muted small">Two-column layout: a searchable member directory (with PDF export, sponsor badges, and a private "Contact me" relay) beside the self-add form. Honeypot + optional Turnstile bot protection. Single column on mobile.</div>
+      </div>
+    </label>
+  </div>
+  <p class="muted small" style="margin: 12px 0 0;">
+    {% if site and site.recovery_contacts_enabled %}
+      <span class="badge badge-success">Enabled</span> — the public <code>/contactlist</code> page is live.
+    {% else %}
+      <span class="badge badge-muted">Disabled</span> — turn the page on from <a href="{{ url_for('main.frontend_form_recovery_contacts') }}">Forms → Recovery Contacts</a> to make it public.
+    {% endif %}
+  </p>
+
+  {{ tpl_customize_panel('recovery_contacts', 'default', recovery_contacts_active_settings, 'Directory + form', scope_label='/contactlist page') }}
+
+  {# Page-level config: heading / subheading / Markdown intro plus the
+     container-width controls — mirrors the Contact card above. Form
+     mechanics (visibility, alerts, submit label, success message, bot
+     protection) live on the Forms admin so this surface stays focused
+     on look-and-feel. #}
+  <form class="form fe-tplgrid-form" method="post"
+        action="{{ url_for('main.frontend_recovery_contacts_template_save') }}"
+        style="margin-top: 1rem;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <fieldset class="fieldset fe-mlist-copy-fieldset">
+      <legend>Page heading</legend>
+      <p class="muted small" style="margin: 0 0 8px;">Override the title, subheading, and intro shown above the directory + form. Leave blank to use the baked defaults.</p>
+      <label>Title
+        <input type="text" name="recovery_contacts_heading" maxlength="200"
+               value="{{ site.recovery_contacts_heading or '' }}"
+               placeholder="Recovery Contacts">
+      </label>
+      <label>Subheading
+        <textarea name="recovery_contacts_subheading" rows="2" maxlength="500"
+                  placeholder="Add yourself to the directory and reach other members directly.">{{ site.recovery_contacts_subheading or '' }}</textarea>
+      </label>
+      <label>Optional intro <span class="muted smaller">(Markdown supported, shown above the form)</span>
+        <textarea name="recovery_contacts_intro" rows="4"
+                  placeholder="Optional paragraph shown above the form.">{{ site.recovery_contacts_intro or '' }}</textarea>
+      </label>
+    </fieldset>
+
+    {# Container width — same shape/bounds as the Contact + list admin
+       surfaces. Two radio cards choose a centered boxed layout (capped
+       at the max-width below) or full-bleed (spans the viewport with
+       the side-padding %). Out-of-range numeric inputs clamp server-side. #}
+    {%- set _rcmode = (site.recovery_contacts_width_mode if site else None) or 'boxed' -%}
+    {%- set _rcpad  = (site.recovery_contacts_padding_pct if site else 5) -%}
+    {%- set _rcmax  = (site.recovery_contacts_max_width   if site else 1160) -%}
+    <fieldset class="fieldset fe-mlist-width-fieldset">
+      <legend>Container width</legend>
+      <div class="fe-mlist-width-row">
+        <label class="check">
+          <input type="radio" name="recovery_contacts_width_mode" value="boxed"
+                 {% if _rcmode == 'boxed' %}checked{% endif %}>
+          <span><b>Boxed</b> — caps at the max-width below and centers in the viewport.</span>
+        </label>
+        <label class="check">
+          <input type="radio" name="recovery_contacts_width_mode" value="full"
+                 {% if _rcmode == 'full' %}checked{% endif %}>
+          <span><b>Full width</b> — spans the entire viewport with the side padding below applied as <code>vw</code> gutters.</span>
+        </label>
+      </div>
+      <div class="fe-mlist-width-controls">
+        <label class="fe-mlist-width-pad">
+          <span>Max width (px, boxed only)</span>
+          <input type="number" name="recovery_contacts_max_width"
+                 min="640" max="2400" step="10" value="{{ _rcmax }}">
+        </label>
+        <label class="fe-mlist-width-pad">
+          <span>Side padding (% of viewport, full-width only)</span>
+          <input type="number" name="recovery_contacts_padding_pct"
+                 min="0" max="20" step="1" value="{{ _rcpad }}">
+        </label>
+      </div>
+    </fieldset>
+
+    <div class="form-actions">
+      <a class="btn" href="{{ url_for('frontend.recovery_contacts') }}" target="_blank" rel="noopener">Preview /contactlist ↗</a>
+      <a class="btn" href="{{ url_for('main.recovery_contacts') }}">Review entries</a>
+      <a class="btn" href="{{ url_for('main.frontend_form_recovery_contacts') }}">Form mechanics</a>
+      <button class="btn btn-primary">Save Recovery Contacts page</button>
+    </div>
+  </form>
+</section>
+
 {# Events list picker — same chrome as the Meetings list section.
    Layout choices: cards / calendar / timeline / magazine. #}
 <section class="card fe-tplgrid-section">
@@ -2587,12 +2702,6 @@
             '</button>' +
           '</div>' +
           '<div class="modal-body"></div>' +
-          '<div class="modal-foot" data-tpl-foot>' +
-            '<div class="fe-save-bar fe-modal-save-bar" data-tpl-save-bar hidden>' +
-              '<span class="fe-save-bar-msg">Unsaved changes</span>' +
-              '<button type="button" class="btn fe-save-bar-btn" data-tpl-save-btn>Save</button>' +
-            '</div>' +
-          '</div>' +
         '</div>';
       modal.querySelector('.modal-head h2').textContent = m.heading;
       modal.querySelector('.modal-body').appendChild(m.section);
@@ -2609,90 +2718,31 @@
       if (origHead) origHead.style.display = 'none';
       document.body.appendChild(modal);
 
-      wireDirty(modal);
+      wireModalForms(modal);
     }
 
-    // Per-modal dirty tracking + save bar. Listens for input /
-    // change on every form inside the modal; flips the bar visible
-    // on first edit. Save bar's click POSTs every dirty form via
-    // fetch and shows "Saved" — the modal stays open until the
-    // operator clicks the X.
-    function wireDirty(modal) {
-      var bar = modal.querySelector('[data-tpl-save-bar]');
-      var btn = modal.querySelector('[data-tpl-save-btn]');
-      var msg = bar.querySelector('.fe-save-bar-msg');
-      var dirtyForms = new Set();
-      function show() {
-        bar.hidden = false;
-        bar.classList.remove('is-leaving');
-        msg.textContent = dirtyForms.size > 1
-          ? ('Unsaved changes (' + dirtyForms.size + ' sections)')
-          : 'Unsaved changes';
-        btn.disabled = false;
-        btn.textContent = 'Save';
-      }
-      function hide() {
-        bar.hidden = true;
-        bar.classList.remove('is-leaving');
-        dirtyForms.clear();
-      }
+    // Lifted template sections commit through the single global yellow
+    // save bar (#fe-save-bar) — the same one every other Web Frontend
+    // admin page uses (it already stacks above an open modal and keeps
+    // the modal open after saving). We deliberately DON'T add a second
+    // in-modal save bar; we only need to:
+    //   (a) keep the inline per-section "Save" buttons hidden inside the
+    //       modal — the global `.fe-admin-main .form-actions` hide rule
+    //       can't reach a form once it's been moved into the modal; and
+    //   (b) stop a stray native submit (e.g. Enter in a field) from
+    //       doing a full-page POST that would slam the modal shut —
+    //       route it through the global bar's Save so the modal stays open.
+    function wireModalForms(modal) {
       modal.querySelectorAll('form').forEach(function (form) {
-        function markDirty() { dirtyForms.add(form); show(); }
-        form.addEventListener('input', markDirty);
-        form.addEventListener('change', markDirty);
-        // Block native submit (would close the modal + reload) and
-        // route through the save bar instead. Submit buttons that
-        // belong to a different form (form="…" attr) keep their
-        // own behaviour.
         form.addEventListener('submit', function (e) {
           if (e.submitter && e.submitter.form !== form) return;
           e.preventDefault();
-          dirtyForms.add(form);
-          show();
-          // Mirror the bar-click path so a stray Enter in a field
-          // still triggers the same save flow.
-          btn.click();
+          var gbtn = document.getElementById('fe-save-bar-btn');
+          if (gbtn) gbtn.click();
         });
-        // Hide any inline primary "Save" buttons each section
-        // shipped with — the bar is the canonical commit affordance
-        // now, and a duplicate inside the body would just confuse.
         form.querySelectorAll('button.btn-primary').forEach(function (b) {
           var wrap = b.closest('.form-actions, .branding-save-row');
           (wrap || b).style.display = 'none';
-        });
-      });
-
-      btn.addEventListener('click', function () {
-        if (!dirtyForms.size) { hide(); return; }
-        btn.disabled = true;
-        msg.textContent = 'Saving…';
-        btn.textContent = 'Saving…';
-        var jobs = Array.from(dirtyForms).map(function (form) {
-          var fd = new FormData(form);
-          return fetch(form.action, {
-            method: form.method || 'POST',
-            credentials: 'same-origin',
-            body: fd,
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-          }).then(function (r) {
-            if (!r.ok) throw new Error('save failed ' + r.status);
-          });
-        });
-        Promise.all(jobs).then(function () {
-          msg.textContent = 'Saved';
-          // Animate the bar out via the same fe-save-leave keyframe
-          // the global save bar uses, then reset state so a follow-
-          // up edit re-shows it fresh. Modal itself stays open
-          // until the operator clicks the X.
-          var done = false;
-          function finish() { if (done) return; done = true; hide(); }
-          bar.addEventListener('animationend', finish, { once: true });
-          bar.classList.add('is-leaving');
-          setTimeout(finish, 400);
-        }).catch(function () {
-          btn.disabled = false;
-          btn.textContent = 'Save';
-          msg.textContent = 'Save failed — try again';
         });
       });
     }
