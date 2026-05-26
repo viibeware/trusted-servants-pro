@@ -4984,3 +4984,60 @@
   // the lookup logic for the catalog entry + thumbnail HTML.
   window.applyDynbgTrigger = applyToTrigger;
 })();
+
+// ── Expandable rank lists ─────────────────────────────────────────
+// Generic "Show N more" expander for `.wt-rank-list--expandable`.
+// Server pre-renders the full pool; rows past the initial cap carry
+// `wt-rank-row--hidden`. Each button click strips that class from
+// the next `data-step` rows and triggers a quick fade/slide keyframe.
+// When no hidden rows remain, the button is removed.
+//
+// Markup contract:
+//   <ul class="wt-rank-list wt-rank-list--expandable"
+//       data-wt-expand="<key>" data-step="30" data-total="N">
+//     <li class="wt-rank-row [wt-rank-row--hidden]"> ... </li>
+//   </ul>
+//   <button data-wt-expand-btn="<key>">Show 30 more</button>
+//   <span data-wt-expand-meta="<key>">base · meta</span>   (optional)
+(function () {
+  document.querySelectorAll('[data-wt-expand]').forEach(list => {
+    const key = list.dataset.wtExpand;
+    const step = parseInt(list.dataset.step, 10) || 30;
+    const total = parseInt(list.dataset.total, 10) || 0;
+    const btn = document.querySelector(`[data-wt-expand-btn="${key}"]`);
+    const meta = document.querySelector(`[data-wt-expand-meta="${key}"]`);
+    if (!btn) return;
+    const metaBase = meta ? meta.textContent : '';
+
+    function updateMeta() {
+      if (!meta) return;
+      const shown = list.querySelectorAll('.wt-rank-row:not(.wt-rank-row--hidden)').length;
+      meta.textContent = `${metaBase} · showing ${shown} of ${total}`;
+    }
+    updateMeta();
+
+    btn.addEventListener('click', () => {
+      const hidden = list.querySelectorAll('.wt-rank-row--hidden');
+      const toReveal = Array.from(hidden).slice(0, step);
+      toReveal.forEach((row, i) => {
+        row.classList.remove('wt-rank-row--hidden');
+        row.classList.add('wt-rank-row--revealing');
+        // Tiny per-row stagger turns the batch reveal into a wave
+        // rather than a single jarring jump.
+        row.style.animationDelay = (i * 8) + 'ms';
+        row.addEventListener('animationend', () => {
+          row.classList.remove('wt-rank-row--revealing');
+          row.style.animationDelay = '';
+        }, { once: true });
+      });
+      updateMeta();
+      const remaining = list.querySelectorAll('.wt-rank-row--hidden').length;
+      if (remaining === 0) {
+        btn.parentElement.remove();
+      } else {
+        // First text node holds the label; preserve the trailing icon.
+        btn.firstChild.textContent = `Show ${Math.min(step, remaining)} more `;
+      }
+    });
+  });
+})();

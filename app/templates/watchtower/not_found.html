@@ -87,43 +87,81 @@
   {% endif %}
 </section>
 
+{# Initial-visible row count and per-click reveal step for both
+   expandable rank lists below. Server pre-renders the full pool; JS
+   just unhides hidden rows in batches. #}
+{% set _INITIAL = 30 %}
+{% set _STEP = 30 %}
 <div class="wt-two-col">
   <section class="card">
-    <div class="card-head"><h2>Top missing URLs</h2><span class="muted smaller">{{ window }}d · fix these first</span></div>
+    <div class="card-head"><h2>Top missing URLs</h2><span class="muted smaller" data-wt-expand-meta="top-paths">{{ window }}d · fix these first</span></div>
     {% if not top_paths %}
     <p class="muted">No 404s in this window.</p>
     {% else %}
     {% set tp_max = (top_paths|map(attribute='count')|max) or 1 %}
-    <ul class="wt-rank-list">
+    <ul class="wt-rank-list wt-rank-list--with-action wt-rank-list--expandable"
+        data-wt-expand="top-paths"
+        data-initial="{{ _INITIAL }}"
+        data-step="{{ _STEP }}"
+        data-total="{{ top_paths|length }}">
       {% for r in top_paths %}
-      <li class="wt-rank-row">
+      {% set _existing = existing_redirects.get(r.label) %}
+      <li class="wt-rank-row {% if loop.index0 >= _INITIAL %}wt-rank-row--hidden{% endif %}">
         <div class="wt-rank-label mono small">
           <a href="{{ r.label }}" target="_blank" rel="noopener nofollow" title="Open {{ r.label }} (will 404)">{{ r.label }}</a>
           {% if r.last_seen %}<span class="muted smaller"> · last {{ r.last_seen.strftime('%b %d') }}</span>{% endif %}
         </div>
         <div class="wt-rank-bar"><span style="width: {{ (r.count / tp_max * 100)|round(0,'floor') }}%"></span></div>
         <div class="wt-rank-count">{{ '{:,}'.format(r.count) }}</div>
+        <div class="wt-rank-action">
+          {% if _existing %}
+          <span class="wt-redirect-chip" title="Redirects to {{ _existing }}">{{ icon('arrow-right') }} redirected</span>
+          {% else %}
+          <button type="button" class="btn btn-sm wt-redirect-btn"
+                  data-wt-redirect-open
+                  data-source="{{ r.label }}"
+                  title="Create a redirect for {{ r.label }}">{{ icon('plus') }} Redirect</button>
+          {% endif %}
+        </div>
       </li>
       {% endfor %}
     </ul>
+    {% if top_paths|length > _INITIAL %}
+    <div class="wt-expand-foot">
+      <button type="button" class="btn btn-sm" data-wt-expand-btn="top-paths">
+        Show {{ _STEP }} more {{ icon('chevron-down') }}
+      </button>
+    </div>
+    {% endif %}
     {% endif %}
   </section>
 
   <section class="card">
-    <div class="card-head"><h2>Top referrers</h2><span class="muted smaller">{{ window }}d · where they came from</span></div>
+    <div class="card-head"><h2>Top referrers</h2><span class="muted smaller" data-wt-expand-meta="top-referrers">{{ window }}d · where they came from</span></div>
     {% if not top_referrers %}
     <p class="muted">No data.</p>
     {% else %}
     {% set tr_max = (top_referrers|map(attribute='count')|max) or 1 %}
-    <ul class="wt-rank-list">
+    <ul class="wt-rank-list wt-rank-list--expandable"
+        data-wt-expand="top-referrers"
+        data-initial="{{ _INITIAL }}"
+        data-step="{{ _STEP }}"
+        data-total="{{ top_referrers|length }}">
       {% for r in top_referrers %}
-      <li class="wt-rank-row">
+      <li class="wt-rank-row {% if loop.index0 >= _INITIAL %}wt-rank-row--hidden{% endif %}">
         <div class="wt-rank-label small" title="{{ r.label }}">{{ r.label|truncate(64) }}</div>
         <div class="wt-rank-bar"><span style="width: {{ (r.count / tr_max * 100)|round(0,'floor') }}%"></span></div>
         <div class="wt-rank-count">{{ '{:,}'.format(r.count) }}</div>
       </li>
       {% endfor %}
     </ul>
+    {% if top_referrers|length > _INITIAL %}
+    <div class="wt-expand-foot">
+      <button type="button" class="btn btn-sm" data-wt-expand-btn="top-referrers">
+        Show {{ _STEP }} more {{ icon('chevron-down') }}
+      </button>
+    </div>
+    {% endif %}
     {% endif %}
   </section>
 </div>
@@ -139,10 +177,11 @@
   <div style="overflow-x:auto">
     <table class="tbl">
       <thead>
-        <tr><th>When (UTC)</th><th>Requested URL</th><th>Referrer</th><th>Device</th></tr>
+        <tr><th>When (UTC)</th><th>Requested URL</th><th>Referrer</th><th>Device</th><th></th></tr>
       </thead>
       <tbody>
         {% for e in recent %}
+        {% set _existing = existing_redirects.get(e.path) %}
         <tr>
           <td class="muted small" style="white-space:nowrap">{{ e.created_at.strftime('%b %d, %H:%M') }}</td>
           <td class="mono small">
@@ -152,6 +191,16 @@
             {% if e.referrer %}<span title="{{ e.referrer }}">{{ e.referrer|truncate(60) }}</span>{% else %}<span class="muted">— direct / typed</span>{% endif %}
           </td>
           <td class="muted small">{{ (e.device or 'other')|title }}{% if e.browser %} · {{ e.browser }}{% endif %}</td>
+          <td class="row-actions" style="white-space:nowrap">
+            {% if _existing %}
+            <span class="wt-redirect-chip" title="Redirects to {{ _existing }}">{{ icon('arrow-right') }} redirected</span>
+            {% else %}
+            <button type="button" class="btn btn-sm wt-redirect-btn"
+                    data-wt-redirect-open
+                    data-source="{{ e.path }}"
+                    title="Create a redirect for {{ e.path }}">{{ icon('plus') }} Redirect</button>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -159,4 +208,234 @@
   </div>
   {% endif %}
 </section>
+
+{# ── Create-redirect modal ─────────────────────────────────────
+   Opens when an admin clicks "Redirect" on a Top missing URL or
+   Recent 404s row. Source is pre-filled from the row's path and
+   read-only (admin can still edit it via the standard Redirects
+   page); admin types the target. AJAX POST to
+   /watchtower/not-found/redirect creates the UrlRedirect and the
+   modal stays open until success so the admin can keep going
+   without losing their place on the 404s page. #}
+<div class="modal wt-redirect-modal" id="wt-redirect-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="wt-redirect-title">
+    <div class="modal-head">
+      <h2 id="wt-redirect-title">Create redirect</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+    </div>
+    <form id="wt-redirect-form" autocomplete="off">
+      <div class="modal-body">
+        <p class="muted small">
+          Visitors hitting the source path will be sent to the target
+          with a permanent (301) redirect. Manage all redirects on the
+          <a href="{{ url_for('main.frontend_redirects') }}">Web Frontend → Redirects</a> page.
+        </p>
+        <label class="wt-redirect-field">
+          <span>Source path</span>
+          <input type="text" id="wt-redirect-source" name="source_path"
+                 required maxlength="2000">
+          <div class="wt-redirect-source-hint">
+            <span class="muted smaller">
+              Tip: end the path in <code>/*</code> to catch every URL under
+              a prefix (e.g. <code>/swag/*</code> covers all of <code>/swag/...</code>).
+            </span>
+            <button type="button" class="btn btn-sm wt-redirect-wild-btn"
+                    id="wt-redirect-make-wild"
+                    title="Convert the source to a wildcard covering the parent path">Use <code>/*</code></button>
+          </div>
+        </label>
+        <label class="wt-redirect-field">
+          <span>Target URL</span>
+          <input type="text" id="wt-redirect-target" name="target_path"
+                 required maxlength="2000"
+                 placeholder="/new-page or https://example.org">
+          <span class="muted smaller">Either a path on this site (<code>/about</code>) or a full external URL. Wildcards aren't allowed here — every matched URL lands on this exact target.</span>
+        </label>
+        <div class="wt-redirect-error" id="wt-redirect-error" hidden role="alert"></div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="wt-redirect-submit">Save redirect</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  .wt-rank-list--with-action .wt-rank-row {
+    /* Base wt-rank-row is label / bar / count; add an action column
+       on the right for the per-row Redirect button. */
+    grid-template-columns: minmax(0, 1fr) 110px 70px auto;
+  }
+  .wt-rank-action { display: flex; justify-content: flex-end; }
+  .wt-redirect-btn { display: inline-flex; align-items: center; gap: 4px; }
+  .wt-redirect-btn .icon { width: 14px; height: 14px; }
+  .wt-redirect-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 0.78rem; font-weight: 600;
+    padding: 3px 9px; border-radius: 999px;
+    background: color-mix(in srgb, var(--ok, #10b981) 14%, transparent);
+    color: var(--ok, #047857);
+    white-space: nowrap;
+  }
+  .wt-redirect-chip .icon { width: 12px; height: 12px; }
+  .wt-redirect-modal .modal-panel { max-width: 540px; }
+  .wt-redirect-field { display: flex; flex-direction: column; gap: 4px; margin-top: 14px; }
+  .wt-redirect-field span:first-child { font-weight: 600; font-size: 0.9rem; }
+  .wt-redirect-field input {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+    width: 100%; box-sizing: border-box;
+  }
+  .wt-redirect-field input[readonly] {
+    background: color-mix(in srgb, var(--border) 30%, transparent);
+    cursor: default;
+  }
+  .wt-redirect-source-hint {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px; margin-top: 2px;
+  }
+  .wt-redirect-source-hint > span { flex: 1 1 auto; }
+  .wt-redirect-wild-btn { flex: 0 0 auto; white-space: nowrap; }
+  .wt-redirect-wild-btn code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: transparent; padding: 0;
+  }
+  .wt-redirect-error {
+    margin-top: 12px; padding: 10px 12px; border-radius: 6px;
+    background: color-mix(in srgb, var(--danger, #dc2626) 12%, transparent);
+    color: var(--danger, #991b1b);
+    font-size: 0.88rem;
+  }
+  .wt-redirect-success-flash {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: var(--ok, #10b981); color: white;
+    padding: 10px 18px; border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    z-index: 200; font-weight: 600;
+    opacity: 0; transition: opacity 0.18s ease;
+  }
+  .wt-redirect-success-flash.show { opacity: 1; }
+</style>
+
+<script>
+(function () {
+  const modal = document.getElementById('wt-redirect-modal');
+  if (!modal) return;
+  const form = document.getElementById('wt-redirect-form');
+  const sourceIn = document.getElementById('wt-redirect-source');
+  const targetIn = document.getElementById('wt-redirect-target');
+  const submitBtn = document.getElementById('wt-redirect-submit');
+  const errorBox = document.getElementById('wt-redirect-error');
+  const wildBtn = document.getElementById('wt-redirect-make-wild');
+  const ENDPOINT = "{{ url_for('main.watchtower_not_found_create_redirect') }}";
+
+  // "Use /*" — turn the source path into a wildcard covering its
+  // parent directory. /swag/hats → /swag/*, /swag → /*, /swag/* → no-op.
+  if (wildBtn) {
+    wildBtn.addEventListener('click', () => {
+      let v = sourceIn.value.trim();
+      if (!v) return;
+      if (v.endsWith('/*')) return;
+      // Strip trailing slash so /swag/ collapses with /swag.
+      if (v.endsWith('/') && v.length > 1) v = v.slice(0, -1);
+      const idx = v.lastIndexOf('/');
+      const parent = (idx <= 0) ? '' : v.slice(0, idx);
+      sourceIn.value = parent + '/*';
+      sourceIn.focus();
+    });
+  }
+
+  function open(source) {
+    sourceIn.value = source || '';
+    targetIn.value = '';
+    errorBox.hidden = true;
+    errorBox.textContent = '';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Save redirect';
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => targetIn.focus(), 50);
+  }
+  function close() {
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+
+  // Delegated so newly-revealed rows from the expand-list button
+  // also open the modal — they don't exist at initial bind time.
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-wt-redirect-open]');
+    if (btn) open(btn.dataset.source);
+  });
+  modal.querySelectorAll('[data-close]').forEach(el =>
+    el.addEventListener('click', close));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal.classList.contains('open')) close();
+  });
+
+  function showFlash(msg) {
+    const el = document.createElement('div');
+    el.className = 'wt-redirect-success-flash';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    setTimeout(() => {
+      el.classList.remove('show');
+      setTimeout(() => el.remove(), 220);
+    }, 2400);
+  }
+
+  // Swap the row's "Redirect" button for a "redirected" chip in place
+  // so the admin can see what's already been handled this session
+  // without a full page reload.
+  function markHandled(source, target) {
+    document.querySelectorAll('[data-wt-redirect-open]').forEach(btn => {
+      if (btn.dataset.source !== source) return;
+      const chip = document.createElement('span');
+      chip.className = 'wt-redirect-chip';
+      chip.title = 'Redirects to ' + target;
+      chip.innerHTML = '<svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg> redirected';
+      btn.replaceWith(chip);
+    });
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const source = sourceIn.value.trim();
+    const target = targetIn.value.trim();
+    if (!source || !target) return;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving…';
+    errorBox.hidden = true;
+    try {
+      const r = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ source_path: source, target_path: target }),
+        credentials: 'same-origin',
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data.ok) {
+        markHandled(source, target);
+        close();
+        showFlash('Redirect saved: ' + source + ' → ' + target);
+      } else {
+        errorBox.textContent = data.error || 'Could not save redirect.';
+        errorBox.hidden = false;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Save redirect';
+      }
+    } catch (err) {
+      errorBox.textContent = 'Network error — please try again.';
+      errorBox.hidden = false;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Save redirect';
+    }
+  });
+})();
+</script>
 {% endblock %}

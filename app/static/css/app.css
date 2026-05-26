@@ -12571,15 +12571,45 @@ body.pbe-is-palette-dragging .pbe-section-canvas {
 .wt-rank-count { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 0.9rem; }
 .wt-rank-list--inline .wt-rank-row { grid-template-columns: 100px minmax(0, 1fr) 130px; }
 
+/* Expandable rank lists ─────────────────────────────────────────────
+   Server pre-renders the full pool; rows past the initial cap get
+   `wt-rank-row--hidden`. JS strips that class in batches and tags the
+   newly-revealed row with `--revealing` for one tick to drive the
+   keyframe. The expand button sits inside `.wt-expand-foot` below
+   the list. See the expander IIFE in app.js for the markup contract. */
+.wt-rank-row--hidden { display: none; }
+.wt-rank-row--revealing {
+  animation: wt-rank-row-reveal 220ms cubic-bezier(.22, .8, .36, 1) both;
+}
+@keyframes wt-rank-row-reveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt-rank-row--revealing { animation: none; }
+}
+.wt-expand-foot {
+  display: flex; justify-content: center;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.2);
+}
+.wt-expand-foot .btn { display: inline-flex; align-items: center; gap: 6px; }
+.wt-expand-foot .icon { width: 14px; height: 14px; }
+
 /* Hour-of-day bar strip ────────────────────────────────────────── */
 .wt-hourly {
-  display: flex; align-items: flex-end; gap: 4px;
+  /* `align-items: stretch` (the default) lets each column fill the
+     140px container height. With `flex-end` here the columns would
+     shrink to the height of their (tiny) tick label, collapsing the
+     flex:1 track inside them to 1px — and percentage bar heights
+     would have nothing to scale against. */
+  display: flex; align-items: stretch; gap: 4px;
   height: 140px;
   padding: 8px 0 6px;
 }
-.wt-hourly-col { flex: 1; display: flex; flex-direction: column; gap: 4px; align-items: stretch; min-width: 0; }
+.wt-hourly-col { flex: 1; display: flex; flex-direction: column; gap: 4px; align-items: stretch; min-width: 0; min-height: 0; }
 .wt-hourly-track { flex: 1; background: rgba(148, 163, 184, 0.08); border-radius: 4px;
-  display: flex; align-items: flex-end; }
+  display: flex; align-items: flex-end; min-height: 0; }
 .wt-hourly-bar {
   width: 100%; background: linear-gradient(180deg, rgb(59,130,246), rgb(99,102,241));
   border-radius: 4px 4px 2px 2px;

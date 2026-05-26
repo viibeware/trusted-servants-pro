@@ -87,38 +87,63 @@
 
 <div class="wt-two-col">
   <section class="card">
-    <div class="card-head"><h2>Top paths</h2><span class="muted smaller">{{ window }}d</span></div>
+    {# Initial-visible row count and per-click reveal step for the
+       two expandable rank lists below. JS in app.js handles the
+       reveal animation — see `data-wt-expand*` markup contract. #}
+    {% set _INITIAL = 30 %}
+    {% set _STEP = 30 %}
+    <div class="card-head"><h2>Top paths</h2><span class="muted smaller" data-wt-expand-meta="vt-top-paths">{{ window }}d</span></div>
     {% if not top_paths %}
     <p class="muted">No data.</p>
     {% else %}
     {% set tp_max = (top_paths|map(attribute='count')|max) or 1 %}
-    <ul class="wt-rank-list">
+    <ul class="wt-rank-list wt-rank-list--expandable"
+        data-wt-expand="vt-top-paths"
+        data-step="{{ _STEP }}"
+        data-total="{{ top_paths|length }}">
       {% for r in top_paths %}
-      <li class="wt-rank-row">
+      <li class="wt-rank-row {% if loop.index0 >= _INITIAL %}wt-rank-row--hidden{% endif %}">
         <div class="wt-rank-label mono small">{{ r.label }}</div>
         <div class="wt-rank-bar"><span style="width: {{ (r.count / tp_max * 100)|round(0,'floor') }}%"></span></div>
         <div class="wt-rank-count">{{ '{:,}'.format(r.count) }}</div>
       </li>
       {% endfor %}
     </ul>
+    {% if top_paths|length > _INITIAL %}
+    <div class="wt-expand-foot">
+      <button type="button" class="btn btn-sm" data-wt-expand-btn="vt-top-paths">
+        Show {{ _STEP }} more {{ icon('chevron-down') }}
+      </button>
+    </div>
+    {% endif %}
     {% endif %}
   </section>
 
   <section class="card">
-    <div class="card-head"><h2>Top referrers</h2><span class="muted smaller">{{ window }}d</span></div>
+    <div class="card-head"><h2>Top referrers</h2><span class="muted smaller" data-wt-expand-meta="vt-top-referrers">{{ window }}d</span></div>
     {% if not top_referrers %}
     <p class="muted">No data.</p>
     {% else %}
     {% set tr_max = (top_referrers|map(attribute='count')|max) or 1 %}
-    <ul class="wt-rank-list">
+    <ul class="wt-rank-list wt-rank-list--expandable"
+        data-wt-expand="vt-top-referrers"
+        data-step="{{ _STEP }}"
+        data-total="{{ top_referrers|length }}">
       {% for r in top_referrers %}
-      <li class="wt-rank-row">
+      <li class="wt-rank-row {% if loop.index0 >= _INITIAL %}wt-rank-row--hidden{% endif %}">
         <div class="wt-rank-label">{{ r.label }}</div>
         <div class="wt-rank-bar"><span style="width: {{ (r.count / tr_max * 100)|round(0,'floor') }}%"></span></div>
         <div class="wt-rank-count">{{ '{:,}'.format(r.count) }}</div>
       </li>
       {% endfor %}
     </ul>
+    {% if top_referrers|length > _INITIAL %}
+    <div class="wt-expand-foot">
+      <button type="button" class="btn btn-sm" data-wt-expand-btn="vt-top-referrers">
+        Show {{ _STEP }} more {{ icon('chevron-down') }}
+      </button>
+    </div>
+    {% endif %}
     {% endif %}
   </section>
 </div>
@@ -151,7 +176,7 @@
       <div class="wt-hourly-track">
         <div class="wt-hourly-bar" style="height: {{ (h.views / hr_max * 100)|round(0,'floor') }}%;"></div>
       </div>
-      <div class="wt-hourly-tick">{% if h.hour % 4 == 0 %}{{ '%02d'|format(h.hour) }}{% endif %}</div>
+      <div class="wt-hourly-tick">{{ '%02d'|format(h.hour) }}</div>
     </div>
     {% endfor %}
   </div>

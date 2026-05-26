@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block heading %}Redirects{% endblock %}
-{% block heading_help %}Centrally manage URL redirects on the public site. Every visit hits a single indexed lookup against this table — when a request's path matches a row's source, the visitor is sent to the target with a 301. Use it for legacy WordPress URLs, renamed pages on outside platforms, vanity short-links, or any other path-to-URL mapping you need.{% endblock %}
+{% block heading_help %}Centrally manage URL redirects on the public site. Every visit hits a single indexed lookup against this table — when a request's path matches a row's source, the visitor is sent to the target with a 301. Use it for legacy WordPress URLs, renamed pages on outside platforms, vanity short-links, or any other path-to-URL mapping you need. Wildcard prefixes are supported: a source ending in <code>/*</code> (e.g. <code>/swag/*</code>) catches every URL under that prefix and lands them all on the target. Exact-match rules always win over wildcards.{% endblock %}
 {% block content %}
 <div class="fe-admin-layout">
   {% include "_frontend_subnav.html" %}
@@ -23,10 +23,10 @@
       <div class="redirect-form-grid">
         <label>Source path
           <input type="text" name="source_path" required
-                 placeholder="/wp-content/old-post"
+                 placeholder="/wp-content/old-post or /swag/*"
                  maxlength="2000"
                  data-redirect-source>
-          <span class="muted smaller">Must start with <code>/</code>. Matched exactly against the request path (case-sensitive, no wildcards).</span>
+          <span class="muted smaller">Must start with <code>/</code>. Matched case-sensitively. End in <code>/*</code> to match every URL under a prefix (e.g. <code>/swag/*</code>).</span>
         </label>
         <label>Target URL
           <input type="text" name="target_path" required

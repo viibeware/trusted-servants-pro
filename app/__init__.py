@@ -496,9 +496,16 @@ def create_app():
         Redirects (covers legacy WordPress URLs, renamed pages,
         external short-links, etc.).
 
+        Two match modes:
+        - Exact (with trailing-slash tolerance) — O(log n) on the
+          unique `source_path` index. Tried first; an exact rule
+          always wins over a wildcard.
+        - Wildcard (`/prefix/*`) — full scan of the (small,
+          admin-curated) set of wildcard rows, longest-prefix winner.
+          Lands every URL under the prefix on the literal target.
+
         Cheap early-out for static-asset prefixes so the assets path
-        doesn't pay the indexed lookup. The query itself is O(log n)
-        on the unique `source_path` index.
+        doesn't pay either lookup.
         """
         p = request.path or ""
         # Skip asset paths — these never redirect, but they're the
@@ -518,6 +525,20 @@ def create_app():
         if rows:
             row = next((r for r in rows if r.source_path == p), rows[0])
             return redirect(row.target_path, code=301)
+        # Wildcard fallback. Source paths of the form "/foo/*" match
+        # any request whose path starts with "/foo/" (the "/" boundary
+        # prevents "/foo/*" from accidentally matching "/foobar").
+        # Longest prefix wins so "/swag/sale/*" beats "/swag/*".
+        wild = UrlRedirect.query.filter(
+            UrlRedirect.source_path.endswith("/*")).all()
+        best = None
+        for r in wild:
+            prefix = r.source_path[:-1]  # strip the trailing "*", keep the "/"
+            if p == prefix[:-1] or p.startswith(prefix):
+                if best is None or len(r.source_path) > len(best.source_path):
+                    best = r
+        if best:
+            return redirect(best.target_path, code=301)
         return None
 
     # Cache-bust token (?v=) on image + static asset URLs. See app/imgcache.py.

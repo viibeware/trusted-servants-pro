@@ -6,6 +6,18 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.7.5] — 2026-05-26
+
+### Added
+
+- **Create a redirect from any 404 in one click** — every row in the **Top missing URLs** and **Recent 404s** sections of Watchtower → 404s now has a **Redirect** button. Clicking it opens a modal pre-filled with the source path; type the target, save, and a 301 is added to the `UrlRedirect` table without taking you off the page. The row in-place swaps to a "redirected" chip so you can immediately spot which URLs you've handled and keep going through the list. New JSON endpoint `POST /watchtower/not-found/redirect` (CSRF-protected via the global `X-CSRFToken` fetch wrapper); validation mirrors the full Redirects admin page.
+- **Wildcard redirects** — source paths ending in `/*` (e.g. `/swag/*`) now match every URL under that prefix and land them all on the literal target. Exact-match rules always win over wildcards; among wildcards the longest prefix wins, and the `/` boundary keeps `/swag/*` from accidentally catching `/swagger`. The Watchtower modal grew a **Use `/*`** helper button that converts the clicked 404 path into a parent-prefix wildcard, and the Redirects admin page (`/tspro/frontend/redirects`) explains the syntax. Validation rejects `*` anywhere other than a trailing `/*`, a bare `/*`, `*` in the target, and self-loops where the target falls under the wildcard prefix.
+- **Expandable Top missing URLs / Top paths / Top referrers cards** on both the Watchtower **404s** and **Visitors** tabs. Each card shows 30 rows initially and a **Show 30 more** button below the list reveals the next batch with a quick fade/slide-down keyframe (220 ms cubic-bezier, ~8 ms per-row stagger; respects `prefers-reduced-motion`). The card-head meta updates live to "showing X of Y" and the button hides itself when the pool is exhausted. Server now fetches up to 300 rows for these lists so most expand sessions don't need another round-trip. The expander lives in `app/static/js/app.js` and matches any `[data-wt-expand]` / `[data-wt-expand-btn]` pair.
+
+### Fixed
+
+- **Watchtower → Visitors "Hour of day" chart was rendering as 24 flat 1-px ticks** even with thousands of views in the window. Root cause: `.wt-hourly` was using `align-items: flex-end`, which sized each column to its tiny tick label instead of stretching to the 140 px container; the inner `flex: 1` track then collapsed to ~1 px, leaving the bars' percentage heights with no reference. Changed to `align-items: stretch` (with `min-height: 0` on the column + track for safe flex shrinking); tracks keep their own internal `align-items: flex-end` so bars still bottom-align. Hour labels now show under **every** column (was every 4th).
+
 ## [2.7.4] — 2026-05-26
 
 ### Added

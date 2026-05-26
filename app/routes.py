@@ -8738,26 +8738,54 @@ def frontend_redirects():
                            entity_lookup=entity_lookup)
 
 
+def _normalize_redirect_pair(src, tgt):
+    """Shared validation for both the full Redirects admin page and the
+    inline Watchtower 404s modal. Returns ``(src, tgt, error)`` where
+    ``error`` is ``None`` on success or a user-facing message on
+    failure. Wildcard rules: source may end in ``/*`` (matches any
+    path under that prefix and lands them all on the literal target);
+    ``*`` is not allowed anywhere else in either field."""
+    src = (src or "").strip()
+    tgt = (tgt or "").strip()
+    if not src or not tgt:
+        return src, tgt, "Both source and target are required."
+    if not src.startswith("/"):
+        src = "/" + src
+    src = src[:2000]
+    tgt = tgt[:2000]
+    # Wildcard validation. The only place `*` is allowed is the very
+    # end of the source as `/*`. No wildcards in the target — every
+    # match lands on the literal URL.
+    if "*" in tgt:
+        return src, tgt, "Wildcards (*) aren't allowed in the target."
+    is_wild = src.endswith("/*")
+    if "*" in src and not is_wild:
+        return src, tgt, ("Wildcard must be a trailing /*, e.g. "
+                          "/swag/* — * isn't allowed elsewhere.")
+    if is_wild:
+        prefix = src[:-2]  # strip "/*"
+        if not prefix or prefix == "":
+            return src, tgt, "Wildcard needs at least one path segment, e.g. /swag/*."
+        # A target that falls under the wildcard prefix would create
+        # an infinite redirect loop (every retry re-matches).
+        if tgt == prefix or tgt.startswith(prefix + "/"):
+            return src, tgt, (f"Target falls under the wildcard prefix "
+                              f"({prefix}/) — that would loop forever.")
+    if src == tgt:
+        return src, tgt, "Source and target can't be the same path."
+    return src, tgt, None
+
+
 @bp.route("/frontend/redirects/save", methods=["POST"])
 @admin_required
 def frontend_redirects_save():
     """Create OR update a redirect. The presence of `redirect_id`
     decides which path: empty → create, set → update by id."""
     rid_raw = (request.form.get("redirect_id") or "").strip()
-    src = (request.form.get("source_path") or "").strip()
-    tgt = (request.form.get("target_path") or "").strip()
-    if not src or not tgt:
-        flash("Both source and target are required", "danger")
-        return redirect(url_for("main.frontend_redirects"))
-    # Normalize source to start with "/" — the before_request handler
-    # matches against `request.path` which always starts with "/".
-    if not src.startswith("/"):
-        src = "/" + src
-    src = src[:2000]
-    tgt = tgt[:2000]
-    # Block `source == target` loops at the form layer.
-    if src == tgt:
-        flash("Source and target can't be the same path.", "danger")
+    src, tgt, err = _normalize_redirect_pair(
+        request.form.get("source_path"), request.form.get("target_path"))
+    if err:
+        flash(err, "danger")
         return redirect(url_for("main.frontend_redirects"))
     if rid_raw:
         try:
@@ -14272,8 +14300,10 @@ def watchtower_visitors():
         summary=vm.summary(days=window),
         daily=vm.daily_series(days=window),
         hourly=vm.hourly_distribution(days=min(14, window)),
-        top_paths=vm.top_paths(days=window, limit=10),
-        top_referrers=vm.top_referrers(days=window, limit=10),
+        # Big enough pool that the client-side "Show 30 more" expand
+        # rarely runs out without paying for another round-trip.
+        top_paths=vm.top_paths(days=window, limit=300),
+        top_referrers=vm.top_referrers(days=window, limit=300),
         devices=vm.device_breakdown(days=window),
     )
 
@@ -14290,6 +14320,38 @@ def watchtower_not_found():
         window = max(7, min(365, int(request.args.get("window", 30))))
     except (TypeError, ValueError):
         window = 30
+    # Resolve which of the 404'd paths shown on this page are *already*
+    # covered by an existing redirect (exact OR wildcard) so the row
+    # can render an "already redirected" chip instead of the create
+    # button. Same priority as the runtime handler: exact wins, then
+    # longest-prefix wildcard.
+    all_redirects = UrlRedirect.query.with_entities(
+        UrlRedirect.source_path, UrlRedirect.target_path).all()
+    exact_map = {r.source_path: r.target_path
+                 for r in all_redirects if not r.source_path.endswith("/*")}
+    wild_rules = sorted(
+        [(r.source_path[:-1], r.target_path)  # keep trailing "/"
+         for r in all_redirects if r.source_path.endswith("/*")],
+        key=lambda x: -len(x[0]))
+
+    def _resolve(path):
+        if path in exact_map:
+            return exact_map[path]
+        for prefix, target in wild_rules:
+            if path == prefix[:-1] or path.startswith(prefix):
+                return target
+        return None
+
+    # Fetch a generous pool so the admin can keep clicking "Show 30
+    # more" client-side without paying another round-trip. 300 covers
+    # any realistic 404 backlog while staying cheap to render.
+    top_paths = wt.top_missing_paths(days=window, limit=300)
+    recent = wt.recent_404s(limit=100)
+    paths_on_page = (
+        {r["label"] for r in top_paths} | {e.path for e in recent}
+    )
+    existing_redirects = {p: _resolve(p) for p in paths_on_page if _resolve(p)}
+
     return render_template(
         "watchtower/not_found.html",
         active_tab="not-found",
@@ -14297,9 +14359,10 @@ def watchtower_not_found():
         windows=(7, 14, 30, 60, 90, 180, 365),
         summary=wt.not_found_summary(days=window),
         daily=wt.not_found_daily(days=window),
-        top_paths=wt.top_missing_paths(days=window, limit=12),
-        top_referrers=wt.top_404_referrers(days=window, limit=10),
-        recent=wt.recent_404s(limit=100),
+        top_paths=top_paths,
+        top_referrers=wt.top_404_referrers(days=window, limit=300),
+        recent=recent,
+        existing_redirects=existing_redirects,
     )
 
 
@@ -14311,6 +14374,31 @@ def watchtower_not_found_clear():
     n = wt.clear_404s()
     flash(f"Cleared {n} logged 404{'' if n == 1 else 's'}.", "success")
     return redirect(url_for("main.watchtower_not_found"))
+
+
+@bp.route("/watchtower/not-found/redirect", methods=["POST"])
+@admin_required
+def watchtower_not_found_create_redirect():
+    """Inline create-redirect endpoint for the 404s tab. Accepts JSON
+    `{source_path, target_path}` and returns JSON so the modal can save
+    without taking the admin off the page. Mirrors the validation in
+    `frontend_redirects_save` (normalize leading slash, length cap,
+    loop check, uniqueness)."""
+    payload = request.get_json(silent=True) or request.form
+    src, tgt, err = _normalize_redirect_pair(
+        payload.get("source_path"), payload.get("target_path"))
+    if err:
+        return jsonify(ok=False, error=err), 400
+    existing = UrlRedirect.query.filter_by(source_path=src).first()
+    if existing:
+        return jsonify(ok=False,
+                       error=f"A redirect already exists for {src} → {existing.target_path}.",
+                       existing_target=existing.target_path), 409
+    row = UrlRedirect(source_path=src, target_path=tgt)
+    db.session.add(row)
+    db.session.commit()
+    return jsonify(ok=True, id=row.id, source_path=src, target_path=tgt,
+                   is_wildcard=src.endswith("/*"))
 
 
 @bp.route("/watchtower/access")
