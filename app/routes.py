@@ -14512,6 +14512,19 @@ def watchtower_not_found():
     )
     existing_redirects = {p: _resolve(p) for p in paths_on_page if _resolve(p)}
 
+    # Active block set for the IPs that appear in `recent`, so the
+    # table can render "Blocked" instead of a Block button for already-
+    # banned IPs. One indexed query against IPBlock per page load.
+    recent_ips = {e.ip for e in recent if e.ip}
+    blocked_ips = set()
+    if recent_ips:
+        from .models import IPBlock as _IPBlock
+        now_ = datetime.utcnow()
+        blocked_ips = {b.ip for b in _IPBlock.query
+                       .filter(_IPBlock.ip.in_(recent_ips))
+                       .filter((_IPBlock.expires_at.is_(None)) |
+                               (_IPBlock.expires_at > now_)).all()}
+
     return render_template(
         "watchtower/not_found.html",
         active_tab="not-found",
@@ -14523,6 +14536,7 @@ def watchtower_not_found():
         top_referrers=wt.top_404_referrers(days=window, limit=300),
         recent=recent,
         existing_redirects=existing_redirects,
+        blocked_ips=blocked_ips,
     )
 
 
@@ -14559,6 +14573,31 @@ def watchtower_not_found_create_redirect():
     db.session.commit()
     return jsonify(ok=True, id=row.id, source_path=src, target_path=tgt,
                    is_wildcard=src.endswith("/*"))
+
+
+@bp.route("/watchtower/not-found/path-ips")
+@admin_required
+def watchtower_not_found_path_ips():
+    """Return an HTML fragment listing the distinct source IPs hitting
+    a given 404 path in the current window, with per-IP hit counts +
+    last-seen + a Block / Blocked button. The Watchtower 404s template
+    fetches this fragment when the admin clicks an expand chevron on a
+    Top missing URL row, and injects the response inline.
+
+    Fragment (not full page) so it can drop straight into the parent
+    `<li>` without iframes or JSON-to-DOM glue. CSRF protection isn't
+    needed — this is a GET that reads only."""
+    from . import watchtower as wt
+    path = (request.args.get("path") or "").strip()
+    if not path:
+        return ("", 400)
+    try:
+        window = max(7, min(365, int(request.args.get("window", 30))))
+    except (TypeError, ValueError):
+        window = 30
+    ips = wt.not_found_ips_for_path(path, days=window, limit=25)
+    return render_template("watchtower/_not_found_ips.html",
+                           path=path, ips=ips, window=window)
 
 
 @bp.route("/watchtower/access")

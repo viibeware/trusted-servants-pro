@@ -2978,12 +2978,19 @@ class NotFoundEvent(db.Model):
     # Daily-rotating one-way hash for unique-visitor approximation. Same
     # privacy properties as VisitorEvent.visitor_hash.
     visitor_hash = db.Column(db.String(32), index=True)
+    # Source IP. Unlike VisitorEvent we DO persist the IP for 404s —
+    # 404 logs are an abuse-investigation surface (scanner traffic,
+    # vulnerability probes, link-rot from a specific source). Same
+    # justification as LoginFailure.ip and ActivityLog.ip. Admin-only
+    # surface; index keeps the "all 404s from this IP" lookup cheap.
+    ip = db.Column(db.String(45), index=True)
     # Date-only UTC bucket (YYYY-MM-DD) so the tab's today/7d/window
     # rollups run in SQLite without a per-row date conversion.
     day = db.Column(db.String(10), nullable=False, index=True)
 
     __table_args__ = (
         db.Index("ix_not_found_event_day_path", "day", "path"),
+        db.Index("ix_not_found_event_path_ip", "path", "ip"),
     )
 
 

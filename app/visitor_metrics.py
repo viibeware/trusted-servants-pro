@@ -292,6 +292,11 @@ def record_404(path=None):
             browser=browser,
             os=os_name,
             visitor_hash=_visitor_hash(_client_ip(), ua),
+            # 404 events DO persist the IP (unlike regular visit events)
+            # so Watchtower can show "who's hitting this dead URL" and
+            # offer a one-click block. Same abuse-investigation use case
+            # as LoginFailure.ip / ActivityLog.ip.
+            ip=_client_ip()[:45] or None,
         )
         db.session.add(ev)
         db.session.commit()

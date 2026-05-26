@@ -6,6 +6,12 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.8.1] — 2026-05-26
+
+### Added
+
+- **Source IPs visible on Watchtower → 404s with one-click blocking.** Every row in **Top missing URLs** now has an **IPs** chevron button (route icon) that lazily fetches and inlines a panel listing the distinct IPs hitting that URL in the current window — IP, hit count, last-seen timestamp, and a per-IP **Block IP** button. Already-blocked IPs render as a red "Blocked" chip instead. The **Recent 404s** table gained a **Source IP** column plus a per-row **Block** button. Blocking from either surface reuses the existing `/watchtower/ban-ip` endpoint and returns the admin to the 404s tab; the ban reason is auto-populated with the 404 path. Powered by a new `not_found_ips_for_path()` aggregator + `GET /watchtower/not-found/path-ips` HTML-fragment endpoint; one batched `IPBlock` lookup populates the "Blocked vs Block" state per page load so there are no N+1 queries. New `NotFoundEvent.ip` column (`VARCHAR(45)`, indexed) captures source IP on every public 404 going forward — existing rows display "—" since they predate the column.
+
 ## [2.8.0] — 2026-05-26
 
 ### Added

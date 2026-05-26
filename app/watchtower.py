@@ -233,6 +233,44 @@ def clear_404s():
     return int(n or 0)
 
 
+def not_found_ips_for_path(path, days=30, limit=20):
+    """Distinct source IPs that hit ``path`` in the last ``days`` days,
+    plus a hit count and last-seen timestamp per IP. Each row also
+    carries an ``is_blocked`` flag so the UI can render "Block IP" vs
+    "Blocked" without an extra round-trip per row.
+
+    Rows with NULL ip (pre-2.8.1 events) are excluded — there's no IP
+    to show or block, and including them would just inflate the
+    "distinct count" with a misleading bucket.
+    """
+    if not path:
+        return []
+    today = datetime.utcnow().date()
+    cutoff = (today - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+    rows = (db.session.query(
+                NotFoundEvent.ip,
+                func.count(NotFoundEvent.id),
+                func.max(NotFoundEvent.created_at))
+            .filter(NotFoundEvent.path == path)
+            .filter(NotFoundEvent.day >= cutoff)
+            .filter(NotFoundEvent.ip.isnot(None))
+            .group_by(NotFoundEvent.ip)
+            .order_by(func.count(NotFoundEvent.id).desc())
+            .limit(limit).all())
+    if not rows:
+        return []
+    # Batch-resolve blocked state so the template doesn't N+1.
+    ips = [r[0] for r in rows]
+    now = datetime.utcnow()
+    blocked = {b.ip for b in IPBlock.query
+                .filter(IPBlock.ip.in_(ips))
+                .filter((IPBlock.expires_at.is_(None)) |
+                        (IPBlock.expires_at > now)).all()}
+    return [{"ip": ip, "count": int(c), "last_seen": ls,
+             "is_blocked": ip in blocked}
+            for ip, c, ls in rows]
+
+
 # ─── Anomaly indicators ──────────────────────────────────────────
 def anomaly_signals():
     """Cheap rule-based detector. Returns a list of dicts:

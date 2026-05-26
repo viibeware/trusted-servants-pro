@@ -1937,6 +1937,12 @@ def _migrate_sqlite(app):
                          ("og_image_filename", "VARCHAR(500)")):
             add("page", col, ddl)
 
+        # NotFoundEvent — added in 2.8.1. Captures the source IP on
+        # public 404s so the Watchtower 404s tab can show "who's hitting
+        # this URL" and offer a one-click block. Existing rows get NULL
+        # IPs (the column was added after the fact); new 404s carry IPs.
+        add("not_found_event", "ip", "VARCHAR(45)")
+
         # One-shot data migration: when the new frontend_og_* columns are
         # added on an existing deployment, seed them from the legacy og_*
         # columns. The frontend Branding admin page used to write to og_*,

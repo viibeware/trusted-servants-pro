@@ -110,7 +110,7 @@
         data-total="{{ top_paths|length }}">
       {% for r in top_paths %}
       {% set _existing = existing_redirects.get(r.label) %}
-      <li class="wt-rank-row {% if loop.index0 >= _INITIAL %}wt-rank-row--hidden{% endif %}">
+      <li class="wt-rank-row wt-rank-row--ip-host {% if loop.index0 >= _INITIAL %}wt-rank-row--hidden{% endif %}">
         <div class="wt-rank-label mono small">
           <a href="{{ r.label }}" target="_blank" rel="noopener nofollow" title="Open {{ r.label }} (will 404)">{{ r.label }}</a>
           {% if r.last_seen %}<span class="muted smaller"> · last {{ r.last_seen.strftime('%b %d') }}</span>{% endif %}
@@ -126,7 +126,19 @@
                   data-source="{{ r.label }}"
                   title="Create a redirect for {{ r.label }}">{{ icon('plus') }} Redirect</button>
           {% endif %}
+          <button type="button" class="btn btn-sm wt-ips-toggle"
+                  data-wt-ips-toggle
+                  data-path="{{ r.label }}"
+                  data-window="{{ window }}"
+                  aria-expanded="false"
+                  title="See which IPs are hitting this URL">
+            {{ icon('route') }} {{ icon('chevron-down') }}
+          </button>
         </div>
+        {# Full-width second grid row (grid-column: 1/-1) reserved
+           for the IP list panel. Stays hidden until the toggle fires
+           and the fetched fragment is injected. #}
+        <div class="wt-rank-ips-panel" data-wt-ips-panel hidden></div>
       </li>
       {% endfor %}
     </ul>
@@ -181,11 +193,12 @@
   <div style="overflow-x:auto">
     <table class="tbl">
       <thead>
-        <tr><th>When (UTC)</th><th>Requested URL</th><th>Referrer</th><th>Device</th><th></th></tr>
+        <tr><th>When (UTC)</th><th>Requested URL</th><th>Referrer</th><th>Device</th><th>Source IP</th><th></th></tr>
       </thead>
       <tbody>
         {% for e in recent %}
         {% set _existing = existing_redirects.get(e.path) %}
+        {% set _blocked = e.ip and e.ip in blocked_ips %}
         <tr>
           <td class="muted small" style="white-space:nowrap">{{ e.created_at.strftime('%b %d, %H:%M') }}</td>
           <td class="mono small">
@@ -195,6 +208,9 @@
             {% if e.referrer %}<span title="{{ e.referrer }}">{{ e.referrer|truncate(60) }}</span>{% else %}<span class="muted">— direct / typed</span>{% endif %}
           </td>
           <td class="muted small">{{ (e.device or 'other')|title }}{% if e.browser %} · {{ e.browser }}{% endif %}</td>
+          <td class="mono small" style="white-space:nowrap">
+            {% if e.ip %}{{ e.ip }}{% else %}<span class="muted">—</span>{% endif %}
+          </td>
           <td class="row-actions" style="white-space:nowrap">
             {% if _existing %}
             <span class="wt-redirect-chip" title="Redirects to {{ _existing }}">{{ icon('arrow-right') }} redirected</span>
@@ -203,6 +219,22 @@
                     data-wt-redirect-open
                     data-source="{{ e.path }}"
                     title="Create a redirect for {{ e.path }}">{{ icon('plus') }} Redirect</button>
+            {% endif %}
+            {% if e.ip %}
+              {% if _blocked %}
+              <span class="wt-nf-ips-blocked" title="This IP is currently on the blocklist">{{ icon('slash') }} Blocked</span>
+              {% else %}
+              <form method="post" action="{{ url_for('main.watchtower_ban_ip') }}"
+                    style="display:inline"
+                    onsubmit="return confirm('Block {{ e.ip }}? This rejects every inbound request from this IP with a 403 until you unblock from Watchtower → Access.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="ip" value="{{ e.ip }}">
+                <input type="hidden" name="reason" value="Hitting 404: {{ e.path|truncate(180) }}">
+                <input type="hidden" name="ttl_hours" value="0">
+                <input type="hidden" name="return_url" value="{{ url_for('main.watchtower_not_found', window=window) }}">
+                <button type="submit" class="btn btn-sm btn-danger" title="Add this IP to the blocklist (permanent)">{{ icon('slash') }} Block</button>
+              </form>
+              {% endif %}
             {% endif %}
           </td>
         </tr>
@@ -321,9 +353,107 @@
     opacity: 0; transition: opacity 0.18s ease;
   }
   .wt-redirect-success-flash.show { opacity: 1; }
+
+  /* ── IP-list expansion on Top missing URL rows ────────────────
+     The `.wt-rank-row--ip-host` LI is a CSS grid (defined for
+     .wt-rank-row in app.css). The IPs panel is a 5th grid child
+     that spans every column via grid-column 1/-1, so it pushes
+     the row layout downward without breaking column alignment. */
+  .wt-rank-row--ip-host .wt-rank-action {
+    display: inline-flex; align-items: center; gap: 4px;
+    flex-wrap: wrap; justify-content: flex-end;
+  }
+  .wt-ips-toggle {
+    display: inline-flex; align-items: center; gap: 2px;
+    padding: 3px 6px;
+  }
+  .wt-ips-toggle .icon { width: 14px; height: 14px; }
+  .wt-ips-toggle[aria-expanded="true"] .icon:last-child {
+    transform: rotate(180deg);
+    transition: transform 160ms ease;
+  }
+  .wt-ips-toggle .icon:last-child {
+    transition: transform 160ms ease;
+  }
+  .wt-rank-ips-panel {
+    grid-column: 1 / -1;
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: color-mix(in srgb, var(--border) 25%, transparent);
+    border-radius: 8px;
+  }
+  .wt-rank-ips-panel[hidden] { display: none; }
+  .wt-nf-ips-empty { margin: 0; }
+  .wt-nf-ips-head { margin-bottom: 8px; }
+  .wt-nf-ips-list { list-style: none; margin: 0; padding: 0; }
+  .wt-nf-ips-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) auto auto auto;
+    align-items: center; gap: 10px;
+    padding: 4px 0;
+    border-top: 1px dashed rgba(148, 163, 184, 0.18);
+  }
+  .wt-nf-ips-row:first-child { border-top: 0; }
+  .wt-nf-ips-addr { font-weight: 600; }
+  .wt-nf-ips-count { font-variant-numeric: tabular-nums; }
+  .wt-nf-ips-action { justify-self: end; }
+  .wt-nf-ips-action .btn { display: inline-flex; align-items: center; gap: 4px; }
+  .wt-nf-ips-action .icon { width: 12px; height: 12px; }
+  .wt-nf-ips-blocked {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 0.78rem; font-weight: 600;
+    padding: 3px 9px; border-radius: 999px;
+    background: color-mix(in srgb, var(--danger, #dc2626) 14%, transparent);
+    color: var(--danger, #991b1b);
+    white-space: nowrap;
+  }
+  .wt-nf-ips-blocked .icon { width: 12px; height: 12px; }
 </style>
 
 <script>
+// IP-list expansion on Top missing URL rows. Fetches a server-rendered
+// fragment lazily (no payload until the admin clicks) and injects it
+// into the row's `.wt-rank-ips-panel` cell. Re-clicking toggles the
+// panel without re-fetching. Delegated so newly-revealed rows from
+// the "Show 30 more" expander participate too.
+(function () {
+  const PANEL_SEL = '[data-wt-ips-panel]';
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-wt-ips-toggle]');
+    if (!btn) return;
+    e.preventDefault();
+    const row = btn.closest('li');
+    const panel = row && row.querySelector(PANEL_SEL);
+    if (!panel) return;
+    const expanded = btn.getAttribute('aria-expanded') === 'true';
+    if (expanded) {
+      panel.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+      return;
+    }
+    // First open → fetch the fragment unless we already have it cached.
+    if (!panel.dataset.loaded) {
+      panel.innerHTML = '<p class="muted small wt-nf-ips-empty">Loading…</p>';
+      panel.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      try {
+        const url = "{{ url_for('main.watchtower_not_found_path_ips') }}" +
+          "?path=" + encodeURIComponent(btn.dataset.path) +
+          "&window=" + encodeURIComponent(btn.dataset.window || '30');
+        const r = await fetch(url, { credentials: 'same-origin' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        panel.innerHTML = await r.text();
+        panel.dataset.loaded = '1';
+      } catch (err) {
+        panel.innerHTML = '<p class="wt-redirect-error">Couldn\'t load IPs — please try again.</p>';
+      }
+    } else {
+      panel.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+    }
+  });
+})();
+
 (function () {
   const modal = document.getElementById('wt-redirect-modal');
   if (!modal) return;

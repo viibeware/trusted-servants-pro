@@ -1,0 +1,41 @@
+{# Inline fragment served by `/watchtower/not-found/path-ips?path=...`.
+   The Watchtower 404s template fetches this when the admin clicks an
+   expand chevron on a Top missing URL row and injects it as the
+   row's child panel. Self-contained — its parent only contributes
+   layout. The Block buttons POST to the standard
+   `/watchtower/ban-ip` endpoint with a `return_url` back so the
+   admin lands on the 404s tab after blocking. #}
+<div class="wt-nf-ips" role="region" aria-label="IPs hitting {{ path }}">
+  {% if not ips %}
+  <p class="muted small wt-nf-ips-empty">No IPs recorded for this path. (Existing 404 events from before 2.8.1 weren't captured with their source IP — new hits will be.)</p>
+  {% else %}
+  <div class="wt-nf-ips-head muted smaller">
+    {{ ips|length }} distinct IP{{ '' if ips|length == 1 else 's' }} hitting <code>{{ path|truncate(80) }}</code> in the last {{ window }} days
+  </div>
+  <ul class="wt-nf-ips-list">
+    {% for r in ips %}
+    <li class="wt-nf-ips-row">
+      <span class="wt-nf-ips-addr mono small" title="{{ r.ip }}">{{ r.ip }}</span>
+      <span class="wt-nf-ips-count" title="{{ r.count }} hit{{ '' if r.count == 1 else 's' }}">{{ '{:,}'.format(r.count) }}× </span>
+      {% if r.last_seen %}<span class="wt-nf-ips-last muted smaller">last {{ r.last_seen.strftime('%b %d, %H:%M') }}</span>{% endif %}
+      <span class="wt-nf-ips-action">
+        {% if r.is_blocked %}
+        <span class="wt-nf-ips-blocked" title="This IP is currently on the blocklist (manage from Watchtower → Access)">{{ icon('slash') }} Blocked</span>
+        {% else %}
+        <form method="post" action="{{ url_for('main.watchtower_ban_ip') }}"
+              class="wt-nf-ips-block-form"
+              onsubmit="return confirm('Block {{ r.ip }}? This rejects every inbound request from this IP with a 403 until you unblock from Watchtower → Access.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="ip" value="{{ r.ip }}">
+          <input type="hidden" name="reason" value="Hitting 404: {{ path|truncate(180) }}">
+          <input type="hidden" name="ttl_hours" value="0">
+          <input type="hidden" name="return_url" value="{{ url_for('main.watchtower_not_found', window=window) }}">
+          <button type="submit" class="btn btn-sm btn-danger" title="Add to the IP blocklist (permanent)">{{ icon('slash') }} Block IP</button>
+        </form>
+        {% endif %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
