@@ -14468,6 +14468,129 @@ def watchtower_visitors():
     )
 
 
+@bp.route("/watchtower/visitors.csv")
+@admin_required
+def watchtower_visitors_csv():
+    """Comprehensive visitor-metrics export. Returns a single CSV
+    grouped into labelled sections (Summary / Daily series / Hour of
+    day / Top paths / Top referrers / Devices / Browsers / Operating
+    systems) so an admin can drop it into Excel or Sheets and have
+    every chart's underlying data without screen-scraping.
+
+    Each breakdown carries BOTH `views` and `unique_visitors` columns
+    so the spreadsheet user can sort/filter on whichever metric they
+    prefer. Rows are unioned across the two rankings — a path that
+    only appears in the hits-by-views top list still gets a row with
+    its (smaller) unique-visitor count and vice versa.
+
+    Window honors the standard `?window=N` param the visitors page
+    uses; pool size for the top lists is capped at 300 to match the
+    inline expandable lists' depth."""
+    from . import visitor_metrics as vm
+    from flask import make_response
+    import csv as _csv
+    from io import StringIO
+
+    try:
+        window = max(7, min(365, int(request.args.get("window", 30))))
+    except (TypeError, ValueError):
+        window = 30
+    hr_days = min(30, window)
+
+    s = vm.summary(days=window)
+    daily = vm.daily_series(days=window)
+    hourly_v = vm.hourly_distribution(days=hr_days, metric="views")
+    hourly_u = vm.hourly_distribution(days=hr_days, metric="uniques")
+
+    def _merge(views_rows, uniques_rows):
+        """Union two ranked breakdowns into one label -> {views, uniques}
+        mapping, sorted by views desc with uniques as the tiebreaker.
+        Preserves every label that appeared in either ranking."""
+        m = {}
+        for r in views_rows:
+            m.setdefault(r["label"], {"views": 0, "uniques": 0})["views"] = r["count"]
+        for r in uniques_rows:
+            m.setdefault(r["label"], {"views": 0, "uniques": 0})["uniques"] = r["count"]
+        return sorted(m.items(),
+                      key=lambda kv: (-kv[1]["views"], -kv[1]["uniques"], kv[0]))
+
+    paths     = _merge(vm.top_paths(days=window, limit=300, metric="views"),
+                       vm.top_paths(days=window, limit=300, metric="uniques"))
+    referrers = _merge(vm.top_referrers(days=window, limit=300, metric="views"),
+                       vm.top_referrers(days=window, limit=300, metric="uniques"))
+    devices   = _merge(vm.device_breakdown(days=window, metric="views"),
+                       vm.device_breakdown(days=window, metric="uniques"))
+    browsers  = _merge(vm.browser_breakdown(days=window, metric="views"),
+                       vm.browser_breakdown(days=window, metric="uniques"))
+    oses      = _merge(vm.os_breakdown(days=window, metric="views"),
+                       vm.os_breakdown(days=window, metric="uniques"))
+
+    buf = StringIO()
+    w = _csv.writer(buf)
+    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
+    # File-level preamble. Comment-style first row keeps the file
+    # human-readable; spreadsheet importers treat it as a single cell
+    # in column A which is fine for context.
+    w.writerow([f"# Visitor metrics — last {window} days — exported {now_str}"])
+    w.writerow([])
+
+    # ── Summary ────────────────────────────────────────────────────
+    w.writerow(["## Summary"])
+    w.writerow(["metric", "value"])
+    for key, label in (
+            ("views_today",     "Views today"),
+            ("views_yesterday", "Views yesterday"),
+            ("views_7d",        "Views (last 7d)"),
+            ("views_30d",       "Views (last 30d)"),
+            ("views_window",    f"Views (last {window}d)"),
+            ("uniques_today",   "Unique visitors today"),
+            ("uniques_7d",      "Unique visitors (last 7d)"),
+            ("uniques_30d",     "Unique visitors (last 30d)"),
+            ("uniques_window",  f"Unique visitors (last {window}d)"),
+            ("total_views",     "Total views (lifetime)")):
+        w.writerow([label, s.get(key, 0)])
+    if s.get("first_seen_at"):
+        w.writerow(["First seen at", s["first_seen_at"].strftime("%Y-%m-%d %H:%M UTC")])
+    w.writerow([])
+
+    # ── Daily series ───────────────────────────────────────────────
+    w.writerow(["## Daily series"])
+    w.writerow(["day", "views", "unique_visitors"])
+    for d in daily:
+        w.writerow([d["day"], d["views"], d["uniques"]])
+    w.writerow([])
+
+    # ── Hour of day ────────────────────────────────────────────────
+    w.writerow([f"## Hour of day (UTC, last {hr_days}d)"])
+    w.writerow(["hour", "views", "unique_visitors"])
+    uniques_by_hour = {r["hour"]: r["count"] for r in hourly_u}
+    for r in hourly_v:
+        w.writerow([f"{r['hour']:02d}", r["count"], uniques_by_hour.get(r["hour"], 0)])
+    w.writerow([])
+
+    def _write_breakdown(section_label, label_col, rows):
+        w.writerow([section_label])
+        w.writerow([label_col, "views", "unique_visitors"])
+        for label, counts in rows:
+            w.writerow([label, counts["views"], counts["uniques"]])
+        w.writerow([])
+
+    _write_breakdown("## Top paths",     "path",     paths)
+    _write_breakdown("## Top referrers", "referrer", referrers)
+    _write_breakdown("## Devices",       "device",   devices)
+    _write_breakdown("## Browsers",      "browser",  browsers)
+    _write_breakdown("## Operating systems", "os",   oses)
+
+    filename = f"visitor-metrics-{window}d-{datetime.utcnow().strftime('%Y%m%d')}.csv"
+    resp = make_response(buf.getvalue())
+    resp.headers["Content-Type"] = "text/csv; charset=utf-8"
+    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    # Don't cache — the underlying data changes every page view.
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 @bp.route("/watchtower/not-found")
 @admin_required
 def watchtower_not_found():

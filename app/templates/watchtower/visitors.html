@@ -14,6 +14,10 @@
     </select>
   </label>
 </form>
+<a class="btn btn-sm" href="{{ url_for('main.watchtower_visitors_csv', window=window) }}"
+   title="Download a comprehensive CSV of the current window's metrics — summary, daily series, hourly distribution, top paths/referrers, and device/browser/OS breakdowns. Each breakdown carries both views and unique-visitor counts.">
+  {{ icon('download') }} Download CSV
+</a>
 {% endblock %}
 {% block content %}
 {% include "watchtower/_tabs.html" %}
