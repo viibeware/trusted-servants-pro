@@ -40,7 +40,7 @@
 
         {% if meeting.description %}
         <article class="fe-meeting-mag-prose">
-          {{ meeting.description|markdown }}
+          {{ meeting.description|markdown_block }}
         </article>
         {% else %}
         <p class="fe-meeting-mag-empty muted">No description has been added yet for this meeting.</p>

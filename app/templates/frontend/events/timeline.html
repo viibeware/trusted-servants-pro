@@ -133,7 +133,7 @@
 
         {% if event.body %}
         <article class="fe-event-time-prose">
-          {{ event.body|markdown }}
+          {{ event.body|markdown_block }}
         </article>
         {% endif %}
 

@@ -7,7 +7,14 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.8.2 — 2026-05-26 (latest) — Visitor metrics export + timezone fix for events
+## 2.8.3 — 2026-05-28 (latest) — Live-update content-page preview + markdown lists + SVG image scaling
+
+- **Content-page Preview now updates live.** Open the preview tab once and keep editing — the preview reloads automatically (debounced) every time you change a block, no need to keep clicking Preview. The preview window remembers your scroll position across reloads so you stay in the spot you were inspecting. Nothing gets saved to the live page until you hit Save — the preview is purely a render of your current, in-progress edits.
+- **Markdown lists in announcement and meeting bodies render properly.** Typing `intro line` ⏎ `- item` directly under a paragraph now renders as a real bulleted list on the public site (announcement detail pages, event detail pages, and all four meeting-detail templates). Previously you had to remember to leave a blank line before the `-` for the list to render; the field now handles that for you.
+- **SVG image blocks now respect the width setting.** An SVG dropped into an image block was sometimes capping at its source file's intrinsic size instead of scaling up to the chosen width — particularly inside flex containers with centered alignment. SVGs now scale up to fill the percentage you picked (50%, 80%, 100%, etc.) regardless of the source file's pixel dimensions, while raster images keep their existing "don't upscale past natural size" behaviour.
+- **Unplaced blocks bin reads more cleanly.** Pills in the Unplaced bin on the page builder now stack vertically with the same tint and spacing as placed blocks, instead of wrapping into a horizontal row with a different background — easier to scan and to drag back into the active layout.
+
+## 2.8.2 — 2026-05-26 — Visitor metrics export + timezone fix for events
 
 - **Export visitor metrics to CSV.** A new **Export CSV** button on **Watchtower → Visitors** downloads everything in the current window — daily traffic, top paths, top referrers, devices/browsers/OS breakdowns — in one spreadsheet-friendly file. The export respects whichever **Unique visitors / Hits** mode you have selected so the numbers match what's on the page.
 - **Tooltips and chart polish on Watchtower → Visitors.** Hovering any bar in the daily-traffic chart now shows the exact count and date in a small tooltip. The legend on the chart is back to the right side, the Devices/Browsers/Operating systems donut grid lines up cleanly on every screen width, and hover states on the donut slices show the full breakdown.

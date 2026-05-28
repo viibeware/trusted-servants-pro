@@ -1260,16 +1260,28 @@ window.tspBlogTags = [
 
 <script>
 // Preview button — opens the current (unsaved) editor state in a new tab
-// via the editor-gated preview route. Building a FormData from the edit
-// form fires its `formdata` listener, which serialises the live block
-// editor into the blocks_json field — so the preview reflects the exact
-// in-progress content without saving anything.
+// via the editor-gated preview route, then LIVE-UPDATES that same tab as
+// the admin keeps editing. Building a FormData from the edit form fires
+// its `formdata` listener, which serialises the live block editor into
+// blocks_json — so the preview reflects the exact in-progress content
+// without saving anything.
+//
+// Live update: the preview window is opened with a fixed name
+// (`tsp-page-preview-<id>`) so subsequent form submits with that target
+// reuse the same window. We listen for `input` events on the edit form
+// (the structure card dispatches one whenever blocks_json changes) and
+// debounce-resubmit to the preview. Scroll position is preserved by a
+// small companion script in the preview template (sessionStorage).
 (function () {
   var btn = document.getElementById('page-preview-btn');
   var form = document.getElementById('page-edit-form');
   if (!btn || !form) return;
-  btn.addEventListener('click', function () {
-    var url = btn.getAttribute('data-preview-url');
+  var url = btn.getAttribute('data-preview-url');
+  var pageId = (url.match(/\/(\d+)(?:$|\?)/) || [])[1] || 'x';
+  var WIN_NAME = 'tsp-page-preview-' + pageId;
+  var previewWin = null;
+
+  function submitToPreview() {
     var fd;
     try { fd = new FormData(form); } catch (_) { fd = null; }
     var blocks = (fd && fd.get('blocks_json'))
@@ -1278,7 +1290,7 @@ window.tspBlogTags = [
     var tmp = document.createElement('form');
     tmp.method = 'POST';
     tmp.action = url;
-    tmp.target = '_blank';
+    tmp.target = WIN_NAME;
     tmp.rel = 'noopener';
     tmp.style.display = 'none';
     function add(name, value) {
@@ -1291,6 +1303,30 @@ window.tspBlogTags = [
     document.body.appendChild(tmp);
     tmp.submit();
     tmp.remove();
+  }
+
+  btn.addEventListener('click', function () {
+    if (!previewWin || previewWin.closed) {
+      // Open (or focus existing) window with the fixed name. Submitting
+      // to the same target name lands in this window.
+      previewWin = window.open('about:blank', WIN_NAME);
+    } else {
+      try { previewWin.focus(); } catch (_) {}
+    }
+    submitToPreview();
+  });
+
+  // Debounced live update — fires whenever the edit form mutates AND we
+  // have a still-open preview window. Skip when no preview is open so
+  // editing without a preview costs nothing.
+  var liveTimer = null;
+  form.addEventListener('input', function () {
+    if (!previewWin || previewWin.closed) return;
+    if (liveTimer) clearTimeout(liveTimer);
+    liveTimer = setTimeout(function () {
+      if (!previewWin || previewWin.closed) return;
+      submitToPreview();
+    }, 700);
   });
 })();
 </script>

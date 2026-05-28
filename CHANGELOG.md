@@ -6,6 +6,18 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.8.3] — 2026-05-28
+
+### Added
+
+- **Content-page Preview live-updates.** The Preview button on the page editor (`frontend_page_edit.html`) now opens the preview into a fixed, named window (`tsp-page-preview-<page_id>`) and the editor re-POSTs the current `blocks_json` to that window on every change to the edit form, debounced 700 ms. The structure card already dispatches `input` events from the hidden `#page-blocks-json` field whenever pills are dragged / removed / edited, so the live-update wiring just listens for those at the form level. Live-update only fires when the preview window is still open (`win.closed` check) so editing without an open preview costs nothing. Scroll position is preserved across reloads by a small companion script injected into `frontend/page.html` (preview-mode only) that stashes `window.scrollY` in `sessionStorage` on `beforeunload` and restores it on next load.
+
+### Fixed
+
+- **Markdown lists in admin-authored post / meeting bodies didn't render unless the author left a blank line before the dash.** The detail templates piped these fields through the `markdown` Jinja filter, which is bare Python-Markdown with no preprocessing — Python-Markdown requires a blank line before a list / heading / blockquote when it follows a paragraph, so `intro⏎- item` rendered inline. Switched to the existing `markdown_block` filter, which inserts the required blank line for the user before any list / heading / blockquote that directly follows non-blank content. Affects all four meeting-detail templates (`frontend/meetings/classic.html`, `card_stack.html`, `magazine.html`, `minimal.html`) for `meeting.description` and all four event-detail templates (`frontend/events/classic.html`, `minimal.html`, `poster.html`, `timeline.html`) for `event.body`. Event templates are reused by `/announcement/<slug>` (see `frontend.announcement_detail`), so this covers announcement bodies too.
+- **SVG image blocks rendered at the SVG's intrinsic width instead of the admin-chosen `max_width_pct`** when the block sat inside a flex container with `align-items: center`. Block-level `<figure>` children of a centered flex parent only stretch when given an explicit width — `max-width` alone has nothing to clamp because the figure shrink-wraps to the SVG's intrinsic dimensions (e.g. `<svg width="452">`). The image-block renderer in both `templates/frontend/page.html` and `templates/_blocks.html` now appends `width: <pct>%` to the figure's inline styles when the src ends in `.svg` (case-insensitive, query/fragment stripped), and `width: 100%; height: auto` to the img, so SVGs scale to fill the chosen percentage regardless of their source dimensions. Raster images keep the existing `max-width: 100%` semantics so a small image in a wide figure doesn't get upscaled.
+- **Unplaced blocks bin on the page builder wrapped pills horizontally with a different background**, making mixed-length labels jumble. The `.fe-page-orphans-list` zone now stacks pills vertically (`flex-direction: column; gap: 6px`) matching the structure tree, the `background: var(--panel)` per-pill override was dropped so orphan pills inherit the same `var(--brand-soft)` tint as placed pills, pill padding bumped to `10px 12px` with radius `10px`, and the bin container's radius bumped to `12px`.
+
 ## [2.8.2] — 2026-05-26
 
 ### Added

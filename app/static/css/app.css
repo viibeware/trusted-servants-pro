@@ -10759,12 +10759,12 @@ input.be-container-color-text.is-invalid {
   display: none;
 }
 .fe-page-orphans-list {
-  display: flex; flex-wrap: wrap; gap: 8px;
-  padding: 12px; border: 1px dashed var(--border); border-radius: 10px;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px; border: 1px dashed var(--border); border-radius: 12px;
   background: var(--panel-2); min-height: 56px;
 }
 .fe-page-orphans-list .fe-page-structure-block {
-  background: var(--panel);
+  padding: 10px 12px; border-radius: 10px;
 }
 
 /* ── Drag-drop affordances ──────────────────────────────────────

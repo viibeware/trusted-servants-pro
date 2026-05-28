@@ -34,7 +34,7 @@
 
     {% if meeting.description %}
     <div class="fe-meeting-min-desc">
-      {{ meeting.description|markdown }}
+      {{ meeting.description|markdown_block }}
     </div>
     {% endif %}
 

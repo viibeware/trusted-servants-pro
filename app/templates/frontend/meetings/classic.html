@@ -29,7 +29,7 @@
         <h1>{{ meeting.name }}</h1>
         {% if meeting.description %}
         <div class="fe-meeting-detail-desc">
-          {{ meeting.description|markdown }}
+          {{ meeting.description|markdown_block }}
         </div>
         {% endif %}
       </div>

@@ -98,6 +98,21 @@
     {% elif _align == 'center' %}{% set _ = _fig_styles.append('text-align: center') %}{% set _ = _fig_styles.append('margin-left: auto') %}{% set _ = _fig_styles.append('margin-right: auto') %}{% endif %}
     {% if (_w | int) != 100 %}{% set _ = _fig_styles.append('max-width: ' ~ _w ~ '%') %}{% endif %}
     {% set _img_styles = ['max-width: 100%'] %}
+    {# SVGs are vectors — admins expect them to scale to the chosen
+       width regardless of the source file's intrinsic dimensions. We
+       give the figure an explicit `width: <pct>%` (not just max-width)
+       so a flex/grid parent with `align-items: center` doesn't shrink
+       the figure down to the SVG's intrinsic size, and the img gets
+       `width: 100%; height: auto` so it fills the figure. Raster
+       images keep the legacy max-width-only semantics. Lowercased and
+       query/fragment-stripped so `logo.svg?v=2` still matches. #}
+    {% set _src_lower = (d.src or '')|lower %}
+    {% set _src_path  = _src_lower.split('?')[0].split('#')[0] %}
+    {% if _src_path.endswith('.svg') %}
+      {% set _ = _fig_styles.append('width: ' ~ _w ~ '%') %}
+      {% set _ = _img_styles.append('width: 100%') %}
+      {% set _ = _img_styles.append('height: auto') %}
+    {% endif %}
     {# Border-radius rides through `--img-radius` so the public CSS
        can halve it on mobile via a media query. The matching
        stylesheet reads `border-radius: var(--img-radius, 0)`. #}

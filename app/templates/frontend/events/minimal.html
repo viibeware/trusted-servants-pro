@@ -41,7 +41,7 @@
 
     {% if event.body %}
     <article class="fe-event-min-prose">
-      {{ event.body|markdown }}
+      {{ event.body|markdown_block }}
     </article>
     {% endif %}
 

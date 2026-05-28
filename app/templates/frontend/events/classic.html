@@ -72,7 +72,7 @@
         <h1>{{ event.title }}</h1>
         {% if event.body %}
         <div class="fe-event-detail-desc">
-          {{ event.body|markdown }}
+          {{ event.body|markdown_block }}
         </div>
         {% endif %}
       </header>

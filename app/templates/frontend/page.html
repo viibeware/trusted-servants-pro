@@ -257,6 +257,30 @@
       {%- set _ = _fig_styles.append('max-width: ' ~ _w ~ '%') -%}
     {%- endif -%}
     {%- set _img_styles = ['max-width: 100%'] -%}
+    {# SVGs sourced via <img src="…svg"> are vectors — admins expect
+       them to scale to the chosen width regardless of the source
+       file's intrinsic dimensions. We treat SVG specially in two
+       places:
+       1. The figure gets an explicit `width: <pct>%` (not just
+          max-width) so a flex/grid parent with `align-items: center`
+          doesn't shrink the figure down to the SVG's intrinsic size.
+          Without this, an SVG with `width="452"` placed inside a
+          centered flex container stops at 452px even though the
+          admin set max_width_pct=100.
+       2. The img gets `width: 100%; height: auto` so it fills the
+          figure (driven by max_width_pct) and the viewBox aspect
+          ratio carries the height.
+       Lowercased and query/fragment-stripped so cache-busted URLs
+       (`logo.svg?v=2`) still match. Raster images keep the legacy
+       `max-width` semantics so a small image in a wide figure
+       doesn't get upscaled. #}
+    {%- set _src_lower = (d.src or '')|lower -%}
+    {%- set _src_path  = _src_lower.split('?')[0].split('#')[0] -%}
+    {%- if _src_path.endswith('.svg') -%}
+      {%- set _ = _fig_styles.append('width: ' ~ _w ~ '%') -%}
+      {%- set _ = _img_styles.append('width: 100%') -%}
+      {%- set _ = _img_styles.append('height: auto') -%}
+    {%- endif -%}
     {# Emit border-radius as a custom property `--img-radius` (not as
        a direct `border-radius` declaration) so a CSS media query can
        halve it on narrow viewports. Stylesheet reads the var via
@@ -628,6 +652,29 @@
   .fe-preview-banner-close:hover { background: rgba(255,255,255,.15); }
   @media (prefers-reduced-motion: reduce) { .fe-preview-banner-dot { animation: none; } }
 </style>
+{# Scroll preservation across live-update reloads. The page-edit screen
+   re-POSTs blocks_json to this preview window on every edit (debounced),
+   which is a full navigation — without this, the preview would jump
+   back to the top each time the admin tweaks anything. We stash the
+   scroll position in sessionStorage on unload and restore it on load. #}
+<script>
+(function () {
+  var key = 'tsp-preview-scroll-' + ({{ page.id if page else 0 }});
+  try {
+    var stored = sessionStorage.getItem(key);
+    if (stored !== null) {
+      var y = parseInt(stored, 10) || 0;
+      // Defer to next frame so layout has settled before we scroll.
+      window.requestAnimationFrame(function () {
+        window.scrollTo(0, y);
+      });
+    }
+  } catch (_) {}
+  window.addEventListener('beforeunload', function () {
+    try { sessionStorage.setItem(key, String(window.scrollY)); } catch (_) {}
+  });
+})();
+</script>
 {% endif %}
 {% if not page %}
 {# No homepage configured — index()'s fallback renders this template with

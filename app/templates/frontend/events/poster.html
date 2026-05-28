@@ -123,7 +123,7 @@
 
     {% if event.body %}
     <article class="fe-event-poster-prose">
-      {{ event.body|markdown }}
+      {{ event.body|markdown_block }}
     </article>
     {% endif %}
 
