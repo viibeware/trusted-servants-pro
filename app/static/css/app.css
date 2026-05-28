@@ -4386,6 +4386,19 @@ form[data-savebar-row].is-dirty {
   transition: opacity 180ms ease, visibility 0s linear 180ms; }
 .modal.open { visibility: visible; opacity: 1;
   transition: opacity 180ms ease, visibility 0s linear 0s; }
+/* Global picker modals (body-rooted helpers that get opened FROM
+   inside another modal — e.g. clicking "Choose icon" / "Choose
+   media" / "Choose dynamic background" while editing a hero block,
+   a template, a nav link). Same-z-index modals stack by DOM order,
+   and these global pickers can end up earlier in the DOM than a
+   dynamically-appended trigger modal (the template-settings modal
+   is built and appended at runtime), which would otherwise leave
+   the picker rendered BEHIND the modal that opened it. Bumping
+   z-index here keeps them safely above content modals (100) and
+   below the sticky save bar (110). */
+.modal#dynbg-picker-modal,
+.modal#media-picker-modal,
+.modal#icon-picker-modal { z-index: 105; }
 .modal-backdrop {
   position: absolute; inset: 0;
   background: rgba(17, 24, 39, 0.45);

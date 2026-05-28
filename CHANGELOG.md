@@ -6,6 +6,13 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.9.1] — 2026-05-28
+
+### Fixed
+
+- **Dynamic Background picker rendered BEHIND the template-edit modal that triggered it.** Both modals had `z-index: 100`; same-z-index siblings stack by DOM order. The `#dynbg-picker-modal` lives in `base.html` (early DOM), but the per-template settings modal on `frontend_templates.html` is built dynamically via JS and `document.body.appendChild`'d at runtime — landing AFTER the picker in the DOM, so the picker painted under it. Bumped `#dynbg-picker-modal`, `#media-picker-modal`, and `#icon-picker-modal` to `z-index: 105` (above content modals at 100, below the sticky save bar at 110). Future global pickers should join the same selector.
+- **Authenticated users with a public tab open showed as "persistently online on `/api/live-meeting`".** The utility bar's poller fetches `/api/live-meeting` every 30 s (and on every visibility change) when the LIVE-badge toggle is on, and `_track_last_seen` in `routes.py` only skipped `main.api_*` endpoints — but the live-meeting endpoint lives on the **frontend** blueprint as `frontend.api_live_meeting`, so each poll rewrote `last_path` to `/api/live-meeting` and refreshed `last_seen_at`, keeping the user warm forever. Added a path-based skip (`request.path.startswith("/api/")`) so background polls on any blueprint's `/api/*` route are excluded from location tracking. Match by path (not endpoint name) so future API routes on any blueprint inherit the skip automatically.
+
 ## [2.9.0] — 2026-05-28
 
 ### Added

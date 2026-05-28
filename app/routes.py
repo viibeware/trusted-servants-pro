@@ -456,7 +456,19 @@ def _track_last_seen():
     if request.method != "GET":
         return
     endpoint = request.endpoint or ""
-    if endpoint.startswith("main.api_") or endpoint == "static":
+    if endpoint == "static":
+        return
+    # Skip background-polled `/api/*` endpoints regardless of which
+    # blueprint they live on. Without this, a public tab left open
+    # pins the user's last_path to the polled URL (notably
+    # `frontend.api_live_meeting`, hit every 30s by the utility bar)
+    # which keeps `last_seen_at` warm forever — they show up as
+    # "persistently online on /api/live-meeting" in the Currently
+    # Online widget. Match by request.path so future API endpoints
+    # on any blueprint inherit the skip automatically.
+    if request.path.startswith("/api/"):
+        return
+    if endpoint.startswith("main.api_"):
         return
     if endpoint.endswith("_metrics"):
         return

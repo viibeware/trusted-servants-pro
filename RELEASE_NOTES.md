@@ -7,7 +7,12 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.9.0 — 2026-05-28 (latest) — Page drafts, edit history, and a live-updating preview
+## 2.9.1 — 2026-05-28 (latest) — Dynamic-background picker layering + phantom "online" users fix
+
+- **Fixed: the Dynamic Background picker opened behind the modal that launched it** on the frontend templates page. The picker is a shared body-level dialog and was getting stacked under the template-edit modal (which is appended at runtime). The picker (along with the global media + icon pickers) now layers cleanly on top of any content modal that triggered it.
+- **Fixed: users appeared "persistently online" on `/api/live-meeting`.** The utility bar polls that endpoint every 30 seconds when the live-meeting badge is enabled, and the online-users tracker was treating each poll as a real page view — pinning the user's last-seen location to `/api/live-meeting` forever. Background polls on any `/api/*` endpoint are now skipped, so the Currently Online widget reflects actual navigation again. After deploying, lingering phantom-online users should drop off within your usual idle cutoff.
+
+## 2.9.0 — 2026-05-28 — Page drafts, edit history, and a live-updating preview
 
 - **Save pages as drafts without publishing.** Already-published pages can now stash in-progress edits in a draft slot without touching the live page. The yellow save bar in the page editor now has two buttons — **Save Draft** and **Publish** — so it's always clear what's about to happen, and an amber banner appears at the top whenever you're editing draft content. When a draft is loaded, a top-of-screen **Publish draft** button lets you push it live without having to make a fake edit first to expose the save bar. The pages list shows an "Unpublished changes" chip on any row that has a stashed draft.
 - **Full edit history with one-click rollback.** Every Save Draft and Publish is recorded — up to the last 50 entries per page. A new **History** button on the page editor opens a chronological list (newest first) with Draft / Published chips, timestamps, and the author of each save. Clicking **Restore** loads any past revision back into a draft for review; your live page stays unchanged until you click Publish, so rollbacks are always safe to preview before committing.
