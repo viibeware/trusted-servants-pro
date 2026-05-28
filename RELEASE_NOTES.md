@@ -7,7 +7,12 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.9.2 — 2026-05-28 (latest) — Pastel strength slider, themed image elevation, detail-page polish
+## 2.9.3 — 2026-05-28 (latest) — Card body preview controls + "Read more" links on list templates
+
+- **New setting on the announcements and events list templates: pick how much of each post's body shows on the card.** Web Frontend → Templates → Customize panel on either list template now has a **Card body preview** control with two modes: **Full body** (renders the entire body on each card) or **Truncated body** capped at a character count you set (50–2000, default 200). The character input is greyed out unless truncated is selected. Announcements default to full (no change for existing sites); events default to truncated 200 chars (events now show their body alongside the existing summary line, capped so cards stay compact).
+- **"Read more ›" link added to every announcement and event card.** Every card in the announcements list and every card-shaped event card (Cards layout, Magazine "More events" tiles, Timeline cards) now ships with a Read more link pointing at the post's detail page. The link is shown regardless of body length or truncation setting — the title is still the primary affordance, this is the explicit secondary call-to-action. Magazine hero events keep their existing "View event" primary button; Calendar view has no cards (chips + list) so it's unchanged.
+
+## 2.9.2 — 2026-05-28 — Pastel strength slider, themed image elevation, detail-page polish
 
 - **Dynamic background pastel intensity is now a slider, not a toggle.** Pull the slider in the Dynamic Background picker between 0 and 100 to dial how soft your light-mode palette gets — at 0 the colours stay fully saturated, at 100 they land in true cream / blush / mint pastels. Old saves that had the checkbox on still load with full strength. The strength-100 endpoint was also rebalanced to be visibly paler than the previous all-or-nothing setting, so even a maxed slider reads as a soft wash rather than a punchy tinted block.
 - **Featured images on announcement, event, and archive detail pages now elevate with a themed shadow.** A clearly visible `lg` shadow sits behind the image at rest and expands to an `xl` shadow on hover, with the shadow colour automatically following whatever you set under **Design → Card shadow colour** — change the theme tint and the image shadow retints to match. The border that used to outline the image is gone, the hover lift is dropped (the shadow alone does the work, no jumping), and the transition runs a flat 200 ms.

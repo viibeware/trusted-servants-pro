@@ -36,8 +36,32 @@
       {% endif %}
     </div>
     {% endif %}
+    {# Body preview mode comes from the per-template settings the
+       dispatcher (`templates/frontend/announcements_list.html`) sets
+       as `_announcements_list_tpl`. Default is full — preserves the
+       legacy behaviour for sites that haven't touched the new
+       setting. Truncated mode slices the raw markdown BEFORE
+       markdown_block renders, so the trailing `…` ellipsis appears
+       inside the rendered prose without breaking the trailing
+       paragraph wrapper. #}
+    {%- set _ann_card_tpl = _announcements_list_tpl if _announcements_list_tpl is defined else {} -%}
+    {%- set _ann_body_mode  = (_ann_card_tpl.get('card_body_mode') or 'full') -%}
+    {%- set _ann_body_chars = (_ann_card_tpl.get('card_body_max_chars') or 200) | int -%}
     {% if ann.body %}
-    <div class="fe-announcements-card-fulltext">{{ ann.body|markdown_block }}</div>
+    <div class="fe-announcements-card-fulltext">
+      {%- if _ann_body_mode == 'truncated' -%}
+        {{ ann.body|truncate(_ann_body_chars, True, '…')|markdown_block }}
+      {%- else -%}
+        {{ ann.body|markdown_block }}
+      {%- endif -%}
+    </div>
     {% endif %}
+    {# Read-more shortcut. Renders unconditionally so every card has a
+       clear path to the full detail page regardless of body length
+       or truncation setting — the title link is the primary
+       affordance, but this row gives visitors a second, explicit
+       "go to detail" call to action. #}
+    <a class="fe-card-read-more" href="{{ _detail_url }}"
+       aria-label="Read full announcement: {{ ann.title }}">Read more <span aria-hidden="true">›</span></a>
   </div>
 </article>

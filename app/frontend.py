@@ -1073,7 +1073,11 @@ def template_settings(site, kind, key):
               "bg_dynbg_pastel_light",
               # Classic blog detail rail toggles — present only when
               # explicitly disabled, so a missing key means "show".
-              "show_related_widget", "show_categories_widget"):
+              "show_related_widget", "show_categories_widget",
+              # Card body preview controls (announcements + events list
+              # templates). Missing keys fall through to the per-list
+              # default in the partial.
+              "card_body_mode", "card_body_max_chars"):
         if k in leaf:
             out[k] = leaf[k]
     return out

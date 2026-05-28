@@ -9736,6 +9736,26 @@ def frontend_template_settings_save(kind, key):
             leaf["show_related_widget"] = False
         if request.form.get("show_categories_widget") != "1":
             leaf["show_categories_widget"] = False
+    # Per-card body preview — applies to the announcements list cards
+    # (controls `Post.body` display) and the events list cards
+    # (controls `Post.body` display, distinct from the always-shown
+    # `Post.summary`). Two modes:
+    #   • full      — render the entire body via markdown_block.
+    #   • truncated — slice the raw body to `card_body_max_chars`
+    #                 (clamped 50..2000) before rendering.
+    # Both keys only persist when the admin actively chose them so a
+    # missing-leaf surface still picks up the template-default render
+    # path in the card partial.
+    if kind in ("announcements_list", "events_list"):
+        body_mode = (request.form.get("card_body_mode") or "").strip().lower()
+        if body_mode in ("full", "truncated"):
+            leaf["card_body_mode"] = body_mode
+            if body_mode == "truncated":
+                try:
+                    chars = int(request.form.get("card_body_max_chars") or 200)
+                except (TypeError, ValueError):
+                    chars = 200
+                leaf["card_body_max_chars"] = max(50, min(chars, 2000))
     for fkey in ("heading_font", "body_font"):
         v = (request.form.get(fkey) or "").strip()
         if v and font_by_key(v):

@@ -47,6 +47,17 @@
       {% if ev.summary %}
       <p class="fe-events-tl-summary muted">{{ ev.summary|truncate(180, True, '…') }}</p>
       {% endif %}
+      {# Read-more — explicit secondary CTA matching the Cards /
+         Magazine layouts. The card-level `<a class="fe-events-tl-
+         card-link">` overlay above already makes the whole tile
+         clickable, but a visible "Read more ›" link gives keyboard
+         + screen-reader users the same affordance the announcements
+         + cards layouts now ship, and reads as the explicit "next
+         step" for sighted visitors scanning the card. The overlay
+         anchor sits below in stacking order so this link's pointer
+         events win over it. #}
+      <a class="fe-card-read-more fe-events-tl-read-more" href="{{ _detail_url }}"
+         aria-label="Read full event details: {{ ev.title }}">Read more <span aria-hidden="true">›</span></a>
     </article>
   </li>
   {% endfor %}

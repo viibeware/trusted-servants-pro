@@ -7053,6 +7053,59 @@ body.fe-frontend-force-dark .fe-events-omni-tab.is-active {
 .fe-events-card-meta-icon { display: inline-flex; width: 14px; height: 14px; }
 .fe-events-card-meta-icon .icon { width: 14px; height: 14px; }
 .fe-events-card-summary { margin: 0; font-size: 0.95rem; line-height: 1.5; }
+/* Body preview rendered under the summary on event cards when an
+   admin has body text on the post + the events-list template hasn't
+   suppressed it. Slightly tighter than the summary so the two read
+   as a hierarchy (summary = lede, body = continuation). Strips
+   first/last margin so the block sits flush with the card padding. */
+.fe-events-card-body-preview {
+  margin: 6px 0 0; font-size: 0.92rem; line-height: 1.55;
+  color: var(--fe-color-text, var(--fe-ink));
+}
+.fe-events-card-body-preview > :first-child { margin-top: 0; }
+.fe-events-card-body-preview > :last-child  { margin-bottom: 0; }
+.fe-events-card-body-preview p { margin: 0.6em 0; }
+
+/* "Read more ›" affordance appended to truncated card bodies on both
+   the events and announcements list templates. Sits inline as the
+   tail of the body block so the chevron reads as "this preview
+   continues at the linked detail page". Uses the accent text colour
+   that drives every other "look here next" link on list pages, and
+   the `›` chevron slides one character on hover for a small
+   directional cue. */
+.fe-card-read-more {
+  display: inline-block;
+  margin-top: 6px;
+  font-weight: 600;
+  color: var(--fe-accent, var(--fe-color-text, currentColor));
+  text-decoration: none;
+  white-space: nowrap;
+}
+.fe-card-read-more:hover,
+.fe-card-read-more:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.fe-card-read-more > span {
+  display: inline-block;
+  margin-left: 2px;
+  transition: transform 160ms ease;
+}
+.fe-card-read-more:hover > span,
+.fe-card-read-more:focus-visible > span {
+  transform: translateX(3px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fe-card-read-more > span { transition: none; }
+}
+/* Timeline cards stack the read-more above the absolute card-link
+   overlay (z-index 1) so the link is clickable. `position: relative`
+   creates a positioning context that participates in the stacking
+   order without pulling the link out of the flex/grid flow. */
+.fe-events-tl-read-more {
+  position: relative; z-index: 2;
+  align-self: flex-start;
+}
 
 @media (max-width: 720px) {
   .fe-events-card,

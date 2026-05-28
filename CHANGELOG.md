@@ -6,6 +6,15 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.9.3] — 2026-05-28
+
+### Added
+
+- **Per-template "Card body preview" setting on the announcements_list and events_list customize panels.** New radio + character-count input on `tpl_customize_panel` (gated on `kind in ('announcements_list', 'events_list')`) stores `card_body_mode` (`'full' | 'truncated'`) and `card_body_max_chars` (clamped 50..2000, default 200) into the per-template settings leaf via `frontend_template_settings_save`. The character input is `disabled` until the truncated radio is selected; an inline IIFE re-gates it on the fly. `frontend.py::template_settings` was extended to include the two new keys in its passthrough allowlist — without this the loader silently dropped the keys and persisted saves wouldn't apply on the public render. **(Fixed in same commit.)**
+- **`_announcement_card.html` reads the mode + char cap from `_announcements_list_tpl`** (the dispatcher template's scoped variable). Truncated mode slices `ann.body` via Jinja's `truncate(N, True, '…')` BEFORE piping through `markdown_block`, so the trailing ellipsis lands inside the rendered paragraph. Default mode = `full` — preserves the legacy render for sites that haven't touched the setting.
+- **`_event_card.html` adds a new `.fe-events-card-body-preview` block** rendering `ev.body` under the existing `ev.summary` line, controlled by the same mode + cap pair read from `_events_list_tpl`. Default mode = `truncated` at 200 chars — events historically rendered only `summary`, so an unbounded body would balloon every card; the opinionated default keeps cards compact while letting admins flip to full for long-form previews. The Magazine "More events" tiles force-compact via the include's `compact=true` and bypass the new block entirely.
+- **"Read more ›" link on every list card.** Renders unconditionally at the bottom of `.fe-announcements-card-body` and `.fe-events-card-body` (and on the Timeline layout's `.fe-events-tl-card`), independent of body length or truncation setting. Targets the post's detail URL via `post_url(...)`. New `.fe-card-read-more` CSS class — accent-coloured weight 600 text with a `›` chevron that slides 3px on `:hover` / `:focus-visible` (motion gated by `prefers-reduced-motion`). Timeline variant carries `position: relative; z-index: 2` so the visible link's pointer events win over the card's absolute `.fe-events-tl-card-link` overlay.
+
 ## [2.9.2] — 2026-05-28
 
 ### Added

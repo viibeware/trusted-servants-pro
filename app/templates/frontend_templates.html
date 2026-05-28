@@ -316,6 +316,65 @@
         <p class="muted small">Manage fonts on the <a href="{{ url_for('main.frontend_fonts_icons') }}">Fonts &amp; Icons</a> page.</p>
       </fieldset>
 
+      {# Per-card body display — announcements + events list templates.
+         Two modes: full (render the entire post body) or truncated
+         (slice to a character count first). The character input is
+         only enabled when truncated is selected; the wrapper rule
+         in app.css greys it out otherwise. Defaults differ by kind
+         so existing sites keep their current look: announcements
+         have always rendered the full body, events have never shown
+         body at all. #}
+      {% if kind in ('announcements_list', 'events_list') %}
+        {%- set _bm = settings.get('card_body_mode')
+                      or ('full' if kind == 'announcements_list' else 'truncated') -%}
+        {%- set _bmc = settings.get('card_body_max_chars') or 200 -%}
+      <fieldset class="fieldset fe-tplgrid-card-body">
+        <legend>Card body preview</legend>
+        <label class="check">
+          <input type="radio" name="card_body_mode" value="full"
+                 {% if _bm == 'full' %}checked{% endif %}
+                 data-card-body-mode>
+          <span>Show <b>full body</b> on each card.</span>
+        </label>
+        <label class="check">
+          <input type="radio" name="card_body_mode" value="truncated"
+                 {% if _bm == 'truncated' %}checked{% endif %}
+                 data-card-body-mode>
+          <span>Show <b>truncated body</b> capped at
+            <input type="number" name="card_body_max_chars"
+                   min="50" max="2000" step="10"
+                   value="{{ _bmc }}"
+                   data-card-body-chars
+                   {% if _bm != 'truncated' %}disabled{% endif %}
+                   style="width: 5em; margin: 0 4px;">
+            characters.</span>
+        </label>
+        <p class="muted small">
+          {% if kind == 'announcements_list' -%}
+          Controls the announcement body text rendered under the title on each card.
+          {%- else -%}
+          When a body is shown alongside the event summary, this controls how much of it renders on each card.
+          {%- endif %}
+        </p>
+        <script>
+        (function () {
+          // Gate the character input on the truncated radio so admins
+          // don't fiddle with a number that won't apply. Delegated to
+          // the fieldset so the script can sit inline and bind once.
+          var fs = document.currentScript.closest('.fe-tplgrid-card-body');
+          if (!fs) return;
+          var chars = fs.querySelector('[data-card-body-chars]');
+          fs.addEventListener('change', function (e) {
+            var t = e.target.closest('[data-card-body-mode]');
+            if (!t || !chars) return;
+            chars.disabled = (t.value !== 'truncated');
+            if (t.value === 'truncated') chars.focus();
+          });
+        })();
+        </script>
+      </fieldset>
+      {% endif %}
+
       {# Classic-blog-only widget toggles. The classic blog detail
          template ships with a right-side rail carrying the related
          posts + categories widgets; when both are off the rail
