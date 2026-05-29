@@ -334,10 +334,16 @@ html[data-theme="dark"] .fe-utility-bar.is-live { background: #d6b000; }
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    gap: 0; padding: 0; min-height: 36px;
-    /* Width clamp from the desktop inline style (max-width / fe-container)
-       loses meaning when the strip is allowed to overflow horizontally;
-       remove it so swipes can travel the whole viewport. */
+    gap: 0; min-height: 36px;
+    /* Width clamp + side padding from the desktop inline style lose
+       meaning once the strip becomes a full-bleed horizontal swipe lane:
+       the boxed-mode `max-width` and the full-width-mode inline
+       `padding-left/right: <header-pct>%` are both stamped inline by the
+       template, so only `!important` can beat them. Without zeroing the
+       padding the strip's content box stays inset by the header gutter,
+       each snap page sizes to that inset box, and the gutter on either
+       side reveals the neighbouring item's pills at rest. */
+    padding: 0 !important;
     max-width: none !important;
   }
   .fe-utility-bar-inner::-webkit-scrollbar { display: none; }
@@ -349,11 +355,22 @@ html[data-theme="dark"] .fe-utility-bar.is-live { background: #d6b000; }
     flex-wrap: nowrap;
   }
 
-  /* The centre column — when it carries the live message it's a snap
-     point of its own (full viewport, centred); when empty (no live
-     meeting) it collapses so the side snap points sit flush. */
+  /* Every mobile snap "page" (the centre, each item in item mode, each
+     side in group mode) must fill the full viewport width so that when
+     one is snapped into view its neighbours are scrolled fully off-screen
+     — otherwise the edge of an adjacent item's pill peeks in at the gap.
+     `flex-basis: 100%` ALONE doesn't do this here: a percentage flex-basis
+     resolves against the flex container's main size, which is treated as
+     indefinite inside a horizontal scroll container, so it collapses to
+     each page's *content* width (e.g. 355px on a 390px viewport). A
+     percentage `min-width` instead resolves against the container's
+     definite content width (the visible 100% / clientWidth), so it
+     reliably pins each page to ≥ the viewport. Pages wider than the
+     viewport (a long container) keep their natural width and stay
+     swipeable. */
   .fe-utility-bar-center {
     flex: 0 0 100%;
+    min-width: 100%;
     scroll-snap-align: center;
     display: flex; align-items: center; justify-content: center;
     padding: 6px 14px; min-height: 36px;
@@ -375,6 +392,11 @@ html[data-theme="dark"] .fe-utility-bar.is-live { background: #d6b000; }
   .fe-utility-bar--mobile-item .fe-utility-bar-side { display: contents; }
   .fe-utility-bar--mobile-item .fe-utility-mobile-item {
     flex: 0 0 100%;
+    min-width: 100%;  /* full-viewport page — see .fe-utility-bar-center above */
+    /* Clip content wider than the page (e.g. a container whose pills total
+       more than the viewport on a narrow phone) so it can't spill past the
+       page edge and peek in beside the neighbouring snap point. */
+    overflow: hidden;
     scroll-snap-align: center;
     display: flex; align-items: center; justify-content: center;
     padding: 6px 14px; min-height: 36px;
@@ -386,6 +408,8 @@ html[data-theme="dark"] .fe-utility-bar.is-live { background: #d6b000; }
      horizontally with normal gaps. */
   .fe-utility-bar--mobile-group .fe-utility-bar-side {
     flex: 0 0 100%;
+    min-width: 100%;  /* full-viewport page — see .fe-utility-bar-center above */
+    overflow: hidden; /* clip over-wide content so it can't peek past the page edge */
     scroll-snap-align: center;
     display: flex; align-items: center; justify-content: center;
     flex-wrap: wrap; gap: 12px;
@@ -551,6 +575,15 @@ body.fe-megamenu-open .fe-menu-btn span:last-child {
 /* Headroom auto-hide for the Recovery Blue header — same JS class, same
    slide-up/slide-down behaviour as the classic header above. */
 .fe-header-recovery.fe-header-hidden { transform: translateY(-100%); }
+/* On mobile the Recovery Blue header stays FULLY sticky — it never auto-
+   hides on scroll-down. The headroom JS still toggles .fe-header-hidden,
+   but we neutralise the slide-up transform at/below the 880px breakpoint
+   (where the header collapses to the hamburger nav) so the helpline bar +
+   menu button stay reachable while scrolling. Same specificity as the rule
+   above but later in source order, so it wins inside the media query. */
+@media (max-width: 880px) {
+  .fe-header-recovery.fe-header-hidden { transform: none; }
+}
 
 /* Utility strip */
 .fe-recovery-util { background: var(--fe-recovery-blue); color: #fff;
@@ -708,6 +741,17 @@ body.fe-megamenu-open .fe-recovery-menu-btn span:last-child {
   transform: translateY(-5px) rotate(-45deg);
 }
 
+/* Shared "drop down" entrance for the mobile menus — the hamburger
+   dropdown and the mega-menu panel both slide down + fade in from 12px
+   above their resting position with the same easing, so opening either
+   reads as one consistent motion instead of a hard cut. The -12px start
+   matches the mega-menu panel's own resting transform. Replays on every
+   open because the .fe-nav-open / .open class is re-added each time. */
+@keyframes feMobileMenuDrop {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* Responsive */
 @media (max-width: 980px) {
   .fe-recovery-nav-newcomer { display: none; }
@@ -715,9 +759,10 @@ body.fe-megamenu-open .fe-recovery-menu-btn span:last-child {
 @media (max-width: 880px) {
   .fe-recovery-nav { display: none; position: absolute; left: 0; right: 0;
     top: 100%; flex-direction: column; gap: 0; background: #fff;
-    border-bottom: 1px solid #e5e9f0; padding: 8px 20px 16px;
+    border-bottom: 1px solid #e5e9f0; padding: 8px 20px calc(16px + 1rem);
     box-shadow: 0 10px 24px rgba(15,23,42,0.10); z-index: 5; }
-  .fe-header-recovery.fe-nav-open .fe-recovery-nav { display: flex; align-items: stretch; }
+  .fe-header-recovery.fe-nav-open .fe-recovery-nav { display: flex; align-items: stretch;
+    animation: feMobileMenuDrop 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
   .fe-recovery-nav-link { padding: 12px 14px; }
   .fe-recovery-nav-cta { margin: 6px 14px 0; text-align: center; padding: 12px 18px !important; }
   .fe-recovery-menu-btn { display: inline-flex; flex-direction: column; justify-content: center; }
@@ -2082,6 +2127,22 @@ body.fe-megamenu-open { overflow: hidden; }
     border-bottom-left-radius: 0 !important;
     border-bottom-right-radius: 0 !important;
   }
+  /* Mega-menu panel drops down with the SAME easing as the hamburger
+     dropdown (feMobileMenuDrop) on mobile, regardless of the desktop
+     panel-fade toggle, so opening a mega menu on a phone always animates
+     in instead of snapping. Replays on each open via the .open class; the
+     .fe-megamenu-panel-fade transition (when enabled) still drives the
+     slide-up on close. */
+  .fe-megamenu.open {
+    animation: feMobileMenuDrop 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}
+/* Respect reduced-motion: skip the mobile drop entrance for both menus
+   (they still appear, just without the slide/fade). Placed after both
+   animation declarations above so it wins on equal specificity. */
+@media (prefers-reduced-motion: reduce) {
+  .fe-header-recovery.fe-nav-open .fe-recovery-nav,
+  .fe-megamenu.open { animation: none; }
 }
 .fe-megamenu-inner {
   max-width: 1400px; margin: 0 auto; padding: 0 40px;
@@ -11399,25 +11460,18 @@ body.fe-footer-force-dark .fe-footer-admin-login--logout:focus-visible {
   border-color: rgba(245, 158, 11, 0.80);
 }
 
-/* Footer admin-login auth row — same layout idea (space-between,
-   pills at the column edges) so the signed-in footer matches the
-   mega-menu treatment. `width: 100%` lets the row fill the block
-   container's column flow regardless of which footer layout it's
-   dropped into. */
+/* Footer admin-login auth row — the signed-in pair (dashboard + logout)
+   sits LEFT-ALIGNED with a fixed gap and wraps to a second line when the
+   footer block gets too narrow to hold both on one row. `width: 100%`
+   lets the row fill the block container's column flow regardless of which
+   footer layout it's dropped into. */
 .fe-footer-admin-login-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: flex-start;
+  gap: 1rem;
   width: 100%;
   flex-wrap: wrap;
-}
-.fe-footer-admin-login--logout {
-  /* Force the Logout pill toward the far end of the row when the
-     footer block is narrower than the row's natural content. With
-     flex-wrap allowed, this keeps the pair visually paired even
-     after a wrap. */
-  margin-left: auto;
 }
 
 
