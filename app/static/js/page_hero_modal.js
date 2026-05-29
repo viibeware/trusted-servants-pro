@@ -172,6 +172,14 @@
     if (_dyn('randomize_positions') === '1') _dynCfg.randomize_positions = true;
     if (_dyn('animate_off') === '1') _dynCfg.animate = false;
     if (_dyn('pastel_light') === '1') _dynCfg.pastel_light = true;
+    // Per-preset knobs arrive as one JSON blob in the `__knobs` input.
+    const _dynKnobs = _dyn('knobs');
+    if (_dynKnobs) {
+      try {
+        const k = JSON.parse(_dynKnobs);
+        if (k && typeof k === 'object' && Object.keys(k).length) _dynCfg.knobs = k;
+      } catch (_) { /* malformed → ignore */ }
+    }
     data.bg_dynbg_config_json = Object.keys(_dynCfg).length
       ? JSON.stringify(_dynCfg) : '';
 
@@ -347,6 +355,7 @@
           randomizePositions: !!cfg.randomize_positions,
           animateOff: cfg.animate === false,
           pastelLight: !!cfg.pastel_light,
+          knobs: (cfg.knobs && typeof cfg.knobs === 'object') ? cfg.knobs : {},
         });
       }
     }

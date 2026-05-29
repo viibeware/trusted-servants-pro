@@ -1,0 +1,565 @@
+/* ===========================================================================
+   dynbg.css — Dynamic-background recipe library (extracted from frontend.css)
+
+   Loaded by BOTH the public frontend (frontend/base.html et al.) AND the
+   admin shell (base.html) so the dynamic-background picker modal renders its
+   live preview + thumbnail recipes. The admin shell only loads app.css (the
+   picker CHROME), so these recipe rules must live in a shared file.
+
+   Single source of truth — do NOT re-add these rules to frontend.css.
+   Backgrounds: aurora-blobs, mesh-gradient, aurora-bands, dotted-grid,
+   diagonal-lines.  Overlays: noise-grain, scanlines, linen, vignette,
+   crosshatch, dot-weave.
+   =========================================================================== */
+
+/* ── Dynamic backgrounds library ────────────────────────────────
+   Eight CSS-only backdrops that any frontend surface (page, hero,
+   section, container block, etc.) can opt into via the .fe-dynbg
+   wrapper rendered by frontend/_dynbg.html.
+
+   Common contract:
+     • .fe-dynbg sits absolutely-positioned inside a positioned host
+       and stretches to its bounds. Hosts that want a dynbg must set
+       `position: relative; overflow: hidden;` and place .fe-dynbg as
+       the first child so it paints under everything else.
+     • Every preset draws using brand tokens (--fe-accent, --fe-color-
+       bg, --fe-color-surface) so the same key produces a brand-
+       coloured backdrop on every install.
+     • Animations honour prefers-reduced-motion globally below.
+     • Dark-mode rules stack at the bottom of each preset's section.
+*/
+.fe-dynbg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.fe-dynbg > * {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+/* When a dynbg lives inside a host that also lays out content, the
+   host's children need a positive z-index OR a stacking context so
+   they paint above the dynbg. The :has() selector promotes the host
+   so consumers don't have to remember; falls back gracefully on
+   browsers without :has() (the host class can opt in manually). */
+:where(.fe-dynbg-host) { position: relative; isolation: isolate; }
+:where(.fe-dynbg-host) > :not(.fe-dynbg) { position: relative; z-index: 1; }
+/* The :where rule above promotes every direct child (other than the
+   `.fe-dynbg` layer itself) to `position: relative` so content paints
+   above the dynbg layer. That's correct for content blocks but BREAKS
+   absolutely-positioned overlays that also live as direct children —
+   the hero's particle <canvas>, background <video>, and frosty blob
+   container all want `position: absolute; inset: 0` to overlay the
+   section without taking flex flow space. When forced into flow,
+   `initLoginFX`'s `parent.getBoundingClientRect()` resize loop
+   inflates the canvas, which inflates the parent, which fires
+   ResizeObserver, which inflates the canvas — and the hero balloons
+   well past 100vh. Re-assert absolute positioning for those
+   overlays specifically. Higher specificity than the :where rule
+   above so we always win the cascade. */
+.fe-dynbg-host > .fe-hero-particles,
+.fe-dynbg-host > .fe-hero-video,
+.fe-dynbg-host > .fe-hero-bg {
+  position: absolute;
+  z-index: 0;
+}
+/* Particle canvas in particular should sit ABOVE the dynbg layer
+   but below content. Keep its z-index: 1 from `.fe-hero-particles`. */
+.fe-dynbg-host > .fe-hero-particles {
+  z-index: 1;
+}
+
+/* Page-level dynbg wrapper: when an admin sets a dynamic background
+   on a list/index page (meetings list, events list, etc.), the inner
+   page-section's flat soft-panel background would paint on top of the
+   dynbg and hide it. Force the immediate child sections of the page
+   wrapper to render transparent so the chosen backdrop shows through.
+   Cards inside those sections keep their own backgrounds (they're
+   nested deeper, so the rule doesn't reach them). */
+.fe-page-dynbg-host.fe-dynbg-host > .fe-section,
+.fe-page-dynbg-host.fe-dynbg-host > .fe-mlist,
+.fe-page-dynbg-host.fe-dynbg-host > section {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fe-dynbg * { animation: none !important; }
+}
+
+/* Admin opt-out: when a `.fe-dynbg-no-anim-marker` element is
+   present inside the host (emitted by `_dynbg_apply.html` when the
+   admin checked "Freeze movement"), freeze every animated child in
+   the base dynbg and the overlay layer.
+
+   Uses `:has()` so each surface's host doesn't need a separate
+   server-side class stamp — the marker span travels with the
+   apply-partial include and the CSS finds it from any host. The
+   explicit `.fe-dynbg-no-anim` class below is kept as a fallback
+   so future server-side stamping (or :has()-less browsers) can
+   still opt out by adding it directly. Same `!important` recipe
+   as the reduced-motion gate. */
+.fe-dynbg-host:has(> .fe-dynbg-no-anim-marker) .fe-dynbg > *,
+.fe-dynbg-host:has(> .fe-dynbg-no-anim-marker) .fe-dynbg-overlay > *,
+.fe-dynbg-no-anim .fe-dynbg > *,
+.fe-dynbg-no-anim .fe-dynbg-overlay > * {
+  animation: none !important;
+}
+
+/* ── aurora-blobs ─── 3 brand-tinted blurred circles drifting.
+   Each blob's colour resolves through `--fe-dynbg-c1/c2/c3` first
+   (set by the per-surface custom-colour stamp on the dynbg-host)
+   and falls through to the brand accent when no override is set. */
+.fe-dynbg-aurora-blobs {
+  --_db-c1: var(--fe-dynbg-c1, color-mix(in srgb, var(--fe-accent, #0b5cff) 60%, #16c2ba));
+  --_db-c2: var(--fe-dynbg-c2, color-mix(in srgb, var(--fe-accent, #0b5cff) 50%, #8b5cf6));
+  --_db-c3: var(--fe-dynbg-c3, color-mix(in srgb, var(--fe-accent, #0b5cff) 35%, #fb923c));
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft, #f8fafc));
+  filter: none;
+}
+/* Each blob's position + size reads from `--fe-dynbg-blob-<slot>-*`
+   custom properties. When `randomize_positions` is on, the host
+   stamps fresh values per render; otherwise the var() fallbacks
+   reproduce the original hand-tuned layout. */
+.fe-dynbg-aurora-blobs .fe-dynbg-blob {
+  width: var(--_db-blob-size, 380px);
+  height: var(--_db-blob-size, 380px);
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.55;
+  animation: feDynbgBlobDrift 18s ease-in-out infinite;
+  inset: auto;
+}
+.fe-dynbg-aurora-blobs .fe-dynbg-blob-a {
+  --_db-blob-size: var(--fe-dynbg-blob-a-size, 380px);
+  top: var(--fe-dynbg-blob-a-top, -120px);
+  left: var(--fe-dynbg-blob-a-left, -80px);
+  bottom: var(--fe-dynbg-blob-a-bottom, auto);
+  right: var(--fe-dynbg-blob-a-right, auto);
+  background: var(--_db-c1);
+}
+.fe-dynbg-aurora-blobs .fe-dynbg-blob-b {
+  --_db-blob-size: var(--fe-dynbg-blob-b-size, 380px);
+  top: var(--fe-dynbg-blob-b-top, auto);
+  left: var(--fe-dynbg-blob-b-left, auto);
+  bottom: var(--fe-dynbg-blob-b-bottom, -160px);
+  right: var(--fe-dynbg-blob-b-right, -100px);
+  background: var(--_db-c2);
+  animation-delay: -6s; animation-duration: 22s;
+}
+.fe-dynbg-aurora-blobs .fe-dynbg-blob-c {
+  --_db-blob-size: var(--fe-dynbg-blob-c-size, 240px);
+  top: var(--fe-dynbg-blob-c-top, 30%);
+  left: var(--fe-dynbg-blob-c-left, auto);
+  bottom: var(--fe-dynbg-blob-c-bottom, auto);
+  right: var(--fe-dynbg-blob-c-right, 35%);
+  background: var(--_db-c3);
+  opacity: 0.45;
+  animation-delay: -12s; animation-duration: 26s;
+}
+@keyframes feDynbgBlobDrift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(40px, -25px) scale(1.05); }
+  66%      { transform: translate(-30px, 30px) scale(0.95); }
+}
+html[data-theme="dark"] .fe-dynbg-aurora-blobs,
+body.fe-frontend-force-dark .fe-dynbg-aurora-blobs,
+.fe-megamenu-force-dark .fe-dynbg-aurora-blobs {
+  background: var(--fe-color-bg, #0b1220);
+}
+html[data-theme="dark"] .fe-dynbg-aurora-blobs .fe-dynbg-blob,
+body.fe-frontend-force-dark .fe-dynbg-aurora-blobs .fe-dynbg-blob,
+.fe-megamenu-force-dark .fe-dynbg-aurora-blobs .fe-dynbg-blob {
+  opacity: 0.65;
+}
+
+/* ── mesh-gradient ─── three overlapping conic gradients, no motion */
+.fe-dynbg-mesh-gradient {
+  --_db-c1: var(--fe-dynbg-c1, var(--fe-accent, #0b5cff));
+  --_db-c2: var(--fe-dynbg-c2, color-mix(in srgb, var(--fe-accent, #0b5cff) 60%, #8b5cf6));
+  --_db-c3: var(--fe-dynbg-c3, color-mix(in srgb, var(--fe-accent, #0b5cff) 40%, #fb923c));
+  background: var(--fe-color-bg, #f8fafc);
+}
+.fe-dynbg-mesh-gradient .fe-dynbg-mesh {
+  inset: -10%;
+  filter: blur(80px);
+  opacity: 0.5;
+}
+.fe-dynbg-mesh-gradient .fe-dynbg-mesh-a {
+  background: conic-gradient(
+    from var(--fe-dynbg-mesh-a-angle, 0deg)
+      at var(--fe-dynbg-mesh-a-x, 25%) var(--fe-dynbg-mesh-a-y, 30%),
+    var(--_db-c1) 0deg,
+    transparent 90deg,
+    transparent 270deg,
+    var(--_db-c2) 360deg);
+}
+.fe-dynbg-mesh-gradient .fe-dynbg-mesh-b {
+  background: conic-gradient(
+    from var(--fe-dynbg-mesh-b-angle, 180deg)
+      at var(--fe-dynbg-mesh-b-x, 75%) var(--fe-dynbg-mesh-b-y, 60%),
+    var(--_db-c2) 0deg,
+    transparent 120deg,
+    transparent 240deg,
+    var(--_db-c3) 360deg);
+  opacity: 0.4;
+}
+.fe-dynbg-mesh-gradient .fe-dynbg-mesh-c {
+  background: radial-gradient(ellipse 60% 40%
+    at var(--fe-dynbg-mesh-c-x, 50%) var(--fe-dynbg-mesh-c-y, 50%),
+    color-mix(in srgb, var(--_db-c1) 25%, transparent),
+    transparent 70%);
+  opacity: 0.7;
+}
+html[data-theme="dark"] .fe-dynbg-mesh-gradient,
+body.fe-frontend-force-dark .fe-dynbg-mesh-gradient,
+.fe-megamenu-force-dark .fe-dynbg-mesh-gradient {
+  background: var(--fe-color-bg, #0b1220);
+}
+html[data-theme="dark"] .fe-dynbg-mesh-gradient .fe-dynbg-mesh,
+body.fe-frontend-force-dark .fe-dynbg-mesh-gradient .fe-dynbg-mesh,
+.fe-megamenu-force-dark .fe-dynbg-mesh-gradient .fe-dynbg-mesh {
+  opacity: 0.4;
+}
+
+/* ── aurora-bands ─── wide angled bands sweeping vertically */
+.fe-dynbg-aurora-bands {
+  --_db-c1: var(--fe-dynbg-c1, color-mix(in srgb, var(--fe-accent, #0b5cff) 70%, #16c2ba));
+  --_db-c2: var(--fe-dynbg-c2, color-mix(in srgb, var(--fe-accent, #0b5cff) 55%, #8b5cf6));
+  background: var(--fe-color-surface-alt, var(--fe-panel-soft, #f8fafc));
+}
+.fe-dynbg-aurora-bands .fe-dynbg-band {
+  inset: -20%;
+  filter: blur(70px);
+  opacity: 0.55;
+  animation: feDynbgBandDrift 24s ease-in-out infinite alternate;
+}
+.fe-dynbg-aurora-bands .fe-dynbg-band-a {
+  background: linear-gradient(var(--fe-dynbg-band-a-angle, 115deg),
+    transparent 30%,
+    var(--_db-c1) 50%,
+    transparent 70%);
+}
+.fe-dynbg-aurora-bands .fe-dynbg-band-b {
+  background: linear-gradient(var(--fe-dynbg-band-b-angle, 75deg),
+    transparent 25%,
+    var(--_db-c2) 55%,
+    transparent 80%);
+  animation-delay: -8s; animation-duration: 30s;
+  opacity: 0.45;
+}
+@keyframes feDynbgBandDrift {
+  0%   { transform: translate(-5%, -3%); }
+  100% { transform: translate(5%, 3%); }
+}
+html[data-theme="dark"] .fe-dynbg-aurora-bands,
+body.fe-frontend-force-dark .fe-dynbg-aurora-bands,
+.fe-megamenu-force-dark .fe-dynbg-aurora-bands {
+  background: var(--fe-color-bg, #0b1220);
+}
+html[data-theme="dark"] .fe-dynbg-aurora-bands .fe-dynbg-band,
+body.fe-frontend-force-dark .fe-dynbg-aurora-bands .fe-dynbg-band,
+.fe-megamenu-force-dark .fe-dynbg-aurora-bands .fe-dynbg-band {
+  opacity: 0.7;
+}
+
+/* ── dotted-grid ─── subtle dot lattice.
+   Tunable via per-preset knob vars stamped on .fe-dynbg by the picker:
+     --fe-dynbg-dot-size    dot radius    (px,  default 1px)
+     --fe-dynbg-dot-gap     lattice pitch (px,  default 18px)
+     --fe-dynbg-dot-angle   lattice rotation (deg, default 0)
+     --fe-dynbg-dot-opacity layer opacity (0-1, default 0.5)
+   Two-colour preset: Colour 1 (`--fe-dynbg-c1`) is the DOT colour
+   (foreground), Colour 2 (`--fe-dynbg-c2`) is the surface BACKGROUND.
+   Each falls through to a sensible token when the admin leaves it
+   blank, so picking only one of the pair still reads well. */
+.fe-dynbg-dotted-grid {
+  --_db-dot: var(--fe-dynbg-dot-size, 1px);
+  --_db-gap: var(--fe-dynbg-dot-gap, 18px);
+  background: var(--fe-dynbg-c2, var(--fe-color-surface-alt, var(--fe-panel-soft, #f8fafc)));
+  /* Establish a size query container so the dots layer can size itself
+     off the LARGER of this layer's two dimensions (cqmax) — something a
+     per-axis percentage (inset/width %) can't express. Without it, a
+     rotated lattice on a wide/short (or tall/narrow) surface only covers
+     a band the width of the SHORT side, leaving bare strips at the ends.
+     The layer is absolutely positioned with a definite (inset-driven)
+     size, so size containment never collapses it. */
+  container-type: size;
+}
+/* The dots layer is a square 2× the host's LONGEST side, centred, so a
+   rotation of any angle on any aspect ratio still fully covers it (a
+   centred square of side 2·max always exceeds the host's diagonal). The
+   repeating radial-gradient tiles across it; transform-origin centre +
+   the admin's --fe-dynbg-dot-angle spin the whole lattice in place. */
+.fe-dynbg-dotted-grid .fe-dynbg-dots {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 200cqmax;
+  height: 200cqmax;
+  margin-top: -100cqmax;
+  margin-left: -100cqmax;
+  background-image: radial-gradient(
+    circle at var(--_db-dot) var(--_db-dot),
+    var(--fe-dynbg-c1, color-mix(in srgb, var(--fe-color-text, #0a0a0a) 22%, transparent)) var(--_db-dot),
+    transparent 0);
+  background-size: var(--_db-gap) var(--_db-gap);
+  background-position: 0 0;
+  opacity: var(--fe-dynbg-dot-opacity, 0.5);
+  transform: rotate(var(--fe-dynbg-dot-angle, 0deg));
+  transform-origin: center center;
+}
+html[data-theme="dark"] .fe-dynbg-dotted-grid,
+body.fe-frontend-force-dark .fe-dynbg-dotted-grid,
+.fe-megamenu-force-dark .fe-dynbg-dotted-grid {
+  background: var(--fe-dynbg-c2, var(--fe-color-bg, #0b1220));
+}
+html[data-theme="dark"] .fe-dynbg-dotted-grid .fe-dynbg-dots,
+body.fe-frontend-force-dark .fe-dynbg-dotted-grid .fe-dynbg-dots,
+.fe-megamenu-force-dark .fe-dynbg-dotted-grid .fe-dynbg-dots {
+  background-image: radial-gradient(
+    circle at var(--_db-dot) var(--_db-dot),
+    var(--fe-dynbg-c1, color-mix(in srgb, #ffffff 28%, transparent)) var(--_db-dot),
+    transparent 0);
+  opacity: var(--fe-dynbg-dot-opacity, 0.3);
+}
+
+/* ── diagonal-lines ─── soft diagonal stripes.
+   Tunable knob vars stamped on .fe-dynbg by the picker:
+     --fe-dynbg-line-angle     stripe angle  (deg, default 135deg)
+     --fe-dynbg-line-thickness stroke width   (px,  default 1px)
+     --fe-dynbg-line-gap       stripe pitch   (px,  default 14px)
+     --fe-dynbg-line-opacity   stroke alpha   (0-1, default 0.07)
+   Two-colour preset: Colour 1 (`--fe-dynbg-c1`) is the LINE colour
+   (foreground), Colour 2 (`--fe-dynbg-c2`) is the surface BACKGROUND.
+   The gradient references `--fe-dynbg-line-fg` for the stroke colour,
+   so colour + opacity stay defined here in one place. */
+.fe-dynbg-diagonal-lines {
+  --_db-lang: var(--fe-dynbg-line-angle, 135deg);
+  --_db-lthk: var(--fe-dynbg-line-thickness, 1px);
+  --_db-lgap: var(--fe-dynbg-line-gap, 14px);
+  --fe-dynbg-line-fg: color-mix(in srgb, var(--fe-dynbg-c1, var(--fe-color-text, #0a0a0a)) calc(var(--fe-dynbg-line-opacity, 0.07) * 100%), transparent);
+  background: var(--fe-dynbg-c2, var(--fe-color-surface-alt, var(--fe-panel-soft, #f8fafc)));
+}
+.fe-dynbg-diagonal-lines .fe-dynbg-lines {
+  background-image: repeating-linear-gradient(
+    var(--_db-lang),
+    var(--fe-dynbg-line-fg) 0 var(--_db-lthk),
+    transparent var(--_db-lthk) var(--_db-lgap));
+}
+html[data-theme="dark"] .fe-dynbg-diagonal-lines,
+body.fe-frontend-force-dark .fe-dynbg-diagonal-lines,
+.fe-megamenu-force-dark .fe-dynbg-diagonal-lines {
+  background: var(--fe-dynbg-c2, var(--fe-color-bg, #0b1220));
+  --fe-dynbg-line-fg: color-mix(in srgb, var(--fe-dynbg-c1, #ffffff) calc(var(--fe-dynbg-line-opacity, 0.09) * 100%), transparent);
+}
+
+/* ── Dynamic-background overlays ────────────────────────────────
+   Independent layer that paints above the base dynbg AND above
+   page content (with `pointer-events: none` so clicks pass through).
+   Each overlay textures the surface without intercepting input;
+   they compose with any base dynbg or stand on their own. */
+.fe-dynbg-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Above content (host promotes content to z-index: 1) but well
+     below modals (z-index: 100+). The texture rides on top of the
+     hero / cards / typography to give the whole surface a tactile
+     finish, the way the viibeware project's body::before does
+     site-wide. The `--bg-only` modifier below opts out of this
+     placement and tucks the overlay between the base dynbg and
+     content, so cards / typography paint without the texture. */
+  z-index: 10;
+}
+.fe-dynbg-overlay--bg-only {
+  /* z-index: 0 keeps the overlay above the base .fe-dynbg (also at
+     z-index: auto / 0) while content (forced to z-index: 1 by the
+     host's :where rule) paints on top — content stays clean while
+     the bg gets textured. DOM order matters here: this overlay must
+     render AFTER the base dynbg and BEFORE content for the stacking
+     to work; _dynbg_apply.html follows that order. */
+  z-index: 0;
+}
+/* ── noise-grain ─── viibeware's recipe: SVG fractal-noise tiled.
+   Data-URL (vs inline <svg>) because inline SVGs without an explicit
+   viewBox sometimes render blank when sized 100%/100% inside a
+   positioned parent — particularly under <body> on Safari. The
+   data-URL has its own viewBox so the SVG paints reliably and tiles
+   via the default `background-repeat: repeat`. The 0.03 alpha on the
+   rect inside the SVG matches the viibeware recipe exactly; CSS-side
+   opacity stays at 1 so the texture reads at the same intensity it
+   does on viibeware. */
+.fe-dynbg-overlay-noise-grain {
+  background-image: url("data:image/svg+xml;utf8,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+}
+html[data-theme="dark"] .fe-dynbg-overlay-noise-grain,
+body.fe-frontend-force-dark .fe-dynbg-overlay-noise-grain,
+.fe-megamenu-force-dark .fe-dynbg-overlay-noise-grain {
+  /* Same grain reads quieter against dark backgrounds, so flip to a
+     blend mode that lifts the texture against deep tones rather than
+     bumping the alpha (which would look noisy on light theme). */
+  mix-blend-mode: screen;
+  opacity: 0.6;
+}
+
+/* Pattern overlays read two admin knobs (stamped inline by
+   _dynbg_overlay.html when set):
+     --fe-dynbg-ov-scale   pattern-pitch multiplier (×1 = recipe default)
+     --fe-dynbg-ov-opacity layer opacity            (1  = recipe default)
+   Each recipe multiplies its hand-tuned px pitch by the scale and
+   applies the opacity on the layer. Defaults reproduce the original
+   look exactly so existing saves render unchanged. Noise-grain is the
+   exception (its size/intensity bake into a data-URL, handled in the
+   partial), so these vars don't touch it. */
+
+/* ── scanlines ─── horizontal stripes; scale widens the line pitch */
+.fe-dynbg-overlay-scanlines {
+  --_ovs: var(--fe-dynbg-ov-scale, 1);
+  opacity: var(--fe-dynbg-ov-opacity, 1);
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent calc(2px * var(--_ovs)),
+    rgba(0, 0, 0, 0.015) calc(2px * var(--_ovs)),
+    rgba(0, 0, 0, 0.015) calc(4px * var(--_ovs))
+  );
+}
+html[data-theme="dark"] .fe-dynbg-overlay-scanlines,
+body.fe-frontend-force-dark .fe-dynbg-overlay-scanlines,
+.fe-megamenu-force-dark .fe-dynbg-overlay-scanlines {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent calc(2px * var(--_ovs)),
+    rgba(255, 255, 255, 0.025) calc(2px * var(--_ovs)),
+    rgba(255, 255, 255, 0.025) calc(4px * var(--_ovs))
+  );
+}
+
+/* ── linen ─── two-direction stripe weave */
+.fe-dynbg-overlay-linen {
+  --_ovs: var(--fe-dynbg-ov-scale, 1);
+  opacity: var(--fe-dynbg-ov-opacity, 1);
+  background:
+    repeating-linear-gradient(0deg,
+      transparent 0 calc(1px * var(--_ovs)),
+      rgba(0, 0, 0, 0.025) calc(1px * var(--_ovs)) calc(2px * var(--_ovs))),
+    repeating-linear-gradient(90deg,
+      transparent 0 calc(1px * var(--_ovs)),
+      rgba(0, 0, 0, 0.025) calc(1px * var(--_ovs)) calc(2px * var(--_ovs)));
+}
+html[data-theme="dark"] .fe-dynbg-overlay-linen,
+body.fe-frontend-force-dark .fe-dynbg-overlay-linen,
+.fe-megamenu-force-dark .fe-dynbg-overlay-linen {
+  background:
+    repeating-linear-gradient(0deg,
+      transparent 0 calc(1px * var(--_ovs)),
+      rgba(255, 255, 255, 0.04) calc(1px * var(--_ovs)) calc(2px * var(--_ovs))),
+    repeating-linear-gradient(90deg,
+      transparent 0 calc(1px * var(--_ovs)),
+      rgba(255, 255, 255, 0.04) calc(1px * var(--_ovs)) calc(2px * var(--_ovs)));
+}
+
+/* ── vignette ─── radial darken from corners. Scale pulls the clear
+   centre in/out (×1 = the original 40% inner stop); opacity scales
+   the corner darkness. */
+.fe-dynbg-overlay-vignette {
+  --_ovs: var(--fe-dynbg-ov-scale, 1);
+  opacity: var(--fe-dynbg-ov-opacity, 1);
+  background: radial-gradient(ellipse at center,
+    transparent calc(40% / var(--_ovs)),
+    rgba(0, 0, 0, 0.18) 100%);
+}
+html[data-theme="dark"] .fe-dynbg-overlay-vignette,
+body.fe-frontend-force-dark .fe-dynbg-overlay-vignette,
+.fe-megamenu-force-dark .fe-dynbg-overlay-vignette {
+  background: radial-gradient(ellipse at center,
+    transparent calc(40% / var(--_ovs)),
+    rgba(0, 0, 0, 0.45) 100%);
+}
+
+/* ── crosshatch ─── two diagonal stripe sets */
+.fe-dynbg-overlay-crosshatch {
+  --_ovs: var(--fe-dynbg-ov-scale, 1);
+  opacity: var(--fe-dynbg-ov-opacity, 1);
+  background:
+    repeating-linear-gradient(45deg,
+      transparent 0 calc(4px * var(--_ovs)),
+      rgba(0, 0, 0, 0.04) calc(4px * var(--_ovs)) calc(5px * var(--_ovs))),
+    repeating-linear-gradient(-45deg,
+      transparent 0 calc(4px * var(--_ovs)),
+      rgba(0, 0, 0, 0.04) calc(4px * var(--_ovs)) calc(5px * var(--_ovs)));
+}
+html[data-theme="dark"] .fe-dynbg-overlay-crosshatch,
+body.fe-frontend-force-dark .fe-dynbg-overlay-crosshatch,
+.fe-megamenu-force-dark .fe-dynbg-overlay-crosshatch {
+  background:
+    repeating-linear-gradient(45deg,
+      transparent 0 calc(4px * var(--_ovs)),
+      rgba(255, 255, 255, 0.05) calc(4px * var(--_ovs)) calc(5px * var(--_ovs))),
+    repeating-linear-gradient(-45deg,
+      transparent 0 calc(4px * var(--_ovs)),
+      rgba(255, 255, 255, 0.05) calc(4px * var(--_ovs)) calc(5px * var(--_ovs)));
+}
+
+/* ── dot-weave ─── tiny dot lattice for halftone newsprint feel.
+   Scale widens the lattice pitch; opacity multiplies the base 0.4. */
+.fe-dynbg-overlay-dot-weave {
+  --_ovs: var(--fe-dynbg-ov-scale, 1);
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(0, 0, 0, 0.18) 1px,
+    transparent 0);
+  background-size: calc(6px * var(--_ovs)) calc(6px * var(--_ovs));
+  opacity: calc(0.4 * var(--fe-dynbg-ov-opacity, 1));
+}
+html[data-theme="dark"] .fe-dynbg-overlay-dot-weave,
+body.fe-frontend-force-dark .fe-dynbg-overlay-dot-weave,
+.fe-megamenu-force-dark .fe-dynbg-overlay-dot-weave {
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(255, 255, 255, 0.22) 1px,
+    transparent 0);
+  opacity: calc(0.3 * var(--fe-dynbg-ov-opacity, 1));
+}
+
+/* All overlays respect reduced-motion just like the base dynbg
+   layer (none of them animate today, but keep the gate uniform so
+   future animated overlays inherit the rule for free). */
+@media (prefers-reduced-motion: reduce) {
+  .fe-dynbg-overlay { animation: none !important; }
+  .fe-dynbg-overlay * { animation: none !important; }
+}
+
+/* ── Light-mode pastel swap (shared with the frontend) ── */
+/* ── Dynbg pastel-in-light-mode swap ──────────────────────────────
+   When the admin enables "Use pastels in light mode only" in the
+   dynbg-picker modal, the renderer stamps companion
+   `--fe-dynbg-cN-light` custom properties next to the canonical
+   `--fe-dynbg-cN` ones. Outside dark mode (no `data-theme="dark"`
+   attribute on <html>) we re-bind the canonical vars to the
+   pastel values so every consumer (blob fills, gradient stops,
+   band strokes, spotlight colours) picks up the soft palette
+   automatically — no per-preset CSS to update. Dark mode keeps
+   the full-saturation originals so the surface still reads with
+   depth on a dark page. */
+/* `!important` is required because the canonical `--fe-dynbg-cN` is
+   set INLINE on the same element (`style="--fe-dynbg-c1: #vivid;
+   --fe-dynbg-c1-light: #pastel"`), and inline custom-property
+   declarations otherwise outrank any selector-driven rule for the
+   same property. The swap only fires when the visitor is in light
+   mode AND the element carries a `-light` companion, so it's a
+   narrow rebind — won't leak into dark mode or onto any element
+   that didn't opt in by carrying the companion var. */
+html:not([data-theme="dark"]) [style*="--fe-dynbg-c1-light"] {
+  --fe-dynbg-c1: var(--fe-dynbg-c1-light) !important;
+}
+html:not([data-theme="dark"]) [style*="--fe-dynbg-c2-light"] {
+  --fe-dynbg-c2: var(--fe-dynbg-c2-light) !important;
+}
+html:not([data-theme="dark"]) [style*="--fe-dynbg-c3-light"] {
+  --fe-dynbg-c3: var(--fe-dynbg-c3-light) !important;
+}

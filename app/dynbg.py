@@ -56,14 +56,6 @@ CATALOG = [
         ),
     },
     {
-        "key": "starfield",
-        "name": "Starfield",
-        "description": (
-            "Dark backdrop with twinkling pinpoints. Great for "
-            "moody section banners or footer regions."
-        ),
-    },
-    {
         "key": "dotted-grid",
         "name": "Dotted grid",
         "description": (
@@ -79,26 +71,148 @@ CATALOG = [
             "for cards and section bands."
         ),
     },
-    {
-        "key": "noise-paper",
-        "name": "Noise paper",
-        "description": (
-            "Hand-feel paper grain via SVG noise. Pairs well with "
-            "serif typography on long-form pages."
-        ),
-    },
-    {
-        "key": "spotlight",
-        "name": "Spotlight glow",
-        "description": (
-            "Two large radial glows — corner-anchored — fading into "
-            "the page colour. Subtle, focuses the eye on content."
-        ),
-    },
 ]
 
 
 VALID_KEYS = {entry["key"] for entry in CATALOG}
+
+
+# ── Per-preset capability spec ──────────────────────────────────
+# Drives which Options-tab controls the picker modal shows for the
+# active background ("don't show settings that won't apply"), and
+# declares each preset's tunable knobs. The modal reads this via the
+# ``dynbg_preset_caps`` Jinja global (stamped as JSON on the modal),
+# so adding a knob here surfaces it in the UI with no template edit.
+#
+#   colors              — number of custom-colour slots that matter
+#                         (0 hides the colour fieldset entirely).
+#   color_labels        — optional per-slot labels. When present they
+#                         replace the generic "Colour 1/2/3" headings,
+#                         so e.g. the pattern presets read "Dots" /
+#                         "Background" instead. The renderer maps slot
+#                         N → --fe-dynbg-cN regardless of label.
+#   randomize_positions — show the "randomize positions" toggle.
+#   randomize_default   — when an admin first PICKS this preset, default
+#                         the randomize-colours toggle on. False for the
+#                         pattern presets (dots/lines), whose whole point
+#                         is a deliberate fg/bg pair the admin sets.
+#   animate             — show the "freeze movement" toggle (and the
+#                         preset's CSS actually animates).
+#   knobs               — ordered list of numeric sliders unique to
+#                         this preset. Each: key (stored under
+#                         cfg['knobs'][key] + stamped as the css_var),
+#                         label, min/max/step, default, unit, and the
+#                         CSS custom property it feeds.
+PRESET_CAPS = {
+    "aurora-blobs": {
+        "colors": 3, "randomize_positions": True, "randomize_default": True,
+        "animate": True, "knobs": [],
+    },
+    "mesh-gradient": {
+        "colors": 3, "randomize_positions": True, "randomize_default": True,
+        "animate": False, "knobs": [],
+    },
+    "aurora-bands": {
+        "colors": 2, "randomize_positions": True, "randomize_default": True,
+        "animate": True, "knobs": [],
+    },
+    "dotted-grid": {
+        "colors": 2, "color_labels": ["Dots", "Background"],
+        "randomize_positions": False, "randomize_default": False,
+        "animate": False,
+        "knobs": [
+            {"key": "dot_size", "label": "Dot size", "min": 1, "max": 5,
+             "step": 0.5, "default": 1, "unit": "px", "css_var": "--fe-dynbg-dot-size"},
+            {"key": "dot_gap", "label": "Spacing", "min": 8, "max": 48,
+             "step": 2, "default": 18, "unit": "px", "css_var": "--fe-dynbg-dot-gap"},
+            {"key": "dot_angle", "label": "Rotation", "min": 0, "max": 360,
+             "step": 5, "default": 0, "unit": "deg", "css_var": "--fe-dynbg-dot-angle"},
+            {"key": "dot_opacity", "label": "Opacity", "min": 5, "max": 100,
+             "step": 5, "default": 50, "unit": "%", "css_var": "--fe-dynbg-dot-opacity"},
+        ],
+    },
+    "diagonal-lines": {
+        "colors": 2, "color_labels": ["Lines", "Background"],
+        "randomize_positions": False, "randomize_default": False,
+        "animate": False,
+        "knobs": [
+            {"key": "line_angle", "label": "Angle", "min": 0, "max": 180,
+             "step": 5, "default": 135, "unit": "deg", "css_var": "--fe-dynbg-line-angle"},
+            {"key": "line_gap", "label": "Spacing", "min": 6, "max": 40,
+             "step": 2, "default": 14, "unit": "px", "css_var": "--fe-dynbg-line-gap"},
+            {"key": "line_opacity", "label": "Opacity", "min": 3, "max": 100,
+             "step": 1, "default": 7, "unit": "%", "css_var": "--fe-dynbg-line-opacity"},
+            {"key": "line_thickness", "label": "Thickness", "min": 1, "max": 6,
+             "step": 0.5, "default": 1, "unit": "px", "css_var": "--fe-dynbg-line-thickness"},
+        ],
+    },
+}
+
+# Flattened lookup: {preset_key: {knob_key: spec}} for O(1) validation.
+KNOB_SPECS = {pk: {k["key"]: k for k in caps["knobs"]}
+              for pk, caps in PRESET_CAPS.items()}
+
+
+def preset_caps(key):
+    """Return the capability dict for a preset key, or a safe empty
+    shape (no colours, no knobs) for unknown / blank keys so callers
+    can read fields without guards."""
+    return PRESET_CAPS.get(key, {"colors": 0, "randomize_positions": False,
+                                  "animate": False, "knobs": []})
+
+
+def normalize_knobs(preset_key, raw):
+    """Validate a raw {knob_key: value} mapping against ``preset_key``'s
+    spec. Drops unknown keys and any value equal to the knob's default
+    (so a vanilla config stores nothing). Each value is clamped to the
+    knob's [min, max]. Returns a dict (possibly empty)."""
+    specs = KNOB_SPECS.get(preset_key) or {}
+    if not specs or not isinstance(raw, dict):
+        return {}
+    out = {}
+    for k, spec in specs.items():
+        if k not in raw:
+            continue
+        v = normalize_float(raw.get(k), spec["min"], spec["max"], None)
+        if v is None:
+            continue
+        # Drop values that round-trip to the default (keep JSON tiny).
+        if abs(v - spec["default"]) < 1e-9:
+            continue
+        # Integer-valued knobs (step is a whole number) store as int.
+        out[k] = int(round(v)) if float(spec["step"]).is_integer() and v == int(v) else round(v, 3)
+    return out
+
+
+def knobs_to_css_vars(preset_key, knobs):
+    """Stamp a preset's knob values as their CSS custom properties for
+    inline ``style`` use, appending the unit. Returns '' when empty.
+    Only emits vars for knobs the preset actually declares."""
+    specs = KNOB_SPECS.get(preset_key) or {}
+    if not specs or not knobs:
+        return ""
+    def _num(v):
+        # Render whole numbers without a trailing `.0` (3.0 → "3") so
+        # the stamped CSS reads cleanly; keep the fraction otherwise.
+        f = float(v)
+        return str(int(f)) if f == int(f) else str(round(f, 3))
+    parts = []
+    for k, spec in specs.items():
+        if k not in knobs:
+            continue
+        unit = spec.get("unit", "")
+        val = knobs[k]
+        if unit == "deg":
+            parts.append(f"{spec['css_var']}: {_num(val)}deg;")
+        elif unit == "px":
+            parts.append(f"{spec['css_var']}: {_num(val)}px;")
+        elif unit == "%":
+            # Stamp as a 0-1 fraction so recipes can use it directly as
+            # an opacity / alpha without a calc() divide.
+            parts.append(f"{spec['css_var']}: {round(float(val) / 100.0, 4)};")
+        else:
+            parts.append(f"{spec['css_var']}: {_num(val)};")
+    return " ".join(parts)
 
 
 # ── Overlays ────────────────────────────────────────────────────
@@ -251,7 +365,7 @@ VALID_OVERLAY_SCOPES = {"all", "bg"}
 # animations. Drives the "Disable animation" toggle in the modal —
 # the picker only shows the toggle when the active preset is one of
 # these, so admins never see a useless control on static presets.
-ANIMATED_KEYS = {"aurora-blobs", "aurora-bands", "starfield"}
+ANIMATED_KEYS = {"aurora-blobs", "aurora-bands"}
 
 # Noise-grain admin-tunable ranges. baseFrequency on `<feTurbulence>`
 # controls grain SIZE — lower values produce bigger particles, higher
@@ -263,6 +377,51 @@ NOISE_SIZE_DEFAULT = 0.9
 NOISE_SIZE_MIN, NOISE_SIZE_MAX = 0.1, 2.0
 NOISE_INTENSITY_DEFAULT = 0.03
 NOISE_INTENSITY_MIN, NOISE_INTENSITY_MAX = 0.005, 0.5
+
+# Persisted overlay size/intensity clamp — a UNION range wide enough to
+# hold both the noise-grain ranges above AND the pattern-overlay ranges
+# below, so a single pair of stored fields (overlay_size /
+# overlay_intensity) round-trips for any overlay. The modal sets the
+# per-overlay slider bounds from OVERLAY_KNOBS; decode only needs to
+# not reject a valid value.
+OVERLAY_SIZE_MIN, OVERLAY_SIZE_MAX = 0.1, 3.0
+OVERLAY_INTENSITY_MIN, OVERLAY_INTENSITY_MAX = 0.0, 1.0
+
+# Per-overlay Size + Intensity knob specs. EVERY overlay exposes both
+# sliders now (the admin asked for size+intensity on all textures), but
+# the meaning differs by overlay family:
+#   • noise-grain — size = feTurbulence baseFrequency (lower = bigger
+#     particles), intensity = the SVG rect's alpha. Baked into a data-
+#     URL at render (the SVG can't read CSS vars).
+#   • every other (pattern) overlay — size = a pattern-scale multiplier
+#     stamped as `--fe-dynbg-ov-scale` (×1 = the recipe's hand-tuned
+#     dimensions), intensity = layer opacity stamped as
+#     `--fe-dynbg-ov-opacity`. Defaults of 1.0/1.0 reproduce the
+#     original look so existing saves render unchanged.
+OVERLAY_KNOBS = {
+    "noise-grain": {
+        "size": {"min": NOISE_SIZE_MIN, "max": NOISE_SIZE_MAX, "step": 0.05,
+                 "default": NOISE_SIZE_DEFAULT, "label": "Grain size",
+                 "lo": "coarse", "hi": "fine"},
+        "intensity": {"min": NOISE_INTENSITY_MIN, "max": NOISE_INTENSITY_MAX,
+                      "step": 0.005, "default": NOISE_INTENSITY_DEFAULT,
+                      "label": "Intensity", "lo": "whisper", "hi": "heavy"},
+    },
+}
+# Pattern overlays all share the same scale + opacity knob shape.
+for _ov in ("scanlines", "linen", "vignette", "crosshatch", "dot-weave"):
+    OVERLAY_KNOBS[_ov] = {
+        "size": {"min": 0.25, "max": 3.0, "step": 0.05, "default": 1.0,
+                 "label": "Scale", "lo": "tight", "hi": "wide"},
+        "intensity": {"min": 0.0, "max": 1.0, "step": 0.05, "default": 1.0,
+                      "label": "Intensity", "lo": "faint", "hi": "bold"},
+    }
+
+
+def overlay_knobs(key):
+    """Return the Size/Intensity knob spec dict for an overlay key, or
+    None for unknown/blank. Drives the modal's per-overlay sliders."""
+    return OVERLAY_KNOBS.get(key)
 
 
 def normalize_scope(value):
@@ -314,7 +473,8 @@ def normalize_pastel_strength(v, default=0):
 def encode_config(overlay_key=None, colors=None, scope=None,
                   noise_size=None, noise_intensity=None,
                   randomize_colors=False, randomize_positions=False,
-                  animate=True, randomize=None, pastel_light=0):
+                  animate=True, randomize=None, pastel_light=0,
+                  knobs=None, preset_key=None):
     """Return a JSON-serialisable dict shape for a surface's dynbg
     config column. Drops empty / default fields so a fresh install
     stores ``{}`` rather than a fat default record.
@@ -324,6 +484,14 @@ def encode_config(overlay_key=None, colors=None, scope=None,
     ``randomize_positions``. The ``animate`` kwarg defaults to True
     (the preset's keyframe animations run); only an explicit opt-out
     persists, keeping the JSON minimal for the common case.
+
+    ``knobs`` is a {knob_key: value} mapping of the active preset's
+    per-preset sliders (dot size/gap, line angle/thickness, …);
+    ``preset_key`` scopes its validation. ``noise_size`` /
+    ``noise_intensity`` carry the active overlay's Size/Intensity and
+    are dropped only when equal to THAT overlay's default (so pattern
+    overlays whose default differs from noise-grain's persist
+    correctly).
     """
     cleaned = {}
     ov = normalize_overlay(overlay_key)
@@ -332,12 +500,17 @@ def encode_config(overlay_key=None, colors=None, scope=None,
     sc = normalize_scope(scope)
     if sc and sc != "all":  # 'all' is the implicit default
         cleaned["overlay_scope"] = sc
-    ns = normalize_float(noise_size, NOISE_SIZE_MIN, NOISE_SIZE_MAX, None)
-    if ns is not None and abs(ns - NOISE_SIZE_DEFAULT) > 1e-6:
+    # Overlay Size / Intensity. Default-drop against the active
+    # overlay's own defaults (noise-grain vs pattern overlays differ).
+    _ovk = OVERLAY_KNOBS.get(ov) if ov else None
+    _sz_def = _ovk["size"]["default"] if _ovk else NOISE_SIZE_DEFAULT
+    _int_def = _ovk["intensity"]["default"] if _ovk else NOISE_INTENSITY_DEFAULT
+    ns = normalize_float(noise_size, OVERLAY_SIZE_MIN, OVERLAY_SIZE_MAX, None)
+    if ns is not None and abs(ns - _sz_def) > 1e-6:
         cleaned["overlay_size"] = round(ns, 3)
-    ni = normalize_float(noise_intensity, NOISE_INTENSITY_MIN,
-                         NOISE_INTENSITY_MAX, None)
-    if ni is not None and abs(ni - NOISE_INTENSITY_DEFAULT) > 1e-6:
+    ni = normalize_float(noise_intensity, OVERLAY_INTENSITY_MIN,
+                         OVERLAY_INTENSITY_MAX, None)
+    if ni is not None and abs(ni - _int_def) > 1e-6:
         cleaned["overlay_intensity"] = round(ni, 4)
     if randomize:  # legacy single flag → expands to both
         randomize_colors = True
@@ -346,6 +519,10 @@ def encode_config(overlay_key=None, colors=None, scope=None,
         cleaned["randomize_colors"] = True
     if randomize_positions:
         cleaned["randomize_positions"] = True
+    # Per-preset knobs (validated + default-dropped against the spec).
+    nk = normalize_knobs(preset_key, knobs)
+    if nk:
+        cleaned["knobs"] = nk
     # Opt-in: only persist a non-zero pastel strength. Stored as an int
     # 0-100 (the slider's value). Legacy True/False is mapped through
     # normalize_pastel_strength so older callers stay correct without
@@ -386,6 +563,7 @@ def decode_config(raw):
         "randomize": False,
         "animate": True,
         "pastel_light": 0,
+        "knobs": {},
         "colors": [],
     }
     if not raw:
@@ -408,9 +586,9 @@ def decode_config(raw):
         "overlay": normalize_overlay(data.get("overlay")),
         "overlay_scope": normalize_scope(data.get("overlay_scope")),
         "overlay_size": normalize_float(data.get("overlay_size"),
-                                         NOISE_SIZE_MIN, NOISE_SIZE_MAX, None),
+                                         OVERLAY_SIZE_MIN, OVERLAY_SIZE_MAX, None),
         "overlay_intensity": normalize_float(data.get("overlay_intensity"),
-                                              NOISE_INTENSITY_MIN, NOISE_INTENSITY_MAX, None),
+                                              OVERLAY_INTENSITY_MIN, OVERLAY_INTENSITY_MAX, None),
         "randomize_colors": rc,
         "randomize_positions": rp,
         "randomize": rc or rp,  # legacy alias — true when either is on
@@ -418,6 +596,11 @@ def decode_config(raw):
         # Strength int 0-100. Back-compat: a legacy ``True`` boolean
         # still decodes as 100 (full pastel) via normalize_pastel_strength.
         "pastel_light": normalize_pastel_strength(data.get("pastel_light"), 0),
+        # Per-preset knob values. Left un-scoped here (we don't know the
+        # preset key at decode time) — the raw dict is passed through and
+        # consumers scope it via knobs_to_css_vars(preset_key, knobs),
+        # which only emits vars for knobs that preset declares.
+        "knobs": (data.get("knobs") if isinstance(data.get("knobs"), dict) else {}),
         "colors": [c for c in normalize_colors(data.get("colors") or []) if c],
     }
 
@@ -546,6 +729,35 @@ def random_colors(n=3):
     return out
 
 
+def thumb_style(dynbg_key):
+    """Return an inline-style string that seeds a preset thumbnail with a
+    FRESH random palette + random positions, so every catalog thumbnail
+    (and the modal's live preview when it falls back to a preset's own
+    look) reads as a distinct, lively sample rather than the identical
+    brand-default render.
+
+    Combines a 3-colour ``random_colors`` palette (stamped as
+    ``--fe-dynbg-cN``) with ``random_positions(key)`` for the presets
+    that have movable parts (blobs / mesh / bands). Static presets
+    (dotted-grid, diagonal-lines) still get a random palette so their
+    tint differs tile-to-tile. Returns '' for an unknown / blank key.
+
+    Server-rendered, so each page load reshuffles the picker — matching
+    the "randomly selected colors and positions" behaviour the admin
+    asked for without any client-side colour math.
+    """
+    if not dynbg_key or dynbg_key not in VALID_KEYS:
+        return ""
+    parts = []
+    for i, c in enumerate(random_colors(3), start=1):
+        parts.append(f"--fe-dynbg-c{i}: {c};")
+    pos = positions_to_css_vars(random_positions(dynbg_key))
+    style = " ".join(parts)
+    if pos:
+        style = (style + " " + pos).strip()
+    return style
+
+
 def resolve_colors(cfg):
     """Return the colours to stamp on a surface's dynbg-host. When
     ``cfg.randomize_colors`` is True the saved colours are ignored
@@ -573,12 +785,12 @@ def random_positions(dynbg_key):
     """Return a dict of CSS-variable strings → values that randomise
     the position-shaped properties of a single dynbg preset. Each
     value is server-rendered fresh on every request, so the same
-    surface's blobs / mesh / bands / spotlights spawn at different
-    coordinates each page load.
+    surface's blobs / mesh / bands spawn at different coordinates
+    each page load.
 
     Returns an empty dict for presets without meaningfully-randomis-
-    able positions (dotted-grid, diagonal-lines, noise-paper) so
-    the consumer can safely call this for any key.
+    able positions (dotted-grid, diagonal-lines) so the consumer can
+    safely call this for any key.
     """
     import random as _random
     out = {}
@@ -608,22 +820,6 @@ def random_positions(dynbg_key):
         for slot in ("a", "b"):
             ang = _random.randint(40, 160)
             out[f"--fe-dynbg-band-{slot}-angle"] = f"{ang}deg"
-    elif dynbg_key == "spotlight":
-        # Two corner-anchored spots; each gets a random corner +
-        # size so the highlight pattern reads differently each load.
-        for slot in ("a", "b"):
-            top  = _random.choice(["-25%", "auto"])
-            bot  = "auto" if top != "auto" else "-25%"
-            left = _random.choice(["-15%", "auto"])
-            right = "auto" if left != "auto" else "-15%"
-            w = _random.randint(50, 90)
-            h = _random.randint(60, 100)
-            out[f"--fe-dynbg-spot-{slot}-top"]    = top
-            out[f"--fe-dynbg-spot-{slot}-bottom"] = bot
-            out[f"--fe-dynbg-spot-{slot}-left"]   = left
-            out[f"--fe-dynbg-spot-{slot}-right"]  = right
-            out[f"--fe-dynbg-spot-{slot}-w"] = f"{w}%"
-            out[f"--fe-dynbg-spot-{slot}-h"] = f"{h}%"
     return out
 
 
@@ -664,9 +860,9 @@ def noise_grain_data_url(size=None, intensity=None):
     ``style="background-image: url('...')"``. Caller adds the
     surrounding url() / quote chars as needed.
     """
-    sz = normalize_float(size, NOISE_SIZE_MIN, NOISE_SIZE_MAX, NOISE_SIZE_DEFAULT)
-    op = normalize_float(intensity, NOISE_INTENSITY_MIN,
-                         NOISE_INTENSITY_MAX, NOISE_INTENSITY_DEFAULT)
+    sz = normalize_float(size, OVERLAY_SIZE_MIN, OVERLAY_SIZE_MAX, NOISE_SIZE_DEFAULT)
+    op = normalize_float(intensity, OVERLAY_INTENSITY_MIN,
+                         OVERLAY_INTENSITY_MAX, NOISE_INTENSITY_DEFAULT)
     # All apostrophes inside the SVG are URL-encoded as %27 so they
     # don't conflict with the surrounding `url('...')` wrapper when
     # the data-URL is stamped as an inline `style="background-image:

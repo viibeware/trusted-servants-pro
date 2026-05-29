@@ -54,6 +54,7 @@
 {% if site and site.frontend_apple_touch_icon_name %}<meta name="apple-mobile-web-app-title" content="{{ site.frontend_apple_touch_icon_name }}">{% endif %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=app_build_id) }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/frontend.css', v=app_build_id) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dynbg.css', v=app_build_id) }}">
 {# Per-theme stylesheet — loaded only for the alternate themes (classic +
    recovery-blue live in frontend.css). The file is static/css/themes/<key>.css
    and is scoped under body[data-fe-theme="<key>"]; one conditional link

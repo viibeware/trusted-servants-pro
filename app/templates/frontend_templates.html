@@ -285,6 +285,7 @@
                 'randomize_positions': settings.get('bg_dynbg_randomize_positions') if settings else False,
                 'animate': settings.get('bg_dynbg_animate', True) if settings else True,
                 'pastel_light': settings.get('bg_dynbg_pastel_light', False) if settings else False,
+                'knobs': settings.get('bg_dynbg_knobs', {}) if settings else {},
           } -%}
           {{ dynbg_trigger(field_name='bg_dynamic_key',
                            current=settings.get('bg_dynamic_key') if settings else None,

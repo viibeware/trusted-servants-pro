@@ -6,6 +6,31 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.9.4] — 2026-05-29
+
+### Added
+
+- **Dynamic-background picker reorganised into Background + Options tabs with a live preview.** The modal now leads with a fixed preview band (`.dynbg-modal-preview`, a sibling between `.modal-head` and the scroll body so it sits flush under the title bar and nothing scrolls above it) that re-renders on every settings change — preset, overlay, colours, pastel strength, randomize toggles, and per-preset knobs all repaint the sample in place. The **Options** tab merges the former Overlay + Colours panels and only shows the controls that apply to the active preset (driven by a new `PRESET_CAPS` capability spec stamped onto the panel as `data-dynbg-preset-caps` JSON), so admins never see a knob that does nothing for the chosen background.
+- **Per-preset tuning knobs.** A generic `knobs` JSON dimension (validated/scoped by `dynbg.normalize_knobs` against `PRESET_CAPS`, stamped as CSS custom properties by `knobs_to_css_vars`) carries each preset's sliders without per-field plumbing. Dotted grid exposes Dot size / Spacing / **Rotation** / Opacity; diagonal lines exposes Angle / Spacing / Opacity / Thickness. Round-tripped end-to-end through `routes.py`, `frontend.py` template settings, the block editor, and the page-hero modal.
+- **Size + Intensity on every texture overlay.** Previously only Noise grain was tunable; Scanlines, Linen, Vignette, Crosshatch, and Dot weave now each expose a Scale (`--fe-dynbg-ov-scale`) and Intensity (`--fe-dynbg-ov-opacity`) slider via the new `OVERLAY_KNOBS` spec, with per-overlay slider bounds set in the modal. Defaults of ×1 reproduce the original look so existing saves render unchanged.
+- **Foreground/background colours for the pattern presets.** Dotted grid and diagonal lines are now two-colour presets labelled **Dots/Lines** + **Background** — Colour 1 (`--fe-dynbg-c1`) drives the dot/stroke colour and Colour 2 (`--fe-dynbg-c2`) the surface fill (light + dark). Custom colours now actually affect these patterns; leaving a slot blank falls through to the brand token.
+- **Server-randomised picker thumbnails.** `dynbg.thumb_style()` seeds each catalog tile with a fresh random palette + random positions per page load, so the picker reads as a lively sample set rather than identical brand-default renders.
+
+### Changed
+
+- **Dynamic-background recipes extracted into a shared `app/static/css/dynbg.css`**, now linked by both the admin shell (`base.html`) and the public frontend templates so the picker's live preview and thumbnails render the real recipes. These rules are no longer duplicated in `frontend.css` — single source of truth.
+- **Unset custom-colour slots display a ∅ null glyph** in the picker chips instead of the brand-default blue swatch, so an admin can tell at a glance which slots are overridden vs. falling through to the theme token.
+- **Default randomize-on for the presets that have movable parts.** Aurora blobs / mesh / bands default the randomize-colours (and positions, where applicable) toggles on when first picked; the deliberate fg/bg pattern presets default them off.
+
+### Removed
+
+- **Retired the Starfield, Noise paper, and Spotlight glow base backgrounds.** All of their catalog entries, CSS recipes, and supporting code were removed. The six texture *overlays* (Noise grain, Scanlines, Linen, Vignette, Crosshatch, Dot weave) are unaffected. Any surface previously set to one of the three retired presets falls back to "no dynamic background" (its solid colour / uploaded image still renders).
+
+### Fixed
+
+- **Dotted-grid rotation now tiles across the whole surface instead of a narrow band.** The dots layer was only oversized `inset: -30%` (≈1.6×), so on a wide/short (or tall/narrow) surface a near-90° rotation shrank the dotted region to a band the width of the *short* side — a per-axis-percentage limitation (`inset`/`width %` can't size off the *longer* dimension). `.fe-dynbg-dotted-grid` is now a CSS size query container and the dots layer is a centred square sized `200cqmax` (2× the host's longest side); a centred square of side 2·max always exceeds the host's diagonal, so the lattice fully covers at any angle and aspect ratio.
+- **The pastel-strength slider now live-updates the picker preview.** Dragging it re-pastelises the in-modal sample immediately (the admin shell is light mode, so the preview applies the pastel directly to `--fe-dynbg-cN`) instead of only taking effect after save.
+
 ## [2.9.3] — 2026-05-28
 
 ### Added

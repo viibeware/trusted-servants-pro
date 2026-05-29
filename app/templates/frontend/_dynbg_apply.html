@@ -24,10 +24,10 @@
        …content…
      </article>
 #}
-{%- if dynbg_key -%}
-{% with dynbg_key=dynbg_key %}{% include "frontend/_dynbg.html" %}{% endwith %}
-{%- endif -%}
 {%- set _ck_cfg = dynbg_decode(dynbg_config) -%}
+{%- if dynbg_key -%}
+{% with dynbg_key=dynbg_key, dynbg_knobs=_ck_cfg.knobs %}{% include "frontend/_dynbg.html" %}{% endwith %}
+{%- endif -%}
 {%- if _ck_cfg.overlay -%}
 {% with dynbg_overlay_key=_ck_cfg.overlay,
          dynbg_overlay_scope=_ck_cfg.overlay_scope,

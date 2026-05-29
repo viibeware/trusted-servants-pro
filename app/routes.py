@@ -90,6 +90,22 @@ def _dynbg_config_from_form(form, config_field):
     """
     from . import dynbg as _dynbg
     import json as _json
+    # The base-key field is the config_field minus the `_config_json`
+    # suffix (e.g. bg_dynbg_config_json → bg_dynamic_key). Used to scope
+    # per-preset knob validation. Falls back to a couple of known names.
+    _preset_key = (form.get("bg_dynamic_key")
+                   or form.get(config_field.replace("_dynbg_config_json", "_dynamic_key"))
+                   or None)
+    # Per-preset knobs arrive as one JSON blob (dot size/gap, line
+    # angle/thickness, …). Parse defensively — a tampered / malformed
+    # value collapses to {} and encode_config drops it.
+    _knobs_raw = form.get(f"{config_field}__knobs")
+    try:
+        _knobs = _json.loads(_knobs_raw) if _knobs_raw else None
+        if not isinstance(_knobs, dict):
+            _knobs = None
+    except (ValueError, TypeError):
+        _knobs = None
     cfg = _dynbg.encode_config(
         overlay_key=form.get(f"{config_field}__overlay"),
         colors=[form.get(f"{config_field}__c{i}") for i in (1, 2, 3)],
@@ -108,6 +124,9 @@ def _dynbg_config_from_form(form, config_field):
         # (also accepts legacy '1' booleans → full strength) and drops
         # the field entirely when 0 so the JSON stays minimal.
         pastel_light=form.get(f"{config_field}__pastel_light"),
+        # Per-preset knobs, validated + default-dropped against the
+        # active preset's spec inside encode_config.
+        knobs=_knobs, preset_key=_preset_key,
         # Legacy single-flag input still accepted on the off-chance an
         # older form posts it — encode_config maps it to both new flags.
         randomize=form.get(f"{config_field}__randomize") == "1" or None,
@@ -9691,6 +9710,15 @@ def frontend_template_settings_save(kind, key):
     # encode_config gate the per-surface columns use, so a tampered
     # POST can only land on known overlay keys / valid hex colours /
     # in-range noise knobs.
+    # Per-preset knobs arrive as one JSON blob; parse defensively.
+    import json as _json
+    _knobs_raw = request.form.get("bg_dynbg_config_json__knobs")
+    try:
+        _knobs = _json.loads(_knobs_raw) if _knobs_raw else None
+        if not isinstance(_knobs, dict):
+            _knobs = None
+    except (ValueError, TypeError):
+        _knobs = None
     dynbg_cfg = _dynbg.encode_config(
         overlay_key=request.form.get("bg_dynbg_config_json__overlay"),
         colors=[request.form.get(f"bg_dynbg_config_json__c{i}") for i in (1, 2, 3)],
@@ -9703,6 +9731,7 @@ def frontend_template_settings_save(kind, key):
         # Strength slider 0-100; encode_config normalises legacy
         # booleans + clamps the int. Raw value passed through here.
         pastel_light=request.form.get("bg_dynbg_config_json__pastel_light"),
+        knobs=_knobs, preset_key=dyn_key,
     )
     if dynbg_cfg.get("overlay"):
         leaf["bg_dynbg_overlay"] = dynbg_cfg["overlay"]
@@ -9726,6 +9755,8 @@ def frontend_template_settings_save(kind, key):
         # behaving as full-strength because normalize_pastel_strength
         # at the consumer side coerces ``True`` → 100.
         leaf["bg_dynbg_pastel_light"] = dynbg_cfg["pastel_light"]
+    if dynbg_cfg.get("knobs"):
+        leaf["bg_dynbg_knobs"] = dynbg_cfg["knobs"]
     # Classic blog detail toggles for the right-side rail. Stored
      # only as explicit `False` so the JSON stays lean — missing keys
      # mean "show the widget" (the default). When the user unchecks

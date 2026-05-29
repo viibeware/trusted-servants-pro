@@ -11237,20 +11237,20 @@ input.be-container-color-text.is-invalid {
   background: var(--card-soft, #f1f5f9);
 }
 .fe-dynbg-picker-md .fe-dynbg-picker-thumb { height: 110px; }
-/* The dynbg children are absolutely positioned with sized
-   `width`/`height` (380px blobs, etc.) — far bigger than the
-   thumbnail tile. We scale them down with a CSS transform so a
-   single recipe drives both the live render and the preview. */
+/* The recipe layer fills the whole tile (it's `position:absolute;
+   inset:0` from the base .fe-dynbg rule). Earlier this tile scaled
+   the layer down with a transform, which — combined with the inner
+   spans' own `inset:0` — collapsed pattern recipes (dotted-grid,
+   diagonal-lines) into a thin band at the top. Letting the layer
+   fill naturally + clipping to the tile is correct for every recipe:
+   blob/mesh/band presets read as a cropped slice (fine for a swatch),
+   patterns tile edge-to-edge. `overflow:hidden` on the thumb (set
+   above) keeps oversized blurred blobs inside the tile. */
 .fe-dynbg-picker-thumb .fe-dynbg {
-  transform: scale(0.45);
-  transform-origin: center center;
-  width: calc(100% / 0.45);
-  height: calc(100% / 0.45);
-  inset: auto;
-  top: 50%;
-  left: 50%;
-  margin-left: calc(-50% / 0.45);
-  margin-top: calc(-50% / 0.45);
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 .fe-dynbg-picker-thumb-none {
   display: grid;
@@ -11372,10 +11372,96 @@ input.be-container-color-text.is-invalid {
 }
 .dynbg-modal-blurb { margin: 0 0 16px; }
 
+/* ── Dynbg modal — live preview (above the tabs) ─────────────────
+   A real .fe-dynbg-host surface the modal restamps on every change.
+   The dynbg recipes load in the admin via css/dynbg.css, so this
+   renders the genuine effect (not a static image). Fixed aspect so
+   the modal doesn't jump as presets with different intrinsic heights
+   swap in. */
+.dynbg-modal-preview {
+  /* A fixed band BETWEEN the title bar and the scrolling .modal-body
+     (it's a direct child of .modal-panel, a flex column, so it's a
+     non-shrinking sibling — flex-shrink:0 — that the body scrolls
+     beneath). This is why no objects ever appear above it: the scroll
+     viewport literally starts below this strip. Flush to the head with
+     a divider underneath. */
+  flex-shrink: 0;
+  padding: 14px 24px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.dynbg-modal-preview-surface {
+  position: relative;
+  width: 100%;
+  height: 150px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--card-soft, color-mix(in srgb, var(--text) 4%, var(--card)));
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+}
+.dynbg-modal-preview-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  z-index: 1;
+}
+.dynbg-modal-preview-empty-icon { font-size: 1.6rem; font-weight: 300; line-height: 1; }
+/* When a preset is active the host carries data-has-bg; hide the empty
+   placeholder so the recipe reads cleanly. */
+.dynbg-modal-preview-surface[data-has-bg] .dynbg-modal-preview-empty { display: none; }
+.dynbg-modal-preview-badge {
+  position: absolute;
+  left: 10px; bottom: 10px;
+  z-index: 2;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.dynbg-modal-preview-surface[data-has-bg] .dynbg-modal-preview-badge { opacity: 1; }
+
+/* ── Dynbg modal — Options-tab nested sub-groups ─────────────────
+   The Options tab folds the texture-overlay grid + its scope/noise
+   knobs into one fieldset; these sub-groups divide them visually. */
+.dynbg-modal-subgroup {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.dynbg-modal-subgroup[hidden] { display: none; }
+.dynbg-modal-subgroup-label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.82rem;
+  margin-bottom: 4px;
+}
+
+/* Per-preset knob sliders (dot size/gap, line angle/thickness, …),
+   rebuilt by the modal handler from the active preset's spec. Each
+   row mirrors the slider layout the noise knobs use. */
+.dynbg-modal-knobs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* A picker fieldset hidden by the per-preset capability gate. The
+   `hidden` attribute alone is overridden by the fieldset's own
+   `display:flex`-ish rules elsewhere, so force it. */
+.dynbg-modal-fieldset[hidden],
+.dynbg-modal-randomize[hidden] { display: none !important; }
+
 /* ── Dynbg modal — tabs + colour controls ───────────────────────
-   The modal grew from a single picker grid into three panels
-   (Background / Overlay / Colours). These rules style the tab bar
-   at the top and the colour-input fieldset on the third panel. */
+   The modal is two panels (Background / Options) with a tab bar at
+   the top. These rules style that bar and the colour-input fieldset. */
 .dynbg-modal-tabs {
   display: flex; gap: 4px;
   padding: 4px;
@@ -11416,6 +11502,10 @@ input.be-container-color-text.is-invalid {
   gap: 16px;
   flex-wrap: wrap;
 }
+/* The `display:flex` above overrides the native `hidden` attribute, so
+   a per-preset gated slot (e.g. Colour 3 on the 2-colour pattern
+   presets) would still render. Re-assert the hide. */
+.dynbg-modal-color-row[hidden] { display: none !important; }
 .dynbg-modal-color-label {
   flex: 0 0 auto;
   min-width: 80px;
@@ -11423,16 +11513,47 @@ input.be-container-color-text.is-invalid {
   font-size: 0.9375rem;
 }
 .dynbg-modal-color-controls {
+  /* `position: relative` anchors the ∅ overlay (below) over the
+     swatch. `flex-wrap` lets the shared design-token picker's injected
+     🎨 button / hex caption / token chip wrap to a second line on
+     narrow widths instead of crushing the row. */
+  position: relative;
   flex: 1 1 auto;
   display: flex; align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 .dynbg-modal-color-controls input[type="color"] {
   width: 44px; height: 44px;
+  flex: 0 0 auto;
   padding: 0; border: 1px solid var(--border);
   border-radius: 8px; cursor: pointer;
   background: var(--card);
 }
+/* ∅ "unset" overlay. A native <input type=color> can never be blank,
+   so when the slot is unset we paint a neutral hatched tile + ∅ glyph
+   directly over the swatch (which is always the first, left-edge item
+   in the row). Absolutely positioned so it does NOT wrap the input —
+   the shared design-token picker injects controls right after the
+   input and those must remain normal flex siblings. */
+.dynbg-modal-color-null {
+  position: absolute;
+  top: 0; left: 0;
+  width: 44px; height: 44px;
+  display: none;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 1.4rem;
+  font-weight: 300;
+  pointer-events: none;       /* clicks still reach the swatch beneath */
+  background:
+    repeating-linear-gradient(45deg,
+      color-mix(in srgb, var(--text) 7%, transparent) 0 5px,
+      var(--card) 5px 10px);
+}
+.dynbg-modal-color-null.is-shown { display: grid; }
 .dynbg-modal-color-controls input[type="text"] {
   flex: 1 1 160px;
   padding: 8px 12px;

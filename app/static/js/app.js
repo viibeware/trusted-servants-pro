@@ -4561,6 +4561,10 @@
   let wired = false;
 
   // ── Background grid ────────────────────────────────────────────
+  // Knob values pending for the NEXT setSelectedKey render — set by the
+  // open handler from the trigger's saved knobs, consumed once so a
+  // later manual card click rebuilds knobs at their defaults.
+  let _pendingKnobs = null;
   function setSelectedKey (key) {
     $$('[data-dynbg-modal-card]').forEach(card => {
       const isMatch = (card.dataset.dynbgKey || '') === (key || '');
@@ -4569,9 +4573,25 @@
       if (radio) radio.checked = isMatch;
     });
     // Show the Freeze-movement toggle only when the active preset
-    // actually animates. Static presets (dotted-grid, lines, paper,
-    // mesh-gradient, spotlight) hide the row entirely.
+    // actually animates. Static presets (dotted-grid, diagonal-lines)
+    // hide the row entirely.
     syncAnimRowVisibility(key || '');
+    // Per-preset capability gate: hide controls that don't apply, and
+    // (re)build this preset's knob sliders.
+    syncOptionVisibility(key || '');
+    renderKnobs(key || '', _pendingKnobs);
+    _pendingKnobs = null;
+    updatePreview();
+  }
+  // Currently-selected base preset key (the active card, '' for None).
+  function selectedKey () {
+    const c = $('[data-dynbg-modal-card].active');
+    return c ? (c.dataset.dynbgKey || '') : '';
+  }
+  // Currently-selected overlay key ('' for None).
+  function selectedOverlay () {
+    const c = $('[data-dynbg-modal-overlay-card].active');
+    return c ? (c.dataset.dynbgOverlayKey || '') : '';
   }
   function entryByKey (key) {
     if (!key) return null;
@@ -4586,9 +4606,138 @@
     };
   }
 
+  // ── Per-preset capability spec + knob engine ───────────────────
+  // The Options panel stamps two JSON blobs: the per-preset caps
+  // (which controls apply to each background + each preset's knob
+  // sliders) and the per-overlay Size/Intensity spec. Parsed once.
+  let _caps = null, _ovKnobSpec = null;
+  function caps () {
+    if (_caps) return _caps;
+    const p = $('[data-dynbg-modal-panel="options"]');
+    try { _caps = p ? JSON.parse(p.dataset.dynbgPresetCaps || '{}') : {}; }
+    catch (_) { _caps = {}; }
+    return _caps;
+  }
+  function overlayKnobSpec () {
+    if (_ovKnobSpec) return _ovKnobSpec;
+    const p = $('[data-dynbg-modal-panel="options"]');
+    try { _ovKnobSpec = p ? JSON.parse(p.dataset.dynbgOverlayKnobs || '{}') : {}; }
+    catch (_) { _ovKnobSpec = {}; }
+    return _ovKnobSpec;
+  }
+  function capFor (key) {
+    return caps()[key] || { colors: 0, randomize_positions: false, animate: false, knobs: [] };
+  }
+
+  // Live per-preset knob VALUES for the active preset, keyed by knob
+  // key. Rebuilt by renderKnobs() on selection; read by getKnobs().
+  let _knobState = {};
+
+  // Rebuild the per-preset knob sliders for `key` from its spec, seeding
+  // each from `values` (saved) or the spec default. Hides the fieldset
+  // when the preset declares no knobs.
+  function renderKnobs (key, values) {
+    const row = $('#dynbg-picker-modal-knobs-row');
+    const host = $('#dynbg-picker-modal-knobs');
+    const legend = $('[data-dynbg-knobs-legend]');
+    if (!row || !host) return;
+    const spec = (capFor(key).knobs) || [];
+    host.innerHTML = '';
+    _knobState = {};
+    if (!spec.length) { row.hidden = true; return; }
+    row.hidden = false;
+    if (legend) legend.textContent = (key === 'dotted-grid') ? 'Dot pattern'
+      : (key === 'diagonal-lines') ? 'Line pattern' : 'Pattern';
+    spec.forEach(k => {
+      const saved = values && (k.key in values) ? Number(values[k.key]) : null;
+      const val = (saved != null && !isNaN(saved)) ? saved : k.default;
+      _knobState[k.key] = val;
+      const label = document.createElement('label');
+      label.className = 'dynbg-modal-slider-row';
+      const headRow = document.createElement('span');
+      headRow.className = 'dynbg-modal-slider-label';
+      const out = document.createElement('output');
+      out.textContent = val;
+      headRow.textContent = k.label + ' ';
+      headRow.appendChild(out);
+      if (k.unit === 'deg') headRow.appendChild(document.createTextNode('°'));
+      else if (k.unit === '%') headRow.appendChild(document.createTextNode('%'));
+      else if (k.unit === 'px') headRow.appendChild(document.createTextNode('px'));
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = k.min; input.max = k.max; input.step = k.step; input.value = val;
+      input.addEventListener('input', () => {
+        const v = parseFloat(input.value);
+        _knobState[k.key] = v;
+        out.textContent = v;
+        updatePreview();
+      });
+      label.appendChild(headRow);
+      label.appendChild(input);
+      host.appendChild(label);
+    });
+  }
+  // Current per-preset knob values, dropping any equal to the spec
+  // default so the saved JSON stays minimal. Returns {} when none.
+  function getKnobs (key) {
+    const spec = (capFor(key).knobs) || [];
+    const out = {};
+    spec.forEach(k => {
+      const v = _knobState[k.key];
+      if (v == null || isNaN(v)) return;
+      if (Math.abs(v - k.default) < 1e-9) return;
+      out[k.key] = v;
+    });
+    return out;
+  }
+  // Reset every knob slider to its spec default + repaint.
+  function resetKnobs (key) {
+    renderKnobs(key, {});
+    updatePreview();
+  }
+
+  // Show/hide each Options control per the active preset's caps so we
+  // never show settings that don't apply. Called from setSelectedKey.
+  function syncOptionVisibility (key) {
+    const cap = capFor(key);
+    const hasBg = !!key;
+    const setHidden = (sel, hide) => { const e = $(sel); if (e) e.hidden = hide; };
+    // Colours fieldset — hidden when the preset uses 0 custom colours
+    // (or no background at all). Surplus colour rows hidden per count.
+    setHidden('#dynbg-picker-modal-colors-row', !hasBg || (cap.colors || 0) < 1);
+    const labels = cap.color_labels || null;
+    [1, 2, 3].forEach(slot => {
+      const r = $('#dynbg-picker-modal-c' + slot + '-text');
+      const rowEl = r ? r.closest('.dynbg-modal-color-row') : null;
+      if (rowEl) rowEl.hidden = (cap.colors || 0) < slot;
+      // Per-preset colour labels (e.g. "Dots" / "Background" for the
+      // pattern presets) replace the generic "Colour N" heading; fall
+      // back to the generic label when the preset declares none.
+      const labelEl = rowEl ? rowEl.querySelector('.dynbg-modal-color-label') : null;
+      if (labelEl) labelEl.textContent = (labels && labels[slot - 1]) ? labels[slot - 1] : ('Colour ' + slot);
+    });
+    // Swap the fieldset blurb for the pattern presets so the fg/bg
+    // intent reads clearly instead of the generic "primary glow" copy.
+    const blurb = $('#dynbg-picker-modal-colors-row .muted.small');
+    if (blurb) {
+      blurb.textContent = labels
+        ? ('Set the ' + labels[0].toLowerCase() + ' colour and the ' + labels[1].toLowerCase()
+           + ' colour. Leave a slot blank to fall through to the site default.')
+        : 'Override the brand-token colours each preset uses with up to three custom hexes. Unset slots (shown ∅) fall through to the brand accent. Colour 1 is the primary glow, Colour 2 the secondary accent, Colour 3 the tertiary highlight.';
+    }
+    // Randomize fieldset — show colours toggle whenever the preset has
+    // colours; show the positions toggle only when the preset has
+    // meaningfully-randomisable positions (blobs / mesh / bands).
+    setHidden('#dynbg-picker-modal-randomize-row', !hasBg);
+    setHidden('#dynbg-picker-modal-randomize-colors-label', (cap.colors || 0) < 1);
+    setHidden('#dynbg-picker-modal-randomize-positions-label', !cap.randomize_positions);
+    // Pastel only matters when colours are in play.
+    setHidden('#dynbg-picker-modal-pastel-row', !hasBg || (cap.colors || 0) < 1);
+  }
+
   // ── Animation toggle ───────────────────────────────────────────
-  // Only a subset of presets actually animate (aurora-blobs / bands
-  // / starfield). The toggle row is `hidden` for the others so the
+  // Only a subset of presets actually animate (aurora-blobs /
+  // aurora-bands). The toggle row is `hidden` for the others so the
   // admin never sees a useless checkbox. The `data-dynbg-animated-
   // keys` attribute on the row carries the comma-separated key set
   // so this JS doesn't need its own copy of the catalog.
@@ -4649,10 +4798,221 @@
       const radio = card.querySelector('input[type="radio"]');
       if (radio) radio.checked = isMatch;
     });
-    // Show the noise-grain knobs only when noise-grain is the active
-    // overlay; other overlays don't expose tunable size/intensity.
-    const knobs = $('#dynbg-picker-modal-noise-knobs');
-    if (knobs) knobs.hidden = key !== 'noise-grain';
+    // Texture Size/Intensity knobs apply to EVERY overlay now. Show the
+    // subgroup whenever an overlay is active and set the sliders' bounds
+    // / labels / defaults from that overlay's spec.
+    applyOverlayKnobBounds(key);
+    updatePreview();
+  }
+
+  // Configure the overlay Size/Intensity sliders for `key` from the
+  // per-overlay spec (different overlays have different ranges + the
+  // noise overlay labels them Grain size / Intensity vs Scale /
+  // Intensity for patterns). Hides the subgroup when no overlay.
+  function applyOverlayKnobBounds (key) {
+    const sub = $('#dynbg-picker-modal-overlay-knobs');
+    if (!sub) return;
+    const spec = overlayKnobSpec()[key];
+    if (!key || !spec) { sub.hidden = true; return; }
+    sub.hidden = false;
+    const sizeEl = $('#dynbg-picker-modal-noise-size');
+    const intEl = $('#dynbg-picker-modal-noise-intensity');
+    const sizeLab = $('[data-dynbg-ovsize-label]');
+    const intLab = $('[data-dynbg-ovint-label]');
+    const sizeHint = $('[data-dynbg-ovsize-hint]');
+    const intHint = $('[data-dynbg-ovint-hint]');
+    const sizeOut = $('#dynbg-picker-modal-noise-size-out');
+    const intOut = $('#dynbg-picker-modal-noise-intensity-out');
+    if (sizeEl && spec.size) {
+      sizeEl.min = spec.size.min; sizeEl.max = spec.size.max; sizeEl.step = spec.size.step;
+      // Keep the current value if it's in-range, else snap to default.
+      const cur = parseFloat(sizeEl.value);
+      if (isNaN(cur) || cur < spec.size.min || cur > spec.size.max) sizeEl.value = spec.size.default;
+      if (sizeOut) sizeOut.textContent = sizeEl.value;
+    }
+    if (intEl && spec.intensity) {
+      intEl.min = spec.intensity.min; intEl.max = spec.intensity.max; intEl.step = spec.intensity.step;
+      const cur = parseFloat(intEl.value);
+      if (isNaN(cur) || cur < spec.intensity.min || cur > spec.intensity.max) intEl.value = spec.intensity.default;
+      if (intOut) intOut.textContent = intEl.value;
+    }
+    if (sizeLab && spec.size) sizeLab.textContent = spec.size.label || 'Size';
+    if (intLab && spec.intensity) intLab.textContent = spec.intensity.label || 'Intensity';
+    if (sizeHint && spec.size) sizeHint.textContent = spec.size.min + ' = ' + (spec.size.lo || '') + ' · ' + spec.size.max + ' = ' + (spec.size.hi || '');
+    if (intHint && spec.intensity) intHint.textContent = spec.intensity.min + ' = ' + (spec.intensity.lo || '') + ' · ' + spec.intensity.max + ' = ' + (spec.intensity.hi || '');
+  }
+
+  // ── Live preview (above the tabs) ──────────────────────────────
+  // Rebuilds the preview surface from the modal's CURRENT state on
+  // every change: base preset markup (cloned from the chosen card's
+  // recipe), custom / randomised colours stamped as --fe-dynbg-cN,
+  // an optional texture overlay (+scope), the freeze-animation flag,
+  // and a live noise data-URL when the noise-grain knobs are tuned.
+  // The recipes load in the admin via css/dynbg.css, so this paints
+  // the genuine effect rather than a static image.
+  function overlayNameByKey (key) {
+    if (!key) return '';
+    const c = $('#dynbg-picker-modal-overlay-grid [data-dynbg-overlay-key="' + CSS.escape(key) + '"]');
+    const n = c && c.querySelector('.fe-dynbg-picker-name');
+    return n ? n.textContent.trim() : key;
+  }
+  function previewRandomColors (n) {
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const h = Math.floor(Math.random() * 360);
+      const s = Math.floor(55 + Math.random() * 35);  // 55–90%
+      const l = Math.floor(45 + Math.random() * 20);  // 45–65%
+      out.push('hsl(' + h + ' ' + s + '% ' + l + '%)');
+    }
+    return out;
+  }
+  // JS port of dynbg.pastelize — softens a #rrggbb toward a pastel
+  // band by `strength` 0-100 (matches the server so the live preview
+  // equals the saved render). Returns #rrggbb or null on bad input.
+  function pastelizeHex (hex, strength) {
+    if (typeof hex !== 'string') return null;
+    let h = hex.replace('#', '');
+    if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    if (h.length === 8) h = h.slice(0, 6);
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+    const s = Math.max(0, Math.min(100, strength | 0));
+    if (s === 0) return '#' + h;
+    const t = s / 100;
+    const r = parseInt(h.slice(0, 2), 16) / 255,
+          g = parseInt(h.slice(2, 4), 16) / 255,
+          b = parseInt(h.slice(4, 6), 16) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    let hue = 0, sat = 0; const li = (mx + mn) / 2;
+    const d = mx - mn;
+    if (d) {
+      sat = li > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+      if (mx === r) hue = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+      else if (mx === g) hue = ((b - r) / d + 2) / 6;
+      else hue = ((r - g) / d + 4) / 6;
+    }
+    const legacyTS = Math.min(sat, 0.339);
+    const legacyTL = Math.max(0.69, Math.min(0.75, li * 0.24 + 0.53));
+    const targetS = legacyTS * 0.5;
+    const targetL = legacyTL + (1 - legacyTL) * 0.5;
+    const newS = sat * (1 - t) + targetS * t;
+    const newL = li * (1 - t) + targetL * t;
+    // HSL→RGB
+    const hue2rgb = (p, q, tt) => {
+      if (tt < 0) tt += 1; if (tt > 1) tt -= 1;
+      if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+      if (tt < 1 / 2) return q;
+      if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+      return p;
+    };
+    let nr, ng, nb;
+    if (newS === 0) { nr = ng = nb = newL; }
+    else {
+      const q = newL < 0.5 ? newL * (1 + newS) : newL + newS - newL * newS;
+      const p = 2 * newL - q;
+      nr = hue2rgb(p, q, hue + 1 / 3);
+      ng = hue2rgb(p, q, hue);
+      nb = hue2rgb(p, q, hue - 1 / 3);
+    }
+    const x = v => ('0' + Math.round(v * 255).toString(16)).slice(-2);
+    return '#' + x(nr) + x(ng) + x(nb);
+  }
+  function previewNoiseUrl (size, intensity) {
+    const sz = (size === '' || size == null || isNaN(parseFloat(size))) ? 0.9 : parseFloat(size);
+    const op = (intensity === '' || intensity == null || isNaN(parseFloat(intensity))) ? 0.03 : parseFloat(intensity);
+    // Mirrors dynbg.noise_grain_data_url (apostrophes URL-encoded so
+    // the data-URL survives inside url('...')).
+    return "data:image/svg+xml;utf8," +
+      "%3Csvg viewBox=%270 0 256 256%27 xmlns=%27http://www.w3.org/2000/svg%27%3E" +
+      "%3Cfilter id=%27noise%27%3E" +
+      "%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%27" + sz + "%27 " +
+      "numOctaves=%274%27 stitchTiles=%27stitch%27/%3E" +
+      "%3C/filter%3E" +
+      "%3Crect width=%27100%25%27 height=%27100%25%27 filter=%27url(%23noise)%27 opacity=%27" + op + "%27/%3E" +
+      "%3C/svg%3E";
+  }
+  function updatePreview () {
+    const host = $('#dynbg-picker-modal-preview');
+    if (!host) return;
+    const key = selectedKey();
+    const overlay = selectedOverlay();
+    // Strip prior injected layers (keep the empty placeholder + badge).
+    host.querySelectorAll('.fe-dynbg, .fe-dynbg-overlay').forEach(e => e.remove());
+    host.classList.remove('fe-dynbg-no-anim');
+    host.removeAttribute('style');
+    const badge = host.querySelector('[data-dynbg-preview-badge]');
+    if (!key && !overlay) {
+      host.removeAttribute('data-has-bg');
+      if (badge) badge.textContent = '';
+      return;
+    }
+    host.setAttribute('data-has-bg', '');
+    // Colour vars: randomised palette when that toggle is on, else the
+    // admin's custom slots (blank slots fall through to brand tokens).
+    // The pastel slider softens whichever palette is in play so the
+    // preview matches the saved light-mode render (admin shell is
+    // light mode, so we apply pastel directly to --fe-dynbg-cN).
+    const rc = $('#dynbg-picker-modal-randomize-colors');
+    let colors = (rc && rc.checked) ? previewRandomColors(3) : getColors();
+    const pastel = parseInt((($('#dynbg-picker-modal-pastel-light') || {}).value) || '0', 10) || 0;
+    const parts = [];
+    (colors || []).forEach((c, i) => {
+      if (!c) return;
+      let out = c;
+      if (pastel > 0) { const p = pastelizeHex(c, pastel); if (p) out = p; }
+      parts.push('--fe-dynbg-c' + (i + 1) + ': ' + out + ';');
+    });
+    // Per-preset knob vars (dot size/gap/rotation, line angle/gap, …).
+    if (key) {
+      const spec = (capFor(key).knobs) || [];
+      spec.forEach(k => {
+        if (!k.css_var) return;
+        const v = _knobState[k.key];
+        if (v == null || isNaN(v)) return;
+        if (k.unit === 'deg') parts.push(k.css_var + ': ' + v + 'deg;');
+        else if (k.unit === 'px') parts.push(k.css_var + ': ' + v + 'px;');
+        else if (k.unit === '%') parts.push(k.css_var + ': ' + (v / 100) + ';');
+        else parts.push(k.css_var + ': ' + v + ';');
+      });
+    }
+    if (parts.length) host.setAttribute('style', parts.join(' '));
+    // Base preset recipe (clone the chosen card's .fe-dynbg markup).
+    if (key) {
+      const entry = entryByKey(key);
+      if (entry && entry.thumbHtml) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = entry.thumbHtml.trim();
+        const node = tmp.querySelector('.fe-dynbg');
+        if (node) {
+          // The cloned thumb carries its own randomised inline vars;
+          // strip them so the host's (pastel-aware) vars win.
+          node.removeAttribute('style');
+          host.insertBefore(node, host.firstChild);
+        }
+      }
+      if (getAnimateOff()) host.classList.add('fe-dynbg-no-anim');
+    }
+    // Texture overlay layer (+scope, +live size/intensity knobs).
+    if (overlay) {
+      const ov = document.createElement('div');
+      ov.className = 'fe-dynbg-overlay fe-dynbg-overlay-' + overlay;
+      if (getSelectedScope() === 'bg') ov.classList.add('fe-dynbg-overlay--bg-only');
+      const ovSize = getNoiseSize();   // raw slider string ('' when default)
+      const ovInt = getNoiseIntensity();
+      if (overlay === 'noise-grain') {
+        ov.style.backgroundImage = "url('" + previewNoiseUrl(ovSize, ovInt) + "')";
+      } else {
+        // Pattern overlays consume scale + opacity CSS vars.
+        if (ovSize !== '') ov.style.setProperty('--fe-dynbg-ov-scale', ovSize);
+        if (ovInt !== '') ov.style.setProperty('--fe-dynbg-ov-opacity', ovInt);
+      }
+      host.appendChild(ov);
+    }
+    if (badge) {
+      const entry = key ? entryByKey(key) : null;
+      let label = entry ? entry.name : 'Overlay only';
+      if (overlay) label += ' + ' + overlayNameByKey(overlay);
+      badge.textContent = label;
+    }
   }
 
   // ── Scope toggle ───────────────────────────────────────────────
@@ -4690,24 +5050,33 @@
     if (el) el.value = numeric;
     if (out) out.textContent = numeric.toFixed(3);
   }
+  // Default-drop the overlay Size / Intensity against the ACTIVE
+  // overlay's own default (noise-grain vs pattern overlays differ), so
+  // a slider left at the default persists nothing. '' = use default.
+  function activeOverlayDefaults () {
+    const spec = overlayKnobSpec()[selectedOverlay()];
+    return spec
+      ? { size: spec.size.default, intensity: spec.intensity.default }
+      : { size: NOISE_DEFAULTS.size, intensity: NOISE_DEFAULTS.intensity };
+  }
   function getNoiseSize () {
     const el = $('#dynbg-picker-modal-noise-size');
     if (!el) return '';
     const v = parseFloat(el.value);
-    if (isNaN(v) || Math.abs(v - NOISE_DEFAULTS.size) < 1e-6) return '';
+    if (isNaN(v) || Math.abs(v - activeOverlayDefaults().size) < 1e-6) return '';
     return String(v);
   }
   function getNoiseIntensity () {
     const el = $('#dynbg-picker-modal-noise-intensity');
     if (!el) return '';
     const v = parseFloat(el.value);
-    if (isNaN(v) || Math.abs(v - NOISE_DEFAULTS.intensity) < 1e-6) return '';
+    if (isNaN(v) || Math.abs(v - activeOverlayDefaults().intensity) < 1e-6) return '';
     return String(v);
   }
 
   // ── Randomize toggles ──────────────────────────────────────────
   // Two independent flags: colours (re-tints palette per render) and
-  // positions (blobs/gradients/bands/spotlights spawn at fresh
+  // positions (blobs/gradients/bands spawn at fresh
   // coordinates per render). Either can be on without the other.
   function setRandomizeColors (on) {
     const el = $('#dynbg-picker-modal-randomize-colors');
@@ -4731,17 +5100,26 @@
   // The text input is the source-of-truth — admins can type a hex
   // (with or without alpha) or leave it blank to fall back to the
   // brand default. Setting either input syncs the other.
+  //
+  // Native <input type=color> can't be empty, so an UNSET slot is
+  // shown by toggling the ∅ overlay (`.dynbg-modal-color-null`) over
+  // the swatch instead of seeding the misleading brand-blue.
+  // markChipUnset() keeps that overlay in sync.
+  function markChipUnset (slot, unset) {
+    const nul = $('[data-dynbg-color-null="' + slot + '"]');
+    if (nul) nul.classList.toggle('is-shown', !!unset);
+  }
   function setColor (slot, hex) {
     const colorEl = $('#dynbg-picker-modal-c' + slot + '-color');
     const textEl  = $('#dynbg-picker-modal-c' + slot + '-text');
     if (textEl) textEl.value = hex || '';
-    // Native color input requires a #rrggbb shape; fall back to a
-    // sensible default when the field is empty / shaped weirdly so
-    // the swatch isn't confusing.
+    const m = (hex || '').match(/^#([0-9a-fA-F]{6})$/);
     if (colorEl) {
-      const m = (hex || '').match(/^#([0-9a-fA-F]{6})$/);
-      colorEl.value = m ? hex : '#0b5cff';
+      // When set, mirror the hex onto the native swatch; when unset,
+      // leave a neutral grey under the ∅ overlay (never brand-blue).
+      colorEl.value = m ? hex : '#cccccc';
     }
+    markChipUnset(slot, !m);
   }
   function getColor (slot) {
     const textEl = $('#dynbg-picker-modal-c' + slot + '-text');
@@ -4774,6 +5152,15 @@
     const randomColors    = payload.randomizeColors ? '1' : '';
     const randomPositions = payload.randomizePositions ? '1' : '';
     const animateOff      = payload.animateOff ? '1' : '';
+    // Per-preset knobs as a JSON string ('' when none). Accept either a
+    // pre-serialised string or an object.
+    let knobsStr = '';
+    if (payload.knobs) {
+      if (typeof payload.knobs === 'string') knobsStr = payload.knobs;
+      else if (typeof payload.knobs === 'object' && Object.keys(payload.knobs).length) {
+        knobsStr = JSON.stringify(payload.knobs);
+      }
+    }
     // pastelLight is now a numeric strength 0-100 (legacy booleans
     // still accepted: true → 100, false → 0). Empty string when off so
     // the trigger's status-text "pastel" extra is suppressed.
@@ -4800,6 +5187,7 @@
     const randomPosIn    = inputBy('dynbgTriggerRandomizePositionsInput');
     const animateOffIn   = inputBy('dynbgTriggerAnimateOffInput');
     const pastelLightIn  = inputBy('dynbgTriggerPastelLightInput');
+    const knobsIn        = inputBy('dynbgTriggerKnobsInput');
     if (baseInput)      baseInput.value      = key;
     if (overlayInput)   overlayInput.value   = overlay;
     if (c1Input)        c1Input.value        = colors[0] || '';
@@ -4812,6 +5200,7 @@
     if (randomPosIn)    randomPosIn.value    = randomPositions;
     if (animateOffIn)   animateOffIn.value   = animateOff;
     if (pastelLightIn)  pastelLightIn.value  = pastelLight;
+    if (knobsIn)        knobsIn.value        = knobsStr;
     trigger.dataset.dynbgCurrent = key;
     trigger.dataset.dynbgOverlay = overlay;
     trigger.dataset.dynbgC1 = colors[0] || '';
@@ -4824,6 +5213,7 @@
     trigger.dataset.dynbgRandomizePositions = randomPositions;
     trigger.dataset.dynbgAnimateOff = animateOff;
     trigger.dataset.dynbgPastelLight = pastelLight;
+    trigger.dataset.dynbgKnobs = knobsStr;
     const entry = entryByKey(key);
     const nameEl = trigger.querySelector('[data-dynbg-trigger-name]');
     const statusEl = trigger.querySelector('[data-dynbg-trigger-status]');
@@ -4872,7 +5262,7 @@
     // we touched so listeners pick up the consolidated change.
     [baseInput, overlayInput, c1Input, c2Input, c3Input,
      scopeInput, sizeInput, intensityIn,
-     randomColorsIn, randomPosIn, animateOffIn, pastelLightIn].forEach(el => {
+     randomColorsIn, randomPosIn, animateOffIn, pastelLightIn, knobsIn].forEach(el => {
       if (el) el.dispatchEvent(new Event('change', { bubbles: true }));
     });
   }
@@ -4908,6 +5298,7 @@
         randomizePositions: !!getRandomizePositions(),
         animateOff: !!getAnimateOff(),
         pastelLight: getPastelLight(),  // numeric string '0'..'100' (or '' off)
+        knobs: getKnobs(key),
       });
       closeSelf();
     });
@@ -4918,15 +5309,52 @@
         randomizeColors: false, randomizePositions: false,
         pastelLight: false,
         animateOff: false,
+        knobs: {},
       });
       closeSelf();
+    });
+    // Scope radios + randomize/freeze toggles repaint the live preview.
+    modal.querySelectorAll('input[name="__dynbg_modal_scope_pick"]').forEach(r => {
+      r.addEventListener('change', updatePreview);
+    });
+    ['#dynbg-picker-modal-randomize-colors',
+     '#dynbg-picker-modal-randomize-positions',
+     '#dynbg-picker-modal-animate-off'].forEach(sel => {
+      const el = $(sel);
+      if (el) el.addEventListener('change', updatePreview);
     });
     // Card click -> mark active immediately on whichever grid the
     // click landed in. Delegated on the modal so we don't need to
     // re-bind if the catalogs ever change.
+    //
+    // A MANUAL background pick (vs the open-handler's programmatic
+    // seed) defaults the randomize toggles ON for the dimensions that
+    // apply to the chosen preset — admins asked for new backgrounds to
+    // start randomised. We only flip a toggle ON (never off) and only
+    // when switching to a DIFFERENT key, so re-clicking the current
+    // card or opening a saved config never clobbers an explicit choice.
     modal.addEventListener('click', e => {
       const baseCard = e.target.closest('[data-dynbg-modal-card]');
-      if (baseCard) setSelectedKey(baseCard.dataset.dynbgKey || '');
+      if (baseCard) {
+        const newKey = baseCard.dataset.dynbgKey || '';
+        const changed = newKey !== selectedKey();
+        setSelectedKey(newKey);
+        if (changed && newKey) {
+          const cap = capFor(newKey);
+          // Only auto-randomise presets that opt in (randomize_default).
+          // The pattern presets (dots/lines) opt OUT — their point is a
+          // deliberate fg/bg colour pair, which a random palette would
+          // immediately override (the very bug this refactor fixes).
+          if (cap.randomize_default) {
+            if ((cap.colors || 0) >= 1) setRandomizeColors(true);
+            if (cap.randomize_positions) setRandomizePositions(true);
+          } else {
+            setRandomizeColors(false);
+            setRandomizePositions(false);
+          }
+          updatePreview();
+        }
+      }
       const overlayCard = e.target.closest('[data-dynbg-modal-overlay-card]');
       if (overlayCard) setSelectedOverlay(overlayCard.dataset.dynbgOverlayKey || '');
     });
@@ -4941,13 +5369,19 @@
       const textEl  = $('#dynbg-picker-modal-c' + slot + '-text');
       const clearEl = modal.querySelector('[data-dynbg-modal-color-clear="' + slot + '"]');
       if (colorEl) colorEl.addEventListener('input', () => {
+        // Actively picking from the native swatch SETS the slot.
         if (textEl) textEl.value = colorEl.value;
+        markChipUnset(slot, false);
+        updatePreview();
       });
       if (textEl) textEl.addEventListener('input', () => {
         const m = textEl.value.match(/^#([0-9a-fA-F]{6})$/);
         if (m && colorEl) colorEl.value = textEl.value;
+        // Empty / invalid text → unset (∅); a full #rrggbb → set.
+        markChipUnset(slot, !m);
+        updatePreview();
       });
-      if (clearEl) clearEl.addEventListener('click', () => setColor(slot, ''));
+      if (clearEl) clearEl.addEventListener('click', () => { setColor(slot, ''); updatePreview(); });
     });
     // Noise-grain slider live-output sync. Save / reset buttons wire
     // through the same setter helpers so a Reset event repopulates
@@ -4956,21 +5390,28 @@
     const sizeOut = $('#dynbg-picker-modal-noise-size-out');
     if (sizeEl && sizeOut) sizeEl.addEventListener('input', () => {
       sizeOut.textContent = sizeEl.value;
+      updatePreview();
     });
     const intensityEl = $('#dynbg-picker-modal-noise-intensity');
     const intensityOut = $('#dynbg-picker-modal-noise-intensity-out');
     if (intensityEl && intensityOut) intensityEl.addEventListener('input', () => {
       intensityOut.textContent = parseFloat(intensityEl.value).toFixed(3);
+      updatePreview();
     });
     const noiseReset = $('#dynbg-picker-modal-noise-reset');
     if (noiseReset) noiseReset.addEventListener('click', () => {
-      setNoiseSize(NOISE_DEFAULTS.size);
-      setNoiseIntensity(NOISE_DEFAULTS.intensity);
+      const def = activeOverlayDefaults();
+      setNoiseSize(def.size);
+      setNoiseIntensity(def.intensity);
+      updatePreview();
     });
-    // Pastel-strength slider — live numeric readout next to the slider
-    // so admins see exactly how much pastelisation they're dialing in.
+    // Per-preset knobs reset → spec defaults.
+    const knobsReset = $('#dynbg-picker-modal-knobs-reset');
+    if (knobsReset) knobsReset.addEventListener('click', () => resetKnobs(selectedKey()));
+    // Pastel-strength slider — live numeric readout + live preview so
+    // the admin sees the softening applied as they drag.
     const pastelEl = $('#dynbg-picker-modal-pastel-light');
-    if (pastelEl) pastelEl.addEventListener('input', syncPastelOut);
+    if (pastelEl) pastelEl.addEventListener('input', () => { syncPastelOut(); updatePreview(); });
     // Close affordances — backdrop + X.
     modal.querySelectorAll('[data-close]').forEach(el => {
       el.addEventListener('click', closeSelf);
@@ -4987,14 +5428,24 @@
     e.preventDefault();
     wireModalOnce();
     activeTrigger = trigger;
+    // Seed the per-preset knob values BEFORE setSelectedKey so its
+    // renderKnobs() call builds the sliders at the saved values. Parsed
+    // from the trigger's `data-dynbg-knobs` JSON blob.
+    try {
+      const raw = trigger.dataset.dynbgKnobs || '';
+      _pendingKnobs = raw ? JSON.parse(raw) : null;
+      if (_pendingKnobs && typeof _pendingKnobs !== 'object') _pendingKnobs = null;
+    } catch (_) { _pendingKnobs = null; }
     setSelectedKey(trigger.dataset.dynbgCurrent || '');
     setSelectedOverlay(trigger.dataset.dynbgOverlay || '');
     setColor(1, trigger.dataset.dynbgC1 || '');
     setColor(2, trigger.dataset.dynbgC2 || '');
     setColor(3, trigger.dataset.dynbgC3 || '');
     setSelectedScope(trigger.dataset.dynbgScope || 'all');
-    setNoiseSize(trigger.dataset.dynbgNoiseSize || NOISE_DEFAULTS.size);
-    setNoiseIntensity(trigger.dataset.dynbgNoiseIntensity || NOISE_DEFAULTS.intensity);
+    // setSelectedOverlay already configured the slider bounds for the
+    // active overlay; now seed the saved values within those bounds.
+    if (trigger.dataset.dynbgNoiseSize) setNoiseSize(trigger.dataset.dynbgNoiseSize);
+    if (trigger.dataset.dynbgNoiseIntensity) setNoiseIntensity(trigger.dataset.dynbgNoiseIntensity);
     setRandomizeColors(trigger.dataset.dynbgRandomizeColors === '1');
     setRandomizePositions(trigger.dataset.dynbgRandomizePositions === '1');
     setAnimateOff(trigger.dataset.dynbgAnimateOff === '1');
@@ -5003,6 +5454,7 @@
     // accepts both forms.
     setPastelLight(trigger.dataset.dynbgPastelLight || '');
     setActiveTab('background');
+    updatePreview();
     modal.classList.add('open');
     modal.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';

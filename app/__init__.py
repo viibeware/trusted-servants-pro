@@ -714,6 +714,18 @@ def create_app():
     app.jinja_env.globals["dynbg_resolve_colors"] = _dynbg.resolve_colors
     app.jinja_env.globals["dynbg_resolve_positions"] = _dynbg.resolve_positions_css
     app.jinja_env.globals["dynbg_noise_url"] = _dynbg.noise_grain_data_url
+    # Per-render randomised inline-style for a preset thumbnail (fresh
+    # palette + positions each load) — drives the picker grid thumbs.
+    app.jinja_env.globals["dynbg_thumb_style"] = _dynbg.thumb_style
+    # Per-preset knob CSS-vars (dot size/gap, line angle/thickness, …)
+    # stamped on a surface's dynbg-host so the recipe reads them.
+    app.jinja_env.globals["dynbg_knobs_css"] = _dynbg.knobs_to_css_vars
+    # Per-preset capability spec (which Options controls + knobs apply
+    # to each background) — the modal stamps this as JSON to drive
+    # show/hide + slider rendering. Also the overlay Size/Intensity
+    # spec keyed by overlay so the modal can set per-overlay bounds.
+    app.jinja_env.globals["dynbg_preset_caps"] = lambda: _dynbg.PRESET_CAPS
+    app.jinja_env.globals["dynbg_overlay_knobs"] = lambda: _dynbg.OVERLAY_KNOBS
     # Per-template settings dict — list-page shells read this so the
     # admin's customize-panel choices (font / size / dynbg) take
     # effect on the public site. Falls back to flat columns inside

@@ -1070,7 +1070,7 @@ def template_settings(site, kind, key):
               "bg_dynbg_overlay_scope", "bg_dynbg_overlay_size",
               "bg_dynbg_overlay_intensity", "bg_dynbg_randomize_colors",
               "bg_dynbg_randomize_positions", "bg_dynbg_animate",
-              "bg_dynbg_pastel_light",
+              "bg_dynbg_pastel_light", "bg_dynbg_knobs",
               # Classic blog detail rail toggles — present only when
               # explicitly disabled, so a missing key means "show".
               "show_related_widget", "show_categories_widget",
@@ -1636,6 +1636,7 @@ def meeting_detail(slug):
         "animate": _tpl_settings.get("bg_dynbg_animate", True),
 
         "pastel_light": _tpl_settings.get("bg_dynbg_pastel_light", False),
+        "knobs": _tpl_settings.get("bg_dynbg_knobs", {}),
     }
     # Resolve the meeting's free-text location to a saved Location row
     # so the public templates can render the full split address (name /
@@ -2322,6 +2323,7 @@ def submission_form():
         "randomize_positions": _tpl_settings.get("bg_dynbg_randomize_positions", False),
         "animate": _tpl_settings.get("bg_dynbg_animate", True),
         "pastel_light": _tpl_settings.get("bg_dynbg_pastel_light", False),
+        "knobs": _tpl_settings.get("bg_dynbg_knobs", {}),
     }
     width_mode = (site.frontend_submission_form_width_mode if site else None) or "boxed"
     if width_mode not in ("boxed", "full"):
@@ -2910,6 +2912,7 @@ def fellowships_list():
         "animate": _tpl_settings.get("bg_dynbg_animate", True),
 
         "pastel_light": _tpl_settings.get("bg_dynbg_pastel_light", False),
+        "knobs": _tpl_settings.get("bg_dynbg_knobs", {}),
     }
 
     width_mode = (site.frontend_fellowships_list_width_mode if site else None) or "boxed"
@@ -3274,6 +3277,7 @@ def archive_detail(slug):
         "animate": _tpl_settings.get("bg_dynbg_animate", True),
 
         "pastel_light": _tpl_settings.get("bg_dynbg_pastel_light", False),
+        "knobs": _tpl_settings.get("bg_dynbg_knobs", {}),
     }
     og = _page_og(site, title=post.title,
                   description=post.summary or post.body,
@@ -3571,6 +3575,7 @@ def story_detail(slug):
                     else _story_cfg["animate"]),
 
         "pastel_light": _tpl_settings.get("bg_dynbg_pastel_light", False),
+        "knobs": _tpl_settings.get("bg_dynbg_knobs", {}),
     }
     og = _page_og(site, title=story.title,
                   description=story.summary or story.body,
@@ -3732,6 +3737,7 @@ def blog_post_detail(slug):
         "animate": _tpl_settings.get("bg_dynbg_animate", True),
 
         "pastel_light": _tpl_settings.get("bg_dynbg_pastel_light", False),
+        "knobs": _tpl_settings.get("bg_dynbg_knobs", {}),
     }
 
     # Up to four related posts: prefer ones sharing a category, then
@@ -3940,6 +3946,7 @@ def event_detail(slug):
         "animate": _tpl_settings.get("bg_dynbg_animate", True),
 
         "pastel_light": _tpl_settings.get("bg_dynbg_pastel_light", False),
+        "knobs": _tpl_settings.get("bg_dynbg_knobs", {}),
     }
     og = _page_og(site, title=ev.title,
                   description=ev.summary or ev.body,
@@ -4052,6 +4059,7 @@ def announcement_detail(slug):
         "animate": _tpl_settings.get("bg_dynbg_animate", True),
 
         "pastel_light": _tpl_settings.get("bg_dynbg_pastel_light", False),
+        "knobs": _tpl_settings.get("bg_dynbg_knobs", {}),
     }
     # Pass the post in as `event` so the existing event-detail templates
     # (which all reference `event.*`) render unchanged.
@@ -5124,6 +5132,7 @@ def site_index():
         "animate": _tpl_settings.get("bg_dynbg_animate", True),
 
         "pastel_light": _tpl_settings.get("bg_dynbg_pastel_light", False),
+        "knobs": _tpl_settings.get("bg_dynbg_knobs", {}),
     }
     sort_mode = (site.frontend_site_index_sort_mode or "grouped") if site else "grouped"
     heading = (site.frontend_site_index_heading if site else None) or "Site index"

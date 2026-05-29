@@ -945,6 +945,10 @@
       const currentRandomizePositions = opts.randomizePositions ? '1' : '';
       const currentAnimateOff         = opts.animateOff ? '1' : '';
       const currentPastelLight        = opts.pastelLight ? '1' : '';
+      // Per-preset knobs travel as one JSON blob (matches the macro's
+      // `__knobs` hidden input contract). '' = no overrides.
+      const currentKnobs = (opts.knobs && typeof opts.knobs === 'object'
+        && Object.keys(opts.knobs).length) ? JSON.stringify(opts.knobs) : '';
       const onChange = opts.onChange || (() => {});
 
       const id = 'be-dynbg-trigger-' + (++_dynbgTriggerSeq);
@@ -965,6 +969,7 @@
       const randomizePositionsInput = el('input', { type: 'hidden', id: id + '-randomize-positions', value: currentRandomizePositions });
       const animateOffInput         = el('input', { type: 'hidden', id: id + '-animate-off',        value: currentAnimateOff });
       const pastelLightInput        = el('input', { type: 'hidden', id: id + '-pastel-light',       value: currentPastelLight });
+      const knobsInput              = el('input', { type: 'hidden', id: id + '-knobs',             value: currentKnobs });
 
       // Resolve the catalog row matching the current key by reading
       // the global modal's grid — that's the same source of truth as
@@ -1050,6 +1055,7 @@
         'data-dynbg-trigger-randomize-positions-input':   '#' + id + '-randomize-positions',
         'data-dynbg-trigger-animate-off-input':           '#' + id + '-animate-off',
         'data-dynbg-trigger-pastel-light-input':          '#' + id + '-pastel-light',
+        'data-dynbg-trigger-knobs-input':                 '#' + id + '-knobs',
         'data-dynbg-current': currentKey,
         'data-dynbg-overlay': currentOverlay,
         'data-dynbg-c1': currentColors[0],
@@ -1062,6 +1068,7 @@
         'data-dynbg-randomize-positions': currentRandomizePositions,
         'data-dynbg-animate-off': currentAnimateOff,
         'data-dynbg-pastel-light': currentPastelLight,
+        'data-dynbg-knobs': currentKnobs,
       }, [thumbEl, textEl, caret]);
 
       // The global modal handler dispatches `change` events on every
@@ -1086,6 +1093,7 @@
           const rp  = randomizePositionsInput.value === '1';
           const ao  = animateOffInput.value === '1';
           const pl  = pastelLightInput.value === '1';
+          const kn  = knobsInput.value || '';
           btn.setAttribute('data-dynbg-current', k);
           btn.setAttribute('data-dynbg-overlay', ov);
           btn.setAttribute('data-dynbg-c1', cs[0]);
@@ -1098,6 +1106,7 @@
           btn.setAttribute('data-dynbg-randomize-positions', rp ? '1' : '');
           btn.setAttribute('data-dynbg-animate-off',         ao ? '1' : '');
           btn.setAttribute('data-dynbg-pastel-light',        pl ? '1' : '');
+          btn.setAttribute('data-dynbg-knobs',               kn);
           const newEntry = entryFor(k);
           renderThumb(thumbEl, newEntry);
           nameEl.textContent = newEntry ? newEntry.name : 'Choose…';
@@ -1113,13 +1122,14 @@
             randomizePositions: rp,
             animateOff: ao,
             pastelLight: pl,
+            knobs: kn,
           });
         });
       }
       const allInputs = [baseInput, overlayInput, c1Input, c2Input, c3Input,
                          scopeInput, sizeInput, intensityInput,
                          randomizeColorsInput, randomizePositionsInput,
-                         animateOffInput, pastelLightInput];
+                         animateOffInput, pastelLightInput, knobsInput];
       allInputs.forEach(inp => inp.addEventListener('change', notifyConsolidated));
       allInputs.forEach(i => wrap.appendChild(i));
       wrap.appendChild(btn);
@@ -3781,7 +3791,7 @@
       //   here yet — admins paste a key or leave blank). —
       const pDyn = el('div', { class: 'hero-bg-panel', 'data-bg-panel': 'dynamic' });
       pDyn.appendChild(el('p', { class: 'muted smaller' },
-        ['Pick a CSS-driven backdrop preset by key (e.g. ', el('code', {}, ['aurora']), ', ', el('code', {}, ['mesh-citrus']), ', ', el('code', {}, ['starfield']), ', etc.). Available keys come from the dynbg catalog.']));
+        ['Pick a CSS-driven backdrop preset by key (e.g. ', el('code', {}, ['aurora-blobs']), ', ', el('code', {}, ['mesh-gradient']), ', ', el('code', {}, ['aurora-bands']), ', etc.). Available keys come from the dynbg catalog.']));
       pDyn.appendChild(field('Dynbg key', textInput('bg_dynamic_key', 'aurora')));
       panels.appendChild(pDyn);
 
@@ -4765,9 +4775,11 @@
           // Opt-in: when on, the saved palette pastelises only in
           // light mode. Dark mode keeps full-saturation values.
           pastelLight: !!d.bg_dynbg_pastel_light,
+          // Per-preset knobs (dot size/gap, line angle/thickness, …).
+          knobs: (d.bg_dynbg_knobs && typeof d.bg_dynbg_knobs === 'object') ? d.bg_dynbg_knobs : {},
           onChange: ({key, overlay, colors, scope, noiseSize, noiseIntensity,
                        randomizeColors, randomizePositions, animateOff,
-                       pastelLight}) => {
+                       pastelLight, knobs}) => {
             // Round-trip every dimension into the block data so the
             // serialised blocks_json carries the consolidated state.
             // Empty fields are stored as falsy values rather than
@@ -4793,6 +4805,18 @@
               d.bg_dynbg_pastel_light = true;
             } else {
               delete d.bg_dynbg_pastel_light;
+            }
+            // Per-preset knobs — opt-in; store the parsed object only
+            // when non-empty so the common case stays absent from JSON.
+            let _kn = null;
+            if (knobs) {
+              try { _kn = typeof knobs === 'string' ? JSON.parse(knobs) : knobs; }
+              catch (_) { _kn = null; }
+            }
+            if (_kn && typeof _kn === 'object' && Object.keys(_kn).length) {
+              d.bg_dynbg_knobs = _kn;
+            } else {
+              delete d.bg_dynbg_knobs;
             }
             // Keep the legacy single flag in sync — true when either
             // dimension is on — so old renderers that still read it

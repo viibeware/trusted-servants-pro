@@ -14,6 +14,7 @@
 {# Load the public frontend.css alongside app.css so the block editor's
    live previews (image, button, callout, etc.) match the public render. #}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/frontend.css', v=app_build_id) }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dynbg.css', v=app_build_id) }}">
 
 {# Pill labels for the structure-card tree — same shape the page builder
    uses, scoped to the block types popups offer (split/split3 collapse to

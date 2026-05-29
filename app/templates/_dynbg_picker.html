@@ -68,6 +68,12 @@
    "off" without parsing. #}
 {%- set _pastel_int = _cfg.pastel_light | int -%}
 {%- set _pastel = (_pastel_int | string) if _pastel_int else '' -%}
+{# Per-preset knob values (dot size/gap, line angle/thickness, …)
+   travel as a single JSON blob so the macro + save handler don't need
+   a hidden input per knob. Empty object → '' so the status text /
+   server treat it as "no overrides". #}
+{%- set _knobs = _cfg.knobs or {} -%}
+{%- set _knobs_json = (_knobs | tojson) if _knobs else '' -%}
 <div class="fe-dynbg-trigger-wrap" data-dynbg-trigger-wrap>
   <input type="hidden" name="{{ field_name }}" id="{{ _bid }}-input"
          value="{{ current or '' }}" data-dynbg-trigger-input>
@@ -107,6 +113,9 @@
   <input type="hidden" name="{{ config_field }}__pastel_light"
          id="{{ _bid }}-pastel-light" value="{{ _pastel }}"
          data-dynbg-trigger-pastel-light>
+  <input type="hidden" name="{{ config_field }}__knobs"
+         id="{{ _bid }}-knobs" value="{{ _knobs_json }}"
+         data-dynbg-trigger-knobs>
   <button type="button" class="fe-dynbg-trigger" id="{{ _bid }}"
           data-dynbg-trigger
           data-dynbg-trigger-input="#{{ _bid }}-input"
@@ -121,6 +130,7 @@
           data-dynbg-trigger-randomize-positions-input="#{{ _bid }}-randomize-positions"
           data-dynbg-trigger-animate-off-input="#{{ _bid }}-animate-off"
           data-dynbg-trigger-pastel-light-input="#{{ _bid }}-pastel-light"
+          data-dynbg-trigger-knobs-input="#{{ _bid }}-knobs"
           data-dynbg-current="{{ current or '' }}"
           data-dynbg-overlay="{{ _overlay }}"
           data-dynbg-c1="{{ _c1 }}"
@@ -132,10 +142,11 @@
           data-dynbg-randomize-colors="{{ _rand_c }}"
           data-dynbg-randomize-positions="{{ _rand_p }}"
           data-dynbg-animate-off="{{ _anim }}"
-          data-dynbg-pastel-light="{{ _pastel }}">
+          data-dynbg-pastel-light="{{ _pastel }}"
+          data-dynbg-knobs="{{ _knobs_json }}">
     <span class="fe-dynbg-trigger-thumb" data-dynbg-trigger-thumb>
       {%- if _entry -%}
-      {% with dynbg_key=_entry.key %}{% include "frontend/_dynbg.html" %}{% endwith %}
+      {% with dynbg_key=_entry.key, dynbg_knobs=_knobs %}{% include "frontend/_dynbg.html" %}{% endwith %}
       {%- else -%}
       <span class="fe-dynbg-trigger-thumb-none" aria-hidden="true">∅</span>
       {%- endif -%}

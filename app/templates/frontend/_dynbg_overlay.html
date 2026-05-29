@@ -26,13 +26,24 @@
 {%- set _classes = ['fe-dynbg-overlay', 'fe-dynbg-overlay-' ~ _ok] -%}
 {%- if _scope == 'bg' -%}{%- set _ = _classes.append('fe-dynbg-overlay--bg-only') -%}{%- endif -%}
 {%- set _inline = '' -%}
-{%- if _ok == 'noise-grain' and (dynbg_overlay_size is not none or dynbg_overlay_intensity is not none) -%}
+{%- if _ok == 'noise-grain' -%}
+  {%- if dynbg_overlay_size is not none or dynbg_overlay_intensity is not none -%}
   {# Per-surface noise knobs override the CSS class default. We
      stamp a fresh data-URL inline so this overlay's grain has the
      admin-chosen size + intensity baked in (the SVG can't read CSS
      variables — `feTurbulence`'s baseFrequency must be literal). #}
   {%- set _url = dynbg_noise_url(dynbg_overlay_size, dynbg_overlay_intensity) -%}
   {%- set _inline = "background-image: url('" ~ _url ~ "');" -%}
+  {%- endif -%}
+{%- else -%}
+  {# Pattern overlays read size as a scale MULTIPLIER (--fe-dynbg-ov-
+     scale, ×1 = recipe default) and intensity as a layer opacity
+     (--fe-dynbg-ov-opacity, 1 = default). Both are pure CSS vars the
+     recipe consumes, so we stamp them inline when set. #}
+  {%- set _ovstyle = [] -%}
+  {%- if dynbg_overlay_size is not none -%}{%- set _ = _ovstyle.append("--fe-dynbg-ov-scale: " ~ dynbg_overlay_size) -%}{%- endif -%}
+  {%- if dynbg_overlay_intensity is not none -%}{%- set _ = _ovstyle.append("--fe-dynbg-ov-opacity: " ~ dynbg_overlay_intensity) -%}{%- endif -%}
+  {%- if _ovstyle -%}{%- set _inline = (_ovstyle | join('; ')) ~ ';' -%}{%- endif -%}
 {%- endif %}
 <div class="{{ _classes | join(' ') }}" aria-hidden="true"
      {%- if _inline %} style="{{ _inline }}"{% endif %}></div>

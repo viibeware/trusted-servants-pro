@@ -49,6 +49,10 @@
   })();
 </script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=app_build_id) }}">
+{# dynbg recipe library — shared with the frontend. Loaded here too so the
+   dynamic-background picker modal's live preview + thumbnails render in the
+   admin shell (which otherwise only loads app.css, the picker chrome). #}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dynbg.css', v=app_build_id) }}">
 </head>
 {# Embed mode (chromeless render for iframe-hosted modals) — accept
    either ?embed=1 on the URL or a form-body embed=1 from a POST. The
@@ -2198,35 +2202,37 @@
       <h2 id="dynbg-picker-modal-title">Choose a dynamic background</h2>
       <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
     </div>
+    {# ── Live preview ───────────────────────────────────────────────
+       A real .fe-dynbg-host surface the modal handler restamps on EVERY
+       change (preset, overlay, colours, scope, animate, noise). It lives
+       BETWEEN the title bar and the scrolling .modal-body — a fixed band,
+       NOT inside the scroll area — so the modal content scrolls beneath
+       it and no objects ever appear above it. The dynbg recipes load in
+       the admin via dynbg.css so this renders the genuine effect. #}
+    <div class="dynbg-modal-preview" aria-hidden="true">
+      <div class="dynbg-modal-preview-surface fe-dynbg-host"
+           id="dynbg-picker-modal-preview" data-dynbg-preview>
+        <span class="dynbg-modal-preview-empty" data-dynbg-preview-empty>
+          <span class="dynbg-modal-preview-empty-icon">∅</span>
+          <span>No dynamic background</span>
+        </span>
+        <span class="dynbg-modal-preview-badge" data-dynbg-preview-badge></span>
+      </div>
+    </div>
     <div class="modal-body">
-      {# ── Tabs: Background / Overlay / Colours. The base catalog
-         and the overlay catalog both render as picker grids; the
-         colours panel is a small fieldset of three colour inputs.
-         All three tabs commit together on Save. #}
+      {%- set _dyn = dynbg_defaults() -%}
+      {# ── Tabs: Background / Options. Background is the preset grid;
+         Options folds in the per-preset knobs, colours, randomize,
+         pastel, and the texture overlay (grid + scope + noise). #}
       <div class="dynbg-modal-tabs" role="tablist" data-dynbg-modal-tabs>
         <button type="button" role="tab" class="dynbg-modal-tab is-active"
                 data-dynbg-modal-tab="background" aria-selected="true">Background</button>
         <button type="button" role="tab" class="dynbg-modal-tab"
-                data-dynbg-modal-tab="overlay" aria-selected="false">Overlay</button>
-        <button type="button" role="tab" class="dynbg-modal-tab"
-                data-dynbg-modal-tab="colors" aria-selected="false">Colours</button>
+                data-dynbg-modal-tab="options" aria-selected="false">Options</button>
       </div>
 
       <section class="dynbg-modal-panel is-active" data-dynbg-modal-panel="background">
-        <p class="muted small dynbg-modal-blurb">CSS-driven backdrops that animate or sit static behind the surface. Each preset is dark-mode aware and respects <code>prefers-reduced-motion</code>. The chosen background paints behind any solid colour or uploaded image you've also configured.</p>
-        {# "Disable animation" gate. Visible only when the active
-           preset is one of the keyframe-animated ones (hidden by JS
-           when the user picks a static preset like dotted-grid).
-           data-dynbg-animated-keys hands the JS the list once so it
-           doesn't have to round-trip to a Python check. #}
-        <fieldset class="dynbg-modal-fieldset" id="dynbg-picker-modal-anim-row"
-                  data-dynbg-animated-keys="{{ dynbg_animated_keys()|join(',') }}" hidden>
-          <legend>Animation</legend>
-          <label class="check dynbg-modal-randomize">
-            <input type="checkbox" id="dynbg-picker-modal-animate-off" value="1">
-            <span><b>Freeze movement</b> <span class="muted smaller">— stops the keyframe animation on this preset (blobs / bands / twinkle pinpoints stay where they're first painted). Useful for marketing screenshots, low-power devices, or visitors who find motion distracting.</span></span>
-          </label>
-        </fieldset>
+        <p class="muted small dynbg-modal-blurb">CSS-driven backdrops that animate or sit static behind the surface. Each preset is dark-mode aware and respects <code>prefers-reduced-motion</code>. The chosen background paints behind any solid colour or uploaded image you've also configured. Each tile previews a fresh random palette — your saved colours and texture live on the <b>Options</b> tab.</p>
         <div class="fe-dynbg-picker fe-dynbg-picker-md" id="dynbg-picker-modal-grid" role="radiogroup">
           <label class="fe-dynbg-picker-card" data-dynbg-modal-card data-dynbg-key="">
             <input type="radio" name="__dynbg_modal_pick" value="">
@@ -2239,9 +2245,12 @@
             </span>
           </label>
           {% for entry in dynbg_catalog() %}
+          {# Each thumb carries a fresh random palette + positions
+             (dynbg_thumb_style) so the grid reads as a lively sampler;
+             re-rolled server-side on every page load. #}
           <label class="fe-dynbg-picker-card" data-dynbg-modal-card data-dynbg-key="{{ entry.key }}">
             <input type="radio" name="__dynbg_modal_pick" value="{{ entry.key }}">
-            <span class="fe-dynbg-picker-thumb">
+            <span class="fe-dynbg-picker-thumb" style="{{ dynbg_thumb_style(entry.key) }}">
               {% with dynbg_key=entry.key %}{% include "frontend/_dynbg.html" %}{% endwith %}
             </span>
             <span class="fe-dynbg-picker-info">
@@ -2253,115 +2262,88 @@
         </div>
       </section>
 
-      <section class="dynbg-modal-panel" data-dynbg-modal-panel="overlay">
-        <p class="muted small dynbg-modal-blurb">A texture pass that paints over the base background AND content — same recipe family as the viibeware noise grain (subtle by default; click-through). Compose with any base background or use standalone over a solid colour.</p>
-        <div class="fe-dynbg-picker fe-dynbg-picker-md" id="dynbg-picker-modal-overlay-grid" role="radiogroup">
-          <label class="fe-dynbg-picker-card" data-dynbg-modal-overlay-card data-dynbg-overlay-key="">
-            <input type="radio" name="__dynbg_modal_overlay_pick" value="">
-            <span class="fe-dynbg-picker-thumb fe-dynbg-picker-thumb-none" aria-hidden="true">
-              <span class="fe-dynbg-picker-none-icon">∅</span>
-            </span>
-            <span class="fe-dynbg-picker-info">
-              <span class="fe-dynbg-picker-name">None</span>
-              <span class="fe-dynbg-picker-desc muted small">No texture overlay.</span>
-            </span>
-          </label>
-          {% for entry in dynbg_overlays() %}
-          <label class="fe-dynbg-picker-card" data-dynbg-modal-overlay-card data-dynbg-overlay-key="{{ entry.key }}">
-            <input type="radio" name="__dynbg_modal_overlay_pick" value="{{ entry.key }}">
-            <span class="fe-dynbg-picker-thumb fe-dynbg-overlay-thumb">
-              {# Overlays render against the surface they're on top
-                 of, not on their own — for the picker thumb we paint
-                 a soft brand-tinted plate behind so admins can see
-                 the overlay's recipe in isolation. #}
-              <span class="fe-dynbg-overlay-thumb-plate"></span>
-              {% with dynbg_overlay_key=entry.key %}{% include "frontend/_dynbg_overlay.html" %}{% endwith %}
-            </span>
-            <span class="fe-dynbg-picker-info">
-              <span class="fe-dynbg-picker-name">{{ entry.name }}</span>
-              <span class="fe-dynbg-picker-desc muted small">{{ entry.description }}</span>
-            </span>
-          </label>
-          {% endfor %}
-        </div>
+      {# Per-preset capability spec drives which Options controls show
+         for the active background (so we never show settings that
+         don't apply) and renders the per-preset knob sliders. Stamped
+         as JSON so the modal handler reads it without a round-trip. #}
+      <section class="dynbg-modal-panel" data-dynbg-modal-panel="options"
+               data-dynbg-preset-caps='{{ dynbg_preset_caps() | tojson }}'
+               data-dynbg-overlay-knobs='{{ dynbg_overlay_knobs() | tojson }}'>
+        <p class="muted small dynbg-modal-blurb">Fine-tune the selected background, paint a custom palette, and layer an optional texture overlay. The live preview above updates as you go.</p>
 
-        {%- set _dyn = dynbg_defaults() -%}
-        <fieldset class="dynbg-modal-fieldset">
-          <legend>Scope</legend>
-          <p class="muted small" style="margin: 0 0 8px;">Where the texture lays down. <b>All</b> matches the viibeware feel — texture rides over backgrounds AND content for a consistent surface finish. <b>Background only</b> tucks it under the content (cards / typography stay clean).</p>
-          <div class="dynbg-modal-scope-row" role="radiogroup">
-            <label class="dynbg-modal-scope-opt">
-              <input type="radio" name="__dynbg_modal_scope_pick" value="all"
-                     id="dynbg-picker-modal-scope-all" checked>
-              <span><b>All page elements</b> <span class="muted smaller">— textures bg + content</span></span>
+        {# "Disable animation" gate. Visible only when the active
+           preset is one of the keyframe-animated ones (hidden by JS
+           when the user picks a static preset like dotted-grid).
+           data-dynbg-animated-keys hands the JS the list once. #}
+        <fieldset class="dynbg-modal-fieldset" id="dynbg-picker-modal-anim-row"
+                  data-dynbg-animated-keys="{{ dynbg_animated_keys()|join(',') }}" hidden>
+          <legend>Animation</legend>
+          <label class="check dynbg-modal-randomize">
+            <input type="checkbox" id="dynbg-picker-modal-animate-off" value="1">
+            <span><b>Freeze movement</b> <span class="muted smaller">— stops the keyframe animation on this preset (blobs / bands stay where they're first painted). Useful for marketing screenshots, low-power devices, or visitors who find motion distracting.</span></span>
+          </label>
+        </fieldset>
+
+        {# Per-preset knob sliders (dot size/gap, line angle/thickness,
+           …). The container is empty in markup; the modal handler
+           rebuilds its rows from the active preset's knob spec each
+           time the selection changes, and hides the fieldset for
+           presets that declare no knobs. #}
+        <fieldset class="dynbg-modal-fieldset" id="dynbg-picker-modal-knobs-row" hidden>
+          <legend data-dynbg-knobs-legend>Pattern</legend>
+          <div id="dynbg-picker-modal-knobs" class="dynbg-modal-knobs"></div>
+          <button type="button" class="btn btn-sm" id="dynbg-picker-modal-knobs-reset" style="align-self: flex-start; margin-top: 4px;">Reset to default</button>
+        </fieldset>
+
+        <fieldset class="dynbg-modal-fieldset" id="dynbg-picker-modal-colors-row">
+          <legend>Custom colours</legend>
+          <p class="muted small" style="margin: 0 0 8px;">Override the brand-token colours each preset uses with up to three custom hexes. Unset slots (shown ∅) fall through to the brand accent. Colour 1 is the primary glow, Colour 2 the secondary accent, Colour 3 the tertiary highlight.</p>
+          <div class="dynbg-modal-colors">
+            {% for slot in [1, 2, 3] %}
+            <label class="dynbg-modal-color-row">
+              <span class="dynbg-modal-color-label">Colour {{ slot }}</span>
+              <span class="dynbg-modal-color-controls">
+                {# A native <input type=color> can't be empty, so an
+                   UNSET slot is shown by overlaying a ∅ glyph over a
+                   neutral swatch (CSS) — never the misleading brand
+                   blue. The overlay is absolutely positioned over the
+                   swatch (always the row's first, left-edge item) so it
+                   does NOT wrap the input: the shared design-token
+                   picker injects its 🎨 button / hex caption / chip
+                   right after the input, and those must stay as normal
+                   flex siblings in the row (wrapping the input made
+                   them cram into the 44×44 chip). JS toggles `is-shown`
+                   on the overlay on open / pick / clear. #}
+                <input type="color" id="dynbg-picker-modal-c{{ slot }}-color"
+                       data-dynbg-modal-color="{{ slot }}" value="#cccccc">
+                <span class="dynbg-modal-color-null is-shown"
+                      data-dynbg-color-null="{{ slot }}" aria-hidden="true">∅</span>
+                <input type="text" id="dynbg-picker-modal-c{{ slot }}-text"
+                       data-dynbg-modal-color-text="{{ slot }}"
+                       placeholder="none" maxlength="9"
+                       pattern="^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
+                       autocomplete="off">
+                <button type="button" class="btn btn-sm dynbg-modal-color-clear"
+                        data-dynbg-modal-color-clear="{{ slot }}">Clear</button>
+              </span>
             </label>
-            <label class="dynbg-modal-scope-opt">
-              <input type="radio" name="__dynbg_modal_scope_pick" value="bg"
-                     id="dynbg-picker-modal-scope-bg">
-              <span><b>Background only</b> <span class="muted smaller">— texture sits under content</span></span>
-            </label>
+            {% endfor %}
           </div>
         </fieldset>
 
-        {# Noise-grain only knobs. Visible only when the noise-grain
-           card is the active overlay; toggled by the modal handler.
-           Sliders write to the same hidden inputs the trigger reads
-           on save. #}
-        <fieldset class="dynbg-modal-fieldset" id="dynbg-picker-modal-noise-knobs" hidden>
-          <legend>Noise grain knobs</legend>
-          <p class="muted small" style="margin: 0 0 8px;">Fine-tune the grain. <b>Size</b> controls particle scale (lower = bigger flecks); <b>intensity</b> controls how visible the texture is.</p>
-          <label class="dynbg-modal-slider-row">
-            <span class="dynbg-modal-slider-label">Size <output id="dynbg-picker-modal-noise-size-out">{{ _dyn.noise_size }}</output></span>
-            <input type="range" id="dynbg-picker-modal-noise-size"
-                   min="{{ _dyn.noise_size_min }}" max="{{ _dyn.noise_size_max }}"
-                   step="0.05" value="{{ _dyn.noise_size }}">
-            <span class="muted smaller">{{ _dyn.noise_size_min }} = coarse · {{ _dyn.noise_size_max }} = fine</span>
-          </label>
-          <label class="dynbg-modal-slider-row">
-            <span class="dynbg-modal-slider-label">Intensity <output id="dynbg-picker-modal-noise-intensity-out">{{ '%.3f' % _dyn.noise_intensity }}</output></span>
-            <input type="range" id="dynbg-picker-modal-noise-intensity"
-                   min="{{ _dyn.noise_intensity_min }}" max="{{ _dyn.noise_intensity_max }}"
-                   step="0.005" value="{{ _dyn.noise_intensity }}">
-            <span class="muted smaller">{{ _dyn.noise_intensity_min }} = whisper · {{ _dyn.noise_intensity_max }} = heavy</span>
-          </label>
-          <button type="button" class="btn btn-sm" id="dynbg-picker-modal-noise-reset" style="align-self: flex-start; margin-top: 4px;">Reset to default</button>
-        </fieldset>
-      </section>
-
-      <section class="dynbg-modal-panel" data-dynbg-modal-panel="colors">
-        <p class="muted small dynbg-modal-blurb">Override the brand-token colours each preset uses with up to three custom hexes. Empty slots fall through to the brand accent. Colour 1 is the primary glow, Colour 2 the secondary accent, Colour 3 the tertiary highlight.</p>
-        <div class="dynbg-modal-colors">
-          {% for slot in [1, 2, 3] %}
-          <label class="dynbg-modal-color-row">
-            <span class="dynbg-modal-color-label">Colour {{ slot }}</span>
-            <span class="dynbg-modal-color-controls">
-              <input type="color" id="dynbg-picker-modal-c{{ slot }}-color"
-                     data-dynbg-modal-color="{{ slot }}" value="#0b5cff">
-              <input type="text" id="dynbg-picker-modal-c{{ slot }}-text"
-                     data-dynbg-modal-color-text="{{ slot }}"
-                     placeholder="(brand default)" maxlength="9"
-                     pattern="^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
-                     autocomplete="off">
-              <button type="button" class="btn btn-sm dynbg-modal-color-clear"
-                      data-dynbg-modal-color-clear="{{ slot }}">Clear</button>
-            </span>
-          </label>
-          {% endfor %}
-        </div>
-
-        <fieldset class="dynbg-modal-fieldset" style="margin-top: 16px;">
+        <fieldset class="dynbg-modal-fieldset" id="dynbg-picker-modal-randomize-row">
           <legend>Randomize on every page load</legend>
-          <label class="check dynbg-modal-randomize">
+          <label class="check dynbg-modal-randomize" id="dynbg-picker-modal-randomize-colors-label">
             <input type="checkbox" id="dynbg-picker-modal-randomize-colors" value="1">
             <span><b>Colours</b> <span class="muted smaller">— ignores the slots above; picks a fresh brand-friendly palette each render so the surface re-tints every visit.</span></span>
           </label>
-          <label class="check dynbg-modal-randomize">
+          <label class="check dynbg-modal-randomize" id="dynbg-picker-modal-randomize-positions-label">
             <input type="checkbox" id="dynbg-picker-modal-randomize-positions" value="1">
-            <span><b>Positions</b> <span class="muted smaller">— blobs / gradients / bands / spotlights spawn at fresh coordinates each render. Other static patterns (dotted grid, lines, paper) ignore this since they have nothing to move.</span></span>
+            <span><b>Positions</b> <span class="muted smaller" data-dynbg-randpos-hint>— blobs / gradients / bands spawn at fresh coordinates each render.</span></span>
           </label>
         </fieldset>
 
-        <fieldset class="dynbg-modal-fieldset" style="margin-top: 16px;">
+        <fieldset class="dynbg-modal-fieldset" id="dynbg-picker-modal-pastel-row">
           <legend>Light-mode tone</legend>
           <div class="dynbg-modal-pastel-row">
             <label for="dynbg-picker-modal-pastel-light" class="dynbg-modal-pastel-label">
@@ -2376,6 +2358,83 @@
               <output id="dynbg-picker-modal-pastel-light-out"
                       for="dynbg-picker-modal-pastel-light"
                       aria-live="off">0</output>
+            </div>
+          </div>
+        </fieldset>
+
+        {# ── Texture overlay (merged from the old Overlay tab) ──── #}
+        <fieldset class="dynbg-modal-fieldset">
+          <legend>Texture overlay</legend>
+          <p class="muted small" style="margin: 0 0 10px;">A texture pass that paints over the base background AND content (subtle by default; click-through). Compose with any base background or use standalone over a solid colour.</p>
+          <div class="fe-dynbg-picker fe-dynbg-picker-md" id="dynbg-picker-modal-overlay-grid" role="radiogroup">
+            <label class="fe-dynbg-picker-card" data-dynbg-modal-overlay-card data-dynbg-overlay-key="">
+              <input type="radio" name="__dynbg_modal_overlay_pick" value="">
+              <span class="fe-dynbg-picker-thumb fe-dynbg-picker-thumb-none" aria-hidden="true">
+                <span class="fe-dynbg-picker-none-icon">∅</span>
+              </span>
+              <span class="fe-dynbg-picker-info">
+                <span class="fe-dynbg-picker-name">None</span>
+                <span class="fe-dynbg-picker-desc muted small">No texture overlay.</span>
+              </span>
+            </label>
+            {% for entry in dynbg_overlays() %}
+            <label class="fe-dynbg-picker-card" data-dynbg-modal-overlay-card data-dynbg-overlay-key="{{ entry.key }}">
+              <input type="radio" name="__dynbg_modal_overlay_pick" value="{{ entry.key }}">
+              <span class="fe-dynbg-picker-thumb fe-dynbg-overlay-thumb">
+                {# Overlays render against the surface they're on top
+                   of — paint a soft brand-tinted plate behind so the
+                   recipe reads in isolation. #}
+                <span class="fe-dynbg-overlay-thumb-plate"></span>
+                {% with dynbg_overlay_key=entry.key %}{% include "frontend/_dynbg_overlay.html" %}{% endwith %}
+              </span>
+              <span class="fe-dynbg-picker-info">
+                <span class="fe-dynbg-picker-name">{{ entry.name }}</span>
+                <span class="fe-dynbg-picker-desc muted small">{{ entry.description }}</span>
+              </span>
+            </label>
+            {% endfor %}
+          </div>
+
+          {# Texture Size + Intensity — shown for ANY active overlay
+             (not just noise-grain). The JS sets each slider's bounds /
+             step / default from the overlay-knob spec stamped on the
+             modal, and reads them back into overlay_size /
+             overlay_intensity. Placed directly under the overlay cards
+             per the requested order; Scope sits at the bottom. #}
+          <div class="dynbg-modal-subgroup" id="dynbg-picker-modal-overlay-knobs" hidden>
+            <span class="dynbg-modal-subgroup-label" data-dynbg-overlay-knobs-title>Texture knobs</span>
+            <p class="muted small" style="margin: 0 0 8px;" data-dynbg-overlay-knobs-blurb>Fine-tune the texture's scale and how strongly it reads.</p>
+            <label class="dynbg-modal-slider-row">
+              <span class="dynbg-modal-slider-label"><span data-dynbg-ovsize-label>Size</span> <output id="dynbg-picker-modal-noise-size-out">{{ _dyn.noise_size }}</output></span>
+              <input type="range" id="dynbg-picker-modal-noise-size"
+                     min="{{ _dyn.noise_size_min }}" max="{{ _dyn.noise_size_max }}"
+                     step="0.05" value="{{ _dyn.noise_size }}">
+              <span class="muted smaller" data-dynbg-ovsize-hint>{{ _dyn.noise_size_min }} = coarse · {{ _dyn.noise_size_max }} = fine</span>
+            </label>
+            <label class="dynbg-modal-slider-row">
+              <span class="dynbg-modal-slider-label"><span data-dynbg-ovint-label>Intensity</span> <output id="dynbg-picker-modal-noise-intensity-out">{{ '%.3f' % _dyn.noise_intensity }}</output></span>
+              <input type="range" id="dynbg-picker-modal-noise-intensity"
+                     min="{{ _dyn.noise_intensity_min }}" max="{{ _dyn.noise_intensity_max }}"
+                     step="0.005" value="{{ _dyn.noise_intensity }}">
+              <span class="muted smaller" data-dynbg-ovint-hint>{{ _dyn.noise_intensity_min }} = whisper · {{ _dyn.noise_intensity_max }} = heavy</span>
+            </label>
+            <button type="button" class="btn btn-sm" id="dynbg-picker-modal-noise-reset" style="align-self: flex-start; margin-top: 4px;">Reset to default</button>
+          </div>
+
+          <div class="dynbg-modal-subgroup">
+            <span class="dynbg-modal-subgroup-label">Scope</span>
+            <p class="muted small" style="margin: 0 0 8px;">Where the texture lays down. <b>All</b> rides over backgrounds AND content for a consistent surface finish. <b>Background only</b> tucks it under the content (cards / typography stay clean).</p>
+            <div class="dynbg-modal-scope-row" role="radiogroup">
+              <label class="dynbg-modal-scope-opt">
+                <input type="radio" name="__dynbg_modal_scope_pick" value="all"
+                       id="dynbg-picker-modal-scope-all" checked>
+                <span><b>All page elements</b> <span class="muted smaller">— textures bg + content</span></span>
+              </label>
+              <label class="dynbg-modal-scope-opt">
+                <input type="radio" name="__dynbg_modal_scope_pick" value="bg"
+                       id="dynbg-picker-modal-scope-bg">
+                <span><b>Background only</b> <span class="muted smaller">— texture sits under content</span></span>
+              </label>
             </div>
           </div>
         </fieldset>
