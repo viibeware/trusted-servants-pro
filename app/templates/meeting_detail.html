@@ -45,14 +45,11 @@
 {% endif %}
 
 <section class="card meeting-info">
-  {% if meeting.logo_filename %}
-  <div class="meeting-header">
-    <img class="meeting-logo" src="{{ url_for('main.meeting_logo', mid=meeting.id) }}" alt="">
-  </div>
-  {% endif %}
-
   <div class="meeting-details-grid">
     <div class="detail-block">
+      {% if meeting.logo_filename %}
+      <img class="meeting-logo" src="{{ url_for('main.meeting_logo', mid=meeting.id) }}" alt="">
+      {% endif %}
       {% if meeting.description %}
       <div class="detail-label">Description</div>
       <div class="meeting-description clamp-5" data-clampable>
@@ -61,8 +58,9 @@
       </div>
       {% endif %}
       {% if meeting.schedules %}
-      <div class="detail-label" {% if meeting.description %}style="margin-top: 12px;"{% endif %}>Schedule</div>
       {% set show_zoom_cols = meeting.meeting_type != 'in_person' %}
+      <div class="zg-card schedule-card">
+      <div class="detail-label">Schedule</div>
       <table class="schedule-table">
         <thead>
           <tr>
@@ -83,44 +81,49 @@
           {% endfor %}
         </tbody>
       </table>
+      </div>
       {% endif %}
-    </div>
 
-    <div class="detail-block">
       {% if meeting.location %}
-      {# Try to resolve the meeting's free-text location to a Location row
-         so we can render the full split address (name / street /
-         city/state/zip) on three lines. Custom locations that don't
-         match any saved Location fall back to the legacy single-line
-         render. `set` inside `for` is loop-scoped in Jinja, so use a
-         namespace to capture the match across the loop boundary.
-         Match is case-insensitive + trimmed so minor inconsistencies
-         in legacy data still resolve. #}
-      {%- set _loc_state = namespace(record=none) -%}
-      {%- set _meeting_loc_norm = (meeting.location or '').strip().lower() -%}
-      {%- for _l in locations -%}
-        {%- if _meeting_loc_norm and _l.name and _l.name.strip().lower() == _meeting_loc_norm -%}
-          {%- set _loc_state.record = _l -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {%- set _loc_record = _loc_state.record -%}
+      {# Location resolved to a saved Location row in the route
+         (`location_record`, tolerant of minor name typos) so we can show
+         the full split address + an Open-in-Maps link. Custom locations
+         that don't match any saved Location fall back to the raw text. #}
+      <div class="zg-card location-card">
       <div class="detail-label">Location</div>
-      {% if _loc_record %}
+      {% if location_record %}
         <div class="loc-block">
-          <div class="loc-name">{{ _loc_record.name }}</div>
-          {% for line in _loc_record.address_lines() %}
+          <div class="loc-name">{{ location_record.name }}</div>
+          {% for line in location_record.address_lines() %}
             <div class="loc-line">{{ line }}</div>
           {% endfor %}
         </div>
       {% else %}
-        <div>{{ meeting.location|safe_html }}</div>
+        <div class="loc-name">{{ meeting.location|safe_html }}</div>
       {% endif %}
       {% if meeting.location_notes %}
       <div class="loc-notes muted small">{{ meeting.location_notes }}</div>
       {% endif %}
+      {% if location_maps_url %}
+      <a class="btn btn-sm zg-maps-link" href="{{ location_maps_url }}" target="_blank" rel="noopener">{{ icon('map-pin') }}<span>Open in Maps</span></a>
       {% endif %}
+      </div>
+      {% endif %}
+    </div>
 
+    {# Always render the right column so the 50/50 grid is preserved — for
+       in-person meetings with no Zoom data it simply stays blank. #}
+    <div class="detail-block zoom-col">
       {% if meeting.zoom_meeting_id or meeting.zoom_passcode or meeting.zoom_account or meeting.zoom_link %}
+      <section class="card data-card zoom-card">
+      {% if meeting.meeting_type != 'in_person' and (meeting.zoom_link or meeting.zoom_meeting_id or meeting.zoom_account) %}
+      <div class="zoom-guide-launch">
+        <button type="button" class="btn btn-primary zoom-guide-btn" data-open-modal="zoom-guide-modal">
+          {{ icon('rocket') }}<span>Launch Zoom Meeting (Guided)</span>
+        </button>
+        <p class="muted small zoom-guide-hint">New to hosting? Step-by-step help signing in and starting this meeting.</p>
+      </div>
+      {% endif %}
       <div class="detail-label detail-section-divider">Zoom</div>
       <dl class="zoom-info">
         {% if meeting.zoom_meeting_id %}
@@ -146,9 +149,26 @@
         </dd>
         {% endif %}
       </dl>
-      {% if meeting.meeting_type != 'in_person' and meeting.show_otp and otp_email and (otp_email.email or otp_email.login_url) %}
+      {% if meeting.meeting_type != 'in_person' and meeting.show_otp and otp_email and (otp_email.email or otp_email.login_url or otp_email.imap_host) %}
       <div class="detail-label zoom-divider-top">OTP Email</div>
-      <p class="muted small" style="margin: 4px 0 6px;">Retrieve Zoom one-time-password codes by logging into this email.</p>
+      <p class="muted small" style="margin: 4px 0 6px;">Retrieve Zoom one-time-passcodes for this assigned Zoom account. <strong>Wait 1 minute</strong> before clicking retrieve to allow time for Zoom to send the code.</p>
+      {% if otp_email.imap_host %}
+      {# Inline auto-retrieval — same fetcher the guided wizard uses, so
+         seasoned hosts can pull the latest code without opening the
+         wizard. The webmail login details still show below as a fallback. #}
+      <div class="otp-inline" data-otp-widget data-fetch-url="{{ url_for('main.otp_email_fetch_code') }}">
+        <button type="button" class="btn btn-primary otp-inline-fetch" data-otp-fetch>
+          {{ icon('mail') }}<span data-otp-fetch-label>Retrieve latest code</span>
+        </button>
+        <div class="otp-inline-result" data-otp-result hidden>
+          <button type="button" class="copy-btn mono otp-inline-code" data-copy="" data-tip="Click to copy" data-otp-code>------</button>
+          <span class="otp-inline-meta muted small" data-otp-meta></span>
+        </div>
+        <p class="otp-inline-error" data-otp-error hidden></p>
+      </div>
+      {% endif %}
+      {% if otp_email.email or otp_email.password_enc or otp_email.login_url %}
+      <div class="detail-label otp-manual-label">{% if otp_email.imap_host %}Or log in to the inbox manually{% else %}Webmail login{% endif %}</div>
       <dl class="zoom-info">
         {% if otp_email.email %}
         <dt>Email</dt>
@@ -168,9 +188,222 @@
       </dl>
       {% endif %}
       {% endif %}
+      </section>
+      {% endif %}
     </div>
   </div>
 </section>
+
+{% if meeting.meeting_type != 'in_person' and (meeting.zoom_link or meeting.zoom_meeting_id or meeting.zoom_account) %}
+{# ── Guided Zoom launcher ─────────────────────────────────────────── #}
+{% set _imap_ready = otp_email and otp_email.imap_host %}
+<div class="modal zoom-guide-modal" id="zoom-guide-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel zoom-guide-panel" role="dialog" aria-modal="true" aria-labelledby="zoom-guide-title">
+    <div class="modal-head zoom-guide-head">
+      <div class="zoom-guide-head-text">
+        <h2 id="zoom-guide-title">{{ icon('rocket') }} Launch Zoom Meeting</h2>
+        <p class="zoom-guide-meeting-name">{{ meeting.name }}</p>
+      </div>
+      <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+    </div>
+
+    {# Stepper progress rail #}
+    <ol class="zoom-guide-steps">
+      <li class="zg-step is-active" data-step-dot="1" role="button" tabindex="0" aria-label="Go to step 1: Sign in"><span class="zg-step-num">1</span><span class="zg-step-label">Sign in</span></li>
+      <li class="zg-step" data-step-dot="2" role="button" tabindex="0" aria-label="Go to step 2: Get code"><span class="zg-step-num">2</span><span class="zg-step-label">Get code</span></li>
+      <li class="zg-step" data-step-dot="3" role="button" tabindex="0" aria-label="Go to step 3: Start"><span class="zg-step-num">3</span><span class="zg-step-label">Start</span></li>
+    </ol>
+
+    <div class="modal-body zoom-guide-body">
+
+      {# ── Step 1 — Open Zoom & sign in ───────────────────────────── #}
+      <section class="zg-panel is-active" data-step="1">
+        <h3 class="zg-title">Open Zoom &amp; sign in</h3>
+        <p class="zg-lead">Open the <strong>Zoom desktop app</strong> on your computer and sign in with the account assigned to this meeting.</p>
+        <div class="zg-callout zg-callout-warn">
+          {{ icon('monitor') }}
+          <div>
+            <strong>Use a computer to host.</strong> Zoom hosting works on
+            <strong>Mac, Windows, or Linux</strong> only. You can’t start the meeting
+            from an iPhone, iPad, Android phone/tablet, or a Chromebook.
+          </div>
+        </div>
+
+        <div class="zg-creds">
+          <div class="zg-cred-row">
+            <span class="zg-cred-label">{{ icon('mail') }} Zoom login</span>
+            {% if meeting.zoom_account %}
+            <button type="button" class="copy-btn mono zg-copy" data-copy="{{ meeting.zoom_account.username }}" data-tip="Click to copy">{{ meeting.zoom_account.username }}</button>
+            {% else %}
+            <span class="muted small">No account assigned — ask your service committee.</span>
+            {% endif %}
+          </div>
+          {% if meeting.zoom_account %}
+          <div class="zg-cred-row">
+            <span class="zg-cred-label">{{ icon('key') }} Password</span>
+            <span class="zg-pw pw-row">
+              <button type="button" class="copy-btn mono pw-field zg-copy" data-copy="{{ zoom_account_password }}" data-pw="{{ zoom_account_password }}" data-tip="Click to copy">••••••••</button>
+              <button type="button" class="btn btn-sm reveal-btn" data-target-scope="prev">Reveal</button>
+            </span>
+          </div>
+          {% endif %}
+        </div>
+
+        <figure class="zg-shot">
+          <img src="{{ url_for('static', filename='img/zoomguide/step1.png') }}"
+               alt="Zoom sign-in screen" data-lightbox data-lightbox-caption="Step 1 — Sign in to Zoom with the meeting account">
+          <figcaption>{{ icon('search') }} Click to enlarge</figcaption>
+        </figure>
+      </section>
+
+      {# ── Step 2 — One-time passcode ─────────────────────────────── #}
+      <section class="zg-panel" data-step="2">
+        <h3 class="zg-title">Enter the one-time passcode</h3>
+        <p class="zg-lead">If Zoom asks you to verify your identity, it emails a one-time passcode. Retrieve it here.</p>
+
+        <div class="zg-callout zg-callout-info">
+          {{ icon('shield') }}
+          <div>
+            If you see an <strong>“Allow on other devices”</strong> prompt, ignore it and click
+            <strong>“Or alternatively, Verify via one&#8209;time passcode”</strong> instead.
+            We don’t use the allow-on-other-devices feature.
+          </div>
+        </div>
+
+        <div class="zg-otp" data-otp-widget data-fetch-url="{{ url_for('main.otp_email_fetch_code') }}">
+          <p class="zg-otp-instruction">{{ icon('clock') }} Wait about <strong>1&nbsp;minute</strong> for the email to arrive, then retrieve the latest code.</p>
+          {% if _imap_ready %}
+          <button type="button" class="btn btn-primary zg-otp-fetch" data-otp-fetch>
+            {{ icon('mail') }}<span class="zg-otp-fetch-label">Retrieve code</span>
+          </button>
+          <div class="zg-otp-result" data-otp-result hidden>
+            <div class="zg-otp-code-wrap">
+              <button type="button" class="copy-btn mono zg-otp-code" data-copy="" data-tip="Click to copy" data-otp-code>------</button>
+            </div>
+            <p class="zg-otp-meta muted small" data-otp-meta></p>
+          </div>
+          <p class="zg-otp-error" data-otp-error hidden></p>
+          {% else %}
+          <p class="muted small">Automatic retrieval isn’t set up.
+            {% if otp_email and otp_email.login_url %}Use the webmail inbox below to read the code.{% else %}Ask an admin to configure the IMAP mailbox under Settings → Security.{% endif %}
+          </p>
+          {% endif %}
+          {% if otp_email and (otp_email.login_url or otp_email.email or otp_email.password_enc) %}
+          {# Webmail fallback as a collapsible disclosure — keeps the step
+             tidy while one click reveals the login button + credentials.
+             Starts expanded when there's no automatic IMAP retrieval, since
+             then webmail is the only way to read the code. #}
+          <div class="zg-webmail{% if not _imap_ready %} is-open{% endif %}" data-zg-webmail>
+            <button type="button" class="zg-webmail-toggle" data-zg-webmail-toggle
+                    aria-expanded="{{ 'true' if not _imap_ready else 'false' }}" aria-controls="zg-webmail-panel">
+              <span>{% if _imap_ready %}Code not arriving? Open the webmail inbox instead{% else %}Open the webmail inbox to read the code{% endif %}</span>
+              {{ icon('chevron-down', 'zg-webmail-caret') }}
+            </button>
+            <div class="zg-webmail-panel" id="zg-webmail-panel" data-zg-webmail-panel>
+              <div class="zg-webmail-inner">
+                {% if otp_email.login_url %}
+                <a class="btn btn-primary zg-webmail-login" href="{{ otp_email.login_url }}" target="_blank" rel="noopener">
+                  {{ icon('log-in') }}<span>Log into webmail</span>
+                </a>
+                {% endif %}
+                {% if otp_email.email or otp_email.password_enc %}
+                <div class="zg-creds zg-webmail-creds">
+                  {% if otp_email.email %}
+                  <div class="zg-cred-row">
+                    <span class="zg-cred-label">{{ icon('mail') }} Username</span>
+                    <button type="button" class="copy-btn mono zg-copy" data-copy="{{ otp_email.email }}" data-tip="Click to copy">{{ otp_email.email }}</button>
+                  </div>
+                  {% endif %}
+                  {% if otp_email.password_enc %}
+                  <div class="zg-cred-row">
+                    <span class="zg-cred-label">{{ icon('key') }} Password</span>
+                    <span class="zg-pw pw-row">
+                      <button type="button" class="copy-btn mono pw-field zg-copy" data-copy-url="{{ url_for('main.otp_email_reveal') }}" data-tip="Click to copy">••••••••</button>
+                      <button type="button" class="btn btn-sm reveal-btn" data-reveal-url="{{ url_for('main.otp_email_reveal') }}" data-target-scope="prev">Reveal</button>
+                    </span>
+                  </div>
+                  {% endif %}
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+
+        <figure class="zg-shot">
+          <img src="{{ url_for('static', filename='img/zoomguide/step2.png') }}"
+               alt="Zoom one-time passcode entry screen" data-lightbox data-lightbox-caption="Step 2 — Enter the one-time passcode from the email">
+          <figcaption>{{ icon('search') }} Click to enlarge</figcaption>
+        </figure>
+        <p class="zg-skip-note muted small">No passcode prompt? You can skip this step.</p>
+      </section>
+
+      {# ── Step 3 — Start the meeting ─────────────────────────────── #}
+      <section class="zg-panel" data-step="3">
+        <h3 class="zg-title">Start the meeting</h3>
+        <p class="zg-lead">You’re signed in — launch the meeting. Use the button below, or start it manually with the details.</p>
+
+        <div class="zg-callout zg-callout-warn">
+          {{ icon('alert-triangle') }}
+          <div>
+            If you’re signed into your browser with another Zoom account, it may try to launch
+            the meeting with that account. <strong>Sign out of any Zoom accounts in your browser</strong>
+            before clicking Launch Zoom Meeting for best results.
+          </div>
+        </div>
+
+        {% if meeting.zoom_link %}
+        <a class="btn btn-primary zg-launch-btn" href="{{ meeting.zoom_link }}" target="_blank" rel="noopener">
+          {{ icon('video') }}<span>Launch Zoom Meeting</span>
+        </a>
+        {% endif %}
+
+        <div class="zg-creds zg-launch-details">
+          {% if meeting.zoom_meeting_id %}
+          <div class="zg-cred-row">
+            <span class="zg-cred-label">Meeting ID</span>
+            <button type="button" class="copy-btn mono zg-copy" data-copy="{{ meeting.zoom_meeting_id }}" data-tip="Click to copy">{{ meeting.zoom_meeting_id }}</button>
+          </div>
+          {% endif %}
+          {% if meeting.zoom_passcode %}
+          <div class="zg-cred-row">
+            <span class="zg-cred-label">Passcode</span>
+            <button type="button" class="copy-btn mono zg-copy" data-copy="{{ meeting.zoom_passcode }}" data-tip="Click to copy">{{ meeting.zoom_passcode }}</button>
+          </div>
+          {% endif %}
+        </div>
+
+        <figure class="zg-shot">
+          <img src="{{ url_for('static', filename='img/zoomguide/step3.png') }}"
+               alt="Zoom home screen with New meeting button" data-lightbox data-lightbox-caption="Step 3 — Start or join your meeting from the Zoom home screen">
+          <figcaption>{{ icon('search') }} Click to enlarge</figcaption>
+        </figure>
+      </section>
+
+    </div>
+
+    <div class="modal-foot zoom-guide-foot">
+      <button type="button" class="btn zg-back" data-zg-back hidden>{{ icon('arrow-left') }} Back</button>
+      <span class="zg-foot-spacer"></span>
+      <button type="button" class="btn zg-skip" data-zg-skip hidden>Skip</button>
+      <button type="button" class="btn btn-primary zg-next" data-zg-next>Next {{ icon('arrow-right') }}</button>
+      <button type="button" class="btn btn-primary zg-finish" data-zg-finish hidden>{{ icon('check') }} Finish</button>
+    </div>
+  </div>
+</div>
+
+{# Shared image lightbox for the guide screenshots #}
+<div class="modal zg-lightbox" id="zoom-guide-lightbox" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="zg-lightbox-inner" role="dialog" aria-modal="true">
+    <button type="button" class="icon-btn zg-lightbox-close" data-close aria-label="Close">{{ icon('x') }}</button>
+    <img class="zg-lightbox-img" src="" alt="">
+    <p class="zg-lightbox-caption"></p>
+  </div>
+</div>
+{% endif %}
 
 {% if current_user.can_edit() %}
   {% with modal_id="meeting-edit-modal",

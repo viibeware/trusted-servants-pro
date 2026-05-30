@@ -1233,6 +1233,7 @@
           </p>
           <form class="form" method="post" action="{{ url_for('main.otp_email_save') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="has_imap_fields" value="1">
             <label>Email Address<input name="email" type="email" value="{{ otp.email or '' }}"></label>
             <label>Login URL<input name="login_url" type="url" value="{{ otp.login_url or '' }}" placeholder="https://mail.example.com"></label>
             <label>Password <span class="muted smaller">(leave blank to keep current)</span>
@@ -1241,6 +1242,31 @@
             {% if otp.password_enc %}
             <label class="check"><input type="checkbox" name="clear_password" value="1"><span>Clear stored password</span></label>
             {% endif %}
+
+            <div class="otp-imap-divider">
+              <span>IMAP mailbox (automatic code retrieval)</span>
+            </div>
+            <p class="muted smaller otp-imap-lead">
+              When set, the guided Zoom launcher logs into this mailbox and pulls the
+              newest one-time passcode for the user automatically — no webmail needed.
+              Leave the IMAP username/password blank to reuse the email + password above.
+            </p>
+            <div class="otp-imap-grid">
+              <label>IMAP Server<input name="imap_host" type="text" value="{{ otp.imap_host or '' }}" placeholder="imap.gmail.com" autocomplete="off"></label>
+              <label>Port<input name="imap_port" type="number" min="1" max="65535" value="{{ otp.imap_port or 993 }}"></label>
+            </div>
+            <label class="check"><input type="checkbox" name="imap_ssl" value="1" {% if otp.imap_ssl is none or otp.imap_ssl %}checked{% endif %}><span>Use SSL/TLS (recommended)</span></label>
+            <div class="otp-imap-grid">
+              <label>IMAP Username <span class="muted smaller">(optional)</span><input name="imap_username" type="text" value="{{ otp.imap_username or '' }}" placeholder="defaults to email above" autocomplete="off"></label>
+              <label>Mailbox / Folder<input name="imap_mailbox" type="text" value="{{ otp.imap_mailbox or 'INBOX' }}" placeholder="INBOX"></label>
+            </div>
+            <label>IMAP Password <span class="muted smaller">(optional — leave blank to reuse the password above)</span>
+              <input name="imap_password" type="password" placeholder="{% if otp.imap_password_enc %}•••••••• (saved){% else %}app password{% endif %}" autocomplete="new-password">
+            </label>
+            {% if otp.imap_password_enc %}
+            <label class="check"><input type="checkbox" name="clear_imap_password" value="1"><span>Clear stored IMAP password</span></label>
+            {% endif %}
+
             <div class="data-card-actions"><button class="btn btn-primary">Save OTP Email</button></div>
           </form>
         </section>

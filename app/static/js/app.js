@@ -1856,6 +1856,134 @@
     });
   });
 
+  // ── Guided Zoom launcher wizard ──────────────────────────────────
+  // Stepped modal that walks a host through sign-in → OTP → start.
+  // Lives on the backend meeting detail page (online/hybrid meetings).
+  (function initZoomGuide() {
+    const modal = document.getElementById("zoom-guide-modal");
+    if (!modal) return;
+    const panels = Array.from(modal.querySelectorAll(".zg-panel"));
+    const dots = Array.from(modal.querySelectorAll("[data-step-dot]"));
+    const total = panels.length;
+    const backBtn = modal.querySelector("[data-zg-back]");
+    const nextBtn = modal.querySelector("[data-zg-next]");
+    const skipBtn = modal.querySelector("[data-zg-skip]");
+    const finishBtn = modal.querySelector("[data-zg-finish]");
+    const body = modal.querySelector(".zoom-guide-body");
+    let step = 1;
+
+    function render() {
+      panels.forEach(p => p.classList.toggle("is-active", +p.dataset.step === step));
+      dots.forEach(d => {
+        const n = +d.dataset.stepDot;
+        d.classList.toggle("is-active", n === step);
+        d.classList.toggle("is-done", n < step);
+      });
+      backBtn.hidden = step === 1;
+      nextBtn.hidden = step === total;
+      finishBtn.hidden = step !== total;
+      // "Skip" only on the optional OTP step (step 2).
+      skipBtn.hidden = step !== 2;
+      if (body) body.scrollTop = 0;
+    }
+    function go(n) { step = Math.min(total, Math.max(1, n)); render(); }
+
+    nextBtn && nextBtn.addEventListener("click", () => go(step + 1));
+    skipBtn && skipBtn.addEventListener("click", () => go(step + 1));
+    backBtn && backBtn.addEventListener("click", () => go(step - 1));
+    finishBtn && finishBtn.addEventListener("click", () => closeModal(modal));
+
+    // Clickable stepper circles — jump straight to any step. Keyboard
+    // accessible (Enter/Space) since the <li>s carry role="button".
+    dots.forEach(d => {
+      const target = +d.dataset.stepDot;
+      d.addEventListener("click", () => go(target));
+      d.addEventListener("keydown", e => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(target); }
+      });
+    });
+
+    // Reset to step 1 each time the launcher is opened.
+    document.querySelectorAll('[data-open-modal="zoom-guide-modal"]').forEach(btn =>
+      btn.addEventListener("click", () => { go(1); }));
+
+    // OTP "Retrieve code" buttons (in the wizard AND inline on the meeting
+    // detail page) are wired globally by initOtpFetch() below.
+
+    // ── Webmail fallback disclosure (step 2) ──
+    const wmWrap = modal.querySelector("[data-zg-webmail]");
+    const wmToggle = modal.querySelector("[data-zg-webmail-toggle]");
+    if (wmWrap && wmToggle) {
+      wmToggle.addEventListener("click", () => {
+        const open = wmWrap.classList.toggle("is-open");
+        wmToggle.setAttribute("aria-expanded", String(open));
+      });
+    }
+
+    render();
+  })();
+
+  // ── Image lightbox ([data-lightbox] → #zoom-guide-lightbox) ──────
+  (function initGuideLightbox() {
+    const box = document.getElementById("zoom-guide-lightbox");
+    if (!box) return;
+    const img = box.querySelector(".zg-lightbox-img");
+    const cap = box.querySelector(".zg-lightbox-caption");
+    document.querySelectorAll("[data-lightbox]").forEach(el => {
+      el.addEventListener("click", () => {
+        if (img) { img.src = el.getAttribute("src"); img.alt = el.getAttribute("alt") || ""; }
+        if (cap) cap.textContent = el.dataset.lightboxCaption || "";
+        openModal("zoom-guide-lightbox");
+      });
+    });
+  })();
+
+  // ── OTP "Retrieve code" buttons ([data-otp-fetch]) ───────────────
+  // Shared by the guided wizard (Step 2) and the inline OTP Email section
+  // on the meeting detail page, so seasoned users can pull the latest
+  // code without opening the wizard. Each button lives inside a
+  // [data-otp-widget] that carries the fetch URL and the result/error/
+  // code/meta targets.
+  (function initOtpFetch() {
+    document.querySelectorAll("[data-otp-fetch]").forEach(btn => {
+      const scope = btn.closest("[data-otp-widget]") || document;
+      const fetchUrl = scope.dataset ? scope.dataset.fetchUrl : null;
+      if (!fetchUrl) return;
+      const result = scope.querySelector("[data-otp-result]");
+      const codeEl = scope.querySelector("[data-otp-code]");
+      const metaEl = scope.querySelector("[data-otp-meta]");
+      const errEl = scope.querySelector("[data-otp-error]");
+      const label = btn.querySelector("[data-otp-fetch-label], .zg-otp-fetch-label");
+      const setLabel = (t) => { if (label) label.textContent = t; };
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.classList.add("is-loading");
+        setLabel("Retrieving…");
+        if (errEl) { errEl.hidden = true; errEl.textContent = ""; }
+        try {
+          const r = await fetch(fetchUrl, { headers: { "X-Requested-With": "fetch" } });
+          const j = await r.json();
+          if (j.ok) {
+            if (codeEl) { codeEl.textContent = j.code; codeEl.dataset.copy = j.code; }
+            if (metaEl) metaEl.innerHTML = `Received <strong>${j.sent_at}</strong> · ${j.age_label}`;
+            if (result) result.hidden = false;
+            setLabel("Retrieve again");
+          } else {
+            if (errEl) { errEl.textContent = j.error || "Could not retrieve a code."; errEl.hidden = false; }
+            if (result) result.hidden = true;
+            setLabel("Retrieve code");
+          }
+        } catch (e) {
+          if (errEl) { errEl.textContent = "Network error — please try again."; errEl.hidden = false; }
+          setLabel("Retrieve code");
+        } finally {
+          btn.disabled = false;
+          btn.classList.remove("is-loading");
+        }
+      });
+    });
+  })();
+
   // Clampable text with show-more toggle
   document.querySelectorAll("[data-clampable]").forEach(wrap => {
     const body = wrap.querySelector(".clamp-body");

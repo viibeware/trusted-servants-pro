@@ -4427,6 +4427,151 @@ form[data-savebar-row].is-dirty {
 .modal-foot { padding: 12px 18px; border-top: 1px solid var(--border);
   display: flex; justify-content: flex-end; gap: 10px; }
 
+/* ── Guided Zoom launcher ──────────────────────────────────────────── */
+.zoom-guide-launch { margin: 4px 0 18px; }
+.zoom-guide-btn { font-size: 1.02rem; padding: 11px 20px; display: inline-flex;
+  align-items: center; gap: 9px; box-shadow: 0 6px 18px rgba(11,92,255,.22); }
+.zoom-guide-btn .icon { width: 1.15em; height: 1.15em; }
+.zoom-guide-hint { margin: 1rem 2px 0; }
+
+/* Otp/IMAP settings block in the Security tab */
+.otp-imap-divider { display: flex; align-items: center; gap: 10px; margin: 10px 0 2px;
+  font-size: .82rem; font-weight: 700; letter-spacing: .02em; text-transform: uppercase;
+  color: var(--muted); }
+.otp-imap-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.otp-imap-lead { margin: 0 0 4px; }
+.otp-imap-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+@media (max-width: 540px) { .otp-imap-grid { grid-template-columns: 1fr; } }
+
+/* Wider panel + internal layout */
+.zoom-guide-panel { max-width: 560px; }
+.zoom-guide-head { align-items: flex-start; }
+.zoom-guide-head h2 { display: flex; align-items: center; gap: 8px; }
+.zoom-guide-head h2 .icon { color: var(--brand); width: 1.05em; height: 1.05em; }
+.zoom-guide-meeting-name { margin: 3px 0 0; color: var(--muted); font-size: .9rem; }
+
+/* Stepper rail */
+.zoom-guide-steps { display: flex; list-style: none; margin: 0; padding: 16px 22px 6px;
+  gap: 6px; }
+.zg-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  position: relative; color: var(--muted); font-size: .76rem; font-weight: 600;
+  cursor: pointer; background: none; border: none; }
+.zg-step:hover .zg-step-num { border-color: var(--brand); color: var(--brand); }
+.zg-step:hover.is-active .zg-step-num { color: #fff; }
+.zg-step:focus-visible { outline: none; }
+.zg-step:focus-visible .zg-step-num { box-shadow: 0 0 0 4px var(--brand-soft); }
+.zg-step::before { content: ""; position: absolute; top: 14px; left: calc(-50% + 16px);
+  width: calc(100% - 32px); height: 2px; background: var(--border); z-index: 0; }
+.zg-step:first-child::before { display: none; }
+.zg-step.is-active::before, .zg-step.is-done::before { background: var(--brand); }
+.zg-step-num { position: relative; z-index: 1; width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--panel-2); border: 2px solid var(--border);
+  font-weight: 700; font-size: .85rem; transition: all .18s ease; }
+.zg-step.is-active .zg-step-num { background: var(--brand); border-color: var(--brand); color: #fff;
+  box-shadow: 0 0 0 4px var(--brand-soft); }
+.zg-step.is-done .zg-step-num { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); }
+.zg-step.is-active .zg-step-label, .zg-step.is-done .zg-step-label { color: var(--text); }
+
+.zoom-guide-body { gap: 0; }
+.zg-panel { display: none; flex-direction: column; gap: 13px; }
+.zg-panel.is-active { display: flex; animation: zgFade .25s ease; }
+@keyframes zgFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.zg-title { font-size: 1.18rem; font-weight: 700; margin: 0; }
+.zg-lead { margin: 0; color: var(--muted); line-height: 1.5; }
+
+/* Callouts */
+.zg-callout { display: flex; gap: 11px; padding: 12px 14px; border-radius: 10px;
+  font-size: .9rem; line-height: 1.45; align-items: flex-start; }
+.zg-callout .icon { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 1px; }
+.zg-callout-warn { background: color-mix(in srgb, var(--warning) 14%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border)); }
+.zg-callout-warn .icon { color: var(--warning); }
+.zg-callout-info { background: var(--brand-soft);
+  border: 1px solid color-mix(in srgb, var(--brand) 30%, var(--border)); }
+.zg-callout-info .icon { color: var(--brand); }
+
+/* Credential rows */
+.zg-creds { display: flex; flex-direction: column; gap: 8px; background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.zg-cred-row { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap; }
+.zg-cred-label { display: inline-flex; align-items: center; gap: 7px; font-size: .85rem;
+  font-weight: 600; color: var(--muted); }
+.zg-cred-label .icon { width: 16px; height: 16px; }
+.zg-pw { display: inline-flex; align-items: center; gap: 8px; }
+
+/* Screenshots + figcaption */
+.zg-shot { margin: 2px 0 0; position: relative; cursor: zoom-in; }
+.zg-shot img { width: 100%; display: block; border-radius: 10px; border: 1px solid var(--border);
+  transition: filter .15s ease; }
+.zg-shot:hover img { filter: brightness(.96); }
+.zg-shot figcaption { position: absolute; right: 10px; bottom: 10px; display: inline-flex;
+  align-items: center; gap: 5px; font-size: .76rem; font-weight: 600; color: #fff;
+  background: rgba(17,24,39,.72); padding: 4px 9px; border-radius: 999px;
+  backdrop-filter: blur(4px); }
+.zg-shot figcaption .icon { width: 14px; height: 14px; }
+
+/* OTP block */
+.zg-otp { display: flex; flex-direction: column; gap: 10px; padding: 14px;
+  border: 1px dashed var(--border); border-radius: 10px; }
+.zg-otp-instruction { margin: 0; font-size: .9rem; line-height: 1.5; }
+.zg-otp-instruction .icon { width: 16px; height: 16px; color: var(--muted);
+  vertical-align: -3px; margin-right: 5px; }
+.zg-otp-fetch { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; }
+.zg-otp-fetch.is-loading { opacity: .75; cursor: progress; }
+.zg-otp-result { display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 14px; background: var(--brand-soft); border-radius: 10px; }
+.zg-otp-code { font-size: 2rem; font-weight: 800; letter-spacing: .35em; padding: 4px 8px 4px 16px;
+  color: var(--brand); background: none; border: none; cursor: pointer; }
+.zg-otp-meta { margin: 0; }
+.zg-otp-error { margin: 0; color: var(--danger); font-size: .88rem; font-weight: 600; }
+.zg-otp-fallback { margin: 0; }
+/* Collapsible webmail fallback disclosure */
+.zg-webmail { margin-top: 2px; }
+.zg-webmail-toggle { display: flex; align-items: center; gap: 6px; width: 100%;
+  background: none; border: none; padding: 4px 0; cursor: pointer; text-align: left;
+  color: var(--brand); font-size: .82rem; font-weight: 600; }
+.zg-webmail-toggle:hover { text-decoration: underline; }
+.zg-webmail-toggle > span { flex: 1; }
+.zg-webmail-caret { flex: 0 0 auto; width: 16px; height: 16px;
+  transition: transform .22s ease; }
+.zg-webmail.is-open .zg-webmail-caret { transform: rotate(180deg); }
+.zg-webmail-panel { overflow: hidden; max-height: 0; opacity: 0;
+  transition: max-height .28s ease, opacity .2s ease; }
+.zg-webmail.is-open .zg-webmail-panel { max-height: 360px; opacity: 1; }
+.zg-webmail-inner { display: flex; flex-direction: column; gap: 8px; padding-top: 6px; }
+.zg-webmail-login { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; }
+.zg-webmail-creds { margin: 0; }
+.zg-skip-note { margin: 2px 0 0; }
+
+/* Launch step */
+.zg-launch-btn { align-self: stretch; justify-content: center; font-size: 1.05rem; padding: 13px;
+  display: inline-flex; align-items: center; gap: 9px; }
+.zg-launch-btn .icon { width: 1.15em; height: 1.15em; }
+.zg-launch-details { background: var(--panel-2); }
+
+/* Footer */
+.zoom-guide-foot { justify-content: flex-start; align-items: center; }
+.zg-foot-spacer { flex: 1; }
+/* `.btn { display: inline-flex }` outranks the UA `[hidden]` rule (equal
+   specificity, later wins), so a `hidden` footer button would still show.
+   Force it closed with a higher-specificity selector. Same guard for the
+   step panels and OTP result, which also carry display rules. */
+.zoom-guide-foot .btn[hidden],
+.zoom-guide-modal [hidden] { display: none !important; }
+
+/* Lightbox */
+.zg-lightbox .modal-backdrop { background: rgba(8,11,18,.82); backdrop-filter: blur(8px); }
+.zg-lightbox-inner { position: relative; margin: 4vh auto; width: min(1100px, 94vw);
+  display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.zg-lightbox-img { max-width: 100%; max-height: 84vh; border-radius: 12px;
+  box-shadow: 0 24px 70px rgba(0,0,0,.5); }
+.zg-lightbox-caption { color: #e6e8f0; font-size: .92rem; text-align: center; margin: 0;
+  text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.zg-lightbox-close { position: absolute; top: -6px; right: -6px; background: rgba(0,0,0,.55);
+  color: #fff; border-radius: 50%; width: 38px; height: 38px; z-index: 2; }
+.zg-lightbox-close:hover { background: rgba(0,0,0,.8); }
+
 .fieldset { border: 1px solid var(--border); border-radius: 10px; padding: 2rem; margin: 0;
   display: flex; flex-direction: column; gap: 2rem; }
 /* `display: flex` above overrides the user-agent `display: none`
@@ -4486,9 +4631,12 @@ form[data-savebar-row].is-dirty {
 .meeting-logo { max-height: 48px; max-width: 48px; border-radius: 8px;
   margin-right: 10px; vertical-align: middle; }
 /* Backend meeting detail page — bigger 100px display, distinct from the
-   small inline thumbnails on the admin meeting list. */
-.meeting-header .meeting-logo {
-  max-height: 100px; max-width: 100px; margin-right: 0;
+   small inline thumbnails on the admin meeting list. Rendered as the
+   first item of the left details column (no full-width wrapper) so the
+   right-hand Zoom card can rise to the top of the section. */
+.meeting-info .meeting-logo {
+  max-height: 100px; max-width: 100px; margin: 0 0 20px;
+  display: block; align-self: flex-start;
 }
 .reading-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 8px;
   border: 1px solid var(--border); margin-right: 12px; flex: 0 0 auto; }
@@ -4863,35 +5011,10 @@ body.embed .card.data-card:last-child {
 
 .meeting-info {
   display: flex; flex-direction: column; gap: 20px;
-  /* Anchor for the full-height column divider rendered via ::before. */
   position: relative;
-}
-/* Vertical hairline between the left/right columns of the details
-   grid. Painted on the section card itself so it spans top-padding
-   to bottom-padding (the whole height of the container) instead of
-   stopping at the grid row's height. Hidden when the grid collapses
-   to a single column on narrow viewports — the divider would only
-   visually slice through stacked content there. */
-.meeting-info::before {
-  content: "";
-  position: absolute;
-  /* Stop 2rem short of the card's top + bottom padding edges so the
-     line reads as a column separator rather than a full-bleed
-     hairline through the card chrome. */
-  top: 2rem; bottom: 2rem;
-  left: calc(50% - 0.5px);
-  width: 1px;
-  background: var(--border);
-  pointer-events: none;
-}
-@media (max-width: 600px) {
-  .meeting-info::before { display: none; }
 }
 .meeting-info .detail-label { font-size: 1rem; font-weight: 700; color: var(--text);
   text-transform: none; letter-spacing: 0; margin-bottom: 1rem; }
-.meeting-header { display: flex; gap: 16px; align-items: flex-start; }
-.meeting-header-text { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
-.meeting-header-text .chip { align-self: flex-start; }
 .meeting-description { color: var(--text); }
 .meeting-description .clamp-body { white-space: pre-wrap; }
 .meeting-details-grid {
@@ -4905,13 +5028,18 @@ body.embed .card.data-card:last-child {
   align-items: start;
 }
 .detail-block { display: flex; flex-direction: column; align-self: start; }
-/* Right column gets 1rem of inner padding on the left so its content
-   sits clear of the vertical divider. Only applied on viewports wide
-   enough for the grid to actually have two columns — once it stacks
-   below 600px the second block sits flush like the first. */
-@media (min-width: 601px) {
-  .meeting-details-grid > .detail-block:nth-child(2) { padding-left: 1rem; }
-}
+/* The Zoom data-card lives in its own right-hand column (`.zoom-col`),
+   independent of the left column's Description / Schedule / Location so
+   the two sides flow without colliding. Top-aligned so the card sits up
+   against the top of the section with no dead space above it. */
+/* Zoom block promoted to its own data-card inside the right column.
+   `.card`'s default bottom margin would push it off-center; zero it so
+   the card centers cleanly. */
+.zoom-card { margin-bottom: 0; width: 100%; }
+/* When no guided-launch button precedes it, the "Zoom" section divider
+   becomes the card's first child — drop its top hairline/padding so it
+   doesn't double up with the card's own top edge. */
+.zoom-card > .detail-section-divider:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 /* Divider line between sub-sections inside a detail-block (e.g. the
    right column's Location → Zoom transition). Adds a hairline +
    breathing room in one rule so the inline `margin-top` style on
@@ -4934,6 +5062,37 @@ body.embed .card.data-card:last-child {
 .schedule-table td.sched-day { font-weight: 600; }
 .schedule-table td.sched-time { font-weight: 600; color: var(--text); }
 
+/* Card-style containers (matching the guide's .zg-creds look) wrapping
+   the Schedule and Location sections in the left details column. */
+.zg-card { background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px; }
+.detail-block > .zg-card { margin-top: 16px; }
+.zg-card > .detail-label { margin-bottom: .75rem; }
+.zg-card .schedule-table td:last-child,
+.zg-card .schedule-table th:last-child { padding-right: 0; }
+.zg-card .loc-name { font-weight: 600; color: var(--text); }
+.zg-card .loc-line { color: var(--text); }
+.zg-maps-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; }
+.zg-maps-link .icon { width: 15px; height: 15px; }
+
+/* Inline OTP auto-retrieval on the meeting detail page (mirrors the
+   wizard's Retrieve flow so seasoned hosts can grab a code in place). */
+.otp-inline { display: flex; flex-direction: column; align-items: flex-start;
+  gap: 10px; margin: 6px 0 14px; }
+/* `.otp-inline-result`/`-error` carry display rules that outrank the UA
+   `[hidden]` rule, so force the closed state shut until JS reveals it. */
+.otp-inline [hidden] { display: none !important; }
+.otp-inline-fetch { display: inline-flex; align-items: center; gap: 8px; }
+.otp-inline-fetch .icon { width: 1.05em; height: 1.05em; }
+.otp-inline-fetch.is-loading { opacity: .75; cursor: progress; }
+.otp-inline-result { display: inline-flex; align-items: center; gap: 12px;
+  flex-wrap: wrap; padding: 8px 12px; background: var(--brand-soft); border-radius: 10px; }
+.otp-inline-code { font-size: 1.5rem; font-weight: 800; letter-spacing: .25em;
+  padding: 2px 6px 2px 12px; color: var(--brand); background: none; }
+.otp-inline-meta { margin: 0; }
+.otp-inline-error { margin: 0; color: var(--danger); font-size: .88rem; font-weight: 600; }
+.otp-manual-label { margin-top: 4px; }
+
 .zoom-info { display: grid; grid-template-columns: auto 1fr; gap: 12px 16px; margin: 8px 0 0; align-items: center; }
 .otp-login-btn { font-size: 1rem; padding: 10px 18px; font-weight: 600; }
 .zoom-section-head { font-size: 1rem !important; color: var(--text) !important;
@@ -4947,12 +5106,25 @@ body.embed .card.data-card:last-child {
 .zoom-info dt:has(+ dd > .btn-primary) { display: none; }
 .pw-row { display: inline-flex; align-items: center; gap: 6px; }
 
-.copy-btn { position: relative; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+/* Click-to-copy chips render in Inter with normal letter spacing (the
+   default field colours are kept — only the tooltip is green). `.copy-btn.mono`
+   is listed so the Inter face beats the later `.mono { monospace }` rule
+   (equal-specificity, source-order) for chips that carry both. */
+.copy-btn, .copy-btn.mono { position: relative;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  letter-spacing: normal;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
   padding: 4px 8px; cursor: pointer; color: var(--text); font-size: 1rem; }
 .copy-btn:hover { border-color: var(--access); color: var(--access); }
+/* The prominent OTP-code displays are also .copy-btn chips — re-assert
+   their large, borderless, transparent, brand-coloured look so the generic
+   chip rule above doesn't shrink/box them. */
+.copy-btn.otp-inline-code { font-size: 1.5rem; font-weight: 800; color: var(--brand);
+  background: none; border: none; padding: 2px 6px 2px 12px; }
+.copy-btn.zg-otp-code { font-size: 2rem; font-weight: 800; color: var(--brand);
+  background: none; border: none; padding: 4px 8px 4px 16px; }
 .copy-btn::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%;
-  transform: translateX(-50%); background: var(--text); color: var(--panel); padding: 4px 8px;
+  transform: translateX(-50%); background: var(--success); color: #fff; padding: 4px 8px;
   border-radius: 6px; font-family: inherit; font-size: 0.6875rem; white-space: nowrap; opacity: 0;
   pointer-events: none; transition: opacity .15s; }
 .copy-btn:hover::after, .copy-btn.copied::after { opacity: 1; }

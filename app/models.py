@@ -1418,6 +1418,17 @@ class ZoomOtpEmail(db.Model):
     email = db.Column(db.String(255))
     password_enc = db.Column(db.LargeBinary)
     login_url = db.Column(db.String(1000))
+    # IMAP mailbox settings — let the app log in and pull OTP codes
+    # directly instead of the user opening webmail. The IMAP login can
+    # differ from the human-facing `email`/`password` (e.g. an app
+    # password or a service login), so they're stored separately; when
+    # blank, the fetcher falls back to `email` / `password_enc`.
+    imap_host = db.Column(db.String(255))
+    imap_port = db.Column(db.Integer, default=993)
+    imap_ssl = db.Column(db.Boolean, nullable=False, default=True)
+    imap_username = db.Column(db.String(255))
+    imap_password_enc = db.Column(db.LargeBinary)
+    imap_mailbox = db.Column(db.String(128), default="INBOX")
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 

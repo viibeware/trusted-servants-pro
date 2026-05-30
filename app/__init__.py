@@ -1409,6 +1409,13 @@ def _migrate_sqlite(app):
             add("meeting_file", col, ddl)
         for col, ddl in (("opens_time", "VARCHAR(8)"),):
             add("meeting_schedule", col, ddl)
+        for col, ddl in (("imap_host", "VARCHAR(255)"),
+                         ("imap_port", "INTEGER DEFAULT 993"),
+                         ("imap_ssl", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("imap_username", "VARCHAR(255)"),
+                         ("imap_password_enc", "BLOB"),
+                         ("imap_mailbox", "VARCHAR(128) DEFAULT 'INBOX'")):
+            add("zoom_otp_email", col, ddl)
         for col, ddl in (("location_type", "VARCHAR(16) NOT NULL DEFAULT 'in_person'"),
                          ("address", "VARCHAR(500)"),
                          ("maps_url", "VARCHAR(1000)"),

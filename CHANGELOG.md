@@ -6,6 +6,25 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.9.5] — 2026-05-30
+
+### Added
+
+- **Guided Zoom Meeting launcher — a stepped, blur-backdrop wizard on the backend meeting detail page.** Online/hybrid meetings gain a **Launch Zoom Meeting (Guided)** button above the Zoom ID/passcode block that opens a modal walking a host through three steps: **Sign in** (warns hosting needs a Mac/Windows/Linux desktop — not iOS/Android/Chromebook — and shows the assigned account login + click-to-copy password with reveal), **Get code** (reminds the user to click *"Or alternatively, Verify via one-time passcode"* rather than "Allow on other devices", then retrieves the OTP — see below), and **Start the meeting** (a Launch button on the start URL plus Meeting ID/passcode to copy, and a caveat to sign out of any other Zoom account in the browser first). Each step carries an annotated screenshot that opens in a lightbox; the stepper circles at the top are clickable (and keyboard-accessible) to jump between steps.
+- **Automatic OTP-code retrieval over IMAP (`app/otp_fetch.py`).** A new fetcher logs into the shared OTP inbox read-only (IMAP `EXAMINE` — never marks mail read), finds the freshest Zoom sign-in code, parses the 6-digit passcode, and returns it with the email's own timestamp. Stripping `<head>`/`<style>`/`<script>` first keeps embedded CSS/font-URL digits from polluting the search, and a hint-scored extractor (anchored on "expire", "passcode", "verification"…) isolates the real code over stray numbers (map coordinates, dates, phone numbers, zips). Backs both the wizard's Step 2 and an inline **Retrieve latest code** button added to the OTP Email section, so seasoned hosts can pull a code in place without opening the wizard.
+- **IMAP mailbox settings in Settings → Security → Zoom OTP Email.** The existing OTP-email credentials gained IMAP server / port / SSL / optional username / mailbox / optional app-password fields (encrypted via Fernet, additively migrated). Username/password fall back to the email + password above when left blank.
+- **Location now resolves to its full address with an Open-in-Maps link.** The meeting detail Location card shows the saved Location's complete address (not just the name) plus an **Open in Maps** button (the record's `maps_url`, else a Google Maps search). Resolution moved to the route with tolerant matching (exact normalized match, then a difflib similarity ≥ 0.86 fallback) so a one-character typo in the meeting's free-text location still resolves.
+
+### Changed
+
+- **Meeting detail page restyled into a balanced two-column card layout.** The Zoom section is wrapped in its own `data-card` (brand-accent panel) in the right column, the full-height vertical divider is gone, the logo moved into the left column so the Zoom card rises to the top, and the Schedule and Location sections sit in their own card-style containers. The 50/50 grid is preserved even for in-person meetings (the right column simply renders blank).
+- **OTP code freshness window tightened to 10 minutes, and the newest code always wins** when several arrive in the window (ranked by Zoom-origin, then code confidence, then recency — so a genuine code can't be hijacked by a stray number in a newer non-code notice).
+- **Click-to-copy chips render in Inter with normal letter spacing, and the "Click to copy" tooltip now has a green background.**
+
+### Fixed
+
+- **OTP search no longer misses codes near the UTC midnight boundary.** IMAP `SINCE` compares against each message's `INTERNALDATE` in the *mail server's* timezone (DreamHost is US-Pacific), so a code arriving just after UTC midnight was dated the previous day server-side and excluded. The `SINCE` window is widened by a day to absorb any server offset; the precise per-message UTC timestamp check still enforces the real freshness window.
+
 ## [2.9.4] — 2026-05-29
 
 ### Added

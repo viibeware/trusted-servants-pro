@@ -1806,6 +1806,44 @@ def _resolve_meeting_by_slug(slug):
     return next((m for m in rows if m.public_slug == target), None)
 
 
+def _resolve_meeting_location(meeting, locations):
+    """Match a meeting's free-text ``location`` string to a saved Location
+    row and produce an "Open in Maps" URL.
+
+    Tolerant of minor typos (e.g. "Triange Club" → "Triangle Club"): an
+    exact normalized-name match wins; otherwise the closest name by
+    difflib ratio above a high threshold (0.86) is accepted so a
+    one-character slip still resolves while genuinely different names
+    don't. Returns ``(location_record_or_None, maps_url_or_None)``."""
+    import difflib
+    from urllib.parse import quote_plus
+    raw = (meeting.location or "").strip()
+    if not raw:
+        return None, None
+    norm = raw.lower()
+    record = next((l for l in locations if l.name and l.name.strip().lower() == norm), None)
+    if record is None and locations:
+        best, best_ratio = None, 0.0
+        for l in locations:
+            if not l.name:
+                continue
+            r = difflib.SequenceMatcher(None, norm, l.name.strip().lower()).ratio()
+            if r > best_ratio:
+                best, best_ratio = l, r
+        if best_ratio >= 0.86:
+            record = best
+    # Maps URL: an explicit one on the record wins; otherwise build a
+    # Google Maps search from the best address text available.
+    if record and record.maps_url:
+        maps_url = record.maps_url
+    else:
+        query = (" ".join([record.name or ""] + record.address_lines())
+                 if record else raw).strip()
+        maps_url = ("https://www.google.com/maps/search/?api=1&query=" + quote_plus(query)
+                    if query else None)
+    return record, maps_url
+
+
 @bp.route("/meetings/<slug>")
 @login_required
 def meeting_detail(slug):
@@ -1815,11 +1853,13 @@ def meeting_detail(slug):
     all_libraries = Library.query.order_by(Library.name).all()
     zoom_accounts = ZoomAccount.query.order_by(ZoomAccount.name).all()
     locations = Location.query.order_by(Location.name).all()
+    location_record, location_maps_url = _resolve_meeting_location(m, locations)
     zoom_password = decrypt(m.zoom_account.password_enc) if m.zoom_account else ""
     otp_email = ZoomOtpEmail.query.first()
     return render_template("meeting_detail.html", meeting=m,
                            all_libraries=all_libraries, zoom_accounts=zoom_accounts,
                            locations=locations, zoom_account_password=zoom_password,
+                           location_record=location_record, location_maps_url=location_maps_url,
                            otp_email=otp_email)
 
 
@@ -2443,10 +2483,62 @@ def otp_email_save():
         otp.password_enc = encrypt(pw)
     if request.form.get("clear_password") == "1":
         otp.password_enc = None
+    # IMAP mailbox settings — let the guided launcher pull codes directly.
+    # Guarded by a sentinel so a POST from a form that doesn't carry the
+    # IMAP inputs (e.g. the legacy standalone /otp-email page) leaves the
+    # stored IMAP config untouched instead of silently wiping it.
+    if request.form.get("has_imap_fields") == "1":
+        otp.imap_host = request.form.get("imap_host", "").strip() or None
+        port_raw = request.form.get("imap_port", "").strip()
+        otp.imap_port = int(port_raw) if port_raw.isdigit() else None
+        otp.imap_ssl = request.form.get("imap_ssl") == "1"
+        otp.imap_username = request.form.get("imap_username", "").strip() or None
+        otp.imap_mailbox = request.form.get("imap_mailbox", "").strip() or None
+        imap_pw = request.form.get("imap_password", "")
+        if imap_pw:
+            otp.imap_password_enc = encrypt(imap_pw)
+        if request.form.get("clear_imap_password") == "1":
+            otp.imap_password_enc = None
     db.session.commit()
     flash("OTP email settings updated", "success")
     return redirect(url_for("main.zoom_accounts",
                             **({"embed": "1"} if request.values.get("embed") == "1" else {})))
+
+
+@bp.route("/otp-email/fetch-code")
+@login_required
+def otp_email_fetch_code():
+    """Log into the OTP inbox over IMAP and return the freshest Zoom code.
+
+    Backs the guided Zoom launcher's Step 2 "Retrieve code" button. Any
+    authenticated user who can view a meeting may pull a code — the same
+    audience already sees the inbox credentials on the detail page. Codes
+    older than 10 minutes are never returned (see otp_fetch)."""
+    from .otp_fetch import fetch_latest_code
+    otp = ZoomOtpEmail.query.first()
+    result = fetch_latest_code(otp, max_age_minutes=10)
+    if not result.get("ok"):
+        return jsonify({"ok": False, "error": result.get("error", "Could not retrieve a code.")})
+    sent_at = result["sent_at"]  # aware UTC
+    site = _get_site_setting()
+    try:
+        from .timezone import site_timezone
+        local = sent_at.astimezone(site_timezone(site))
+    except Exception:
+        local = sent_at
+    age = result["age_seconds"]
+    if age < 60:
+        age_label = f"{age}s ago"
+    else:
+        age_label = f"{age // 60} min ago"
+    return jsonify({
+        "ok": True,
+        "code": result["code"],
+        "sent_at": local.strftime("%-I:%M:%S %p"),
+        "sent_date": local.strftime("%b %-d"),
+        "age_label": age_label,
+        "age_seconds": age,
+    })
 
 
 @bp.route("/otp-email/reveal")
