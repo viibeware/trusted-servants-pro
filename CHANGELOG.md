@@ -6,6 +6,18 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.10.0] — 2026-05-30
+
+### Added
+
+- **Email relay transport — an alternative to direct SMTP for hosts that block outbound SMTP ports (e.g. DigitalOcean).** Under **Settings → Domain / Email**, a new **Sending method** selector toggles between **Direct SMTP** and **API relay (HTTPS)**. In relay mode the portal POSTs each message as JSON over HTTPS to a companion relay container ([`viibeware/tspro-relay`](https://hub.docker.com/r/viibeware/tspro-relay)) that performs the actual SMTP delivery, so SMTP credentials never need to live on the app host. New `SiteSetting` columns `mail_transport`, `relay_url`, and `relay_api_key_enc` (Fernet-encrypted, additively migrated); the API key field follows the same "leave blank to keep / clear" pattern as the SMTP password.
+- **`SiteSetting.mail_ready()`** — a transport-aware helper that reports whether outgoing mail is configured for the *active* transport (relay needs a URL + From address; SMTP needs a host + From address). `app/mail.py`'s `send_mail()` now branches on `mail_transport`, with `_send_via_relay()` handling the HTTPS POST (base64 attachments, Reply-To, JSON error surfacing).
+
+### Changed
+
+- **All notification call-sites now gate on `mail_ready()` instead of `smtp_host`**, so access-request emails, contact-form sends, recovery-contact alerts, and backup-failure alerts all work under either transport. The frontend Reply-To sender delegates to the relay in relay mode.
+- **The Email settings UI hides the SMTP server fields when API relay is selected** (and shows the relay URL / key fields instead), driven by the sending-method toggle, so only the relevant fields are visible. The test-send reports which transport it exercised.
+
 ## [2.9.5] — 2026-05-30
 
 ### Added

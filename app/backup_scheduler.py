@@ -128,7 +128,8 @@ def _send_failure_email(app, target, error):
         from . import mail
         from .models import SiteSetting, User
         ss = SiteSetting.query.first()
-        if not ss or not getattr(ss, "smtp_host", None):
+        if not ss or not (ss.mail_ready() if hasattr(ss, "mail_ready")
+                          else getattr(ss, "smtp_host", None)):
             return
         admin_emails = [u.email for u in User.query.filter_by(role="admin").all() if u.email]
         if not admin_emails:

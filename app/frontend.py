@@ -2237,7 +2237,7 @@ def story_submission_submit():
                   or getattr(site, "submission_to", None)
                   or getattr(site, "access_request_to", None)
                   or "").strip()
-    if site.smtp_host and recipients:
+    if site.mail_ready() and recipients:
         submitter_line = f"{submitter_name}"
         if submitter_email:
             submitter_line += f" <{submitter_email}>"
@@ -2489,7 +2489,7 @@ def submission_submit():
     # the holding tank; the featured image (when one was uploaded)
     # rides along as an attachment.
     recipients = (site.submission_to or site.access_request_to or "").strip()
-    if site.smtp_host and recipients:
+    if site.mail_ready() and recipients:
         kind_label = " + ".join([k for k, v in
                                  (("Announcement", is_announcement),
                                   ("Event", is_event)) if v])
@@ -4171,7 +4171,7 @@ def contact_submit():
     recipients = (getattr(site, "contact_form_to", None)
                   or getattr(site, "pic_email", None)
                   or getattr(site, "access_request_to", None) or "").strip()
-    if site.smtp_host and recipients:
+    if site.mail_ready() and recipients:
         # Build a structured plain-text email. Visitor's email is
         # echoed in the body too (in addition to the Reply-To
         # header) so admins reading the message on a phone can
@@ -4455,7 +4455,7 @@ def recovery_contacts_submit():
         # Email the submitter a confirmation link (the opt-in mechanism)
         # plus a "this wasn't me" link that discards the request and locks
         # the listing against further requests for 7 days.
-        if site.smtp_host and email:
+        if site.mail_ready() and email:
             try:
                 confirm_url = url_for("frontend.recovery_contacts_confirm",
                                       token=confirm_token, _external=True)
@@ -4499,7 +4499,7 @@ def recovery_contacts_submit():
         # send an admin email when the new-submission alert is on.
         recipients = (getattr(site, "recovery_contacts_to", None)
                       or getattr(site, "access_request_to", None) or "").strip()
-        if getattr(site, "recovery_contacts_email_alerts", False) and site.smtp_host and recipients:
+        if getattr(site, "recovery_contacts_email_alerts", False) and site.mail_ready() and recipients:
             subject_line = f"New Recovery Contacts entry from {name}"
             lines = [f"A new Recovery Contacts entry has been submitted on the public {site_label} site.",
                      "It is awaiting your approval and is not yet visible to the public.",
@@ -4518,7 +4518,7 @@ def recovery_contacts_submit():
 
     # Audit log.
     _ip = (request.remote_addr or "")[:64]
-    _sent = " — confirmation link sent" if (site.smtp_host and email) else ""
+    _sent = " — confirmation link sent" if (site.mail_ready() and email) else ""
     if wants_removal:
         log_recovery_contact("removal_requested", f"Removal requested{_sent}",
                              entry_name=name, actor="Visitor", ip_address=_ip)
@@ -4576,7 +4576,7 @@ def recovery_contacts_confirm(token):
         # Optional admin FYI that the removal went through.
         recipients = (getattr(site, "recovery_contacts_to", None)
                       or getattr(site, "access_request_to", None) or "").strip()
-        if getattr(site, "recovery_contacts_removal_alerts", False) and site.smtp_host and recipients:
+        if getattr(site, "recovery_contacts_removal_alerts", False) and site.mail_ready() and recipients:
             site_label = (site.frontend_title or "Trusted Servants")
             send_mail(site, recipients,
                       f"Recovery Contacts removal confirmed — {name}",
@@ -4736,7 +4736,7 @@ def recovery_contacts_contact():
             flash(err or "Security check failed — please try again.", "danger")
             return back
 
-    if not site.smtp_host:
+    if not site.mail_ready():
         flash("Contact isn't available right now — please try again later.", "danger")
         return back
 
@@ -5047,7 +5047,13 @@ def _send_with_reply_to(site, recipients, subject, body_text,
     from email.message import EmailMessage
     from email.utils import formataddr
     from .crypto import decrypt
-    from .mail import _recipients
+    from .mail import _recipients, send_mail
+
+    # API-relay transport has no local SMTP socket — hand the whole
+    # message (Reply-To included) to the canonical relay sender.
+    if (getattr(site, "mail_transport", "smtp") or "smtp") == "relay":
+        return send_mail(site, recipients, subject, body_text,
+                         reply_to=reply_to, reply_to_name=reply_to_name)
 
     if not site or not site.smtp_host or not site.smtp_from_email:
         return False, "SMTP is not configured"

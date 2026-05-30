@@ -1110,27 +1110,48 @@
           </p>
           <form class="form" method="post" action="{{ url_for('main.email_save') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="row">
-              <label>SMTP host<input name="smtp_host" type="text" value="{{ site.smtp_host or '' }}" placeholder="smtp.example.com"></label>
-              <label>Port<input name="smtp_port" type="number" min="1" max="65535" value="{{ site.smtp_port or '' }}" placeholder="587"></label>
-            </div>
-            <div class="row">
-              <label>Username<input name="smtp_username" type="text" value="{{ site.smtp_username or '' }}" autocomplete="off"></label>
-              <label>Security
-                <select name="smtp_security">
-                  <option value="starttls" {% if site.smtp_security == 'starttls' %}selected{% endif %}>STARTTLS (port 587)</option>
-                  <option value="ssl" {% if site.smtp_security == 'ssl' %}selected{% endif %}>SSL/TLS (port 465)</option>
-                  <option value="none" {% if site.smtp_security == 'none' %}selected{% endif %}>None (plain)</option>
-                </select>
-              </label>
-            </div>
-            <label>Password
-              <input name="smtp_password" type="password" autocomplete="new-password"
-                     placeholder="{% if site.smtp_password_enc %}(leave blank to keep existing){% else %}Enter password{% endif %}">
+            <label>Sending method
+              <select name="mail_transport" id="mailTransportSelect">
+                <option value="smtp" {% if (site.mail_transport or 'smtp') != 'relay' %}selected{% endif %}>Direct SMTP</option>
+                <option value="relay" {% if (site.mail_transport or 'smtp') == 'relay' %}selected{% endif %}>API relay (HTTPS)</option>
+              </select>
+              <span class="muted smaller">Use <b>API relay</b> when your host blocks outbound SMTP ports (e.g. DigitalOcean). The app sends each message over HTTPS to a relay container that does the SMTP delivery. <b>From email / From name</b> and access-request recipients apply to both modes.</span>
             </label>
-            {% if site.smtp_password_enc %}
-            <label class="check"><input type="checkbox" name="smtp_password_clear" value="1"><span>Remove stored password</span></label>
-            {% endif %}
+            <div id="relayFields">
+              <div class="row">
+                <label>Relay URL<input name="relay_url" type="url" value="{{ site.relay_url or '' }}" placeholder="https://relay.example.com"></label>
+              </div>
+              <label>Relay API key
+                <input name="relay_api_key" type="password" autocomplete="new-password"
+                       placeholder="{% if site.relay_api_key_enc %}(leave blank to keep existing){% else %}Shared secret from the relay{% endif %}">
+              </label>
+              {% if site.relay_api_key_enc %}
+              <label class="check"><input type="checkbox" name="relay_api_key_clear" value="1"><span>Remove stored API key</span></label>
+              {% endif %}
+            </div>
+            <div id="smtpFields">
+              <div class="row">
+                <label>SMTP host<input name="smtp_host" type="text" value="{{ site.smtp_host or '' }}" placeholder="smtp.example.com"></label>
+                <label>Port<input name="smtp_port" type="number" min="1" max="65535" value="{{ site.smtp_port or '' }}" placeholder="587"></label>
+              </div>
+              <div class="row">
+                <label>Username<input name="smtp_username" type="text" value="{{ site.smtp_username or '' }}" autocomplete="off"></label>
+                <label>Security
+                  <select name="smtp_security">
+                    <option value="starttls" {% if site.smtp_security == 'starttls' %}selected{% endif %}>STARTTLS (port 587)</option>
+                    <option value="ssl" {% if site.smtp_security == 'ssl' %}selected{% endif %}>SSL/TLS (port 465)</option>
+                    <option value="none" {% if site.smtp_security == 'none' %}selected{% endif %}>None (plain)</option>
+                  </select>
+                </label>
+              </div>
+              <label>Password
+                <input name="smtp_password" type="password" autocomplete="new-password"
+                       placeholder="{% if site.smtp_password_enc %}(leave blank to keep existing){% else %}Enter password{% endif %}">
+              </label>
+              {% if site.smtp_password_enc %}
+              <label class="check"><input type="checkbox" name="smtp_password_clear" value="1"><span>Remove stored password</span></label>
+              {% endif %}
+            </div>
             <div class="row">
               <label>From email<input name="smtp_from_email" type="email" value="{{ site.smtp_from_email or '' }}" placeholder="noreply@example.com"></label>
               <label>From name<input name="smtp_from_name" type="text" value="{{ site.smtp_from_name or '' }}" placeholder="Trusted Servants Pro"></label>

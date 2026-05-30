@@ -14741,6 +14741,15 @@ def email_save():
     s.smtp_from_name = (request.form.get("smtp_from_name") or "").strip() or None
     sec = (request.form.get("smtp_security") or "starttls").strip()
     s.smtp_security = sec if sec in ("none", "starttls", "ssl") else "starttls"
+    # Transport selection + API-relay credentials.
+    transport = (request.form.get("mail_transport") or "smtp").strip()
+    s.mail_transport = transport if transport in ("smtp", "relay") else "smtp"
+    s.relay_url = (request.form.get("relay_url") or "").strip() or None
+    new_key = request.form.get("relay_api_key") or ""
+    if request.form.get("relay_api_key_clear") == "1":
+        s.relay_api_key_enc = None
+    elif new_key:
+        s.relay_api_key_enc = encrypt(new_key)
     s.access_request_to = (request.form.get("access_request_to") or "").strip() or None
     db.session.commit()
     flash("Email settings saved", "success")
@@ -14789,23 +14798,30 @@ def email_test():
             return jsonify(ok=False, message="Provide a test recipient"), 200
         flash("Provide a test recipient", "danger")
         return redirect(_safe_referrer() or url_for("main.index"))
-    if not (s.smtp_host and s.smtp_from_email):
-        msg = ("SMTP isn't configured yet. Enter SMTP host, port, security, "
-               "and From-email above, click Save, then run the test.")
+    relay_mode = (s.mail_transport or "smtp") == "relay"
+    if not s.mail_ready():
+        if relay_mode:
+            msg = ("API relay isn't configured yet. Enter the relay URL, "
+                   "API key, and From-email above, click Save, then run the test.")
+        else:
+            msg = ("SMTP isn't configured yet. Enter SMTP host, port, security, "
+                   "and From-email above, click Save, then run the test.")
         if wants_json:
             return jsonify(ok=False, message=msg), 200
         flash(msg, "danger")
         return redirect(_safe_referrer() or url_for("main.index"))
+    transport_label = "the API relay" if relay_mode else "SMTP"
     ok, err = send_mail(s, recipients,
                         "Trusted Servants Pro test email",
-                        "This is a test message from Trusted Servants Pro. SMTP is configured correctly.")
+                        f"This is a test message from Trusted Servants Pro. "
+                        f"Outgoing email via {transport_label} is configured correctly.")
     if ok:
         msg = f"Test email sent to {', '.join(recipients)}"
         if wants_json:
             return jsonify(ok=True, message=msg), 200
         flash(msg, "success")
     else:
-        msg = f"SMTP send failed: {err}"
+        msg = f"Send failed: {err}"
         if wants_json:
             return jsonify(ok=False, message=msg), 200
         flash(msg, "danger")
@@ -14849,7 +14865,7 @@ def request_access_submit():
 
     s = _get_site_setting()
     mail_error = None
-    if s.smtp_host and s.access_request_to:
+    if s.mail_ready() and s.access_request_to:
         lines = [
             "A new access request has been submitted to Trusted Servants Pro.",
             "",

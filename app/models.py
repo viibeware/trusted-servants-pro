@@ -663,7 +663,32 @@ class SiteSetting(db.Model):
     smtp_from_email = db.Column(db.String(255))
     smtp_from_name = db.Column(db.String(200))
     smtp_security = db.Column(db.String(16), nullable=False, default="starttls")  # none|starttls|ssl
+    # --- Outgoing mail transport selection ---
+    # 'smtp' (default) sends directly via the smtp_* columns above.
+    # 'relay' POSTs each message as JSON to a TSP email-relay container
+    # over HTTPS (port 443 behind a reverse proxy) — for hosts like
+    # DigitalOcean that block outbound SMTP ports (25/465/587). The
+    # relay holds the real SMTP credentials; this app only needs the
+    # relay base URL + a shared API key. The smtp_from_email /
+    # smtp_from_name columns are reused for the From header in both
+    # modes, so switching transports doesn't change the sender.
+    mail_transport = db.Column(db.String(16), nullable=False, default="smtp")  # smtp|relay
+    relay_url = db.Column(db.String(500))            # e.g. https://relay.example.com
+    relay_api_key_enc = db.Column(db.LargeBinary)    # Fernet-encrypted shared secret
     access_request_to = db.Column(db.String(500))  # comma-separated recipients
+
+    def mail_ready(self):
+        """True when outgoing mail is configured for the active transport.
+
+        Callers gate notification sends on this instead of checking
+        ``smtp_host`` directly, so the API-relay transport (which has
+        no local SMTP host) still sends. Both transports need a From
+        address — without one the message has no usable sender."""
+        if not self.smtp_from_email:
+            return False
+        if (self.mail_transport or "smtp") == "relay":
+            return bool(self.relay_url)
+        return bool(self.smtp_host)
     # Where to email new submissions made via the public /submissionform.
     # Comma-separated list, mirrors access_request_to. Falls back to
     # access_request_to when blank so installs that already configured

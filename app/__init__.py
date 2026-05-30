@@ -1472,6 +1472,10 @@ def _migrate_sqlite(app):
                          ("smtp_from_email", "VARCHAR(255)"),
                          ("smtp_from_name", "VARCHAR(200)"),
                          ("smtp_security", "VARCHAR(16) NOT NULL DEFAULT 'starttls'"),
+                         # Outgoing-mail transport: SMTP (default) vs HTTPS API relay
+                         ("mail_transport", "VARCHAR(16) NOT NULL DEFAULT 'smtp'"),
+                         ("relay_url", "VARCHAR(500)"),
+                         ("relay_api_key_enc", "BLOB"),
                          ("access_request_to", "VARCHAR(500)"),
                          ("submission_to", "VARCHAR(500)"),
                          ("submission_form_enabled", "BOOLEAN NOT NULL DEFAULT 1"),

@@ -674,6 +674,23 @@
       return data;
     }
 
+    // Email transport toggle: the <select> is the SMTP-vs-relay switch.
+    // Show only the field group for the chosen transport — relay fields
+    // in relay mode, the SMTP host/port/auth fields otherwise.
+    (function () {
+      const sel = document.getElementById("mailTransportSelect");
+      const relayFields = document.getElementById("relayFields");
+      const smtpFields = document.getElementById("smtpFields");
+      if (!sel || (!relayFields && !smtpFields)) return;
+      const sync = () => {
+        const relay = sel.value === "relay";
+        if (relayFields) relayFields.style.display = relay ? "" : "none";
+        if (smtpFields) smtpFields.style.display = relay ? "none" : "";
+      };
+      sel.addEventListener("change", sync);
+      sync();
+    })();
+
     settingsModal.querySelectorAll("form").forEach(f => {
       if (f.closest(".settings-frame")) return;
       if (f.dataset.noAjax === "1") return;
