@@ -17,6 +17,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ### Changed
 
+- **The "Retrieve latest code" button now polls the inbox for up to 3 minutes.** Zoom is slow to send the passcode email, so a single check usually came up empty. Clicking Retrieve now keeps checking every ~6 seconds (showing a spinner and "Checking for code…") until a code lands or 3 minutes elapse; it stops early on a configuration/login error. Backed by a new `retryable` flag on the fetch response (the "no email/code yet" and transient-network cases are retryable; config/login errors are terminal). Copy updated to "it may take up to a minute to retrieve a code".
+- **OTP section renamed to "Zoom One-Time-Passcodes (OTP)"** everywhere it appears (meeting detail, Zoom Accounts page, Settings → Security), and on the meeting detail page it's wrapped in a `zg-card` panel matching the Schedule/Location cards.
 - **Meeting detail page restyled into a balanced two-column card layout.** The Zoom section is wrapped in its own `data-card` (brand-accent panel) in the right column, the full-height vertical divider is gone, the logo moved into the left column so the Zoom card rises to the top, and the Schedule and Location sections sit in their own card-style containers. The 50/50 grid is preserved even for in-person meetings (the right column simply renders blank).
 - **OTP code freshness window tightened to 10 minutes, and the newest code always wins** when several arrive in the window (ranked by Zoom-origin, then code confidence, then recency — so a genuine code can't be hijacked by a stray number in a newer non-code notice).
 - **Click-to-copy chips render in Inter with normal letter spacing, and the "Click to copy" tooltip now has a green background.**

@@ -63,8 +63,8 @@
     {% if otp and (otp.email or otp.login_url or otp.password_enc or otp.imap_host) %}
     <aside class="zoom-accounts-side">
       <div class="zoom-otp-widget">
-        <h3 class="zoom-otp-title">OTP Email</h3>
-        <p class="muted small">Retrieve Zoom one-time-passcodes for the assigned Zoom account. <strong>Wait 1 minute</strong> before clicking retrieve to allow time for Zoom to send the code.</p>
+        <h3 class="zoom-otp-title">Zoom One-Time-Passcodes (OTP)</h3>
+        <p class="muted small">Retrieve one-time-passcodes for the assigned Zoom account. Click retrieve and the system will keep checking — <strong>it may take up to a minute to retrieve a code</strong>.</p>
         {% if otp.imap_host %}
         {# Inline auto-retrieval — shares the wizard's fetcher (initOtpFetch). #}
         <div class="otp-inline" data-otp-widget data-fetch-url="{{ url_for('main.otp_email_fetch_code') }}">

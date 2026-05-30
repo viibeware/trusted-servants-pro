@@ -232,9 +232,10 @@ def fetch_latest_code(otp, max_age_minutes=10):
         since = (cutoff - timedelta(days=1)).strftime("%d-%b-%Y")
         typ, data = conn.search(None, "SINCE", since)
         if typ != "OK" or not data or not data[0]:
-            return {"ok": False,
-                    "error": "No recent verification emails found. "
-                             "Wait for the code to arrive, then retry."}
+            # Retryable: the code email simply hasn't landed yet, so a
+            # poller should keep checking rather than give up.
+            return {"ok": False, "retryable": True,
+                    "error": "No recent verification emails found yet."}
 
         ids = data[0].split()
         # Newest UIDs last; walk back from the end and stop once messages
@@ -283,10 +284,9 @@ def fetch_latest_code(otp, max_age_minutes=10):
                 best = (score, code, sent_at)
 
         if not best:
-            return {"ok": False,
-                    "error": "No verification code found in the last "
-                             f"{max_age_minutes} minutes. Wait for a fresh "
-                             "email and retry."}
+            # Retryable: a fresh code may still be on its way.
+            return {"ok": False, "retryable": True,
+                    "error": "No verification code found yet."}
 
         _, code, sent_at = best
         age = int((datetime.now(timezone.utc) - sent_at).total_seconds())
@@ -295,7 +295,9 @@ def fetch_latest_code(otp, max_age_minutes=10):
     except imaplib.IMAP4.error as e:
         return {"ok": False, "error": f"IMAP login failed: {e}"}
     except (OSError, TimeoutError) as e:
-        return {"ok": False, "error": f"Could not reach the mail server: {e}"}
+        # Transient connectivity blip — let the poller try again.
+        return {"ok": False, "retryable": True,
+                "error": f"Could not reach the mail server: {e}"}
     except Exception as e:  # last-resort guard — this backs a UI button
         return {"ok": False, "error": f"Unexpected error retrieving the code: {e}"}
     finally:

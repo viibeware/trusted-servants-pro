@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block heading %}OTP Email{% endblock %}
+{% block heading %}Zoom One-Time-Passcodes (OTP){% endblock %}
 {% block content %}
 <section class="card">
-  <div class="card-head"><h2>Zoom OTP Email</h2></div>
+  <div class="card-head"><h2>Zoom One-Time-Passcodes (OTP)</h2></div>
   <p class="muted small">Shared inbox where Zoom sends one-time-password codes. These credentials are shown to users on Online/Hybrid meeting pages so they can retrieve OTP codes when logging into Zoom.</p>
   <form method="post" action="{{ url_for('main.otp_email_save') }}" class="form">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

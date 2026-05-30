@@ -1945,6 +1945,14 @@
   // [data-otp-widget] that carries the fetch URL and the result/error/
   // code/meta targets.
   (function initOtpFetch() {
+    // Zoom is slow to send the passcode email, so a single check usually
+    // comes up empty. On click we poll the inbox for up to 3 minutes,
+    // every few seconds, until a code lands — showing a spinner the whole
+    // time. We stop early on a configuration/login error (retryable:false)
+    // since retrying that would never succeed.
+    const POLL_MS = 6000;          // gap between checks
+    const DEADLINE_MS = 3 * 60 * 1000;  // give up after 3 minutes
+    const wait = (ms) => new Promise(r => setTimeout(r, ms));
     document.querySelectorAll("[data-otp-fetch]").forEach(btn => {
       const scope = btn.closest("[data-otp-widget]") || document;
       const fetchUrl = scope.dataset ? scope.dataset.fetchUrl : null;
@@ -1955,30 +1963,60 @@
       const errEl = scope.querySelector("[data-otp-error]");
       const label = btn.querySelector("[data-otp-fetch-label], .zg-otp-fetch-label");
       const setLabel = (t) => { if (label) label.textContent = t; };
+      // Spinner is injected (not in markup) so all three call sites get it
+      // without template edits; CSS reveals it while .is-loading is set.
+      const spinner = document.createElement("span");
+      spinner.className = "otp-spinner";
+      spinner.setAttribute("aria-hidden", "true");
+      btn.insertBefore(spinner, btn.firstChild);
+
+      let polling = false;
       btn.addEventListener("click", async () => {
+        if (polling) return;
+        polling = true;
+        const deadline = Date.now() + DEADLINE_MS;
         btn.disabled = true;
         btn.classList.add("is-loading");
-        setLabel("Retrieving…");
+        if (result) result.hidden = true;
         if (errEl) { errEl.hidden = true; errEl.textContent = ""; }
+        setLabel("Checking for code…");
         try {
-          const r = await fetch(fetchUrl, { headers: { "X-Requested-With": "fetch" } });
-          const j = await r.json();
-          if (j.ok) {
-            if (codeEl) { codeEl.textContent = j.code; codeEl.dataset.copy = j.code; }
-            if (metaEl) metaEl.innerHTML = `Received <strong>${j.sent_at}</strong> · ${j.age_label}`;
-            if (result) result.hidden = false;
-            setLabel("Retrieve again");
-          } else {
-            if (errEl) { errEl.textContent = j.error || "Could not retrieve a code."; errEl.hidden = false; }
-            if (result) result.hidden = true;
-            setLabel("Retrieve code");
+          while (true) {
+            let j;
+            try {
+              const r = await fetch(fetchUrl, { headers: { "X-Requested-With": "fetch" } });
+              j = await r.json();
+            } catch (e) {
+              j = { ok: false, retryable: true, error: "Network error" };
+            }
+            if (j.ok) {
+              if (codeEl) { codeEl.textContent = j.code; codeEl.dataset.copy = j.code; }
+              if (metaEl) metaEl.innerHTML = `Received <strong>${j.sent_at}</strong> · ${j.age_label}`;
+              if (result) result.hidden = false;
+              setLabel("Retrieve again");
+              break;
+            }
+            // Hard error (no IMAP, bad login) — retrying won't help.
+            if (!j.retryable) {
+              if (errEl) { errEl.textContent = j.error || "Could not retrieve a code."; errEl.hidden = false; }
+              setLabel("Retrieve code");
+              break;
+            }
+            // Retryable: keep checking until the 3-minute deadline.
+            if (Date.now() + POLL_MS >= deadline) {
+              if (errEl) {
+                errEl.textContent = "No code arrived after 3 minutes. Make sure you triggered the Zoom passcode, then try again.";
+                errEl.hidden = false;
+              }
+              setLabel("Retrieve code");
+              break;
+            }
+            await wait(POLL_MS);
           }
-        } catch (e) {
-          if (errEl) { errEl.textContent = "Network error — please try again."; errEl.hidden = false; }
-          setLabel("Retrieve code");
         } finally {
           btn.disabled = false;
           btn.classList.remove("is-loading");
+          polling = false;
         }
       });
     });

@@ -150,8 +150,9 @@
         {% endif %}
       </dl>
       {% if meeting.meeting_type != 'in_person' and meeting.show_otp and otp_email and (otp_email.email or otp_email.login_url or otp_email.imap_host) %}
-      <div class="detail-label zoom-divider-top">OTP Email</div>
-      <p class="muted small" style="margin: 4px 0 6px;">Retrieve Zoom one-time-passcodes for this assigned Zoom account. <strong>Wait 1 minute</strong> before clicking retrieve to allow time for Zoom to send the code.</p>
+      <div class="zg-card otp-card">
+      <div class="detail-label">Zoom One-Time-Passcodes (OTP)</div>
+      <p class="muted small" style="margin: 4px 0 6px;">Retrieve one-time-passcodes for the assigned Zoom account. Click retrieve and the system will keep checking — <strong>it may take up to a minute to retrieve a code</strong>.</p>
       {% if otp_email.imap_host %}
       {# Inline auto-retrieval — same fetcher the guided wizard uses, so
          seasoned hosts can pull the latest code without opening the
@@ -168,7 +169,7 @@
       </div>
       {% endif %}
       {% if otp_email.email or otp_email.password_enc or otp_email.login_url %}
-      <div class="detail-label otp-manual-label">{% if otp_email.imap_host %}Or log in to the inbox manually{% else %}Webmail login{% endif %}</div>
+      <div class="muted small otp-manual-label">{% if otp_email.imap_host %}Or log in to the inbox manually{% else %}Webmail login{% endif %}</div>
       <dl class="zoom-info">
         {% if otp_email.email %}
         <dt>Email</dt>
@@ -187,6 +188,7 @@
         {% endif %}
       </dl>
       {% endif %}
+      </div>
       {% endif %}
       </section>
       {% endif %}
@@ -272,7 +274,7 @@
         </div>
 
         <div class="zg-otp" data-otp-widget data-fetch-url="{{ url_for('main.otp_email_fetch_code') }}">
-          <p class="zg-otp-instruction">{{ icon('clock') }} Wait about <strong>1&nbsp;minute</strong> for the email to arrive, then retrieve the latest code.</p>
+          <p class="zg-otp-instruction">{{ icon('clock') }} Click retrieve and the system will keep checking — <strong>it may take up to a minute to retrieve a code</strong>.</p>
           {% if _imap_ready %}
           <button type="button" class="btn btn-primary zg-otp-fetch" data-otp-fetch>
             {{ icon('mail') }}<span class="zg-otp-fetch-label">Retrieve code</span>

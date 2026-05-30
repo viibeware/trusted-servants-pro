@@ -5084,14 +5084,32 @@ body.embed .card.data-card:last-child {
 .otp-inline [hidden] { display: none !important; }
 .otp-inline-fetch { display: inline-flex; align-items: center; gap: 8px; }
 .otp-inline-fetch .icon { width: 1.05em; height: 1.05em; }
-.otp-inline-fetch.is-loading { opacity: .75; cursor: progress; }
+.otp-inline-fetch.is-loading { cursor: progress; }
+
+/* "Retrieve code" buttons (wizard + meeting detail + Zoom Accounts) show a
+   spinner while polling the inbox for up to 3 minutes. The spinner is
+   injected as the button's first child by initOtpFetch(); CSS swaps the
+   mail icon out for it whenever the button carries .is-loading. */
+.otp-spinner { display: none; width: 1.05em; height: 1.05em; flex: 0 0 auto;
+  border: 2px solid currentColor; border-right-color: transparent;
+  border-radius: 50%; vertical-align: -0.15em;
+  animation: otpSpin .6s linear infinite; }
+[data-otp-fetch].is-loading .otp-spinner { display: inline-block; }
+[data-otp-fetch].is-loading .icon { display: none; }
+@keyframes otpSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .otp-spinner { animation: none; } }
 .otp-inline-result { display: inline-flex; align-items: center; gap: 12px;
   flex-wrap: wrap; padding: 8px 12px; background: var(--brand-soft); border-radius: 10px; }
 .otp-inline-code { font-size: 1.5rem; font-weight: 800; letter-spacing: .25em;
   padding: 2px 6px 2px 12px; color: var(--brand); background: none; }
 .otp-inline-meta { margin: 0; }
 .otp-inline-error { margin: 0; color: var(--danger); font-size: .88rem; font-weight: 600; }
-.otp-manual-label { margin-top: 4px; }
+.otp-manual-label { margin-top: 10px; }
+/* OTP section promoted to a zg-card on the meeting detail page: separate it
+   from the Zoom host-account block above, and put a 1rem gap between the
+   intro text and the Retrieve button. */
+.otp-card { margin-top: 16px; }
+.otp-card .otp-inline { margin-top: 1rem; }
 
 .zoom-info { display: grid; grid-template-columns: auto 1fr; gap: 12px 16px; margin: 8px 0 0; align-items: center; }
 .otp-login-btn { font-size: 1rem; padding: 10px 18px; font-weight: 600; }

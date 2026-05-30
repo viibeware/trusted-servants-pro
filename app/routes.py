@@ -2518,7 +2518,9 @@ def otp_email_fetch_code():
     otp = ZoomOtpEmail.query.first()
     result = fetch_latest_code(otp, max_age_minutes=10)
     if not result.get("ok"):
-        return jsonify({"ok": False, "error": result.get("error", "Could not retrieve a code.")})
+        return jsonify({"ok": False,
+                        "retryable": bool(result.get("retryable")),
+                        "error": result.get("error", "Could not retrieve a code.")})
     sent_at = result["sent_at"]  # aware UTC
     site = _get_site_setting()
     try:
