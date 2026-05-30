@@ -82,6 +82,15 @@ _ASSET_EXTS = (
 )
 _ASSET_PREFIXES = ("/static/", "/pub/", "/site-branding/", "/favicon")
 
+# Reusable SQL clause: exclude background data/poll rows under /api/ (e.g.
+# the utility bar's /api/live-meeting poller) from EVERY metric. New hits
+# are dropped at record time (see _should_skip), but rows logged before
+# that skip existed are still in the table — applying this clause to every
+# aggregation keeps them from skewing totals, daily series, uniques, and
+# the device/browser/OS/referrer/path/hour breakdowns. (`notlike` treats a
+# NULL path as non-matching, but record_visit always stores at least "/".)
+_NO_API = VisitorEvent.path.notlike("/api/%")
+
 
 def _parse_ua(ua):
     """Return (device, browser, os) for a UA string. Each field falls
@@ -177,6 +186,13 @@ def _should_skip(path, method, ua):
     if lower_path.startswith(_ASSET_PREFIXES):
         return True
     if lower_path.endswith(_ASSET_EXTS):
+        return True
+    # Background data/poll endpoints (e.g. the utility bar's
+    # /api/live-meeting poller, which every public visitor fires every
+    # 30s) are machine requests, not page views — never count them, or
+    # they'd dominate the top-paths list. Mirrors the same /api skip the
+    # online-users tracker applies.
+    if lower_path.startswith("/api/"):
         return True
     # Browser prefetch / prerender hints — Chrome/Edge ship these with a
     # `Sec-Purpose: prefetch` header. We don't want to count link
@@ -337,7 +353,7 @@ def summary(days=30):
     cutoff_window = (today - timedelta(days=days - 1)).strftime("%Y-%m-%d")
 
     def _views_in(day_from, day_to=None):
-        q = db.session.query(func.count(VisitorEvent.id))
+        q = db.session.query(func.count(VisitorEvent.id)).filter(_NO_API)
         if day_to is None:
             q = q.filter(VisitorEvent.day == day_from)
         else:
@@ -346,7 +362,8 @@ def summary(days=30):
         return int(q.scalar() or 0)
 
     def _uniques_in(day_from, day_to=None):
-        q = db.session.query(func.count(func.distinct(VisitorEvent.visitor_hash)))
+        q = (db.session.query(func.count(func.distinct(VisitorEvent.visitor_hash)))
+             .filter(_NO_API))
         if day_to is None:
             q = q.filter(VisitorEvent.day == day_from)
         else:
@@ -355,8 +372,10 @@ def summary(days=30):
         q = q.filter(VisitorEvent.visitor_hash.isnot(None))
         return int(q.scalar() or 0)
 
-    total_views = int(db.session.query(func.count(VisitorEvent.id)).scalar() or 0)
+    total_views = int(db.session.query(func.count(VisitorEvent.id))
+                      .filter(_NO_API).scalar() or 0)
     first_row = (db.session.query(VisitorEvent.created_at)
+                 .filter(_NO_API)
                  .order_by(VisitorEvent.created_at.asc()).first())
     first_seen_at = first_row[0] if first_row else None
 
@@ -387,12 +406,14 @@ def daily_series(days=30):
     views_by_day = dict(
         db.session.query(VisitorEvent.day, func.count(VisitorEvent.id))
         .filter(VisitorEvent.day >= cutoff)
+        .filter(_NO_API)
         .group_by(VisitorEvent.day).all()
     )
     uniques_by_day = dict(
         db.session.query(VisitorEvent.day,
                          func.count(func.distinct(VisitorEvent.visitor_hash)))
         .filter(VisitorEvent.day >= cutoff)
+        .filter(_NO_API)
         .filter(VisitorEvent.visitor_hash.isnot(None))
         .group_by(VisitorEvent.day).all()
     )
@@ -434,7 +455,8 @@ def hourly_distribution(days=14, metric="views"):
     q = (db.session.query(
             func.strftime("%H", VisitorEvent.created_at).label("hour"),
             _count_expr(metric))
-         .filter(VisitorEvent.day >= cutoff))
+         .filter(VisitorEvent.day >= cutoff)
+         .filter(_NO_API))
     if metric == "uniques":
         q = q.filter(VisitorEvent.visitor_hash.isnot(None))
     rows = q.group_by("hour").all()
@@ -455,7 +477,8 @@ def _top_n(column, days, limit, metric="views", label_for_none="(unknown)"):
     cutoff = (today - timedelta(days=days - 1)).strftime("%Y-%m-%d")
     cnt = _count_expr(metric)
     q = (db.session.query(column, cnt)
-         .filter(VisitorEvent.day >= cutoff))
+         .filter(VisitorEvent.day >= cutoff)
+         .filter(_NO_API))
     if metric == "uniques":
         q = q.filter(VisitorEvent.visitor_hash.isnot(None))
     rows = (q.group_by(column).order_by(cnt.desc()).limit(limit).all())
@@ -468,8 +491,23 @@ def top_paths(days=30, limit=10, metric="views"):
     metric="views"   — every page load counts.
     metric="uniques" — counts distinct visitors per path (more useful
                        when comparing reach across pages because it
-                       isn't skewed by a single visitor reloading)."""
-    return _top_n(VisitorEvent.path, days, limit, metric=metric, label_for_none="/")
+                       isn't skewed by a single visitor reloading).
+
+    Background data endpoints under ``/api/`` (e.g. the utility bar's
+    ``/api/live-meeting`` poller) are excluded from the list — they're
+    machine polls, not page views. New hits are already dropped at record
+    time (see ``_should_skip``); this filter also hides any historical
+    ``/api/*`` rows logged before that skip existed."""
+    today = datetime.utcnow().date()
+    cutoff = (today - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+    cnt = _count_expr(metric)
+    q = (db.session.query(VisitorEvent.path, cnt)
+         .filter(VisitorEvent.day >= cutoff)
+         .filter(_NO_API))
+    if metric == "uniques":
+        q = q.filter(VisitorEvent.visitor_hash.isnot(None))
+    rows = (q.group_by(VisitorEvent.path).order_by(cnt.desc()).limit(limit).all())
+    return [{"label": (v or "/"), "count": int(c)} for v, c in rows]
 
 
 def top_referrers(days=30, limit=10, metric="views"):
@@ -479,7 +517,8 @@ def top_referrers(days=30, limit=10, metric="views"):
     cutoff = (today - timedelta(days=days - 1)).strftime("%Y-%m-%d")
     cnt = _count_expr(metric)
     q = (db.session.query(VisitorEvent.referrer_host, cnt)
-         .filter(VisitorEvent.day >= cutoff))
+         .filter(VisitorEvent.day >= cutoff)
+         .filter(_NO_API))
     if metric == "uniques":
         q = q.filter(VisitorEvent.visitor_hash.isnot(None))
     rows = (q.group_by(VisitorEvent.referrer_host)

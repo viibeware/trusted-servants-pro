@@ -24,6 +24,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 ### Fixed
 
 - **OTP search no longer misses codes near the UTC midnight boundary.** IMAP `SINCE` compares against each message's `INTERNALDATE` in the *mail server's* timezone (DreamHost is US-Pacific), so a code arriving just after UTC midnight was dated the previous day server-side and excluded. The `SINCE` window is widened by a day to absorb any server offset; the precise per-message UTC timestamp check still enforces the real freshness window.
+- **`/api/live-meeting` (and any `/api/*` background poll) no longer skews visitor metrics.** The utility bar polls `/api/live-meeting` every 30s on every public visitor; those machine requests were being recorded as `VisitorEvent` rows and inflating totals and the top-paths list. `_should_skip` now drops all `/api/*` requests at record time, and a shared `_NO_API` clause excludes any historical `/api/*` rows from every aggregation (totals, daily series, uniques, top paths/referrers, device/browser/OS donuts, hourly distribution) — non-destructively, without deleting the rows.
 
 ## [2.9.4] — 2026-05-29
 
