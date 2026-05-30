@@ -1961,8 +1961,41 @@
       const codeEl = scope.querySelector("[data-otp-code]");
       const metaEl = scope.querySelector("[data-otp-meta]");
       const errEl = scope.querySelector("[data-otp-error]");
+      const countdownEl = scope.querySelector("[data-otp-countdown]");
       const label = btn.querySelector("[data-otp-fetch-label], .zg-otp-fetch-label");
       const setLabel = (t) => { if (label) label.textContent = t; };
+
+      // Live "expires in m:ss" countdown — Zoom codes die 10 minutes after
+      // the email is sent, so the server hands us the seconds remaining at
+      // fetch time and we tick it down once a second.
+      let countdownTimer = null;
+      const stopCountdown = () => {
+        if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+      };
+      function startCountdown(seconds) {
+        stopCountdown();
+        if (!countdownEl || typeof seconds !== "number") return;
+        let remaining = Math.max(0, Math.floor(seconds));
+        const tick = () => {
+          if (remaining <= 0) {
+            countdownEl.innerHTML = "<strong>Code expired</strong> — request a new code from Zoom.";
+            countdownEl.classList.add("is-expired");
+            countdownEl.classList.remove("is-warning");
+            countdownEl.hidden = false;
+            stopCountdown();
+            return;
+          }
+          const m = Math.floor(remaining / 60);
+          const s = String(remaining % 60).padStart(2, "0");
+          countdownEl.innerHTML = `Expires in <strong>${m}:${s}</strong>`;
+          countdownEl.classList.toggle("is-warning", remaining <= 60);
+          countdownEl.classList.remove("is-expired");
+          countdownEl.hidden = false;
+          remaining -= 1;
+        };
+        tick();
+        countdownTimer = setInterval(tick, 1000);
+      }
       // Spinner is injected (not in markup) so all three call sites get it
       // without template edits; CSS reveals it while .is-loading is set.
       const spinner = document.createElement("span");
@@ -1979,6 +2012,7 @@
         btn.classList.add("is-loading");
         if (result) result.hidden = true;
         if (errEl) { errEl.hidden = true; errEl.textContent = ""; }
+        if (countdownEl) { stopCountdown(); countdownEl.hidden = true; }
         setLabel("Checking for code…");
         try {
           while (true) {
@@ -1993,6 +2027,7 @@
               if (codeEl) { codeEl.textContent = j.code; codeEl.dataset.copy = j.code; }
               if (metaEl) metaEl.innerHTML = `Received <strong>${j.sent_at}</strong> · ${j.age_label}`;
               if (result) result.hidden = false;
+              startCountdown(j.expires_in_seconds);
               setLabel("Retrieve again");
               break;
             }

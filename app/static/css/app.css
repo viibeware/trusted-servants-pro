@@ -5104,6 +5104,13 @@ body.embed .card.data-card:last-child {
   padding: 2px 6px 2px 12px; color: var(--brand); background: none; }
 .otp-inline-meta { margin: 0; }
 .otp-inline-error { margin: 0; color: var(--danger); font-size: .88rem; font-weight: 600; }
+/* "Expires in m:ss" live countdown shown beside a retrieved code (Zoom
+   codes die 10 min after the email is sent). Greens down to a 1-minute
+   amber warning, then red on expiry. Shared by the inline + wizard chips. */
+.otp-inline-countdown, .zg-otp-countdown { margin: 0; font-size: .85rem;
+  font-weight: 600; color: var(--success); }
+.otp-inline-countdown.is-warning, .zg-otp-countdown.is-warning { color: var(--warning); }
+.otp-inline-countdown.is-expired, .zg-otp-countdown.is-expired { color: var(--danger); }
 .otp-manual-label { margin-top: 10px; }
 /* OTP section promoted to a zg-card on the meeting detail page: separate it
    from the Zoom host-account block above, and put a 1rem gap between the

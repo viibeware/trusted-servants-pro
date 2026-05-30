@@ -2533,6 +2533,11 @@ def otp_email_fetch_code():
         age_label = f"{age}s ago"
     else:
         age_label = f"{age // 60} min ago"
+    # Zoom sign-in codes expire 10 minutes after the email is sent. Hand the
+    # client the seconds remaining at fetch time so it can run a live
+    # countdown to expiry alongside the code.
+    ZOOM_OTP_TTL = 10 * 60
+    expires_in = max(0, ZOOM_OTP_TTL - age)
     return jsonify({
         "ok": True,
         "code": result["code"],
@@ -2540,6 +2545,7 @@ def otp_email_fetch_code():
         "sent_date": local.strftime("%b %-d"),
         "age_label": age_label,
         "age_seconds": age,
+        "expires_in_seconds": expires_in,
     })
 
 
