@@ -136,6 +136,11 @@
 :root.pp[data-theme="light"] .pp-brand-mark { filter: none; }
 .pp-brand-name { font-family: "Inter", var(--body); font-weight: 600; font-size: 1.12rem; letter-spacing: -0.01em; color: var(--text); white-space: nowrap; }
 .pp-nav-cta { display: flex; align-items: center; gap: 0.6rem; }
+.pp-nav-menu { display: flex; align-items: center; gap: 0.6rem; }
+/* hamburger: hidden on desktop, shown when the nav collapses (see media query) */
+.pp-navtoggle { display: none; place-items: center; width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; transition: background .2s ease; }
+.pp-navtoggle:hover { background: var(--panel-2); }
+.pp-navtoggle svg { width: 20px; height: 20px; }
 .pp-themetoggle { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; transition: background .2s ease; }
 .pp-themetoggle:hover { background: var(--panel-2); }
 .pp-themetoggle svg { width: 18px; height: 18px; }
@@ -326,7 +331,33 @@
 }
 @media (max-width: 560px) {
   .pp-features, .pp-steps, .pp-stats { grid-template-columns: 1fr; }
-  .pp-nav .pp-nav-cta .pp-hide-sm { display: none; }
+}
+/* Desktop nav order: Docs, Frontend Demo, Launch live demo, dark-mode toggle.
+   display:contents flattens the collapsible group into the bar's flex row so
+   `order` can place the always-visible Launch button between its items. */
+@media (min-width: 721px) {
+  .pp-nav-menu { display: contents; }
+  .pp-nav-cta .pp-nav-docs { order: 1; }
+  .pp-nav-cta .pp-nav-frontend { order: 2; }
+  .pp-nav-cta > .pp-btn-primary { order: 3; }
+  .pp-nav-cta .pp-themetoggle { order: 4; }
+}
+/* Mobile nav: keep "Launch live demo" + the hamburger in the bar; everything
+   else collapses into a full-width dropdown of centered, full-width pills. */
+@media (max-width: 720px) {
+  .pp-navtoggle { display: inline-grid; }
+  .pp-nav-menu {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+    display: none; flex-direction: column; align-items: stretch; gap: 1rem;
+    padding: 1.3rem clamp(1rem, 5vw, 2rem) 1.5rem;
+    background: var(--ink-2); border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line); box-shadow: 0 30px 70px -24px rgba(0,0,0,0.55);
+  }
+  .pp-nav-menu.open { display: flex; }
+  .pp-nav-menu .pp-btn { width: 100%; justify-content: center; }
+  .pp-nav-menu .pp-navlink { display: flex; justify-content: center; align-items: center; width: 100%; padding: 0.85rem 1.4rem; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-weight: 600; }
+  .pp-nav-menu .pp-navlink:hover { background: var(--panel-2); color: var(--text); }
+  .pp-nav-menu .pp-themetoggle { width: 100%; height: auto; padding: 0.8rem; border-radius: 999px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .pp-aurora::before, .pp-aurora::after, .pp-window { animation: none; }

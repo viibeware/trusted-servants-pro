@@ -93,3 +93,25 @@
     if (e.key === "Escape" && box.classList.contains("open")) close();
   });
 })();
+
+// Mobile nav — the two-line hamburger toggles the collapsed menu (everything
+// except the always-visible "Launch live demo" button).
+(function () {
+  "use strict";
+  var toggle = document.querySelector("[data-nav-toggle]");
+  var menu = document.querySelector("[data-nav-menu]");
+  if (!toggle || !menu) return;
+  function close() { menu.classList.remove("open"); toggle.setAttribute("aria-expanded", "false"); }
+  toggle.addEventListener("click", function (e) {
+    e.stopPropagation();
+    var open = menu.classList.toggle("open");
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  // Close after tapping a link (but not the theme toggle, so it stays open).
+  menu.addEventListener("click", function (e) { if (e.target.closest("a")) close(); });
+  // Close on outside click / Escape.
+  document.addEventListener("click", function (e) {
+    if (menu.classList.contains("open") && !menu.contains(e.target) && !toggle.contains(e.target)) close();
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+})();

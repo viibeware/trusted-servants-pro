@@ -68,15 +68,20 @@
         <span class="pp-brand-name">Trusted Servants Pro</span>
       </a>
       <nav class="pp-nav-cta">
-        <a class="pp-navlink pp-hide-sm" href="{{ url_for('docs.index') }}">Docs</a>
-        <button class="pp-themetoggle" type="button" data-theme-toggle aria-label="Toggle light / dark theme" title="Toggle light / dark">
-          <svg class="pp-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
-          <svg class="pp-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-        </button>
-        <a class="pp-btn pp-btn-ghost pp-hide-sm" href="{{ DEMO_SITE }}">Frontend Demo</a>
+        <div class="pp-nav-menu" id="navMenu" data-nav-menu>
+          <a class="pp-btn pp-btn-ghost pp-nav-docs" href="{{ url_for('docs.index') }}">Docs</a>
+          <a class="pp-btn pp-btn-ghost pp-nav-frontend" href="{{ DEMO_SITE }}">Frontend Demo</a>
+          <button class="pp-themetoggle" type="button" data-theme-toggle aria-label="Toggle light / dark theme" title="Toggle light / dark">
+            <svg class="pp-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+            <svg class="pp-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          </button>
+        </div>
         <a class="pp-btn pp-btn-primary" href="{{ DEMO_ADMIN }}">Launch live demo
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
         </a>
+        <button class="pp-navtoggle" type="button" data-nav-toggle aria-label="Open menu" aria-expanded="false" aria-controls="navMenu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9h16M4 15h16"/></svg>
+        </button>
       </nav>
     </div>
   </header>
@@ -106,7 +111,7 @@
     <div class="pp-wrap">
       <div class="pp-stats pp-stagger pp-reveal">
         <div class="pp-stat"><b data-count="20" data-suffix="+">20+</b><span>built-in modules, all toggleable</span></div>
-        <div class="pp-stat"><b>Privacy</b><span>first — your data never leaves your server</span></div>
+        <div class="pp-stat"><b>Privacy first</b><span>Your data never leaves your server</span></div>
         <div class="pp-stat"><b>Zero</b><span>subscription fees</span></div>
         <div class="pp-stat"><b>Free</b><span>open source &amp; self-hosted</span></div>
       </div>
