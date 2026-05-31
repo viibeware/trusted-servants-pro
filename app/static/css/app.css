@@ -13471,6 +13471,16 @@ body.embed .backups-wrap {
 [data-theme="dark"] .backup-test-ok   { color: #86efac; }
 [data-theme="dark"] .backup-test-fail { color: #fca5a5; }
 
+/* API-relay connection status (Settings → Domain / Email). Reuses the
+   backup-status-pill colour set for the pill itself; this just lays the
+   pill + Test button on one row with the error/explanation underneath. */
+.relay-conn { margin-top: .75rem; }
+.relay-conn-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.relay-conn .backup-status-pill[data-relay-pill] { text-transform: none; }
+.relay-conn-detail { margin: .5rem 0 0; }
+.relay-conn-detail.relay-conn-fail { color: #991b1b; }
+[data-theme="dark"] .relay-conn-detail.relay-conn-fail { color: #fca5a5; }
+
 .backup-encrypt-fields {
   padding: 1rem;
   margin: .75rem 0 1rem;

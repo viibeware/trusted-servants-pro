@@ -1128,6 +1128,27 @@
               {% if site.relay_api_key_enc %}
               <label class="check"><input type="checkbox" name="relay_api_key_clear" value="1"><span>Remove stored API key</span></label>
               {% endif %}
+              {# Connection status pill + Test button. The pill renders the
+                 last persisted relay-test outcome; opening this tab re-probes
+                 the relay (Bearer GET /api/health) and the Test button checks
+                 the values typed above before they're saved. #}
+              <div class="relay-conn"
+                   data-relay-test-url="{{ url_for('main.relay_test') }}"
+                   data-relay-configured="{% if site.relay_url and site.relay_api_key_enc %}1{% else %}0{% endif %}">
+                <div class="relay-conn-row">
+                  {% if site.relay_status == 'ok' %}
+                    {% set _pill_cls, _pill_txt = 'backup-status-ok', 'Connected' %}
+                  {% elif site.relay_status == 'fail' %}
+                    {% set _pill_cls, _pill_txt = 'backup-status-failed', 'Not connected' %}
+                  {% else %}
+                    {% set _pill_cls, _pill_txt = 'backup-status-never_run', 'Not tested' %}
+                  {% endif %}
+                  <span class="backup-status-pill {{ _pill_cls }}" data-relay-pill>{{ _pill_txt }}</span>
+                  <button type="button" class="btn btn-sm" data-relay-test>Test connection</button>
+                </div>
+                <p class="muted smaller relay-conn-detail" data-relay-detail
+                   {% if not site.relay_status_detail %}hidden{% endif %}>{{ site.relay_status_detail or '' }}</p>
+              </div>
             </div>
             <div id="smtpFields">
               <div class="row">

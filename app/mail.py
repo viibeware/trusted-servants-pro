@@ -190,3 +190,88 @@ def _send_via_relay(site, recipients, subject, body_text, body_html=None,
     except Exception:
         pass
     return False, (detail or f"Relay returned HTTP {resp.status_code}")
+
+
+def relay_health(url, api_key, timeout=15):
+    """Probe a TSP email-relay for reachability + API-key validity
+    *without sending mail*. Backs the "Test connection" button / status
+    pill on the Settings → Domain / Email tab.
+
+    Primary probe: ``GET {base}/api/health`` with the key as a Bearer
+    token. The relay validates the key (401 if wrong) and reports
+    whether its own SMTP delivery is configured (``configured``).
+
+    Fallback for relays predating /api/health (they 404 it): POST an
+    empty body to ``/api/send``. The relay checks the Bearer key
+    *before* it parses the body, so a wrong key still yields 401 and a
+    valid key yields 400 ("Expected a JSON object body") — i.e. we
+    validate the key without ever delivering a message.
+
+    Returns ``(ok: bool, detail: str, configured: bool|None)`` where
+    ``configured`` is the relay's own SMTP-setup state (None when the
+    relay is too old to report it).
+    """
+    import requests
+
+    if not (url or "").strip():
+        return False, "Relay URL is not set.", None
+    if not api_key:
+        return False, "Relay API key is not set.", None
+
+    base = url.strip().rstrip("/")
+    headers = {"Authorization": f"Bearer {api_key}"}
+
+    try:
+        resp = requests.get(base + "/api/health", headers=headers, timeout=timeout)
+    except requests.exceptions.SSLError as e:
+        return False, f"TLS error reaching the relay: {e}", None
+    except requests.exceptions.RequestException as e:
+        return False, f"Could not reach the relay: {e}", None
+
+    if resp.status_code in (401, 403):
+        return False, "The relay rejected the API key (HTTP 401). Check that the key matches the one on the relay's Settings page.", None
+    if resp.status_code == 404:
+        return _relay_health_legacy(base, headers, timeout)
+    if resp.status_code != 200:
+        return False, f"The relay returned HTTP {resp.status_code}.", None
+
+    try:
+        body = resp.json()
+    except ValueError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    configured = body.get("configured")
+    configured = bool(configured) if configured is not None else None
+    if body.get("ok") is False:
+        return False, (body.get("error") or "The relay reported a problem."), configured
+    if configured is False:
+        return (True,
+                "Connected, but the relay's own SMTP server isn't set up yet — "
+                "configure it on the relay before it can deliver mail.",
+                configured)
+    return True, "Connection OK — the relay is reachable and the API key is valid.", configured
+
+
+def _relay_health_legacy(base, headers, timeout):
+    """Key-validation fallback for relays without /api/health: POST an
+    empty body to /api/send. Auth is checked before the body is parsed,
+    so a bad key → 401 and a good key → 400, and no mail is delivered
+    either way. See :func:`relay_health`."""
+    import requests
+    try:
+        resp = requests.post(base + "/api/send", headers=headers, timeout=timeout)
+    except requests.exceptions.SSLError as e:
+        return False, f"TLS error reaching the relay: {e}", None
+    except requests.exceptions.RequestException as e:
+        return False, f"Could not reach the relay: {e}", None
+    if resp.status_code in (401, 403):
+        return False, "The relay rejected the API key (HTTP 401). Check that the key matches the one on the relay's Settings page.", None
+    # 400 ("Expected a JSON object body") means auth passed — the key is
+    # valid. Any non-401 reply also proves the URL is reachable.
+    if resp.status_code in (200, 400, 413, 500, 502):
+        return (True,
+                "Connection OK — the relay is reachable and the API key is valid. "
+                "(Update the relay to report its SMTP status here.)",
+                None)
+    return False, f"The relay returned HTTP {resp.status_code}.", None

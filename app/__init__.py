@@ -1476,6 +1476,10 @@ def _migrate_sqlite(app):
                          ("mail_transport", "VARCHAR(16) NOT NULL DEFAULT 'smtp'"),
                          ("relay_url", "VARCHAR(500)"),
                          ("relay_api_key_enc", "BLOB"),
+                         # Persisted relay connection-test result (status pill)
+                         ("relay_status", "VARCHAR(16)"),
+                         ("relay_status_detail", "VARCHAR(500)"),
+                         ("relay_checked_at", "DATETIME"),
                          ("access_request_to", "VARCHAR(500)"),
                          ("submission_to", "VARCHAR(500)"),
                          ("submission_form_enabled", "BOOLEAN NOT NULL DEFAULT 1"),

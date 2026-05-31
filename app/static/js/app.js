@@ -630,6 +630,13 @@
           if (f && !f.src && f.dataset.src) f.src = f.dataset.src;
         }
       });
+      // Re-probe the email relay each time the Email tab is opened so its
+      // status pill reflects the live connection, not just the value
+      // persisted at last test. No-op unless relay creds are configured.
+      if (name === "email") {
+        const rc = settingsModal.querySelector(".relay-conn");
+        if (rc && rc._relayRefresh) rc._relayRefresh();
+      }
     };
     tabs.forEach(t => t.addEventListener("click", () => activate(t.dataset.tab)));
 
@@ -689,6 +696,84 @@
       };
       sel.addEventListener("change", sync);
       sync();
+    })();
+
+    // API-relay connection test + status pill (Settings → Domain / Email).
+    // The pill server-renders the last persisted /api/health outcome; this
+    // wires the "Test connection" button (validates the URL + key typed
+    // above, before they're saved) and a re-probe whenever the tab opens.
+    (function () {
+      const wrap = settingsModal.querySelector(".relay-conn");
+      if (!wrap) return;
+      const pill = wrap.querySelector("[data-relay-pill]");
+      const detail = wrap.querySelector("[data-relay-detail]");
+      const btn = wrap.querySelector("[data-relay-test]");
+      const testUrl = wrap.dataset.relayTestUrl;
+      const relayForm = settingsModal.querySelector('form[action$="/settings/email-save"]');
+
+      function setPill(state, label) {
+        pill.className = "backup-status-pill " + (
+          state === "ok" ? "backup-status-ok" :
+          state === "fail" ? "backup-status-failed" :
+          state === "checking" ? "backup-status-running" :
+          "backup-status-never_run");
+        pill.textContent = label;
+      }
+      function setDetail(msg, isFail) {
+        if (msg) {
+          detail.textContent = msg;
+          detail.hidden = false;
+          detail.classList.toggle("relay-conn-fail", !!isFail);
+        } else {
+          detail.hidden = true;
+          detail.textContent = "";
+          detail.classList.remove("relay-conn-fail");
+        }
+      }
+
+      // POST the relay form (relay_url + relay_api_key, falling back to the
+      // stored key when the write-only field is blank) to /settings/relay-test
+      // and reflect the result in the pill. `silent` keeps the prior detail
+      // text visible while a background re-probe is in flight.
+      async function runTest(opts) {
+        opts = opts || {};
+        setPill("checking", "Checking…");
+        if (!opts.silent) setDetail("", false);
+        if (btn) btn.disabled = true;
+        try {
+          const fd = relayForm ? new FormData(relayForm) : new FormData();
+          const r = await fetch(testUrl, {
+            method: "POST", body: fd,
+            headers: { "X-Requested-With": "fetch" },
+            credentials: "same-origin",
+          });
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const data = await r.json();
+          if (data.ok) {
+            setPill("ok", "Connected");
+            setDetail(data.message || "", false);
+          } else {
+            setPill("fail", "Not connected");
+            setDetail(data.message || "Connection failed.", true);
+          }
+        } catch (err) {
+          setPill("fail", "Not connected");
+          setDetail("Couldn't run the test: " + err.message, true);
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      }
+
+      if (btn) btn.addEventListener("click", () => runTest());
+
+      // Called by the tab-activate hook. Only re-probes when relay mode is
+      // the active transport and credentials are stored — otherwise the pill
+      // (hidden in SMTP mode, or meaningless with no creds) is left as-is.
+      wrap._relayRefresh = function () {
+        const sel = document.getElementById("mailTransportSelect");
+        const relayActive = !sel || sel.value === "relay";
+        if (relayActive && wrap.dataset.relayConfigured === "1") runTest({ silent: true });
+      };
     })();
 
     settingsModal.querySelectorAll("form").forEach(f => {

@@ -6,6 +6,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.10.1] — 2026-05-31
+
+### Added
+
+- **API-relay connection test + live status pill (Settings → Domain / Email).** The API-relay transport gained a **Test connection** button and a colour-coded status pill (Connected / Not connected / Not tested) that surfaces the relay's reachability and API-key validity *without sending a message*. The Test button validates the URL + key typed into the form **before** they're saved; opening the Email tab re-probes the saved relay so the pill reflects the live connection, and a failure shows the underlying reason (a rejected key, an unreachable host, etc.). Backed by a new `POST /settings/relay-test` route and `app/mail.py`'s `relay_health()`, which calls the relay's Bearer-authenticated `GET /api/health` (added in [`viibeware/tspro-relay`](https://hub.docker.com/r/viibeware/tspro-relay) **v0.1.1**) and falls back to an auth-only `POST /api/send` probe for older relays — so the key is still validated without delivering mail. New `SiteSetting` columns `relay_status`, `relay_status_detail`, and `relay_checked_at` (additively migrated) persist the last outcome for the pill's initial render.
+
+### Changed
+
+- **Saving changed relay credentials clears the cached connection-test result**, so the pill never claims "Connected" against a URL or key that no longer applies — the Email tab re-probes on its next open to refill it.
+
 ## [2.10.0] — 2026-05-30
 
 ### Added

@@ -675,6 +675,15 @@ class SiteSetting(db.Model):
     mail_transport = db.Column(db.String(16), nullable=False, default="smtp")  # smtp|relay
     relay_url = db.Column(db.String(500))            # e.g. https://relay.example.com
     relay_api_key_enc = db.Column(db.LargeBinary)    # Fernet-encrypted shared secret
+    # Last relay connection-test outcome, shown as a status pill on the
+    # Settings → Domain / Email tab. Written by /settings/relay-test
+    # (a Bearer-auth GET to the relay's /api/health). relay_status is
+    # 'ok' | 'fail' | None (never tested); relay_status_detail holds the
+    # human-readable reason (the relay's error or our connection error)
+    # so the pill can surface why a failed relay isn't working.
+    relay_status = db.Column(db.String(16))          # ok|fail|None
+    relay_status_detail = db.Column(db.String(500))
+    relay_checked_at = db.Column(db.DateTime)
     access_request_to = db.Column(db.String(500))  # comma-separated recipients
 
     def mail_ready(self):

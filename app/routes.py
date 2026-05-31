@@ -14744,12 +14744,23 @@ def email_save():
     # Transport selection + API-relay credentials.
     transport = (request.form.get("mail_transport") or "smtp").strip()
     s.mail_transport = transport if transport in ("smtp", "relay") else "smtp"
+    old_relay_url = s.relay_url
     s.relay_url = (request.form.get("relay_url") or "").strip() or None
     new_key = request.form.get("relay_api_key") or ""
+    relay_creds_changed = (s.relay_url != old_relay_url)
     if request.form.get("relay_api_key_clear") == "1":
         s.relay_api_key_enc = None
+        relay_creds_changed = True
     elif new_key:
         s.relay_api_key_enc = encrypt(new_key)
+        relay_creds_changed = True
+    # A saved URL/key change invalidates the last connection-test result
+    # — the pill shouldn't keep claiming "Connected" against credentials
+    # that no longer apply. The Email tab re-probes on open to refill it.
+    if relay_creds_changed:
+        s.relay_status = None
+        s.relay_status_detail = None
+        s.relay_checked_at = None
     s.access_request_to = (request.form.get("access_request_to") or "").strip() or None
     db.session.commit()
     flash("Email settings saved", "success")
@@ -14826,6 +14837,34 @@ def email_test():
             return jsonify(ok=False, message=msg), 200
         flash(msg, "danger")
     return redirect(_safe_referrer() or url_for("main.index"))
+
+
+@bp.route("/settings/relay-test", methods=["POST"])
+@admin_required
+def relay_test():
+    """Probe the email relay (Bearer-auth GET /api/health) to confirm
+    its URL is reachable and the API key is valid — without sending any
+    mail. Always returns JSON ``{ok, message, configured}``.
+
+    Tests the URL/key typed into the form when present, so an admin can
+    check the connection *before* committing the settings; an empty API
+    key field (its on-load state, since the key is write-only) falls
+    back to the stored key, so an unchanged relay can be re-tested too.
+    The outcome is persisted on SiteSetting so the Email tab can render
+    the status pill on its next open."""
+    from .mail import relay_health
+    from .crypto import decrypt
+    s = _get_site_setting()
+    url = (request.form.get("relay_url") or "").strip() or (s.relay_url or "")
+    typed_key = request.form.get("relay_api_key") or ""
+    key = typed_key or (decrypt(s.relay_api_key_enc) if s.relay_api_key_enc else "")
+    ok, detail, configured = relay_health(url, key)
+    s.relay_status = "ok" if ok else "fail"
+    s.relay_status_detail = (detail or "")[:500]
+    s.relay_checked_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify(ok=ok, message=detail, configured=configured,
+                   checked_at=s.relay_checked_at.isoformat()), 200
 
 
 # --- Access requests ---
