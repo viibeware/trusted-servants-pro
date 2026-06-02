@@ -3,7 +3,25 @@
 {% block heading %}Edit {{ t.name }}{% endblock %}
 {% block heading_help %}Change credentials, schedule, or encryption for this off-site backup target without re-running the setup wizard. The backend kind ({{ t.kind|upper }}) is fixed once a target is created — make a new target if you need to switch backends.{% endblock %}
 {% block content %}
-<div class="backups-wrap">
+{#
+  Per-kind presentation metadata for the prominent connection-type banner.
+  icon + friendly name + one-line description so the operator never has to
+  decode a bare uppercase backend code (the old "· FTP" muted label).
+#}
+{% set _kind_meta = {
+  'tspro_backup': {'icon': 'shield', 'name': 'TS Pro Backup', 'tag': 'End-to-end encrypted', 'tag_icon': 'lock',
+                   'desc': 'Off-site, end-to-end-encrypted destination. Each archive is encrypted to the backup server before it ever leaves this machine.'},
+  'sftp':         {'icon': 'server', 'name': 'SFTP', 'tag': 'SSH file transfer', 'tag_icon': 'lock',
+                   'desc': 'Secure file transfer over SSH — authenticate with a password, a private key, or both.'},
+  'ftp':          {'icon': 'server', 'name': 'FTP / FTPS', 'tag': 'File transfer', 'tag_icon': 'server',
+                   'desc': 'Classic FTP, optionally wrapped in TLS (FTPS). Uploads land in the remote folder you choose below.'},
+  'dropbox':      {'icon': 'box', 'name': 'Dropbox', 'tag': 'Cloud storage', 'tag_icon': 'cloud',
+                   'desc': 'Uploads into your Dropbox app folder over an OAuth refresh-token connection.'},
+} %}
+{% set _km = _kind_meta.get(t.kind, {'icon': 'cloud-upload', 'name': t.kind|upper, 'tag': '', 'tag_icon': 'cloud-upload', 'desc': ''}) %}
+{% set _kind_tag = 'FTPS · TLS encrypted' if (t.kind == 'ftp' and t.use_tls) else ('Plain FTP · no TLS' if t.kind == 'ftp' else _km.tag) %}
+
+<div class="backups-wrap backup-edit">
   <div class="backups-toolbar">
     {% if embed %}
     <a class="btn" href="{{ url_for('main.backups_list', embed=1) }}">← Back to backups</a>
@@ -12,21 +30,37 @@
     {% endif %}
   </div>
 
-  <form class="form" method="post"
+  <form class="form backup-edit-form" method="post"
         action="{{ url_for('main.backups_edit_post', target_id=t.id) }}"
         enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
 
+    {# ── Connection-type banner — the kind, made prominent ────────── #}
+    <header class="backup-edit-hero backup-edit-hero--{{ t.kind }}">
+      <span class="backup-edit-hero-icon" aria-hidden="true">{{ icon(_km.icon) }}</span>
+      <div class="backup-edit-hero-main">
+        <span class="backup-edit-hero-eyebrow">Backup connection type</span>
+        <span class="backup-edit-hero-name">{{ _km.name }}</span>
+        {% if _km.desc %}<p class="backup-edit-hero-desc">{{ _km.desc }}</p>{% endif %}
+      </div>
+      {% if _kind_tag %}
+      <span class="backup-edit-hero-badge">{{ icon(_km.tag_icon) }} {{ _kind_tag }}</span>
+      {% endif %}
+    </header>
+    <p class="backup-edit-hero-note muted smaller">
+      The connection type is fixed once a target is created — create a new target to switch backends.
+    </p>
+
     {# ── Connection — same fields as wizard step 2 ────────────────── #}
     <section class="card backup-step-card">
       <div class="card-head">
-        <h2>{{ icon('key') }} Connection</h2>
-        <span class="muted smaller">{{ t.kind|upper }}{% if t.kind == 'ftp' and t.use_tls %} · FTPS{% endif %}</span>
+        <h2>{{ icon('key') }} Connection details</h2>
       </div>
 
       <label>Target name
-        <input type="text" name="name" value="{{ t.name }}" required maxlength="128">
+        <input type="text" name="name" value="{{ t.name }}" required maxlength="128"
+               placeholder="A name you'll recognize, e.g. “Off-site NAS”">
       </label>
 
       {% if t.kind in ('ftp', 'sftp') %}

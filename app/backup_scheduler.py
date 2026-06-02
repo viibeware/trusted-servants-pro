@@ -274,6 +274,44 @@ def run_target(app, target_id, triggered_by="schedule"):
         return run
 
 
+def _reconcile_orphaned_runs(app):
+    """Clear backups stuck at 'running' after an interrupted process.
+
+    ``run_target`` is synchronous: it flips ``last_status`` to 'running',
+    does the upload, then flips to 'ok'/'failed'. If the process is killed
+    mid-run (a deploy/restart, OOM, or a long upload that overran a worker
+    timeout — a scheduled 3 AM run is a prime candidate) the final flip
+    never happens, so both the BackupRun row and the target's status mirror
+    stay 'running' indefinitely and the pill reads "Running…" forever.
+
+    Nothing survives a process restart, so any 'running' row we see at boot
+    is necessarily dead. Mark those runs failed-interrupted and resync each
+    affected target's status mirror to its most recent resolved run.
+    """
+    from .models import db, BackupTarget, BackupRun
+    with app.app_context():
+        now = datetime.utcnow()
+        orphans = BackupRun.query.filter_by(status="running").all()
+        for r in orphans:
+            r.status = "failed"
+            r.finished_at = r.finished_at or now
+            if not r.error_message:
+                r.error_message = ("Interrupted — the server restarted while "
+                                   "this backup was in progress.")
+        stuck_targets = BackupTarget.query.filter_by(last_status="running").all()
+        for t in stuck_targets:
+            last_done = (BackupRun.query
+                         .filter(BackupRun.target_id == t.id)
+                         .filter(BackupRun.status.in_(("ok", "failed")))
+                         .order_by(BackupRun.started_at.desc())
+                         .first())
+            t.last_status = last_done.status if last_done else "never_run"
+        if orphans or stuck_targets:
+            db.session.commit()
+            logger.info("reconciled %d orphaned 'running' backup run(s), "
+                        "%d stuck target(s)", len(orphans), len(stuck_targets))
+
+
 def _scheduler_loop(app, lock_handle):
     """Tick loop. Hold the lock for the life of the loop."""
     from .models import db, BackupTarget
@@ -313,6 +351,13 @@ def start_scheduler(app):
         logger.info("backup scheduler: lock held by another worker, idle")
         app.config["_BACKUP_SCHEDULER_STARTED"] = True
         return None
+
+    # Clear any backups left stuck at 'running' by a previous process that
+    # died mid-run — only the lock winner does this so workers don't race.
+    try:
+        _reconcile_orphaned_runs(app)
+    except Exception:
+        logger.exception("backup scheduler: failed to reconcile orphaned runs")
 
     # Seed next_run_at for targets that have none (rows just created,
     # or rows from an upgrade prior to this feature).

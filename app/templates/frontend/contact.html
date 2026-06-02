@@ -26,8 +26,21 @@
 {%- if _cwmode not in ('boxed', 'full') %}{%- set _cwmode = 'boxed' %}{%- endif -%}
 {%- set _cwmax  = (site.contact_form_max_width   if site else 1160) -%}
 {%- set _cwpad  = (site.contact_form_padding_pct if site else 5) -%}
-<section class="fe-section fe-contact-section fe-dynbg-host fe-mlist--w-{{ _cwmode }}">
-  {% with dynbg_key='aurora-blobs' %}{% include "frontend/_dynbg.html" %}{% endwith %}
+{# Dynamic background — admin-configurable via Settings → Templates →
+   Contact page → "Customize" (the same dynbg picker every other list /
+   detail surface uses; persisted in frontend_template_settings_json
+   under kind 'contact', key 'split'). Defaults to the long-standing
+   aurora-blobs backdrop so sites that never touched the picker keep
+   their look; pick any recipe / colours / overlay there to change it. #}
+{%- set _tpl = template_settings(site, 'contact', 'split') if site else {} -%}
+{%- set _dynbg = _tpl.get('bg_dynamic_key') or 'aurora-blobs' -%}
+{%- set _dynbg_cfg_raw = {'overlay': _tpl.get('bg_dynbg_overlay'), 'colors': _tpl.get('bg_dynbg_colors') or [], 'overlay_scope': _tpl.get('bg_dynbg_overlay_scope'), 'overlay_size': _tpl.get('bg_dynbg_overlay_size'), 'overlay_intensity': _tpl.get('bg_dynbg_overlay_intensity'), 'randomize_colors': _tpl.get('bg_dynbg_randomize_colors'), 'randomize_positions': _tpl.get('bg_dynbg_randomize_positions'), 'animate': _tpl.get('bg_dynbg_animate', True), 'pastel_light': _tpl.get('bg_dynbg_pastel_light', False), 'knobs': _tpl.get('bg_dynbg_knobs', {})} -%}
+{%- set _dynbg_cfg = dynbg_decode(_dynbg_cfg_raw) -%}
+{%- set _dynbg_color_vars = dynbg_colors_css(dynbg_resolve_colors(_dynbg_cfg), _dynbg_cfg) -%}
+{%- set _dynbg_pos_vars = dynbg_resolve_positions(_dynbg_cfg, _dynbg) -%}
+{%- set _dynbg_inline = (_dynbg_color_vars ~ " " ~ _dynbg_pos_vars) | trim -%}
+<section class="fe-section fe-contact-section fe-dynbg-host fe-mlist--w-{{ _cwmode }}"{% if _dynbg_inline %} style="{{ _dynbg_inline }}"{% endif %}>
+  {% with dynbg_key=_dynbg, dynbg_config=_dynbg_cfg_raw %}{% include "frontend/_dynbg_apply.html" %}{% endwith %}
   <div class="{% if _cwmode == 'boxed' %}fe-container{% else %}fe-mlist-fullwrap{% endif %} fe-contact-container"
        {% if _cwmode == 'boxed' %}style="max-width: {{ _cwmax }}px;"
        {%- elif _cwpad %}style="padding-left: {{ _cwpad }}vw; padding-right: {{ _cwpad }}vw;"{% endif %}>

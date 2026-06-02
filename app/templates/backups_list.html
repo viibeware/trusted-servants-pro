@@ -37,8 +37,19 @@
   {% else %}
   <section class="card backups-table-card">
     <div class="card-head"><h2>{{ icon('cloud-upload') }} Configured targets</h2></div>
+    {# Per-kind chip metadata — a coloured icon + friendly name so each
+       target's backend (TS Pro Backup / SFTP / FTP / Dropbox) reads at a
+       glance instead of a tiny muted "· FTP" code. #}
+    {%- set _kind_meta = {
+      'tspro_backup': {'icon': 'shield', 'label': 'TS Pro Backup', 'cls': 'tspro'},
+      'sftp':         {'icon': 'server', 'label': 'SFTP',          'cls': 'sftp'},
+      'ftp':          {'icon': 'server', 'label': 'FTP',           'cls': 'ftp'},
+      'dropbox':      {'icon': 'box',    'label': 'Dropbox',       'cls': 'dropbox'},
+    } -%}
     <ul class="backup-target-list">
       {% for t in targets %}
+      {%- set _km = _kind_meta.get(t.kind, {'icon': 'cloud-upload', 'label': t.kind|upper, 'cls': 'other'}) -%}
+      {%- set _kind_label = 'FTPS' if (t.kind == 'ftp' and t.use_tls) else _km.label -%}
       <li class="backup-target-row">
         <div class="backup-target-meta">
           <div class="backup-target-name">
@@ -48,8 +59,10 @@
               {% elif t.last_status == 'running' %}Running…
               {% else %}Never run{% endif %}
             </span>
+            <span class="backup-kind-chip backup-kind-chip--{{ _km.cls }}" title="Backend: {{ _kind_label }}">
+              {{ icon(_km.icon) }} {{ _kind_label }}
+            </span>
             <strong>{{ t.name }}</strong>
-            <span class="muted smaller">· {{ 'TS Pro Backup' if t.kind == 'tspro_backup' else t.kind|upper }}</span>
             {% if not t.enabled %}<span class="muted smaller">· paused</span>{% endif %}
             {% if t.kind == 'tspro_backup' %}<span class="muted smaller">· {{ icon('shield') }} end-to-end</span>{% elif t.encrypt_archive %}<span class="muted smaller">· {{ icon('lock') }} encrypted</span>{% endif %}
           </div>

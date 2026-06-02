@@ -6,6 +6,22 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.10.3] — 2026-06-02
+
+### Added
+
+- **Contact and Recovery Contacts pages now honour the Dynamic Background picker (Settings → Web Frontend → Templates).** Both pages previously hard-coded the `aurora-blobs` backdrop directly in their templates, so the backdrop couldn't be changed from the admin. They now resolve their dynamic background from the same per-template settings every other list/detail surface uses — `template_settings(site, 'contact', 'split')` and `template_settings(site, 'recovery_contacts', 'default')` — and apply it through `frontend/_dynbg_apply.html` (recipe + custom colours + overlay + per-preset knobs). The admin picker and its save path (`frontend_template_settings_save`) already existed for both surfaces; only the public templates (`frontend/contact.html`, `frontend/recovery_contacts.html`) were ignoring the saved value. Each page **defaults to `aurora-blobs` when nothing is saved**, so existing sites render identically until an admin picks something. (The `/chat` page is a regular `Page` and was already dynbg-configurable via the page editor, so it was left as-is.)
+- **Colour-coded backend chips on the Manage Backups screen.** Each configured off-site target now shows a prominent, colour-coded chip with an icon and friendly name — **TS Pro Backup** (shield/indigo), **SFTP** (server/green), **FTP/FTPS** (server/slate), **Dropbox** (box/sky) — beside its status pill, replacing the tiny muted `· FTP` backend code so the backend each target uses reads at a glance (`backups_list.html` + a new `.backup-kind-chip` rule set in `app.css`, dark-mode aware; FTP rows show `FTPS` when TLS is on).
+
+### Changed
+
+- **Redesigned the off-site backup connection edit screen.** The edit form now leads with a prominent connection-type banner — a large kind icon, the friendly backend name, a one-line description, and a status badge ("End-to-end encrypted", "FTPS · TLS encrypted", "SSH file transfer", "Cloud storage") — instead of a tiny muted backend code. Fields fill the panel width and are sized up (the setup wizard's 720px card cap is dropped on this screen), with endpoints, hosts, and remote paths rendered in a monospace face so long strings read clearly. All new styling is scoped under `.backup-edit`, so the setup wizard is untouched.
+- **Moved the WordPress importer card to the bottom of Settings → Data.** It now sits below the everyday data tools (full archive, frontend bundle, off-site backups, database snapshots) since it's a one-off migration aid rather than routine maintenance.
+
+### Fixed
+
+- **Off-site backup targets no longer get stuck showing "Running" forever.** `run_target()` runs synchronously: it flips the target's status mirror (and the `BackupRun` row) to `running`, uploads, then flips to `ok`/`failed`. If the process was interrupted mid-run by a restart — a deploy, OOM, or a long upload that overran a worker timeout (a scheduled 3 AM run is a prime candidate) — the final flip never happened and the pill read "Running…" indefinitely with no recovery path. The scheduler now reconciles orphaned `running` rows on boot (only the lock-winning worker does this, so workers don't race): each interrupted `BackupRun` is marked `failed` with an "Interrupted — the server restarted while this backup was in progress." message and a `finished_at`, and every affected target's status mirror is resynced to its most recent resolved (`ok`/`failed`) run, or `never_run` if none.
+
 ## [2.10.2] — 2026-06-01
 
 ### Added

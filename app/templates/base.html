@@ -1746,32 +1746,6 @@
           </div>
         </section>
 
-        {# ── WordPress importer wizard ─────────────────────────── #}
-        <section class="card data-card">
-          <div class="data-card-head">
-            {{ icon('globe') }}
-            <span>WordPress importer</span>
-          </div>
-          <p class="muted small data-card-lead">
-            Pull recovery stories, announcements, or events out of an existing
-            WordPress site. Connect over the WP REST API or upload a posts CSV.
-            The wizard previews exactly what will be created — including slug
-            clashes and image downloads — before anything is saved.
-          </p>
-          <p class="muted smaller data-card-sub">
-            Maps each post (or every post in a category) onto <b>Stories</b>,
-            <b>Announcements</b>, <b>Events</b>, or skip. Featured images are
-            deduplicated by content hash on import.
-          </p>
-          <div class="data-card-actions">
-            <button type="button" class="btn btn-primary"
-                    data-open-modal="wp-import-modal"
-                    data-close-modal="settings-modal">
-              Launch importer →
-            </button>
-          </div>
-        </section>
-
         {# ── Off-site backups ──────────────────────────────────── #}
         <section class="card data-card">
           <div class="data-card-head">
@@ -1852,6 +1826,32 @@
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn">Snapshot now</button>
             </form>
+          </div>
+        </section>
+
+        {# ── WordPress importer wizard ─────────────────────────── #}
+        <section class="card data-card">
+          <div class="data-card-head">
+            {{ icon('globe') }}
+            <span>WordPress importer</span>
+          </div>
+          <p class="muted small data-card-lead">
+            Pull recovery stories, announcements, or events out of an existing
+            WordPress site. Connect over the WP REST API or upload a posts CSV.
+            The wizard previews exactly what will be created — including slug
+            clashes and image downloads — before anything is saved.
+          </p>
+          <p class="muted smaller data-card-sub">
+            Maps each post (or every post in a category) onto <b>Stories</b>,
+            <b>Announcements</b>, <b>Events</b>, or skip. Featured images are
+            deduplicated by content hash on import.
+          </p>
+          <div class="data-card-actions">
+            <button type="button" class="btn btn-primary"
+                    data-open-modal="wp-import-modal"
+                    data-close-modal="settings-modal">
+              Launch importer →
+            </button>
           </div>
         </section>
 
