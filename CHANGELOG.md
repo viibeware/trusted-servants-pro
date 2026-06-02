@@ -6,6 +6,12 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.10.7] — 2026-06-02
+
+### Added
+
+- **Disk-space tile on the dashboard Server widget.** The admin-only Server widget (Dashboard → "Your Role and Server Stats") gains a **Disk** tile alongside CPU and Memory, showing percent used plus `used / total` (e.g. "92 GB / 196 GB") and a sparkline. Measured on the **data volume** (`DATA_DIR` — the disk that actually fills, since the DB, uploads, and backups all live there), falling back to the host root. The tile turns amber at ≥85% — the same threshold as the low-disk banner and Notification Center entry — so the dashboard reads as a live monitor at a glance. `metrics.snapshot()` now takes an optional `disk_path` and returns `disk_total`/`disk_used`/`disk_percent`; `/api/server-metrics` passes the configured data dir. The admin metrics grid widens from 5 to 6 tiles (`server-metrics-grid-6`), with the responsive breakpoints updated to match. Admin-only by construction (the whole Server column is gated on `is_admin()`).
+
 ## [2.10.6] — 2026-06-02
 
 ### Added

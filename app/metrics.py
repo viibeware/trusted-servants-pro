@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import os
 import platform
+import shutil
 import time
 
 import psutil
@@ -67,7 +68,28 @@ def _loadavg():
         return [0.0, 0.0, 0.0]
 
 
-def snapshot():
+def _disk(disk_path):
+    """Usage of the filesystem holding the data volume (``disk_path``),
+    falling back to the host root. That's the disk that actually fills —
+    DB, uploads, and backups all live on it — so it's what an operator
+    needs to watch."""
+    for path in (disk_path, "/"):
+        if not path:
+            continue
+        try:
+            du = shutil.disk_usage(path)
+        except OSError:
+            continue
+        if du.total:
+            return {
+                "disk_total": du.total,
+                "disk_used": du.used,
+                "disk_percent": round(100 * du.used / du.total, 1),
+            }
+    return {"disk_total": 0, "disk_used": 0, "disk_percent": 0}
+
+
+def snapshot(disk_path=None):
     vm = psutil.virtual_memory()
     cpu_pct = psutil.cpu_percent(interval=None)
     return {
@@ -81,6 +103,7 @@ def snapshot():
         "memory_used": vm.total - vm.available,
         "memory_percent": vm.percent,
         "uptime_seconds": int(time.time() - psutil.boot_time()),
+        **_disk(disk_path),
     }
 
 

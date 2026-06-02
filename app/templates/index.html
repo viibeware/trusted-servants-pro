@@ -72,7 +72,7 @@
             <h2>Server</h2>
             <span class="muted smaller server-metrics-os" data-field="os">—</span>
           </div>
-          <div class="server-metrics-grid{% if current_user.is_admin() %} server-metrics-grid-5{% endif %}">
+          <div class="server-metrics-grid{% if current_user.is_admin() %} server-metrics-grid-6{% endif %}">
             <div class="metric-tile">
               <div class="metric-label">CPU</div>
               <div class="metric-value"><span data-field="cpu_percent">—</span><span class="metric-unit">%</span></div>
@@ -83,6 +83,12 @@
               <div class="metric-value"><span data-field="memory_percent">—</span><span class="metric-unit">%</span></div>
               <div class="metric-sub muted smaller" data-field="memory_detail">—</div>
               <canvas class="metric-spark" data-series="mem" width="240" height="40"></canvas>
+            </div>
+            <div class="metric-tile" id="disk-metric-tile">
+              <div class="metric-label">Disk</div>
+              <div class="metric-value"><span data-field="disk_percent">—</span><span class="metric-unit">%</span></div>
+              <div class="metric-sub muted smaller" data-field="disk_detail">—</div>
+              <canvas class="metric-spark" data-series="disk" width="240" height="40"></canvas>
             </div>
             <div class="metric-tile metric-tile-text">
               <div class="metric-label">Load Avg</div>

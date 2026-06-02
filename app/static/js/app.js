@@ -2375,7 +2375,8 @@
     if (!widget.querySelector(".server-metrics-column")) return;
     const endpoint = widget.dataset.endpoint;
     const MAX_SAMPLES = 60;
-    const series = { cpu: [], mem: [] };
+    const series = { cpu: [], mem: [], disk: [] };
+    const DISK_ALERT_PCT = 85;
     const accent = getComputedStyle(document.documentElement).getPropertyValue("--brand").trim() || "#0b5cff";
 
     function fmtBytes(n) {
@@ -2442,12 +2443,18 @@
         const d = await r.json();
         series.cpu.push(d.cpu_percent);
         series.mem.push(d.memory_percent);
+        series.disk.push(d.disk_percent);
         if (series.cpu.length > MAX_SAMPLES) series.cpu.shift();
         if (series.mem.length > MAX_SAMPLES) series.mem.shift();
+        if (series.disk.length > MAX_SAMPLES) series.disk.shift();
         setField("os", d.os + (d.host_mode ? "" : " (container)"));
         setField("cpu_percent", d.cpu_percent.toFixed(0));
         setField("memory_percent", d.memory_percent.toFixed(0));
         setField("memory_detail", fmtBytes(d.memory_used) + " / " + fmtBytes(d.memory_total));
+        setField("disk_percent", (d.disk_percent || 0).toFixed(0));
+        setField("disk_detail", fmtBytes(d.disk_used) + " / " + fmtBytes(d.disk_total));
+        const diskTile = document.getElementById("disk-metric-tile");
+        if (diskTile) diskTile.classList.toggle("metric-tile-alert", (d.disk_percent || 0) >= DISK_ALERT_PCT);
         setField("load_avg", d.load_avg.map(n => n.toFixed(2)).join(" · "));
         setField("uptime", fmtUptime(d.uptime_seconds));
         setField("cpu_count", d.cpu_count + " core" + (d.cpu_count === 1 ? "" : "s") + " · " + d.hostname);

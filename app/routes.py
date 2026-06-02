@@ -926,7 +926,7 @@ def dashboard_customize():
 @admin_required
 def api_server_metrics():
     from .metrics import snapshot
-    return jsonify(snapshot())
+    return jsonify(snapshot(current_app.config.get("DATA_DIR")))
 
 
 @bp.route("/api/version")

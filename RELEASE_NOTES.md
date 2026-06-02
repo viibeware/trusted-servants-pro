@@ -7,7 +7,11 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.10.6 — 2026-06-02 (latest) — A real guarantee against a full disk, plus a heads-up before it happens
+## 2.10.7 — 2026-06-02 (latest) — See your disk space right on the dashboard
+
+- **Disk space is now on your dashboard.** The Server panel on the dashboard (which already shows CPU, memory, uptime, and who's online) now includes a **Disk** tile — how full your server's disk is, with the space used and total (e.g. "92 GB / 196 GB"). It tracks the disk that holds your data, uploads, and backups. The tile turns amber when it crosses 85% full — the same point at which the low-space warning kicks in — so you can keep an eye on it at a glance without leaving the dashboard. Shown to admins only.
+
+## 2.10.6 — 2026-06-02 — A real guarantee against a full disk, plus a heads-up before it happens
 
 - **Your server now actively keeps its own disk tidy.** A small daily housekeeper automatically clears out old, unused Docker images and build leftovers — the stuff that quietly piled up and filled disks before. Unlike the previous auto-cleanup (which only tidied up after automatic updates), this one cleans up *everything* unused, no matter how it got left behind, so the disk stays under control on its own.
 - **You'll get a warning before the disk is ever full.** When the server's disk passes 85% full, admins now see a clear **"Low disk space"** banner at the top of every admin page *and* a matching alert in the Notification Center — with how much space is left and what to do about it. That gives you plenty of runway to act before backups, uploads, or updates could fail. The warning is shown to admins only, and disappears on its own once space is freed.
