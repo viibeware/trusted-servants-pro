@@ -561,7 +561,11 @@ class TSProBackupBackend:
         from . import pubkey
         enc_path = None
         try:
-            fd, enc_path = tempfile.mkstemp(prefix="tsp-e2ee-", suffix=pubkey.EXT)
+            # Encrypt alongside the source zip (on the data volume), not
+            # /tmp — the ciphertext is ~the size of the full archive and
+            # /tmp is often a small tmpfs / constrained overlay.
+            _scratch = _os.environ.get("TSP_TMP_DIR") or _os.path.dirname(_os.path.abspath(local_path)) or None
+            fd, enc_path = tempfile.mkstemp(prefix="tsp-e2ee-", suffix=pubkey.EXT, dir=_scratch)
             _os.close(fd)
             try:
                 pubkey.encrypt_to_pubkey(local_path, enc_path, self.public_key)

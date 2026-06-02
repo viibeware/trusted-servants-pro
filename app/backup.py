@@ -137,8 +137,21 @@ def build_export_archive(app):
     # state — same guarantee as the daily .backup() snapshot, but
     # invoked via the SQLAlchemy engine so it works in any request /
     # background context without needing a raw sqlite3 connect.
+    # Scratch files (the VACUUM copy and the in-progress zip) go on the
+    # data volume, NOT the system temp dir. /tmp is frequently a small
+    # tmpfs or a space-constrained container overlay; VACUUM INTO needs
+    # roughly the full DB size in free space and fails with "database or
+    # disk is full" there. The data dir already holds tsp.db + uploads,
+    # so it's guaranteed to have room for a copy. Honour TSP_TMP_DIR as an
+    # explicit override for installs that mount a dedicated scratch volume.
+    scratch_dir = os.environ.get("TSP_TMP_DIR") or data_dir
+    try:
+        os.makedirs(scratch_dir, exist_ok=True)
+    except OSError:
+        scratch_dir = None  # fall back to the system temp dir
+
     from .models import db as _db
-    tmp_db = tempfile.NamedTemporaryFile(prefix="tsp-export-", suffix=".db", delete=False)
+    tmp_db = tempfile.NamedTemporaryFile(prefix="tsp-export-", suffix=".db", dir=scratch_dir, delete=False)
     tmp_db.close()
     os.unlink(tmp_db.name)
     with _db.engine.connect() as conn:
@@ -146,7 +159,7 @@ def build_export_archive(app):
 
     stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     archive_name = f"{EXPORT_PREFIX}{stamp}{EXPORT_SUFFIX}"
-    tmp_zip = tempfile.NamedTemporaryFile(prefix="tsp-export-", suffix=".zip", delete=False)
+    tmp_zip = tempfile.NamedTemporaryFile(prefix="tsp-export-", suffix=".zip", dir=scratch_dir, delete=False)
     tmp_zip.close()
 
     # Capture context the importer uses to decide whether to scrub
@@ -273,7 +286,11 @@ def decrypt_archive_file(src_path: str, passphrase: str) -> str:
     except InvalidToken as e:
         raise ValueError("wrong passphrase or corrupt archive") from e
 
-    tmp = tempfile.NamedTemporaryFile(prefix="tsp-restore-", suffix=".zip", delete=False)
+    # Stage the decrypted zip next to the source (on the data volume),
+    # not /tmp — a full-portal archive can be large and /tmp is often
+    # space-constrained. os.environ override mirrors build_export_archive.
+    scratch_dir = os.environ.get("TSP_TMP_DIR") or os.path.dirname(os.path.abspath(src_path)) or None
+    tmp = tempfile.NamedTemporaryFile(prefix="tsp-restore-", suffix=".zip", dir=scratch_dir, delete=False)
     tmp.write(plaintext)
     tmp.close()
     return tmp.name

@@ -6,6 +6,12 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.10.4] — 2026-06-02
+
+### Fixed
+
+- **Off-site backups no longer fail with `database or disk is full` when the system temp dir is small.** `build_export_archive()` staged its scratch files — the `VACUUM INTO` copy of the database and the in-progress zip — in the system temp dir (`/tmp`) via `tempfile.NamedTemporaryFile()` with no `dir=`. On many production hosts `/tmp` is a small tmpfs or a space-constrained container overlay, while `VACUUM INTO` needs roughly the full database size in free space at the destination; once a portal's archive grew large enough the export aborted with `(sqlite3.OperationalError) database or disk is full [SQL: VACUUM INTO '/tmp/tsp-export-…db']`, taking down **every** off-site target (TS Pro Backup, Dropbox, FTP/SFTP) since they all build the same archive first. Scratch files now stage on the **data volume** (`UPLOAD_FOLDER`'s parent — the same mount that holds `tsp.db` and `uploads/`, so headroom is guaranteed), with the encrypted-restore decrypt (`decrypt_archive_file`) and the TS Pro Backup e2ee `put()` ciphertext staging alongside their source files for the same reason. A new optional `TSP_TMP_DIR` env var overrides the scratch location for installs that mount a dedicated scratch volume; if the chosen directory isn't writable the code falls back to the system temp dir.
+
 ## [2.10.3] — 2026-06-02
 
 ### Added

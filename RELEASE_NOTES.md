@@ -7,7 +7,11 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.10.3 — 2026-06-02 (latest) — Configurable page backgrounds + clearer, friendlier backups
+## 2.10.4 — 2026-06-02 (latest) — Fix: off-site backups failing with "disk is full"
+
+- **Fixed: off-site backups failing with a "database or disk is full" error.** On some servers, clicking **Run Now** (or a scheduled run) on any off-site backup — TS Pro Backup, Dropbox, FTP, or SFTP — could fail with an internal server error mentioning "database or disk is full," even though the server had plenty of room. The cause was that the app built each backup in the system's small scratch area (`/tmp`) rather than next to your actual data; once a site's backup grew past what that scratch area could hold, the backup couldn't be assembled. Backups are now built on the same disk that holds your data — which always has the space — so this no longer happens. Advanced operators can point the scratch space at a dedicated disk with the new `TSP_TMP_DIR` setting.
+
+## 2.10.3 — 2026-06-02 — Configurable page backgrounds + clearer, friendlier backups
 
 - **Pick the background for your Contact and Recovery Contacts pages.** These two pages used to have a fixed animated background baked in. Now they use the same **Dynamic Background** picker as the rest of your site — open **Settings → Web Frontend → Templates**, find the Contact or Recovery Contacts page, and choose any pattern, colours, or texture in its **Customize** panel. They look exactly as before until you change them, so nothing moves unless you want it to. (The Join the Chat page was already adjustable this way.)
 - **See at a glance what each backup is.** On **Off-site Backups → Manage**, every configured destination now wears a clear, colour-coded label — **TS Pro Backup**, **SFTP**, **FTP/FTPS**, or **Dropbox** — right next to its status, instead of a tiny grey code.
