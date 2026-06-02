@@ -104,6 +104,13 @@ services:
       - TSP_ADMIN_PASSWORD=admin
       - TSP_ADMIN_EMAIL=admin@example.com
     restart: unless-stopped
+    # Cap container logs so an unattended box can't fill its disk over
+    # time (the default json-file driver is unbounded).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 ```
 
 ## One-command install (Ubuntu 24.04)
