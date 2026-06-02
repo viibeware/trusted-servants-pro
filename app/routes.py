@@ -5120,15 +5120,26 @@ def backups_wizard_step2_post(target_id):
                             or (decrypt(t.app_secret_enc) if t.app_secret_enc else None))
             refresh, err = _exchange_dropbox_auth_code(
                 t.app_key, secret_plain, auth_code)
-            if err:
+            if refresh:
+                t.refresh_token_enc = encrypt(refresh)
+                # Refresh token supersedes any legacy short-lived access
+                # token — clear it so DropboxBackend doesn't fall back.
+                t.oauth_token_enc = None
+            elif not t.refresh_token_enc:
+                # No usable token and the code didn't exchange — genuinely
+                # can't connect yet. Surface the error and stay on step 2.
                 flash(err, "danger")
                 return redirect(url_for("main.backups_wizard",
                                         target_id=t.id, step=2,
                                         **_backup_embed_kwargs()))
-            t.refresh_token_enc = encrypt(refresh)
-            # Refresh token supersedes any legacy short-lived access
-            # token — clear it so DropboxBackend doesn't fall back.
-            t.oauth_token_enc = None
+            # else: exchange failed but a refresh token is already stored.
+            # A Dropbox auth code is single-use, and the wizard's "Test
+            # connection" button already submits this form (consuming the
+            # code and storing the refresh token) before the user clicks
+            # "Continue". So on Continue the field still holds the spent
+            # code; re-exchanging it fails, but the connection already
+            # works — treat the stale code as a no-op and proceed rather
+            # than blocking with a misleading error.
         legacy_token = (request.form.get("oauth_token") or "").strip()
         if legacy_token:
             t.oauth_token_enc = encrypt(legacy_token)

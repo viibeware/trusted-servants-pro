@@ -125,6 +125,13 @@
       const j = await testRes.json();
       out.textContent = j.message || (j.ok ? 'ok' : 'failed');
       out.className = 'backup-test-result small ' + (j.ok ? 'backup-test-ok' : 'backup-test-fail');
+      // A successful test has already exchanged + stored the credentials
+      // (incl. a Dropbox one-time auth code → refresh token). Clear the
+      // single-use code so "Continue" doesn't resubmit a spent value.
+      if (j.ok) {
+        const ac = form.querySelector('input[name="auth_code"]');
+        if (ac) ac.value = '';
+      }
     } catch (e) {
       out.textContent = String(e);
       out.className = 'backup-test-result small backup-test-fail';

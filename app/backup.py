@@ -222,22 +222,35 @@ def build_export_archive(app):
     return tmp_zip.name, archive_name, size
 
 
+# Plaintext chunk size for streamed archive encryption. Each chunk becomes
+# one independently-authenticated Fernet token, so peak memory is ~chunk +
+# its base64 token (a few MB) regardless of total archive size — a 4 GB
+# backup encrypts in the same footprint as a 4 MB one.
+_ENC_CHUNK = 4 * 1024 * 1024
+
+
 def encrypt_archive_file(src_path: str, passphrase: str) -> str:
-    """Wrap a zip with passphrase-based Fernet encryption.
+    """Wrap a zip with passphrase-based Fernet encryption, streamed in
+    chunks so memory stays flat on multi-hundred-MB / multi-GB archives.
 
-    Derives a Fernet key from the passphrase via PBKDF2-HMAC-SHA256 with
-    a fresh 16-byte salt; writes ``<src>.enc`` containing a tiny header
-    (magic + version + salt) followed by the Fernet token. Returns the
-    new path. Caller is responsible for unlinking both src and result.
+    Derives a Fernet key from the passphrase via PBKDF2-HMAC-SHA256 with a
+    fresh 16-byte salt, then writes ``<src>.enc``: a tiny header followed
+    by a sequence of length-prefixed Fernet tokens, one per plaintext
+    chunk. Returns the new path. Caller unlinks both src and result.
 
-    Format (little-endian byte order, no SQLite-style framing — this is
-    a tiny header read once by ``decrypt_archive_file``):
+    Format (big-endian length frames):
         offset 0  : 4 bytes  magic   b"TSPB"
-        offset 4  : 1 byte   version 0x01
+        offset 4  : 1 byte   version 0x02  (0x01 = legacy single-token)
         offset 5  : 16 bytes salt
-        offset 21 : N bytes  fernet token (UTF-8 base64, terminated by EOF)
+        offset 21 : repeated until EOF:
+                      4 bytes  uint32  token length L
+                      L bytes  fernet token for one plaintext chunk
+
+    v0x01 archives (whole-file single token) are still readable by
+    ``decrypt_archive_file`` so backups taken before this change restore.
     """
     import base64
+    import struct
     from cryptography.fernet import Fernet
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -250,49 +263,81 @@ def encrypt_archive_file(src_path: str, passphrase: str) -> str:
     key = base64.urlsafe_b64encode(kdf.derive(passphrase.encode()))
     f = Fernet(key)
 
-    with open(src_path, "rb") as src:
-        token = f.encrypt(src.read())
-
     dst_path = src_path + ".enc"
-    with open(dst_path, "wb") as dst:
+    with open(src_path, "rb") as src, open(dst_path, "wb") as dst:
         dst.write(b"TSPB")
-        dst.write(bytes([1]))
+        dst.write(bytes([2]))
         dst.write(salt)
-        dst.write(token)
+        while True:
+            chunk = src.read(_ENC_CHUNK)
+            if not chunk:
+                break
+            token = f.encrypt(chunk)
+            dst.write(struct.pack(">I", len(token)))
+            dst.write(token)
     return dst_path
 
 
 def decrypt_archive_file(src_path: str, passphrase: str) -> str:
-    """Inverse of ``encrypt_archive_file``. Returns the decrypted temp path."""
+    """Inverse of ``encrypt_archive_file``. Returns the decrypted temp path.
+
+    Handles both the streamed v0x02 frame format and the legacy v0x01
+    single-token format (so archives written before chunked encryption
+    still restore)."""
     import base64
+    import struct
     from cryptography.fernet import Fernet, InvalidToken
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+    # Stage the decrypted zip next to the source (on the data volume),
+    # not /tmp — a full-portal archive can be large and /tmp is often
+    # space-constrained. os.environ override mirrors build_export_archive.
+    scratch_dir = os.environ.get("TSP_TMP_DIR") or os.path.dirname(os.path.abspath(src_path)) or None
 
     with open(src_path, "rb") as src:
         magic = src.read(4)
         if magic != b"TSPB":
             raise ValueError("not a TSP encrypted archive (bad magic)")
         version = src.read(1)
-        if version != bytes([1]):
-            raise ValueError(f"unsupported archive version {version!r}")
         salt = src.read(16)
-        token = src.read()
+        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=480_000)
+        key = base64.urlsafe_b64encode(kdf.derive(passphrase.encode()))
+        f = Fernet(key)
 
-    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=480_000)
-    key = base64.urlsafe_b64encode(kdf.derive(passphrase.encode()))
-    try:
-        plaintext = Fernet(key).decrypt(token)
-    except InvalidToken as e:
-        raise ValueError("wrong passphrase or corrupt archive") from e
-
-    # Stage the decrypted zip next to the source (on the data volume),
-    # not /tmp — a full-portal archive can be large and /tmp is often
-    # space-constrained. os.environ override mirrors build_export_archive.
-    scratch_dir = os.environ.get("TSP_TMP_DIR") or os.path.dirname(os.path.abspath(src_path)) or None
-    tmp = tempfile.NamedTemporaryFile(prefix="tsp-restore-", suffix=".zip", dir=scratch_dir, delete=False)
-    tmp.write(plaintext)
-    tmp.close()
+        tmp = tempfile.NamedTemporaryFile(prefix="tsp-restore-", suffix=".zip",
+                                          dir=scratch_dir, delete=False)
+        try:
+            if version == bytes([2]):
+                # Streamed frames: [uint32 len][token] until EOF.
+                while True:
+                    hdr = src.read(4)
+                    if not hdr:
+                        break
+                    if len(hdr) != 4:
+                        raise ValueError("truncated encrypted archive (frame header)")
+                    (length,) = struct.unpack(">I", hdr)
+                    token = src.read(length)
+                    if len(token) != length:
+                        raise ValueError("truncated encrypted archive (frame body)")
+                    tmp.write(f.decrypt(token))
+            elif version == bytes([1]):
+                # Legacy single token covering the whole file.
+                tmp.write(f.decrypt(src.read()))
+            else:
+                raise ValueError(f"unsupported archive version {version!r}")
+        except InvalidToken as e:
+            tmp.close()
+            os.unlink(tmp.name)
+            raise ValueError("wrong passphrase or corrupt archive") from e
+        except Exception:
+            tmp.close()
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
+            raise
+        tmp.close()
     return tmp.name
 
 

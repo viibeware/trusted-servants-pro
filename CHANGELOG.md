@@ -6,6 +6,13 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.10.8] — 2026-06-02
+
+### Fixed
+
+- **Encrypted off-site backups no longer crash the worker ("server offline") on large archives.** `encrypt_archive_file()` read the entire archive into memory and called `Fernet.encrypt()` on the whole blob — peak memory ran to ~1 GB+ for a ~294 MB archive (input + ciphertext + a ~33%-larger base64 token + copies), which OOM-killed the gunicorn worker (SIGKILL / exit 137) mid-request and surfaced in the browser as a "server offline" error after a long pause. Encryption (and the matching decrypt on restore) is now **streamed in 4 MiB chunks** — each chunk is one length-prefixed Fernet token — so peak memory stays flat (~200 MB total process, independent of archive size; a 4 GB backup encrypts in the same footprint as a 4 MB one). Measured: the 294 MB archive now encrypts in ~2 s instead of being killed. The on-disk format is bumped to **v0x02**; the legacy **v0x01** single-token format is still readable by `decrypt_archive_file`, so encrypted backups taken before this change still restore. Affects **every passphrase-encrypted target** (FTP/SFTP/Dropbox); TS Pro Backup was already streamed (`app/pubkey.py`) and was unaffected.
+- **Dropbox backup wizard no longer shows a spurious "connection failed" error on the first "Continue to schedule" click.** The wizard's "Test connection" button submits the form first — which exchanges the Dropbox **one-time** authorization code for a refresh token and stores it — then tests. Because the auth-code field still held the now-spent code, clicking "Continue to schedule" re-submitted it, and `backups_wizard_step2_post` tried to exchange the single-use code a second time, which Dropbox rejects; the second click then worked only because the redirect had cleared the field. `step2_post` is now idempotent: if an auth-code exchange fails **but a working refresh token is already stored**, the spent code is treated as a harmless stale value and the wizard proceeds, instead of blocking with a misleading error. (A genuine first-time failure — no stored token and a bad code — still blocks and surfaces the error.) The wizard also now clears the consumed auth-code field after a successful test, avoiding the redundant exchange entirely.
+
 ## [2.10.7] — 2026-06-02
 
 ### Added

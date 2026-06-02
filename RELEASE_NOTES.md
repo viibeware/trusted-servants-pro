@@ -7,7 +7,12 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.10.7 — 2026-06-02 (latest) — See your disk space right on the dashboard
+## 2.10.8 — 2026-06-02 (latest) — Encrypted backups to Dropbox/FTP/SFTP now work on large portals
+
+- **Fixed: encrypted off-site backups failing with a "server offline" error.** If you turned on archive encryption for an FTP, SFTP, or Dropbox backup, a larger portal could grind for a while and then show a "server offline" error — the encryption step was loading the whole backup into memory at once and running the server out of RAM. Encryption (and decryption on restore) now processes the backup in small pieces, so memory stays low no matter how big your portal is — a multi-gigabyte backup uses the same memory as a tiny one. Backups encrypted before this update still restore normally.
+- **Fixed: a confusing "connection failed" message in the Dropbox setup wizard.** After clicking **Test connection** (which showed a green OK) and then **Continue to schedule**, you'd get a red "connection failed" error on the first click and have to click again. That's resolved — the wizard no longer re-uses the single-use Dropbox authorization code, so Continue works the first time.
+
+## 2.10.7 — 2026-06-02 — See your disk space right on the dashboard
 
 - **Disk space is now on your dashboard.** The Server panel on the dashboard (which already shows CPU, memory, uptime, and who's online) now includes a **Disk** tile — how full your server's disk is, with the space used and total (e.g. "92 GB / 196 GB"). It tracks the disk that holds your data, uploads, and backups. The tile turns amber when it crosses 85% full — the same point at which the low-space warning kicks in — so you can keep an eye on it at a glance without leaving the dashboard. Shown to admins only.
 
