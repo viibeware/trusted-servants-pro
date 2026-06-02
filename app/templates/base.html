@@ -234,6 +234,16 @@
     </header>
     {% block flashes %}
     <div class="flashes">
+      {% if disk_warning and current_user.is_authenticated and current_user.is_admin() %}
+        <div class="flash flash-danger" role="alert">
+          <strong>Low disk space:</strong> the {{ disk_warning.label }} is
+          {{ disk_warning.percent }}% full
+          ({{ disk_warning.free_gb }} GB free of {{ disk_warning.total_gb }} GB).
+          Free space now — backups, uploads, and updates fail once the disk is full.
+          See <em>Settings → Data</em>, or remove unused Docker images on the host
+          (<code>docker image prune -af</code>).
+        </div>
+      {% endif %}
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% for cat, msg in messages %}
           <div class="flash flash-{{ cat }}">{{ msg }}</div>

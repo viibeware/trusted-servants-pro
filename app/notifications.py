@@ -90,6 +90,27 @@ def _items(user):
                 "url": url_for("main.contact_form"),
                 "ts": c.created_at,
             })
+        # Low disk space — same derived source as the admin banner
+        # (app/diskcheck.py). Stable key so a dismissal sticks until the
+        # condition clears; the body re-derives each render so the figures
+        # stay live. None below threshold → no notification.
+        try:
+            from flask import current_app
+            from .diskcheck import disk_warning as _disk_warning
+            dw = _disk_warning(current_app.config.get("DATA_DIR"))
+        except Exception:  # noqa: BLE001 — never let a stat error break the feed
+            dw = None
+        if dw:
+            out.append({
+                "key": "disk_space:low",
+                "category": "System",
+                "icon": "hard-drive",
+                "title": f"Low disk space — {dw['label']} {dw['percent']}% full",
+                "body": (f"{dw['free_gb']} GB free of {dw['total_gb']} GB. "
+                         "Free space before backups, uploads, or updates fail."),
+                "url": url_for("main.backups_list"),
+                "ts": None,
+            })
 
     # Submissions awaiting review — visible to anyone who can act on the
     # holding tank (editors and up), matching the sidebar's pending chips.

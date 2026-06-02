@@ -7,7 +7,13 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.10.5 — 2026-06-02 (latest) — Keep your server from filling its own disk
+## 2.10.6 — 2026-06-02 (latest) — A real guarantee against a full disk, plus a heads-up before it happens
+
+- **Your server now actively keeps its own disk tidy.** A small daily housekeeper automatically clears out old, unused Docker images and build leftovers — the stuff that quietly piled up and filled disks before. Unlike the previous auto-cleanup (which only tidied up after automatic updates), this one cleans up *everything* unused, no matter how it got left behind, so the disk stays under control on its own.
+- **You'll get a warning before the disk is ever full.** When the server's disk passes 85% full, admins now see a clear **"Low disk space"** banner at the top of every admin page *and* a matching alert in the Notification Center — with how much space is left and what to do about it. That gives you plenty of runway to act before backups, uploads, or updates could fail. The warning is shown to admins only, and disappears on its own once space is freed.
+- **Already running an older install?** Re-run the installer to adopt the new housekeeper (your data and settings are preserved) — see the README's **"Keeping disk usage in check"** section.
+
+## 2.10.5 — 2026-06-02 — Keep your server from filling its own disk
 
 - **Your server won't quietly fill its own disk anymore.** Over many months, an unattended portal could slowly use up all its disk space in two ways — automatic updates kept piling up old, unused copies of the app, and the behind-the-scenes activity logs grew without limit. Once the disk filled, things like off-site backups (and even installing updates) would start failing with "disk full" errors. New installs now automatically clean up old images after each update and keep logs trimmed, so this won't happen.
 - **Already running an older install?** If your disk is filling up, you can clean it up and adopt the new safeguards without reinstalling — the README's new **"Keeping disk usage in check"** section walks you through it (a couple of `docker` cleanup commands, then re-running the installer to refresh your setup). Your data and settings are preserved.

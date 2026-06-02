@@ -317,6 +317,34 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Independent safety net for disk growth. WATCHTOWER_CLEANUP only removes
+  # images from updates Watchtower itself performs — it does NOT clean up
+  # images orphaned by manual \`docker compose pull\`, re-tagged :latest churn,
+  # or partial pulls, which is how a box can still pile up hundreds of stale
+  # images. This janitor sweeps everything unused for >72h once a day, so disk
+  # use stays bounded no matter how an image got orphaned. NOTE: prune is
+  # host-wide (every unused image on the daemon), which is correct for a
+  # dedicated TSP host; don't add it on a shared host running other stacks.
+  docker-prune:
+    image: docker:cli
+    container_name: tspro-prune
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          docker image prune -af --filter "until=72h" || true
+          docker builder prune -af --filter "until=72h" || true
+          sleep 86400
+        done
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   caddy_data:
   caddy_config:

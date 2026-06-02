@@ -200,10 +200,13 @@ Back up `/opt/tspro/data/` (or use **Settings → Data → Export** from the UI)
 
 #### Keeping disk usage in check
 
-The installer's `docker-compose.yml` is configured so an unattended box won't fill its own disk:
+The installer's `docker-compose.yml` is configured with three independent safeguards so an unattended box won't fill its own disk:
 
-- **Watchtower removes the old image after each auto-update** (`WATCHTOWER_CLEANUP=true`). Without it, every 24-hour update leaves the previous image behind and they accumulate until the disk is full — a long-running box can pile up *hundreds* of stale images.
+- **A daily image-prune janitor** (the `docker-prune` service) sweeps every image and build-cache entry unused for more than 72 hours, once a day. This is the real guarantee: it reclaims images **no matter how they were orphaned** — manual `docker compose pull`, re-tagged `:latest` churn, or partial pulls — which the next two safeguards don't cover on their own. *(The prune is host-wide, which is correct for a dedicated TSP host; don't add it on a shared host running other Docker stacks.)*
+- **Watchtower removes the old image after each auto-update** (`WATCHTOWER_CLEANUP=true`). This only covers updates Watchtower itself performs — anything pulled or re-tagged another way is left behind, which is why the janitor above exists. Without *either*, a long-running box can pile up *hundreds* of stale images.
 - **Container logs are capped** (`max-size: 10m`, `max-file: 3` per service), so the default unbounded `json-file` driver can't grow without limit.
+
+On top of these, the portal shows admins a **low-disk-space warning** — a banner on every admin page and an entry in the Notification Center — when the data volume or host disk crosses 85%, so you get runway to act before anything fails.
 
 If you installed an **older release** (before these settings shipped) and your disk is filling up, you can reclaim space and adopt the new settings without a reinstall:
 
@@ -216,7 +219,7 @@ df -h /                        # confirm space is back
 docker compose pull && docker compose up -d
 ```
 
-To pick up the `WATCHTOWER_CLEANUP` and log-rotation settings on an existing install, re-run `install.sh` (it rewrites `docker-compose.yml` in place and preserves your `.env` and `data/`).
+To pick up the prune janitor, `WATCHTOWER_CLEANUP`, and log-rotation settings on an existing install, re-run `install.sh` (it rewrites `docker-compose.yml` in place and preserves your `.env` and `data/`).
 
 ### 7. Uninstalling
 

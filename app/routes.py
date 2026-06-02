@@ -359,6 +359,16 @@ def inject_globals():
             notifications_count = _notif.unread_count(current_user)
     except Exception:
         notifications_count = 0
+    # Low-disk warning banner — admin-only. Cheap (cached statvfs); surfaces
+    # before a full disk breaks backups, uploads, or image pulls. See
+    # app/diskcheck.py for the threshold + caching/log-throttle behaviour.
+    disk_warning = None
+    try:
+        if current_user.is_authenticated and current_user.is_admin():
+            from .diskcheck import disk_warning as _disk_warning
+            disk_warning = _disk_warning(current_app.config.get("DATA_DIR"))
+    except Exception:
+        disk_warning = None
     return {"CATEGORY_LABELS": CATEGORY_LABELS, "FILE_CATEGORIES": FILE_CATEGORIES,
             "DAYS_OF_WEEK": DAYS_OF_WEEK, "site": site, "nav_links": nav_links,
             "pending_access_count": pending_access_count,
@@ -368,7 +378,8 @@ def inject_globals():
             "pending_stories_count": pending_stories_count,
             "pending_recovery_contacts_count": pending_recovery_contacts_count,
             "recovery_contacts_abuse_count": recovery_contacts_abuse_count,
-            "notifications_count": notifications_count, "otp": otp}
+            "notifications_count": notifications_count, "otp": otp,
+            "disk_warning": disk_warning}
 
 
 DASHBOARD_WIDGET_KEYS = ("server-metrics", "visitor-metrics", "currently-online", "backups", "trusted-servants", "release-notes", "meetings", "libraries", "files", "access-requests", "forms", "deletions")

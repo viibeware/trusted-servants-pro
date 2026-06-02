@@ -6,6 +6,17 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.10.6] — 2026-06-02
+
+### Added
+
+- **Daily image-prune janitor (`docker-prune` compose service).** A new sidecar in both production compose definitions (`install.sh`'s generated `docker-compose.yml` and `docker-compose.deploy.yml`) runs `docker image prune -af --filter until=72h` and `docker builder prune -af --filter until=72h` once a day. This is the actual guarantee against the disk-fill class of failure: `WATCHTOWER_CLEANUP=true` only reclaims images from updates Watchtower *itself* performs, so images orphaned by manual `docker compose pull`, re-tagged `:latest` churn, or partial pulls accumulate unbounded (a long-lived box was observed with 170 images / ~20 GB reclaimable on a full 24 GB disk). The janitor sweeps everything unused for >72h regardless of how it was orphaned. It mounts `docker.sock` (same privilege Watchtower already holds); the prune is host-wide, so it's intended for a dedicated TSP host. Left out of the dev `docker-compose.yml`, where a host-wide prune would disrupt other local projects.
+- **Low-disk-space warning for admins.** New `app/diskcheck.py` runs a cached (5-min TTL), log-throttled (hourly) `shutil.disk_usage()` check on the data volume and host root, de-duplicated by device id. When either crosses 85%, admins see a banner on every admin page (`base.html`, gated in both the `inject_globals` context processor and the template) and a `disk_space:low` entry in the Notification Center (`app/notifications.py`, inside the admin-only source block). The notification uses a stable key so a dismissal sticks until the condition clears (then re-surfaces if it crosses again via the existing prune-on-resolve logic), while its body re-derives each render so the figures stay live. A `WARNING` is logged when the threshold is first crossed. Both surfaces are strictly admin-only — verified for admin (shown), viewer (hidden), and anonymous (hidden).
+
+### Changed
+
+- README's "Keeping disk usage in check" section documents the new prune janitor and the admin low-disk warning, and notes that re-running `install.sh` adopts the janitor on existing installs.
+
 ## [2.10.5] — 2026-06-02
 
 ### Changed

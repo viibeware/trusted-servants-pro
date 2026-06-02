@@ -24,3 +24,28 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Daily image-prune janitor — an independent safety net for disk growth.
+  # Removes everything unused for >72h, catching images orphaned by manual
+  # `docker compose pull`, :latest churn, or partial pulls (which Watchtower's
+  # own cleanup never touches). NOTE: prune is host-wide; this is intended for
+  # a dedicated TSP host, not a shared box running other stacks.
+  docker-prune:
+    image: docker:cli
+    container_name: tspro-prune
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          docker image prune -af --filter "until=72h" || true
+          docker builder prune -af --filter "until=72h" || true
+          sleep 86400
+        done
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
