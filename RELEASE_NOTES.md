@@ -7,7 +7,13 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.10.4 — 2026-06-02 (latest) — Fix: off-site backups failing with "disk is full"
+## 2.10.5 — 2026-06-02 (latest) — Keep your server from filling its own disk
+
+- **Your server won't quietly fill its own disk anymore.** Over many months, an unattended portal could slowly use up all its disk space in two ways — automatic updates kept piling up old, unused copies of the app, and the behind-the-scenes activity logs grew without limit. Once the disk filled, things like off-site backups (and even installing updates) would start failing with "disk full" errors. New installs now automatically clean up old images after each update and keep logs trimmed, so this won't happen.
+- **Already running an older install?** If your disk is filling up, you can clean it up and adopt the new safeguards without reinstalling — the README's new **"Keeping disk usage in check"** section walks you through it (a couple of `docker` cleanup commands, then re-running the installer to refresh your setup). Your data and settings are preserved.
+- This release changes only the deployment setup and documentation — the app itself is unchanged from 2.10.4.
+
+## 2.10.4 — 2026-06-02 — Fix: off-site backups failing with "disk is full"
 
 - **Fixed: off-site backups failing with a "database or disk is full" error.** On some servers, clicking **Run Now** (or a scheduled run) on any off-site backup — TS Pro Backup, Dropbox, FTP, or SFTP — could fail with an internal server error mentioning "database or disk is full," even though the server had plenty of room. The cause was that the app built each backup in the system's small scratch area (`/tmp`) rather than next to your actual data; once a site's backup grew past what that scratch area could hold, the backup couldn't be assembled. Backups are now built on the same disk that holds your data — which always has the space — so this no longer happens. Advanced operators can point the scratch space at a dedicated disk with the new `TSP_TMP_DIR` setting.
 

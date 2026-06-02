@@ -6,6 +6,15 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.10.5] — 2026-06-02
+
+### Changed
+
+- **Deployment hardening so an unattended host can't fill its own disk.** Two compounding gaps could fill a server's disk over months of unattended operation, after which *every* disk-backed operation failed — including off-site backups (`database or disk is full`) and even `docker compose pull` (`no space left on device`):
+  - **Container log rotation.** All three compose definitions (`install.sh`'s generated `docker-compose.yml`, `docker-compose.deploy.yml`, and the dev `docker-compose.yml`) now set `logging: { driver: json-file, options: { max-size: 10m, max-file: 3 } }` on every service. Docker's default `json-file` driver is unbounded; on a long-running box the container writable layers had grown to multiple GB of unrotated logs.
+  - **Watchtower image cleanup (documented + reinforced).** `install.sh` already set `WATCHTOWER_CLEANUP=true`, but installs predating that flag accumulate one stale image per 24-hour auto-update — a long-lived box was observed with **170 images (167 unused, ~20 GB reclaimable)** filling a 24 GB disk. Added an explanatory comment in the generated compose and a new **"Keeping disk usage in check"** section in the README documenting the settings and the manual remediation (`docker image prune -af` / `docker builder prune -af`, then re-run `install.sh` to adopt the hardened compose) for boxes that predate them.
+- No application code changed in this release; it is compose/installer/documentation only. (Existing deployments must refresh their `docker-compose.yml` — re-run `install.sh` — to pick up the new settings, since `docker compose pull` only updates images, not the compose file.)
+
 ## [2.10.4] — 2026-06-02
 
 ### Fixed

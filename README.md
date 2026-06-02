@@ -191,6 +191,26 @@ docker compose down                           # stop everything
 
 Back up `/opt/tspro/data/` (or use **Settings → Data → Export** from the UI) to preserve the SQLite database, uploads, and Fernet key.
 
+#### Keeping disk usage in check
+
+The installer's `docker-compose.yml` is configured so an unattended box won't fill its own disk:
+
+- **Watchtower removes the old image after each auto-update** (`WATCHTOWER_CLEANUP=true`). Without it, every 24-hour update leaves the previous image behind and they accumulate until the disk is full — a long-running box can pile up *hundreds* of stale images.
+- **Container logs are capped** (`max-size: 10m`, `max-file: 3` per service), so the default unbounded `json-file` driver can't grow without limit.
+
+If you installed an **older release** (before these settings shipped) and your disk is filling up, you can reclaim space and adopt the new settings without a reinstall:
+
+```bash
+cd /opt/tspro
+docker image prune -af        # delete every image not backing a running container
+docker builder prune -af      # delete build cache
+df -h /                        # confirm space is back
+# Then refresh your compose with the current hardened version and restart:
+docker compose pull && docker compose up -d
+```
+
+To pick up the `WATCHTOWER_CLEANUP` and log-rotation settings on an existing install, re-run `install.sh` (it rewrites `docker-compose.yml` in place and preserves your `.env` and `data/`).
+
 ### 7. Uninstalling
 
 `uninstall.sh` ships next to the installer and reverses what it did. Safe defaults: it stops and removes only the TSP containers, named volumes, and the install directory — Docker itself, the firewall, and base packages are left alone unless you ask.

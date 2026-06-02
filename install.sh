@@ -270,6 +270,13 @@ services:
       - TSP_HOST_PROC=/host/proc
       - TSP_HOST_ETC=/host/etc
     restart: unless-stopped
+    # Cap container logs so an unattended box can't fill its disk with
+    # JSON log files over time (default json-file driver is unbounded).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   caddy:
     image: caddy:2-alpine
@@ -284,6 +291,11 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   watchtower:
     image: nickfedor/watchtower:latest
@@ -291,11 +303,19 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
+      # CLEANUP removes the previous image after each successful update —
+      # without it, every auto-update leaves the old image behind and they
+      # accumulate until the disk fills (170 stale images = a full 24 GB box).
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_INCLUDE_RESTARTING=true
       - WATCHTOWER_POLL_INTERVAL=86400
       - WATCHTOWER_LABEL_ENABLE=false
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   caddy_data:
