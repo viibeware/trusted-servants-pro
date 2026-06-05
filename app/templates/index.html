@@ -351,6 +351,7 @@
     {% call dash_widget(key='backups', title='Off-site Backups',
                          head_icon='cloud-upload',
                          badge_count=(backup_summary.failed if _has_failed else 0),
+                         badge_key='backups_failed',
                          badge_title='Targets currently failing') %}
       {% if not backup_summary or backup_summary.total == 0 %}
       <p class="muted">No off-site backups configured yet.</p>
@@ -447,6 +448,7 @@
                          view_all_url=url_for('main.frontend_forms'),
                          view_all_label='Manage forms',
                          badge_count=forms_widget_attention,
+                         badge_key='forms_attention',
                          badge_title='Submissions needing review') %}
       {% if forms_widget_rows %}
       <ul class="list dash-forms-list">
@@ -480,7 +482,7 @@
     <section class="card data-card access-requests-card">
       <div class="access-requests-block">
         <h2 class="ar-title">{% if can_reorder %}<span class="dash-drag-handle dash-drag-handle--in-head" aria-hidden="true">{{ icon('grip-vertical') }}</span>{% endif %}{{ icon('user-plus') }} Access Requests
-          {% if pending_access_count %}<span class="nav-badge">{{ pending_access_count }}</span>{% endif %}
+          <span class="nav-badge" data-live-chip="pending_access" {% if not pending_access_count %}hidden{% endif %}>{{ pending_access_count or 0 }}</span>
         </h2>
         {% if access_requests %}
         <ul class="list">
@@ -496,7 +498,7 @@
 
       <div class="locked-accounts-block">
         <h3 class="locked-accounts-title">Locked Accounts
-          {% if locked_accounts %}<span class="nav-badge nav-badge-warn">{{ locked_accounts|length }}</span>{% endif %}
+          <span class="nav-badge nav-badge-warn" data-live-chip="locked_accounts" {% if not locked_accounts %}hidden{% endif %}>{{ locked_accounts|length }}</span>
         </h3>
         {% if locked_accounts %}
         <ul class="list locked-accounts-list">

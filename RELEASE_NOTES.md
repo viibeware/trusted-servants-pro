@@ -7,7 +7,12 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.10.8 — 2026-06-02 (latest) — Encrypted backups to Dropbox/FTP/SFTP now work on large portals
+## 2.10.9 — 2026-06-05 (latest) — Live notification chips, and a more accurate "who's online"
+
+- **The little number badges update on their own now.** The attention chips on the left sidebar (Watchtower, Notifications, and the per-section counts) and on your dashboard (Access Requests, Locked Accounts, Off-site Backups, Forms) used to only refresh when you reloaded the page. Now they update themselves every few seconds — when a new access request or form submission comes in, the count just appears and ticks up, and when you clear it, the badge disappears on its own. No more reloading to see what's waiting.
+- **"Currently Online" is more accurate.** The dashboard's online count (and the live "who's online" view in the User Log) was sometimes counting people who'd actually left — a browser quietly refetching an icon in the background could keep someone showing as online, parked on a non-page address like `/site-branding/apple-touch-icon`. Now only real page views count, so the online list reflects who's actually using the portal.
+
+## 2.10.8 — 2026-06-02 — Encrypted backups to Dropbox/FTP/SFTP now work on large portals
 
 - **Fixed: encrypted off-site backups failing with a "server offline" error.** If you turned on archive encryption for an FTP, SFTP, or Dropbox backup, a larger portal could grind for a while and then show a "server offline" error — the encryption step was loading the whole backup into memory at once and running the server out of RAM. Encryption (and decryption on restore) now processes the backup in small pieces, so memory stays low no matter how big your portal is — a multi-gigabyte backup uses the same memory as a tiny one. Backups encrypted before this update still restore normally.
 - **Fixed: a confusing "connection failed" message in the Dropbox setup wizard.** After clicking **Test connection** (which showed a green OK) and then **Continue to schedule**, you'd get a red "connection failed" error on the first click and have to click again. That's resolved — the wizard no longer re-uses the single-use Dropbox authorization code, so Continue works the first time.

@@ -32,12 +32,15 @@
        {% if it.is_external %}data-nav-custom{% endif %}
        class="{% if it.active %}active{% endif %}{% if it.is_action %} sidebar-action{% endif %}">
       {{ it.label }}{% if it.is_external %} ↗{% endif %}
-      {%- if it.key == 'watchtower' and pending_access_count %}<span class="nav-badge" title="Pending access requests">{{ pending_access_count }}</span>{% endif -%}
-      {%- if it.key == 'watchtower' and recovery_contacts_abuse_count %}<span class="nav-badge nav-badge-danger" title="Flagged Recovery Contacts requests — review in Watchtower">{{ recovery_contacts_abuse_count }}</span>{% endif -%}
-      {%- if it.key == 'contact_form' and unread_contact_count %}<span class="nav-badge" title="Unread contact-form messages">{{ unread_contact_count }}</span>{% endif -%}
-      {%- if it.key == 'posts' and pending_posts_count %}<span class="nav-badge" title="Submissions awaiting review">{{ pending_posts_count }}</span>{% endif -%}
-      {%- if it.key == 'stories' and pending_stories_count %}<span class="nav-badge" title="Story submissions awaiting review">{{ pending_stories_count }}</span>{% endif -%}
-      {%- if it.key == 'recovery_contacts' and pending_recovery_contacts_count %}<span class="nav-badge" title="Recovery Contacts entries awaiting review">{{ pending_recovery_contacts_count }}</span>{% endif -%}
+      {#- Attention badges always render (hidden at 0) and carry a
+          data-live-chip key so the /_live/counts poller can show, update,
+          and re-hide them without a page reload. -#}
+      {%- if it.key == 'watchtower' %}<span class="nav-badge" data-live-chip="pending_access" title="Pending access requests" {% if not pending_access_count %}hidden{% endif %}>{{ pending_access_count or 0 }}</span>{% endif -%}
+      {%- if it.key == 'watchtower' %}<span class="nav-badge nav-badge-danger" data-live-chip="recovery_contacts_abuse" title="Flagged Recovery Contacts requests — review in Watchtower" {% if not recovery_contacts_abuse_count %}hidden{% endif %}>{{ recovery_contacts_abuse_count or 0 }}</span>{% endif -%}
+      {%- if it.key == 'contact_form' %}<span class="nav-badge" data-live-chip="unread_contact" title="Unread contact-form messages" {% if not unread_contact_count %}hidden{% endif %}>{{ unread_contact_count or 0 }}</span>{% endif -%}
+      {%- if it.key == 'posts' %}<span class="nav-badge" data-live-chip="pending_posts" title="Submissions awaiting review" {% if not pending_posts_count %}hidden{% endif %}>{{ pending_posts_count or 0 }}</span>{% endif -%}
+      {%- if it.key == 'stories' %}<span class="nav-badge" data-live-chip="pending_stories" title="Story submissions awaiting review" {% if not pending_stories_count %}hidden{% endif %}>{{ pending_stories_count or 0 }}</span>{% endif -%}
+      {%- if it.key == 'recovery_contacts' %}<span class="nav-badge" data-live-chip="pending_recovery_contacts" title="Recovery Contacts entries awaiting review" {% if not pending_recovery_contacts_count %}hidden{% endif %}>{{ pending_recovery_contacts_count or 0 }}</span>{% endif -%}
       {%- if it.key == 'web_frontend' and site and not site.frontend_enabled %} <span class="nav-badge nav-badge-muted" title="Public access is off — only signed-in admins and frontend editors can preview">Off</span>{% endif -%}
     </a>
   {% endfor %}

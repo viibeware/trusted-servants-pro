@@ -2498,6 +2498,65 @@
   })();
 })();
 
+// ── LIVE ATTENTION CHIPS ────────────────────────────────────────────────────
+// Poll /tspro/_live/counts and reconcile every [data-live-chip] number chip in
+// place — sidebar nav badges, the Watchtower quicknav chips, the Notifications
+// bell, and the dashboard widget badges — so new access requests / submissions
+// / locked accounts surface their counts without a page reload. Chips always
+// exist in the DOM (hidden at 0); we only flip the number + the hidden flag,
+// never replacing elements, so bound listeners (dashboard drag handles, the
+// notifications button's open handler) stay intact.
+(function () {
+  if (!document.querySelector("[data-live-chip]")) return;
+  const POLL_MS = 20000;
+  // Ask for the dashboard-only chips (failed backups, forms attention) only
+  // while the dashboard grid is on screen, so every other page's poll stays
+  // cheap.
+  const onDashboard = !!document.querySelector(".dash-widget[data-widget-key]");
+  const endpoint = "/tspro/_live/counts" + (onDashboard ? "?dash=1" : "");
+
+  function setChip(el, n) {
+    el.textContent = n;
+    el.hidden = !n;
+  }
+  function apply(counts) {
+    if (!counts || typeof counts !== "object") return;
+    Object.keys(counts).forEach(key => {
+      const n = counts[key] | 0;
+      document.querySelectorAll('[data-live-chip="' + key + '"]')
+              .forEach(el => setChip(el, n));
+    });
+    // Group wrappers (the Watchtower quicknav chips) reveal themselves when the
+    // sum of their listed keys is non-zero and mirror that total in aria-label.
+    document.querySelectorAll("[data-live-chip-group]").forEach(group => {
+      const keys = (group.getAttribute("data-live-chip-group") || "")
+                     .split(/\s+/).filter(Boolean);
+      const total = keys.reduce((s, k) => s + (counts[k] | 0), 0);
+      group.hidden = !total;
+      group.setAttribute("aria-label",
+        total + (total === 1 ? " item" : " items") + " need attention");
+    });
+  }
+
+  async function tick() {
+    if (document.hidden) return;
+    try {
+      const r = await fetch(endpoint, {
+        credentials: "same-origin",
+        headers: { "X-Requested-With": "fetch" },
+      });
+      if (!r.ok) return;
+      apply(await r.json());
+    } catch (_) {}
+  }
+
+  const h = setInterval(tick, POLL_MS);
+  window.addEventListener("beforeunload", () => clearInterval(h));
+  // Reconcile the moment a backgrounded tab regains focus, so the operator
+  // doesn't wait up to POLL_MS to see counts that changed while they were away.
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
+})();
+
 // ── MEGA MENU AJAX (ADD BLOCK / ADD COLUMN / DELETE) ────────────────────────
 // Keep the admin on the page so in-progress edits aren't lost. The server
 // returns rendered HTML for add operations and {ok} for deletes; JS splices

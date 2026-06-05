@@ -270,6 +270,93 @@ def _require_can_edit_library(library):
     return None
 
 
+def _attention_counts(*, include_dashboard=False):
+    """Every live "needs attention" count for the current user, keyed by
+    the same ``data-live-chip`` keys the templates use.
+
+    Single source of truth for the attention chips: ``inject_globals``
+    calls this to seed the initial render and the ``/_live/counts``
+    poller calls it to refresh them in place, so a chip's polled value
+    can never drift from what the page first rendered. Every value
+    defaults to 0 and is role-gated exactly like the rendered chip, so
+    a user only ever gets counts for sections they can act on.
+
+    ``include_dashboard`` adds the two dashboard-only widget chips
+    (failed off-site backups, forms awaiting action). Off by default so
+    the per-request context processor stays lean — the poller turns it
+    on only when the dashboard grid is actually on screen."""
+    counts = {
+        "pending_access": 0, "unread_contact": 0, "locked_accounts": 0,
+        "pending_posts": 0, "pending_stories": 0,
+        "pending_recovery_contacts": 0, "recovery_contacts_abuse": 0,
+        "notifications": 0,
+    }
+    if include_dashboard:
+        counts["backups_failed"] = 0
+        counts["forms_attention"] = 0
+    if not getattr(current_user, "is_authenticated", False):
+        return counts
+    try:
+        site = SiteSetting.query.first()
+    except Exception:
+        site = None
+    is_admin = getattr(current_user, "is_admin", lambda: False)
+    can_edit = getattr(current_user, "can_edit", lambda: False)
+    try:
+        if is_admin():
+            counts["pending_access"] = AccessRequest.query.filter_by(
+                status="pending", is_archived=False).count()
+            counts["unread_contact"] = ContactSubmission.query.filter_by(
+                is_read=False, is_archived=False).count()
+            try:
+                from .auth import currently_locked_usernames
+                counts["locked_accounts"] = len(currently_locked_usernames())
+            except Exception:
+                pass
+            try:
+                from . import watchtower as _wt
+                counts["recovery_contacts_abuse"] = _wt.recovery_contact_abuse_count()
+            except Exception:
+                pass
+        # Editor-visible submission chips, each gated by its module toggle.
+        if can_edit() and site and getattr(site, "posts_enabled", False):
+            counts["pending_posts"] = Post.query.filter(
+                Post.is_pending_review.is_(True),
+                Post.is_archived.is_(False)).count()
+        if can_edit() and site and getattr(site, "stories_enabled", False):
+            counts["pending_stories"] = Story.query.filter(
+                Story.is_pending_review.is_(True),
+                Story.is_archived.is_(False)).count()
+        if site and getattr(site, "recovery_contacts_enabled", False):
+            from .permissions import user_meets_role
+            if user_meets_role(current_user,
+                               getattr(site, "recovery_contacts_required_role", "admin") or "admin"):
+                counts["pending_recovery_contacts"] = RecoveryContact.query.filter_by(approved=False).count()
+    except Exception:
+        # Any DB hiccup leaves the safe all-zero seed in place.
+        for k in ("pending_access", "unread_contact", "locked_accounts",
+                  "pending_posts", "pending_stories",
+                  "pending_recovery_contacts", "recovery_contacts_abuse"):
+            counts[k] = 0
+    try:
+        from . import notifications as _notif
+        counts["notifications"] = _notif.unread_count(current_user)
+    except Exception:
+        counts["notifications"] = 0
+    if include_dashboard and is_admin():
+        try:
+            counts["backups_failed"] = sum(
+                1 for t in BackupTarget.query.all() if t.last_status == "failed")
+        except Exception:
+            pass
+        try:
+            _rows, _attn, _total = _forms_widget_data()
+            counts["forms_attention"] = _attn
+        except Exception:
+            pass
+    return counts
+
+
 @bp.app_context_processor
 def inject_globals():
     try:
@@ -280,85 +367,22 @@ def inject_globals():
         nav_links = NavLink.query.order_by(NavLink.position, NavLink.id).all()
     except Exception:
         nav_links = []
-    pending_access_count = 0
-    unread_contact_count = 0
-    locked_accounts_count = 0
-    pending_posts_count = 0
-    pending_stories_count = 0
-    pending_recovery_contacts_count = 0
-    recovery_contacts_abuse_count = 0
-    try:
-        if current_user.is_authenticated and current_user.is_admin():
-            pending_access_count = AccessRequest.query.filter_by(
-                status="pending", is_archived=False).count()
-            unread_contact_count = ContactSubmission.query.filter_by(
-                is_read=False, is_archived=False).count()
-            # Locked-accounts count drives the second chip on the
-            # Watchtower quicknav button. One query against
-            # LoginFailure aggregated by username — small table,
-            # cheap to compute per-request for admin viewers only.
-            try:
-                from .auth import currently_locked_usernames
-                locked_accounts_count = len(currently_locked_usernames())
-            except Exception:
-                locked_accounts_count = 0
-            # Flagged Recovery Contacts update/removal requests (rate-limited
-            # 2nd updates + owner-disavowed requests) drive a red attention
-            # chip on the Watchtower quicknav so admins catch abuse fast.
-            try:
-                from . import watchtower as _wt
-                recovery_contacts_abuse_count = _wt.recovery_contact_abuse_count()
-            except Exception:
-                recovery_contacts_abuse_count = 0
-        # Pending Announcements/Events submissions chip. Shown to anyone
-        # who can act on the holding tank — same gate the Posts route
-        # uses to enable the "approve" action. Computed outside the
-        # admin-only block so editors see the chip too.
-        if (current_user.is_authenticated
-                and getattr(current_user, "can_edit", lambda: False)()
-                and site and getattr(site, "posts_enabled", False)):
-            pending_posts_count = Post.query.filter(
-                Post.is_pending_review.is_(True),
-                Post.is_archived.is_(False)).count()
-        # Pending Stories submissions chip. Same shape as the posts
-        # chip — gated by editor role + the stories module being on.
-        if (current_user.is_authenticated
-                and getattr(current_user, "can_edit", lambda: False)()
-                and site and getattr(site, "stories_enabled", False)):
-            pending_stories_count = Story.query.filter(
-                Story.is_pending_review.is_(True),
-                Story.is_archived.is_(False)).count()
-        # Pending Recovery Contacts entries chip. Gated by the module's own
-        # admin role (who can approve entries) rather than the editor
-        # gate, since the Recovery Contacts section defaults to admin-tier.
-        if (current_user.is_authenticated
-                and site and getattr(site, "recovery_contacts_enabled", False)):
-            from .permissions import user_meets_role
-            if user_meets_role(current_user,
-                               getattr(site, "recovery_contacts_required_role", "admin") or "admin"):
-                pending_recovery_contacts_count = RecoveryContact.query.filter_by(approved=False).count()
-    except Exception:
-        pending_access_count = 0
-        unread_contact_count = 0
-        locked_accounts_count = 0
-        pending_posts_count = 0
-        pending_stories_count = 0
-        pending_recovery_contacts_count = 0
-        recovery_contacts_abuse_count = 0
+    # All "needs attention" counts come from one shared helper so the
+    # chips' initial render here and their live ``/_live/counts`` refresh
+    # can never disagree. See _attention_counts() for the role gating.
+    _counts = _attention_counts()
+    pending_access_count = _counts["pending_access"]
+    unread_contact_count = _counts["unread_contact"]
+    locked_accounts_count = _counts["locked_accounts"]
+    pending_posts_count = _counts["pending_posts"]
+    pending_stories_count = _counts["pending_stories"]
+    pending_recovery_contacts_count = _counts["pending_recovery_contacts"]
+    recovery_contacts_abuse_count = _counts["recovery_contacts_abuse"]
+    notifications_count = _counts["notifications"]
     try:
         otp = _get_otp_email()
     except Exception:
         otp = None
-    # Notifications Center chip — uncleared count for the current user.
-    # Read-only; derived from the same attention sources as the badges
-    # above (see app/notifications.py).
-    notifications_count = 0
-    try:
-        if current_user.is_authenticated:
-            from . import notifications as _notif
-            notifications_count = _notif.unread_count(current_user)
-    except Exception:
-        notifications_count = 0
     # Low-disk warning banner — admin-only. Cheap (cached statvfs); surfaces
     # before a full disk breaks backups, uploads, or image pulls. See
     # app/diskcheck.py for the threshold + caching/log-throttle behaviour.
@@ -436,83 +460,49 @@ def _guard_frontend_module():
     return redirect(url_for("main.index"))
 
 
-# Endpoint-name suffixes that identify asset-serving / sub-resource
-# routes (file downloads, image fetches, PDF generators, JSON probes,
-# logo fetches, etc.). Resolving an endpoint to one of these means the
-# request is fetching a *resource* belonging to a page, not navigating
-# to a page itself, so it must not flip the user's "where they are
-# right now" pointer to a download URL.
-_LOCATION_SKIP_SUFFIXES = (
-    "_download", "_pdf", "_content", "_image", "_logo",
-    "_favicon", "_serve", "_json", "_thumb", "_thumbnail",
-)
-# Path extensions (case-insensitive) that always indicate a sub-
-# resource even when the endpoint name doesn't follow the convention
-# above — covers static-passthrough routes and any new asset endpoint
-# that ships before the suffix list catches up.
-_LOCATION_SKIP_EXTS = (
-    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".avif", ".ico",
-    ".pdf", ".json", ".woff", ".woff2", ".ttf", ".otf",
-    ".mp4", ".webm", ".mp3", ".zip", ".db", ".css", ".js",
-)
-
-
-@bp.before_app_request
-def _track_last_seen():
+@bp.after_app_request
+def _track_last_seen(response):
     """Throttled last_seen_at update for the authenticated user.
 
     Also captures the user's current navigation location (endpoint +
     path) so the User Log live widget can show where each online
-    person is right now. Skips:
+    person is right now — but *only* for navigations to a real,
+    rendered backend page. The "is this a page?" test is the response
+    itself: a ``200 text/html`` body is a page someone actually
+    landed on; anything else (an icon or other image, a PDF, a file
+    download, a JSON API/metrics poll, a 30x redirect, a 4xx/5xx) is a
+    sub-resource the page loaded or a non-navigation, and must not
+    flip the user's "where they are right now" pointer or keep them
+    counted as Currently Online.
 
-      • Non-GET requests — POSTs redirect to the destination, which
-        re-fires this hook with the friendlier final URL.
-      • API / metrics polling endpoints — these would otherwise pin
-        every viewer to ``/api/online-users`` etc.
-      • Static + favicon assets.
-      • **Sub-resource fetches** — any endpoint whose name ends in
-        ``_download`` / ``_image`` / ``_logo`` / ``_pdf`` / ``_content``
-        / ``_favicon`` / ``_serve`` / ``_json`` / ``_thumb`` and any
-        request whose path ends in a known asset extension. These are
-        files the page being viewed is loading, not the page itself,
-        so we hold the location pointer at the parent page.
+    Running as an ``after_request`` hook (rather than the old
+    ``before_request`` blocklist of endpoint-name suffixes / file
+    extensions) is what makes this robust: we no longer have to
+    enumerate every asset route — the apple-touch-icon, favicons, font
+    assets, logos, and any future asset endpoint are all excluded for
+    free because none of them return ``text/html``. Skips:
+
+      • Non-GET requests — POSTs redirect to the destination, whose
+        GET re-fires this hook with the friendlier final URL.
+      • Anything that isn't a ``200 text/html`` response — files,
+        icons, images, PDFs, JSON API/metrics polling, redirects,
+        and error pages.
 
     Within those rules the location is written either when it
     actually changed (snappy: navigation flips inside one tick of the
     5-second poll) OR when the standard last-seen throttle lapses
     (keeps a pure idle user's row warm enough that they don't drop
     off the online list)."""
-    if not getattr(current_user, "is_authenticated", False):
-        return
     if request.method != "GET":
-        return
-    endpoint = request.endpoint or ""
-    if endpoint == "static":
-        return
-    # Skip background-polled `/api/*` endpoints regardless of which
-    # blueprint they live on. Without this, a public tab left open
-    # pins the user's last_path to the polled URL (notably
-    # `frontend.api_live_meeting`, hit every 30s by the utility bar)
-    # which keeps `last_seen_at` warm forever — they show up as
-    # "persistently online on /api/live-meeting" in the Currently
-    # Online widget. Match by request.path so future API endpoints
-    # on any blueprint inherit the skip automatically.
-    if request.path.startswith("/api/"):
-        return
-    if endpoint.startswith("main.api_"):
-        return
-    if endpoint.endswith("_metrics"):
-        return
-    # The forgot/reset and login pages aren't reachable when
-    # authenticated, but be defensive.
-    if endpoint in ("auth.login", "auth.logout", "auth.forgot_password",
-                    "auth.reset_password"):
-        return
-    if endpoint and endpoint.endswith(_LOCATION_SKIP_SUFFIXES):
-        return
-    path_lower = request.path.lower()
-    if path_lower.endswith(_LOCATION_SKIP_EXTS):
-        return
+        return response
+    if not getattr(current_user, "is_authenticated", False):
+        return response
+    # The definitive "actual page" gate: only a successfully rendered
+    # HTML page counts as presence. This is what restricts Currently
+    # Online to real pages and excludes files/icons regardless of how
+    # the serving endpoint or its URL is named.
+    if response.status_code != 200 or response.mimetype != "text/html":
+        return response
     now = datetime.utcnow()
     last_seen = getattr(current_user, "last_seen_at", None)
     last_path = getattr(current_user, "last_path", None)
@@ -520,10 +510,10 @@ def _track_last_seen():
     path_changed = (path != last_path)
     seen_throttled = last_seen is not None and (now - last_seen) < LAST_SEEN_THROTTLE
     if not path_changed and seen_throttled:
-        return
+        return response
     try:
         current_user.last_seen_at = now
-        current_user.last_endpoint = endpoint[:128] or None
+        current_user.last_endpoint = (request.endpoint or "")[:128] or None
         current_user.last_path = path or None
         db.session.commit()
         # Touch the open login session too so the User Log's session
@@ -532,6 +522,7 @@ def _track_last_seen():
         activity.touch_session(current_user)
     except Exception:
         db.session.rollback()
+    return response
 
 
 def _online_users():
@@ -2805,6 +2796,19 @@ def sidebar_save():
     db.session.commit()
     flash("Sidebar order saved", "success")
     return redirect(_safe_referrer() or url_for("main.index"))
+
+
+@bp.route("/_live/counts")
+@login_required
+def live_counts():
+    """JSON map of every attention count, keyed by ``data-live-chip``
+    key. Polled by the sidebar/dashboard so the number chips appear,
+    update, and disappear without a page reload. ``?dash=1`` adds the
+    dashboard-only widget chips (failed backups, forms attention); the
+    poller sets it only while the dashboard grid is on screen so other
+    pages don't pay for those extra queries."""
+    include_dash = request.args.get("dash") == "1"
+    return jsonify(_attention_counts(include_dashboard=include_dash))
 
 
 @bp.route("/_sidebar/nav")

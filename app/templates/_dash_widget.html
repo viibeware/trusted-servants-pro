@@ -47,7 +47,7 @@
    used inside the macro to render it. #}
 {% macro dash_widget(key, title, head_icon=None,
                      view_all_url=None, view_all_label='View all',
-                     badge_count=0, badge_title='', wide=False) %}
+                     badge_count=0, badge_title='', badge_key=None, wide=False) %}
 <div class="dash-widget{% if wide %} dash-widget-wide{% endif %}"
      data-widget-key="{{ key }}"
      draggable="true">
@@ -57,7 +57,12 @@
       {% if head_icon %}<span class="data-card-head-icon" aria-hidden="true">{{ icon(head_icon) }}</span>{% endif %}
       <span class="dash-widget-title">
         {{ title }}
-        {%- if badge_count %} <span class="nav-badge nav-badge-warn"{% if badge_title %} title="{{ badge_title }}"{% endif %}>{{ badge_count }}</span>{% endif -%}
+        {#- When a badge_key is given the chip always renders (hidden at 0)
+            and carries data-live-chip so the /_live/counts poller can keep
+            it in sync without a reload. Widgets with no badge_key (meetings,
+            files, …) render no chip at all, as before. -#}
+        {%- if badge_key %} <span class="nav-badge nav-badge-warn" data-live-chip="{{ badge_key }}"{% if badge_title %} title="{{ badge_title }}"{% endif %}{% if not badge_count %} hidden{% endif %}>{{ badge_count or 0 }}</span>
+        {%- elif badge_count %} <span class="nav-badge nav-badge-warn"{% if badge_title %} title="{{ badge_title }}"{% endif %}>{{ badge_count }}</span>{% endif -%}
       </span>
       {% if view_all_url %}
       <a href="{{ view_all_url }}" class="link dash-widget-viewall">{{ view_all_label }} {{ icon('arrow-right') }}</a>

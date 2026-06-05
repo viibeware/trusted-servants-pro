@@ -6,6 +6,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.10.9] — 2026-06-05
+
+### Changed
+
+- **The dashboard's "Currently Online" count and the User Log live widget now track only real page views — not asset fetches.** Presence was recorded by a `before_request` blocklist that tried to enumerate every asset route by endpoint-name suffix (`_image`, `_logo`, `_favicon`, …) and URL file extension. Routes that didn't fit the naming convention slipped through — notably the home-screen icon endpoints (`site_apple_touch_icon` / `site_frontend_apple_touch_icon`, whose names end in `_icon` and whose URLs carry no extension), so a browser quietly refetching `/site-branding/apple-touch-icon` kept its user pinned as "online" and parked their live location on a non-page URL. Tracking moved to an `after_request` hook gated on the **response itself**: presence is recorded only for a `200 text/html` response. That definitively excludes icons, images, PDFs, file downloads, JSON API/metrics polls, redirects, and error pages — regardless of how the serving route or its URL is named — and it's self-maintaining, so any future asset endpoint is excluded for free. The throttle/change-detection behaviour is unchanged. (`app/routes.py`, comment sync in `app/auth.py`.)
+
+### Added
+
+- **Sidebar and dashboard attention chips now update live, without a page reload.** The number chips on the backend sidebar (per-section nav badges, the Watchtower quick-nav chips, the Notifications bell) and the dashboard widget badges (Access Requests, Locked Accounts, Off-site Backups, Forms) used to reflect new submissions/requests only on the next full page load. They now poll a new `GET /tspro/_live/counts` endpoint every 20 s (and immediately when a backgrounded tab regains focus) and reconcile each chip in place — so a chip appears, increments, and disappears on its own as work arrives and is cleared. The counts come from one shared helper (`_attention_counts()`) that also seeds the initial render, so a polled value can never drift from what the page first showed; every count stays role-gated exactly as the rendered chip is. Chips now always exist in the DOM (hidden at 0) and carry a `data-live-chip` key; the poller only flips the number + the `hidden` flag, never replacing elements, so bound handlers (dashboard drag-reorder, the Notifications modal trigger) are untouched. Dashboard-only counts (failed backups, forms attention) are requested via `?dash=1` only while the dashboard is on screen, keeping every other page's poll cheap. Also fixed a latent CSS issue where `.nav-badge`'s `display` outranked the UA `[hidden]` rule, so an always-rendered chip wouldn't hide at 0 (`.nav-badge[hidden] { display: none }`).
+
 ## [2.10.8] — 2026-06-02
 
 ### Fixed

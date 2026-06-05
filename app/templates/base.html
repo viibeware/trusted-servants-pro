@@ -146,19 +146,18 @@
          title="Watchtower — security, access requests, deletions, and user activity">
         <span class="sidebar-quicknav-icon" aria-hidden="true">{{ icon('shield') }}</span>
         <span class="sidebar-quicknav-label">Watchtower</span>
-        {% if _watchtower_total %}
-        <span class="sidebar-quicknav-chips" aria-label="{{ _watchtower_total }} item{{ 's' if _watchtower_total != 1 else '' }} need attention">
-          {% if recovery_contacts_abuse_count %}
-          <span class="nav-badge nav-badge-danger" title="{{ recovery_contacts_abuse_count }} flagged Recovery Contacts request{{ 's' if recovery_contacts_abuse_count != 1 else '' }}">{{ recovery_contacts_abuse_count }}</span>
-          {% endif %}
-          {% if pending_access_count %}
-          <span class="nav-badge nav-badge-warn" title="{{ pending_access_count }} pending access request{{ 's' if pending_access_count != 1 else '' }}">{{ pending_access_count }}</span>
-          {% endif %}
-          {% if locked_accounts_count %}
-          <span class="nav-badge" title="{{ locked_accounts_count }} locked account{{ 's' if locked_accounts_count != 1 else '' }}">{{ locked_accounts_count }}</span>
-          {% endif %}
+        {#- Always render the chip group (hidden at 0) so the /_live/counts
+            poller can reveal/update/hide each chip — and the group wrapper —
+            without a page reload. data-live-chip-group lists the keys it
+            sums to decide its own visibility + aria-label. -#}
+        <span class="sidebar-quicknav-chips"
+              data-live-chip-group="recovery_contacts_abuse pending_access locked_accounts"
+              aria-label="{{ _watchtower_total }} item{{ 's' if _watchtower_total != 1 else '' }} need attention"
+              {% if not _watchtower_total %}hidden{% endif %}>
+          <span class="nav-badge nav-badge-danger" data-live-chip="recovery_contacts_abuse" title="Flagged Recovery Contacts requests" {% if not recovery_contacts_abuse_count %}hidden{% endif %}>{{ recovery_contacts_abuse_count or 0 }}</span>
+          <span class="nav-badge nav-badge-warn" data-live-chip="pending_access" title="Pending access requests" {% if not pending_access_count %}hidden{% endif %}>{{ pending_access_count or 0 }}</span>
+          <span class="nav-badge" data-live-chip="locked_accounts" title="Locked accounts" {% if not locked_accounts_count %}hidden{% endif %}>{{ locked_accounts_count or 0 }}</span>
         </span>
-        {% endif %}
       </a>
       {% endif %}
     </div>
@@ -173,6 +172,7 @@
       <span class="sidebar-notif-icon" aria-hidden="true">{{ icon('bell') }}</span>
       <span class="sidebar-notif-label">Notifications</span>
       <span class="nav-badge nav-badge-warn sidebar-notif-chip" data-notif-chip
+            data-live-chip="notifications"
             {% if not notifications_count %}hidden{% endif %}>{{ notifications_count or 0 }}</span>
     </button>
     {% endif %}
