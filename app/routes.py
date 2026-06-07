@@ -153,6 +153,13 @@ bp = Blueprint("main", __name__, url_prefix="/tspro")
 # /pub/*, /site-branding/footer-logo, /site-branding/og-image, /request-access.
 public_bp = Blueprint("public", __name__)
 
+# Inbound machine-to-machine API served at the *root* (not under /tspro):
+# the paired TS Pro Backup server pushes a remote restore to
+# /api/v1/restore[...]. Mounted at root so the backup server can reach it at
+# ``<portal public URL>/api/v1/restore`` without needing to know the console's
+# /tspro prefix. CSRF-exempt as a whole in create_app (token-authenticated).
+restore_bp = Blueprint("restore_api", __name__)
+
 CATEGORY_LABELS = {
     "readings": "Readings",
     "scripts": "Scripts",
@@ -4433,6 +4440,255 @@ def data_import_finalize():
         shutil.rmtree(staging, ignore_errors=True)
 
 
+# ─────────────────────────────────────────────────────────────────────
+# Inbound remote restore (push from a paired TS Pro Backup server)
+# ─────────────────────────────────────────────────────────────────────
+# Out-of-band disaster recovery: when this portal's data is corrupted or
+# the admin is locked out, the operator triggers a restore from the *backup
+# server's* console; it pushes a stored backup here and these endpoints
+# apply it. They are deliberately NOT @admin_required (browser auth is the
+# very thing that's unavailable). Two independent secrets gate them: the
+# shared restore token (X-Restore-Token header) AND the operator's private
+# key, which must both decrypt the archive and derive to the public key on
+# file. CSRF-exempt because they're machine-to-machine, like the upload API.
+
+
+def _restore_chunk_root():
+    upload_dir = current_app.config["UPLOAD_FOLDER"]
+    data_dir = os.path.dirname(upload_dir.rstrip("/"))
+    root = os.path.join(data_dir, "restore-chunks")
+    os.makedirs(root, exist_ok=True)
+    return root
+
+
+def _cleanup_stale_restore_chunk_dirs(max_age_seconds=6 * 60 * 60):
+    import shutil as _shutil, time as _time
+    cutoff = _time.time() - max_age_seconds
+    root = _restore_chunk_root()
+    try:
+        for name in os.listdir(root):
+            d = os.path.join(root, name)
+            try:
+                if os.path.getmtime(d) < cutoff:
+                    _shutil.rmtree(d, ignore_errors=True)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
+def _restore_target_for_token(token):
+    """The BackupTarget that authorized this push, or None. Constant-time
+    match across every target that has remote restore enabled."""
+    if not token:
+        return None
+    for t in BackupTarget.query.filter_by(kind="tspro_backup",
+                                          allow_remote_restore=True).all():
+        if t.verify_restore_token(token):
+            return t
+    return None
+
+
+def _restore_rate_limited(ip):
+    """Light defence-in-depth on top of the 256-bit token: cap failed
+    restore auth attempts per IP. Uses a distinct LoginFailure ``kind`` so
+    it never interferes with (or is cleared by) the console login limiter."""
+    from .models import LoginFailure
+    window = datetime.utcnow() - timedelta(minutes=15)
+    return LoginFailure.query.filter(
+        LoginFailure.kind == "restore",
+        LoginFailure.key == (ip or "?"),
+        LoginFailure.failed_at >= window).count() >= 10
+
+
+def _record_restore_failure(ip):
+    from .models import LoginFailure
+    try:
+        db.session.add(LoginFailure(kind="restore", key=(ip or "?")))
+        db.session.commit()
+    except Exception:  # noqa: BLE001
+        db.session.rollback()
+
+
+def _apply_remote_restore(target, archive_path, private_key):
+    """Decrypt (verifying the key matches the target's public key) and apply
+    a pushed restore via the shared ``_perform_data_import``. Returns a JSON
+    response tuple. The private key is used in-memory only — never logged."""
+    import tempfile
+    from . import pubkey
+
+    upload_dir = current_app.config["UPLOAD_FOLDER"]
+    data_dir = os.path.dirname(upload_dir.rstrip("/"))
+
+    try:
+        with open(archive_path, "rb") as fh:
+            is_e2ee = pubkey.head_is_e2ee(fh.read(8))
+    except OSError:
+        is_e2ee = False
+
+    decrypted_path = None
+    try:
+        if is_e2ee:
+            private_key = (private_key or "").strip()
+            if not private_key:
+                return jsonify(ok=False, error="private key required to decrypt this archive"), 400
+            # Second factor: the supplied private key must derive to the
+            # public key we hold for this target. Blocks a stolen token from
+            # pushing an attacker-crafted archive under a foreign key.
+            if target.e2ee_public_key:
+                try:
+                    derived = pubkey.public_from_private(private_key)
+                except pubkey.E2EEKeyError as e:
+                    return jsonify(ok=False, error=f"invalid private key: {e}"), 400
+                if derived != target.e2ee_public_key:
+                    current_app.logger.warning(
+                        "remote restore rejected: private key does not match target %s key", target.id)
+                    return jsonify(ok=False,
+                                   error="private key does not match this target's encryption key"), 403
+            dec = tempfile.NamedTemporaryFile(prefix="tsp-remote-dec-", suffix=".zip",
+                                              delete=False, dir=data_dir)
+            dec.close()
+            decrypted_path = dec.name
+            try:
+                pubkey.decrypt_with_privkey(archive_path, decrypted_path, private_key)
+            except (pubkey.E2EEDecryptError, pubkey.E2EEKeyError) as e:
+                return jsonify(ok=False, error=f"could not decrypt: {e}"), 400
+            import_path = decrypted_path
+        else:
+            import_path = archive_path
+
+        current_app.logger.warning("remote restore: applying archive to target %s", target.id)
+        # _perform_data_import swaps the DB + uploads + keys, runs migrations,
+        # clears login lockouts and SIGHUPs the workers. It removes the
+        # session/engine, so we must NOT touch the ORM after it returns.
+        ok, _redirect = _perform_data_import(import_path)
+        if not ok:
+            return jsonify(ok=False, error="archive rejected — not a valid TS Pro export"), 400
+        return jsonify(ok=True, message="restore applied; the portal is recycling its workers")
+    finally:
+        if decrypted_path:
+            try: os.unlink(decrypted_path)
+            except OSError: pass
+
+
+@restore_bp.route("/api/v1/restore", methods=["POST"])
+def remote_restore():
+    """Single-shot inbound restore pushed by a paired backup server."""
+    import tempfile
+    ip = request.remote_addr
+    if _restore_rate_limited(ip):
+        return jsonify(ok=False, error="too many restore attempts; try again later"), 429
+    target = _restore_target_for_token((request.headers.get("X-Restore-Token") or "").strip())
+    if target is None:
+        _record_restore_failure(ip)
+        current_app.logger.warning("remote restore rejected: bad token from %s", ip)
+        return jsonify(ok=False, error="invalid restore token"), 401
+
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify(ok=False, error="missing 'file' part"), 400
+    if (request.form.get("scope") or "full").strip() != "full":
+        return jsonify(ok=False, error="only full (whole-site) backups can be restored remotely"), 400
+    private_key = (request.form.get("private_key") or "").strip()
+
+    upload_dir = current_app.config["UPLOAD_FOLDER"]
+    data_dir = os.path.dirname(upload_dir.rstrip("/"))
+    tmp = tempfile.NamedTemporaryFile(prefix="tsp-remote-restore-", suffix=".bin",
+                                      delete=False, dir=data_dir)
+    tmp.close()
+    try:
+        f.save(tmp.name)
+        return _apply_remote_restore(target, tmp.name, private_key)
+    finally:
+        try: os.unlink(tmp.name)
+        except OSError: pass
+        private_key = None
+
+
+@restore_bp.route("/api/v1/restore/chunk", methods=["POST"])
+def remote_restore_chunk():
+    """One chunk of a large inbound restore. Staged per (target, upload_id)."""
+    ip = request.remote_addr
+    target = _restore_target_for_token((request.headers.get("X-Restore-Token") or "").strip())
+    if target is None:
+        _record_restore_failure(ip)
+        return jsonify(ok=False, error="invalid restore token"), 401
+    upload_id = (request.form.get("upload_id") or "").strip().lower()
+    if not _safe_upload_id(upload_id):
+        return jsonify(ok=False, error="invalid upload_id"), 400
+    try:
+        chunk_index = int(request.form.get("chunk_index", ""))
+        total_chunks = int(request.form.get("total_chunks", ""))
+    except ValueError:
+        return jsonify(ok=False, error="bad chunk metadata"), 400
+    if chunk_index < 0 or total_chunks < 1 or chunk_index >= total_chunks:
+        return jsonify(ok=False, error="chunk index out of range"), 400
+    chunk = request.files.get("chunk")
+    if not chunk:
+        return jsonify(ok=False, error="no chunk file"), 400
+
+    _cleanup_stale_restore_chunk_dirs()
+    staging = os.path.join(_restore_chunk_root(), f"{target.id}-{upload_id}")
+    os.makedirs(staging, exist_ok=True)
+    chunk.save(os.path.join(staging, f"{chunk_index:08d}.bin"))
+    return jsonify(ok=True, chunk_index=chunk_index, total_chunks=total_chunks)
+
+
+@restore_bp.route("/api/v1/restore/finalize", methods=["POST"])
+def remote_restore_finalize():
+    """Reassemble a chunked inbound restore and apply it."""
+    import shutil, tempfile
+    ip = request.remote_addr
+    if _restore_rate_limited(ip):
+        return jsonify(ok=False, error="too many restore attempts; try again later"), 429
+    target = _restore_target_for_token((request.headers.get("X-Restore-Token") or "").strip())
+    if target is None:
+        _record_restore_failure(ip)
+        return jsonify(ok=False, error="invalid restore token"), 401
+    upload_id = (request.form.get("upload_id") or "").strip().lower()
+    if not _safe_upload_id(upload_id):
+        return jsonify(ok=False, error="invalid upload_id"), 400
+    if (request.form.get("scope") or "full").strip() != "full":
+        return jsonify(ok=False, error="only full (whole-site) backups can be restored remotely"), 400
+    private_key = (request.form.get("private_key") or "").strip()
+
+    staging = os.path.join(_restore_chunk_root(), f"{target.id}-{upload_id}")
+    if not os.path.isdir(staging):
+        return jsonify(ok=False, error="upload session not found"), 400
+    chunks = sorted(n for n in os.listdir(staging) if n.endswith(".bin"))
+    try:
+        expected = int(request.form.get("total_chunks", "0"))
+    except ValueError:
+        expected = 0
+    if expected and len(chunks) != expected:
+        shutil.rmtree(staging, ignore_errors=True)
+        return jsonify(ok=False,
+                       error=f"upload incomplete — expected {expected} chunks, got {len(chunks)}"), 400
+
+    upload_dir = current_app.config["UPLOAD_FOLDER"]
+    data_dir = os.path.dirname(upload_dir.rstrip("/"))
+    tmp = tempfile.NamedTemporaryFile(prefix="tsp-remote-restore-", suffix=".bin",
+                                      delete=False, dir=data_dir)
+    try:
+        for name in chunks:
+            with open(os.path.join(staging, name), "rb") as src:
+                while True:
+                    block = src.read(8 * 1024 * 1024)
+                    if not block:
+                        break
+                    tmp.write(block)
+    finally:
+        tmp.close()
+
+    try:
+        return _apply_remote_restore(target, tmp.name, private_key)
+    finally:
+        try: os.unlink(tmp.name)
+        except OSError: pass
+        shutil.rmtree(staging, ignore_errors=True)
+        private_key = None
+
+
 # Settings on SiteSetting that make up the public frontend. Used by the
 # scoped frontend export/import so a single site can ship its look-and-feel
 # (content + navigation + assets) without carrying the whole database.
@@ -5070,6 +5326,24 @@ def _tspro_backup_pin_pubkey(t):
         return False, ("This site has no encryption key yet — rotate its keypair in the "
                        "backup server's console, then test again.")
     t.e2ee_public_key = server_pub
+
+    # Publish (or clear) our remote-restore pairing while we have a live,
+    # authenticated session. Best-effort: a registration hiccup must never
+    # fail the connection test — remote restore is a recovery convenience.
+    if caps.get("remote_restore"):
+        try:
+            if t.allow_remote_restore and t.public_url:
+                payload = {"restore_enabled": True,
+                           "callback_url": t.public_url.rstrip("/"),
+                           "restore_token": t.ensure_restore_token()}
+            else:
+                payload = {"restore_enabled": False}
+            requests.post(f"{base}/register",
+                          headers={"Authorization": f"Bearer {api_key}"},
+                          json=payload, timeout=30)
+        except requests.RequestException:
+            pass
+
     db.session.commit()
     return True, pubkey.fingerprint(server_pub)
 
@@ -5357,7 +5631,20 @@ def backups_edit_post(target_id):
         api_key = (request.form.get("api_key") or "").strip()
         if api_key:
             t.api_key_enc = encrypt(api_key)
-        _tspro_backup_pin_pubkey(t)  # best-effort re-pin / refresh fingerprint
+        # Remote restore opt-in. Requires this portal's public URL so the
+        # backup server knows where to push a restore back to.
+        allow_restore = (request.form.get("allow_remote_restore") == "1")
+        t.public_url = (request.form.get("public_url") or "").strip().rstrip("/") or None
+        if allow_restore and not t.public_url:
+            flash("Set this portal's public URL to enable remote restore.", "danger")
+            return redirect(url_for("main.backups_edit", target_id=t.id,
+                                    **_backup_embed_kwargs()))
+        t.allow_remote_restore = allow_restore
+        if allow_restore:
+            t.ensure_restore_token()
+        else:
+            t.clear_restore_token()
+        _tspro_backup_pin_pubkey(t)  # best-effort re-pin + (de)register restore pairing
 
     # ── Schedule (same as step 3) ──
     preset = request.form.get("schedule_preset") or ""

@@ -3137,6 +3137,19 @@ class BackupTarget(db.Model):
     api_key_enc = db.Column(db.LargeBinary)
     e2ee_public_key = db.Column(db.String(80))
 
+    # Remote restore (TS Pro Backup only). When the admin opts in, the
+    # backup server may push a stored backup back to *this* portal — an
+    # out-of-band recovery path for when the data is corrupted or the admin
+    # is locked out. We mint a shared ``restore_token`` and publish it (plus
+    # ``public_url`` — where our inbound /api/v1/restore lives) to the backup
+    # server on every backend ``open()``. The token authenticates the push;
+    # it is Fernet-encrypted at rest and is a high-value secret. Off by
+    # default — a destructive inbound endpoint must be deliberately enabled.
+    allow_remote_restore = db.Column(db.Boolean, nullable=False, default=False)
+    restore_token_enc = db.Column(db.LargeBinary)
+    public_url = db.Column(db.String(500))
+    last_remote_restore_at = db.Column(db.DateTime)
+
     # FTPS toggle (FTP only). When false, plain FTP — surface a warning
     # in the wizard so the admin opts in deliberately.
     use_tls = db.Column(db.Boolean, nullable=False, default=True)
@@ -3173,6 +3186,40 @@ class BackupTarget(db.Model):
         cascade="all, delete-orphan",
         order_by="BackupRun.started_at.desc()",
     )
+
+    # ── Remote-restore token helpers ───────────────────────────────
+    def ensure_restore_token(self) -> str:
+        """Return the plaintext restore token, minting + storing one
+        (Fernet-encrypted) on first use. Stable across calls so the value
+        published to the backup server keeps matching what we verify."""
+        from .crypto import encrypt, decrypt
+        if self.restore_token_enc:
+            existing = decrypt(self.restore_token_enc)
+            if existing:
+                return existing
+        import secrets
+        raw = "tsprt_" + secrets.token_urlsafe(32)
+        self.restore_token_enc = encrypt(raw)
+        return raw
+
+    @property
+    def restore_token(self) -> str:
+        from .crypto import decrypt
+        return decrypt(self.restore_token_enc) if self.restore_token_enc else ""
+
+    def clear_restore_token(self):
+        self.restore_token_enc = None
+
+    def verify_restore_token(self, raw: str) -> bool:
+        """Constant-time check of a presented token against the stored one.
+        Only valid when remote restore is enabled and a token exists."""
+        import hmac
+        if not (self.allow_remote_restore and self.restore_token_enc):
+            return False
+        mine = self.restore_token
+        if not mine or not raw:
+            return False
+        return hmac.compare_digest(mine, raw)
 
 
 class BackupRun(db.Model):

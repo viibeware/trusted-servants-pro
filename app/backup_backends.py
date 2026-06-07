@@ -488,12 +488,18 @@ class TSProBackupBackend:
     acts as a secondary cap via ``delete``.
     """
 
-    def __init__(self, api_base_url, api_key, public_key, scope="full", timeout=120):
+    def __init__(self, api_base_url, api_key, public_key, scope="full", timeout=120,
+                 callback_url="", restore_token="", restore_enabled=False):
         self.base = (api_base_url or "").rstrip("/")
         self.api_key = api_key or ""
         self.public_key = public_key or ""
         self.scope = scope or "full"
         self.timeout = timeout
+        # Remote-restore pairing: published to the server in open() so it
+        # knows how to push a backup back to us and how to authenticate it.
+        self.callback_url = (callback_url or "").rstrip("/")
+        self.restore_token = restore_token or ""
+        self.restore_enabled = bool(restore_enabled)
         self._sess = None
         self._ids = {}  # remote_name -> backup id, populated by list()
         # Chunked-upload capability, learned from /ping in open(). When the
@@ -554,6 +560,20 @@ class TSProBackupBackend:
             raise BackendError(
                 "TS Pro Backup: server provided no encryption key. Rotate the site's "
                 "keypair in the backup server console, then re-test the connection.")
+
+        # Publish (or clear) our remote-restore pairing if the server supports
+        # it. Best-effort: a registration failure must never block a backup —
+        # remote restore is a recovery convenience, not part of the upload.
+        if caps.get("remote_restore"):
+            payload = {"restore_enabled": bool(self.restore_enabled and self.callback_url and self.restore_token)}
+            if payload["restore_enabled"]:
+                payload["callback_url"] = self.callback_url
+                payload["restore_token"] = self.restore_token
+            try:
+                self._sess.post(self._url("/register"), headers=self._headers(),
+                                json=payload, timeout=self.timeout)
+            except requests.RequestException:
+                pass
 
     def put(self, local_path, remote_name):
         import os as _os
@@ -738,5 +758,8 @@ def make_backend(target):
             api_base_url=target.api_base_url or "",
             api_key=decrypt(target.api_key_enc) if target.api_key_enc else "",
             public_key=target.e2ee_public_key or "",
+            callback_url=target.public_url or "",
+            restore_token=target.restore_token if target.allow_remote_restore else "",
+            restore_enabled=bool(target.allow_remote_restore),
         )
     raise BackendError(f"unknown backup kind {kind!r}")

@@ -415,12 +415,16 @@ def create_app():
         return u
 
     from .auth import bp as auth_bp
-    from .routes import bp as main_bp, public_bp
+    from .routes import bp as main_bp, public_bp, restore_bp
     from .frontend import bp as frontend_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(public_bp)
     app.register_blueprint(frontend_bp)
+    app.register_blueprint(restore_bp)
+    # Inbound remote-restore API is authenticated by a per-target token, not
+    # a session cookie — exempt the whole blueprint from form-CSRF.
+    csrf.exempt(restore_bp)
 
     # Common attacker probe paths (env files, git internals, server config
     # files, off-the-shelf admin panels). We don't serve any of these — Flask
@@ -1855,7 +1859,13 @@ def _migrate_sqlite(app):
                          # key, and the site's tsppk_ recipient public key.
                          ("api_base_url", "VARCHAR(500)"),
                          ("api_key_enc", "BLOB"),
-                         ("e2ee_public_key", "VARCHAR(80)")):
+                         ("e2ee_public_key", "VARCHAR(80)"),
+                         # Remote restore (push a stored backup back to this
+                         # portal): opt-in flag, shared token, our public URL.
+                         ("allow_remote_restore", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("restore_token_enc", "BLOB"),
+                         ("public_url", "VARCHAR(500)"),
+                         ("last_remote_restore_at", "DATETIME")):
             add("backup_target", col, ddl)
         for col, ddl in (("asset_files_json", "TEXT"),):
             add("custom_font", col, ddl)

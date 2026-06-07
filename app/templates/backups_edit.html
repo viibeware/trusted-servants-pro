@@ -117,6 +117,28 @@
         {% if t.e2ee_public_key %}🔑 Encryption key fingerprint: <code>{{ t.e2ee_public_key|tspro_fp }}</code> — confirm it matches the backup server's console.
         {% else %}Run “Test connection” to fetch this site's encryption key.{% endif %}
       </p>
+
+      <fieldset class="backup-restore-optin" style="margin-top:1rem;border:1px solid var(--border,#ddd);border-radius:8px;padding:.75rem 1rem">
+        <legend class="smaller"><strong>{{ icon('shield') }} Remote restore</strong></legend>
+        <label class="check">
+          <input type="checkbox" name="allow_remote_restore" value="1" {% if t.allow_remote_restore %}checked{% endif %}>
+          Allow this backup server to push a stored backup back to this portal
+        </label>
+        <p class="muted smaller">Out-of-band disaster recovery — lets you restore from the backup
+          server's console if this portal's data is corrupted or you're locked out. The push is
+          authenticated by a shared token <em>and</em> requires the site's private key, which must
+          decrypt the archive. Leave off unless you want this recovery path.</p>
+        <label>This portal's public URL
+          <input type="url" name="public_url" value="{{ t.public_url or '' }}"
+                 placeholder="https://portal.example.org">
+        </label>
+        <p class="muted smaller">Where the backup server reaches this portal (no <code>/api/v1</code> suffix).
+          Required to enable remote restore. Published to the backup server on the next save / test.</p>
+        {% if t.allow_remote_restore and t.public_url %}
+        <p class="muted smaller">{{ icon('check-circle') }} Enabled. After saving / testing, the backup
+          server's console will show this site as paired and offer “Remote restore” on its full backups.</p>
+        {% endif %}
+      </fieldset>
       {% else %}
       {# Dropbox — same refresh-token flow as the wizard. Shared partial
          so a future change to the OAuth fields lands in one place. #}

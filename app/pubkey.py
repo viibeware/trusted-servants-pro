@@ -136,6 +136,19 @@ def fingerprint(public_key: str) -> str:
     return ":".join(digest[i:i + 4] for i in range(0, 16, 4))
 
 
+def public_from_private(private_key: str) -> str:
+    """Derive the ``tsppk_…`` public key from a ``tspsk_…`` private key.
+
+    Used by the remote-restore endpoint to confirm a supplied private key
+    matches the public key already on file for the target *before* applying
+    a destructive restore — so a stolen restore token alone can't push an
+    archive encrypted under an attacker's own key. Raises ``E2EEKeyError``
+    on a malformed private key."""
+    priv = _load_private(private_key)
+    pub_raw = priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+    return PUB_PREFIX + _b64e(pub_raw)
+
+
 def head_is_e2ee(blob: bytes) -> bool:
     """True iff ``blob`` begins with the public-key envelope magic."""
     return blob[:len(MAGIC)] == MAGIC

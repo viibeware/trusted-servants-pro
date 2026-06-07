@@ -6,6 +6,52 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.11.0] — 2026-06-07
+
+Adds **remote restore**: the off-site TS Pro Backup server can push a stored
+backup back into this portal on operator request — out-of-band recovery for a
+corrupted database, a locked-out admin, or an accidental login/IP lockout, when
+you can't drive a restore from inside the portal. **Off by default**; the admin
+opts in per backup target. Pairs with TS Pro Backup **1.3.0+**.
+
+### Added
+
+- **Inbound remote-restore API** (`POST /api/v1/restore`, `/restore/chunk`,
+  `/restore/finalize`), served on a dedicated root-level blueprint
+  (`restore_bp`) and CSRF-exempt — it's machine-to-machine, like the upload
+  side. It is deliberately **not** behind the admin session (that's the access
+  that's unavailable in a lockout). It reassembles the pushed archive, decrypts
+  it, and applies it through the existing `_perform_data_import()` (which swaps
+  the DB + uploads + `zoom.key`, runs migrations, clears login lockouts,
+  scrubs domain-bound Turnstile, and recycles workers). (`app/routes.py`.)
+- **Auto-pairing.** When remote restore is enabled on a TS Pro Backup target,
+  `TSProBackupBackend.open()` (and "Test connection") publish this portal's
+  public URL + a shared restore token to the backup server via its
+  `POST /api/v1/register` endpoint — best-effort, so a registration hiccup
+  never blocks a backup. (`app/backup_backends.py`, `app/routes.py`.)
+- **Admin opt-in** on the backup-target edit form: an **"Allow remote restore"**
+  toggle plus a **public URL** field (off by default). Enabling mints the token;
+  the next save / test publishes it. (`app/templates/backups_edit.html`.)
+- **`pubkey.public_from_private()`** — derives the `tsppk_…` public key from a
+  `tspsk_…` private key, used to verify a supplied restore key matches the key
+  on file before any destructive action. (`app/pubkey.py`.)
+
+### Security
+
+- **Two independent secrets gate every inbound restore.** The push must carry
+  the per-target restore token (`X-Restore-Token`, constant-time compared,
+  Fernet-encrypted at rest) **and** a private key that both decrypts the
+  archive *and* derives to the target's stored `e2ee_public_key` — checked
+  *before* any DB swap. A stolen token alone cannot push an attacker-crafted
+  archive. Failed attempts are rate-limited per IP (a distinct `LoginFailure`
+  kind, so it never interferes with the console login limiter) and audit-logged.
+  The supplied private key is used in-memory only — never stored or logged.
+
+### Schema
+
+- `BackupTarget` gains `allow_remote_restore`, `restore_token_enc`,
+  `public_url`, and `last_remote_restore_at` (additive boot migration).
+
 ## [2.10.10] — 2026-06-07
 
 ### Fixed
