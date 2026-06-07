@@ -68,6 +68,10 @@
           {% if is_in_archive %}
           <span class="fe-meeting-type fe-meeting-type-archived">Archived</span>
           {% endif %}
+          <button type="button" class="fe-copy-btn fe-copy-url-pill"
+                  data-copy="{{ request.base_url }}" aria-label="Copy link to this page">
+            {{ icon('link') }} <span>Copy URL</span>
+          </button>
         </div>
         <h1>{{ event.title }}</h1>
         {% if event.body %}

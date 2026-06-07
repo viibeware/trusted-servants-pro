@@ -3343,6 +3343,11 @@ html[data-theme="dark"] .fe-event-date-year { color: var(--fe-dm-text-muted, #94
 }
 .fe-meeting-detail-head-content { flex: 1 1 auto; min-width: 0; }
 .fe-meeting-detail-head .fe-meeting-type { margin-bottom: 16px; }
+.fe-meeting-detail-chips {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-bottom: 16px;
+}
+.fe-meeting-detail-chips .fe-meeting-type { margin-bottom: 0; }
 .fe-meeting-detail-head h1 {
   font-family: var(--tpl-heading-font, var(--fe-font-heading));
   font-weight: 800;
@@ -3489,6 +3494,27 @@ html[data-theme="dark"] .fe-event-date-year { color: var(--fe-dm-text-muted, #94
 .fe-copy-btn:hover { color: var(--fe-accent); border-color: var(--fe-accent); }
 .fe-copy-btn .icon { width: 14px; height: 14px; }
 .fe-copy-btn.is-copied { background: #16a34a; color: #fff; border-color: #16a34a; }
+
+/* Public "Copy URL" pill that sits to the right of the category chips on
+   the event and meeting detail heads. Resets the base .fe-copy-btn's fixed
+   28×28 icon-button geometry into a pill matching the .fe-meeting-type
+   chip height, but keeps a slight 1-px border like .fe-edit-shortcut. */
+.fe-copy-btn.fe-copy-url-pill {
+  width: auto; height: auto; align-self: flex-start;
+  gap: 6px; padding: 3px 12px; border-radius: 999px;
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; line-height: 1.45;
+  color: var(--fe-ink-muted);
+  border: 1px solid var(--fe-border);
+}
+.fe-copy-btn.fe-copy-url-pill .icon { width: 13px; height: 13px; }
+.fe-copy-btn.fe-copy-url-pill:hover,
+.fe-copy-btn.fe-copy-url-pill:focus-visible {
+  color: var(--fe-accent); border-color: var(--fe-accent);
+}
+.fe-copy-btn.fe-copy-url-pill.is-copied {
+  background: #16a34a; color: #fff; border-color: #16a34a;
+}
 
 html[data-theme="dark"] .fe-meeting-detail { background: #0b1026; }
 html[data-theme="dark"] .fe-meeting-detail-head h1 { color: var(--fe-text-dark-active, #f1f5f9); }

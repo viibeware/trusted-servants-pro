@@ -21,11 +21,17 @@
       </div>
       {% endif %}
       <div class="fe-meeting-detail-head-content">
-        <span class="fe-meeting-type fe-meeting-type-{{ meeting.meeting_type }}">
-          {% if meeting.meeting_type == 'in_person' %}In Person
-          {% elif meeting.meeting_type == 'online' %}Online
-          {% else %}Hybrid{% endif %}
-        </span>
+        <div class="fe-meeting-detail-chips">
+          <span class="fe-meeting-type fe-meeting-type-{{ meeting.meeting_type }}">
+            {% if meeting.meeting_type == 'in_person' %}In Person
+            {% elif meeting.meeting_type == 'online' %}Online
+            {% else %}Hybrid{% endif %}
+          </span>
+          <button type="button" class="fe-copy-btn fe-copy-url-pill"
+                  data-copy="{{ request.base_url }}" aria-label="Copy link to this page">
+            {{ icon('link') }} <span>Copy URL</span>
+          </button>
+        </div>
         <h1>{{ meeting.name }}</h1>
         {% if meeting.description %}
         <div class="fe-meeting-detail-desc">

@@ -6,6 +6,12 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.10.10] — 2026-06-07
+
+### Added
+
+- **A public "Copy URL" button on the event and meeting detail pages.** The event/announcement/archive detail head (`classic` event template) and the meeting detail head (`classic` meeting template) now show a "Copy URL" pill to the right of the category chips, above the title. It carries a link icon and copies the canonical page URL (`request.base_url`) to the clipboard, flashing green to confirm. The button reuses the existing `.fe-copy-btn` clipboard handler (`navigator.clipboard` with the `document.execCommand` fallback for plain-HTTP LAN access), so it works in non-secure contexts. Styled as a `.fe-copy-url-pill` — a pill matching the `.fe-meeting-type` chip height with a slight 1-px border like the "Edit" shortcut. Visible to everyone (not role-gated). On the meeting head the chip + button are wrapped in a new `.fe-meeting-detail-chips` flex row. (`app/templates/frontend/events/classic.html`, `app/templates/frontend/meetings/classic.html`, `app/static/css/frontend.css`.)
+
 ## [2.10.9] — 2026-06-05
 
 ### Changed
