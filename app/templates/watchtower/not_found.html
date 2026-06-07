@@ -221,8 +221,16 @@
                     title="Create a redirect for {{ e.path }}">{{ icon('plus') }} Redirect</button>
             {% endif %}
             {% if e.ip %}
+              {% set _trusted = trusted_ips.get(e.ip) %}
               {% if _blocked %}
               <span class="wt-nf-ips-blocked" title="This IP is currently on the blocklist">{{ icon('slash') }} Blocked</span>
+              {% elif _trusted %}
+              {# A real user signed in from this IP in the last 30 days —
+                 greyed out so a real user can't be locked out by mistake. #}
+              <span class="wt-nf-ips-block-protected-wrap"
+                    title="Can't block — {{ _trusted }} signed in from this IP in the last 30 days, so blocking it could lock a real user out. Block from Watchtower → Access if you're sure.">
+                <button type="button" class="btn btn-sm btn-danger wt-nf-ips-block-protected" disabled>{{ icon('slash') }} Block</button>
+              </span>
               {% else %}
               <form method="post" action="{{ url_for('main.watchtower_ban_ip') }}"
                     style="display:inline"
@@ -231,6 +239,7 @@
                 <input type="hidden" name="ip" value="{{ e.ip }}">
                 <input type="hidden" name="reason" value="Hitting 404: {{ e.path|truncate(180) }}">
                 <input type="hidden" name="ttl_hours" value="0">
+                <input type="hidden" name="protect_known_users" value="1">
                 <input type="hidden" name="return_url" value="{{ url_for('main.watchtower_not_found', window=window) }}">
                 <button type="submit" class="btn btn-sm btn-danger" title="Add this IP to the blocklist (permanent)">{{ icon('slash') }} Block</button>
               </form>
@@ -408,6 +417,16 @@
     white-space: nowrap;
   }
   .wt-nf-ips-blocked .icon { width: 12px; height: 12px; }
+  /* Block button greyed out because a signed-in user uses this IP. The
+     wrapping span carries the title so the tooltip still shows even
+     though the button itself is disabled (disabled elements can swallow
+     hover events). */
+  .wt-nf-ips-block-protected-wrap { display: inline-block; cursor: help; }
+  .wt-nf-ips-block-protected[disabled],
+  .wt-nf-ips-block-protected:disabled {
+    opacity: 0.45; filter: grayscale(1);
+    cursor: not-allowed; pointer-events: none;
+  }
 </style>
 
 <script>
@@ -450,6 +469,60 @@
     } else {
       panel.hidden = false;
       btn.setAttribute('aria-expanded', 'true');
+    }
+  });
+})();
+
+// Block-IP without a page reload. The IP panels (lazily injected above)
+// each carry a "Block IP" form; we intercept its submit, confirm, and
+// POST via fetch so the admin can keep working down the list and block
+// more IPs. On success the form swaps in place for a "Blocked" chip.
+// Delegated because the forms don't exist until a panel is opened.
+(function () {
+  function toast(msg) {
+    const el = document.createElement('div');
+    el.className = 'wt-redirect-success-flash';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    setTimeout(() => {
+      el.classList.remove('show');
+      setTimeout(() => el.remove(), 220);
+    }, 2400);
+  }
+
+  document.addEventListener('submit', async (e) => {
+    const form = e.target.closest('.wt-nf-ips-block-form');
+    if (!form) return;
+    e.preventDefault();
+    const ip = (form.querySelector('input[name="ip"]') || {}).value || '';
+    if (!confirm('Block ' + ip + '? This rejects every inbound request from this IP with a 403 until you unblock from Watchtower → Access.')) return;
+    const btn = form.querySelector('button[type="submit"]');
+    const icon = btn && btn.querySelector('.icon');
+    const iconHtml = icon ? icon.outerHTML : '';
+    const origHtml = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Blocking…'; }
+    try {
+      const r = await fetch(form.action, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' },
+        body: new FormData(form),
+        credentials: 'same-origin',
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data.ok) {
+        const action = form.closest('.wt-nf-ips-action');
+        if (action) {
+          action.innerHTML = '<span class="wt-nf-ips-blocked" title="This IP is currently on the blocklist (manage from Watchtower → Access)">' + iconHtml + ' Blocked</span>';
+        }
+        toast('Blocked ' + ip + '.');
+      } else {
+        if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+        toast(data.error || ('Could not block ' + ip + '.'));
+      }
+    } catch (err) {
+      if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+      toast('Network error — please try again.');
     }
   });
 })();

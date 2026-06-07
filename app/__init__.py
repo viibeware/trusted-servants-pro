@@ -17,6 +17,36 @@ login_manager.login_message_category = "warning"
 csrf = CSRFProtect()
 
 
+class _CloudflareRemoteAddr:
+    """Rewrite ``REMOTE_ADDR`` from Cloudflare's ``CF-Connecting-IP`` header.
+
+    When the app is fronted by Cloudflare (Cloudflare → Caddy → gunicorn),
+    the real visitor IP rides in ``CF-Connecting-IP`` as a single,
+    Cloudflare-set value. That's more reliable than counting
+    ``X-Forwarded-For`` hops: the XFF chain length varies (Cloudflare +
+    Caddy = two entries), so a fixed ``ProxyFix(x_for=1)`` peels off only
+    the last hop and lands on the Cloudflare edge IP (e.g. 172.71.x.x)
+    instead of the client. Reading the dedicated header sidesteps the
+    hop-count guesswork entirely.
+
+    Wired up *inside* ProxyFix so it runs after XFF processing and wins
+    when the header is present, while still falling back to ProxyFix's
+    XFF result (and to the bare socket ``REMOTE_ADDR``) when it isn't.
+    Only installed when a proxy is trusted, so direct-bind deploys never
+    honor a header a client could forge; disable explicitly with
+    ``TSP_TRUST_CF_HEADER=0`` if a non-Cloudflare proxy sits in front.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    def __call__(self, environ, start_response):
+        cf_ip = environ.get("HTTP_CF_CONNECTING_IP")
+        if cf_ip:
+            environ["REMOTE_ADDR"] = cf_ip.strip()
+        return self.app(environ, start_response)
+
+
 def create_app():
     app = Flask(__name__, instance_relative_config=False)
     # Accept URLs with or without a trailing slash. Werkzeug's
@@ -36,11 +66,20 @@ def create_app():
     # Flask remedy. Hop count is configurable via TSP_TRUSTED_PROXIES so
     # direct-bind deploys can disable it (set to 0) to avoid trusting
     # spoofable headers when no proxy sits in front.
+    #
+    # Cloudflare adds a second hop, so XFF hop-counting alone lands on the
+    # CF edge IP — _CloudflareRemoteAddr (installed inside ProxyFix) reads
+    # CF-Connecting-IP to recover the true client. See that class's docstring.
     try:
         _proxy_hops = int(os.environ.get("TSP_TRUSTED_PROXIES", "1"))
     except ValueError:
         _proxy_hops = 1
     if _proxy_hops > 0:
+        # Added first so it sits *inside* ProxyFix: ProxyFix runs first and
+        # sets REMOTE_ADDR from XFF, then this overrides it with the
+        # Cloudflare header when present (and is a no-op when it isn't).
+        if os.environ.get("TSP_TRUST_CF_HEADER", "1") != "0":
+            app.wsgi_app = _CloudflareRemoteAddr(app.wsgi_app)
         app.wsgi_app = ProxyFix(
             app.wsgi_app,
             x_for=_proxy_hops,

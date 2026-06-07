@@ -15372,6 +15372,7 @@ def watchtower_not_found():
     # banned IPs. One indexed query against IPBlock per page load.
     recent_ips = {e.ip for e in recent if e.ip}
     blocked_ips = set()
+    trusted_ips = {}
     if recent_ips:
         from .models import IPBlock as _IPBlock
         now_ = datetime.utcnow()
@@ -15379,6 +15380,9 @@ def watchtower_not_found():
                        .filter(_IPBlock.ip.in_(recent_ips))
                        .filter((_IPBlock.expires_at.is_(None)) |
                                (_IPBlock.expires_at > now_)).all()}
+        # IPs a real user signed in from within the last 30 days, mapped
+        # to the username — the table greys out their Block button.
+        trusted_ips = wt.recent_login_user_ips(recent_ips)
 
     return render_template(
         "watchtower/not_found.html",
@@ -15392,6 +15396,7 @@ def watchtower_not_found():
         recent=recent,
         existing_redirects=existing_redirects,
         blocked_ips=blocked_ips,
+        trusted_ips=trusted_ips,
     )
 
 
@@ -15654,8 +15659,14 @@ def watchtower_requests():
 @bp.route("/watchtower/ban-ip", methods=["POST"])
 @admin_required
 def watchtower_ban_ip():
-    """Add (or refresh) an IP block. ``ttl_hours=0`` is permanent."""
+    """Add (or refresh) an IP block. ``ttl_hours=0`` is permanent.
+
+    When the caller asks for JSON (``Accept: application/json`` — the 404s
+    tab's inline Block buttons do), the result comes back as JSON so the
+    admin can keep blocking down the IP list without a page reload.
+    Otherwise it redirects back as before for the no-JS form path."""
     from . import watchtower as wt, activity
+    wants_json = "application/json" in request.headers.get("Accept", "")
     ip = (request.form.get("ip") or "").strip()
     reason = request.form.get("reason") or ""
     try:
@@ -15663,16 +15674,38 @@ def watchtower_ban_ip():
     except (TypeError, ValueError):
         ttl_hours = 0
     if not ip:
+        if wants_json:
+            return jsonify(ok=False, error="Provide an IP to block."), 400
         flash("Provide an IP to block.", "danger")
         return redirect(url_for("main.watchtower_access"))
+    # Guard real users: the 404s-tab Block buttons send ``protect_known_users``
+    # so we refuse to block an IP a signed-in user was active from in the last
+    # 30 days (the button is also greyed there, this is belt-and-suspenders).
+    # The Access / overview block forms don't send it, so an admin can still
+    # deliberately block such an IP from those surfaces.
+    if request.form.get("protect_known_users"):
+        known_user = wt.recent_login_user_for_ip(ip)
+        if known_user:
+            msg = (f"Didn't block {ip} — {known_user} signed in from this IP "
+                   "in the last 30 days, so blocking it could lock out a real "
+                   "user. Block it from Watchtower → Access if you're sure.")
+            if wants_json:
+                return jsonify(ok=False, error=msg, protected=True), 409
+            flash(msg, "warning")
+            return redirect(request.form.get("return_url")
+                            or url_for("main.watchtower_not_found"))
     row = wt.ban_ip(ip, reason, current_user.id,
                     ttl_hours=ttl_hours if ttl_hours > 0 else None)
     if row:
         activity.log("watchtower.ban_ip", entity_type="ip_block",
                      entity_id=row.id,
                      summary=f"Banned {ip}" + (f" ({reason})" if reason else ""))
+        if wants_json:
+            return jsonify(ok=True, ip=ip)
         flash(f"Blocked {ip}.", "success")
     else:
+        if wants_json:
+            return jsonify(ok=False, error="Couldn't block — invalid input."), 400
         flash("Couldn't block — invalid input.", "danger")
     return redirect(request.form.get("return_url") or url_for("main.watchtower_access"))
 

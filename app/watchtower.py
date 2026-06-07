@@ -266,9 +266,51 @@ def not_found_ips_for_path(path, days=30, limit=20):
                 .filter(IPBlock.ip.in_(ips))
                 .filter((IPBlock.expires_at.is_(None)) |
                         (IPBlock.expires_at > now)).all()}
+    # Cross-reference against recent successful logins so the UI can grey
+    # out the Block button for any IP a real user has signed in from —
+    # blocking those would 403 a legitimate user out of the portal.
+    trusted = recent_login_user_ips(ips)
     return [{"ip": ip, "count": int(c), "last_seen": ls,
-             "is_blocked": ip in blocked}
+             "is_blocked": ip in blocked,
+             "trusted_user": trusted.get(ip)}
             for ip, c, ls in rows]
+
+
+def recent_login_user_ips(ips, days=30):
+    """Map ``ip -> username`` for any IP in ``ips`` from which a user
+    successfully logged in (or stayed active) within the last ``days``
+    days. Used to protect real users' IPs from being blocked off the
+    Watchtower 404s tab. The username is the most-recently-active user
+    seen on that IP. Returns ``{}`` for an empty/falsy input.
+
+    A login is "recent" if either the session started or was last active
+    within the window, so a long-lived session that's still in use counts
+    even if it was first opened more than ``days`` days ago.
+    """
+    ips = [i for i in (ips or []) if i]
+    if not ips:
+        return {}
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    rows = (db.session.query(LoginSession.ip, User.username)
+            .join(User, User.id == LoginSession.user_id)
+            .filter(LoginSession.ip.in_(ips))
+            .filter(or_(LoginSession.started_at >= cutoff,
+                        LoginSession.last_activity_at >= cutoff))
+            .order_by(LoginSession.last_activity_at.desc())
+            .all())
+    out = {}
+    for ip, username in rows:
+        if ip and ip not in out:
+            out[ip] = username
+    return out
+
+
+def recent_login_user_for_ip(ip, days=30):
+    """Username of the most-recently-active user who logged in from ``ip``
+    within the last ``days`` days, or ``None``. Single-IP convenience
+    wrapper over :func:`recent_login_user_ips` for the ban-IP guard."""
+    ip = (ip or "").strip()
+    return recent_login_user_ips([ip], days=days).get(ip)
 
 
 # ─── Anomaly indicators ──────────────────────────────────────────

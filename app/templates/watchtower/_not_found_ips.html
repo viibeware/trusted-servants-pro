@@ -21,14 +21,24 @@
       <span class="wt-nf-ips-action">
         {% if r.is_blocked %}
         <span class="wt-nf-ips-blocked" title="This IP is currently on the blocklist (manage from Watchtower → Access)">{{ icon('slash') }} Blocked</span>
+        {% elif r.trusted_user %}
+        {# A real user signed in from this IP in the last 30 days — greyed
+           out so we can't accidentally lock them out of the portal. #}
+        <span class="wt-nf-ips-block-protected-wrap"
+              title="Can't block — {{ r.trusted_user }} signed in from this IP in the last 30 days, so blocking it could lock a real user out. Block from Watchtower → Access if you're sure.">
+          <button type="button" class="btn btn-sm btn-danger wt-nf-ips-block-protected" disabled>{{ icon('slash') }} Block IP</button>
+        </span>
         {% else %}
+        {# The 404s-tab JS intercepts this submit, confirms, and POSTs via
+           fetch so blocking doesn't reload the page. Without JS it still
+           posts normally and redirects back via the return_url below. #}
         <form method="post" action="{{ url_for('main.watchtower_ban_ip') }}"
-              class="wt-nf-ips-block-form"
-              onsubmit="return confirm('Block {{ r.ip }}? This rejects every inbound request from this IP with a 403 until you unblock from Watchtower → Access.');">
+              class="wt-nf-ips-block-form">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="ip" value="{{ r.ip }}">
           <input type="hidden" name="reason" value="Hitting 404: {{ path|truncate(180) }}">
           <input type="hidden" name="ttl_hours" value="0">
+          <input type="hidden" name="protect_known_users" value="1">
           <input type="hidden" name="return_url" value="{{ url_for('main.watchtower_not_found', window=window) }}">
           <button type="submit" class="btn btn-sm btn-danger" title="Add to the IP blocklist (permanent)">{{ icon('slash') }} Block IP</button>
         </form>
