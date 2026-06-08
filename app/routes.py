@@ -15429,12 +15429,15 @@ def watchtower():
     nothing — every panel renders from a fresh DB read so a refresh
     always shows current state."""
     from . import watchtower as wt
+    from .timezone import site_tz_label
+    site = SiteSetting.query.first()
     return render_template(
         "watchtower/overview.html",
         active_tab="overview",
         kpis=wt.overview_kpis(),
         daily=wt.daily_visits(days=30),
-        hourly_fail=wt.hourly_failed_logins(hours=24),
+        tz_label=site_tz_label(site),
+        hourly_fail=wt.hourly_failed_logins(hours=24, site=site),
         anomalies=wt.anomaly_signals(),
         top_ips=wt.top_failed_login_ips(days=7, limit=10),
         recent=wt.recent_admin_activity(limit=12),
@@ -15462,16 +15465,19 @@ def watchtower_visitors():
     # when /tspro/frontend/metrics was retired and its donuts moved
     # here.
     hourly_days = min(30, window)
+    from .timezone import site_tz_label
+    site = SiteSetting.query.first()
     return render_template(
         "watchtower/visitors.html",
         active_tab="visitors",
         window=window,
         hr_days=hourly_days,
+        tz_label=site_tz_label(site),
         windows=(7, 14, 30, 60, 90, 180, 365),
         summary=vm.summary(days=window),
         daily=vm.daily_series(days=window),
-        hourly_views=vm.hourly_distribution(days=hourly_days, metric="views"),
-        hourly_uniques=vm.hourly_distribution(days=hourly_days, metric="uniques"),
+        hourly_views=vm.hourly_distribution(days=hourly_days, metric="views", site=site),
+        hourly_uniques=vm.hourly_distribution(days=hourly_days, metric="uniques", site=site),
         # Big enough pool that the client-side "Show 30 more" expand
         # rarely runs out without paying for another round-trip.
         top_paths_views=vm.top_paths(days=window, limit=300, metric="views"),
@@ -15516,10 +15522,13 @@ def watchtower_visitors_csv():
         window = 30
     hr_days = min(30, window)
 
+    from .timezone import site_tz_label
+    site = SiteSetting.query.first()
+    tz_label = site_tz_label(site)
     s = vm.summary(days=window)
     daily = vm.daily_series(days=window)
-    hourly_v = vm.hourly_distribution(days=hr_days, metric="views")
-    hourly_u = vm.hourly_distribution(days=hr_days, metric="uniques")
+    hourly_v = vm.hourly_distribution(days=hr_days, metric="views", site=site)
+    hourly_u = vm.hourly_distribution(days=hr_days, metric="uniques", site=site)
 
     def _merge(views_rows, uniques_rows):
         """Union two ranked breakdowns into one label -> {views, uniques}
@@ -15581,7 +15590,7 @@ def watchtower_visitors_csv():
     w.writerow([])
 
     # ── Hour of day ────────────────────────────────────────────────
-    w.writerow([f"## Hour of day (UTC, last {hr_days}d)"])
+    w.writerow([f"## Hour of day ({tz_label}, last {hr_days}d)"])
     w.writerow(["hour", "views", "unique_visitors"])
     uniques_by_hour = {r["hour"]: r["count"] for r in hourly_u}
     for r in hourly_v:

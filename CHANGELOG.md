@@ -6,6 +6,31 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.11.1] — 2026-06-08
+
+Makes the **hour-of-day charts read in the portal's configured timezone**
+instead of UTC. Both the Watchtower "Failed logins · last 24 hours" chart and
+the frontend visitor-metrics "Hour of day" chart now bucket by the IANA zone
+set in **Settings → Server Timezone** (`SiteSetting.timezone`), so the busy-hour
+bars line up with the fellowship's wall clock rather than the host's UTC.
+
+### Changed
+
+- **Visitor "Hour of day" distribution** (`visitor_metrics.hourly_distribution`)
+  shifts each UTC timestamp by the site's current offset inside the SQLite
+  `strftime` rollup, keeping the aggregation server-side. The chart caption and
+  CSV export section now show the active zone label (e.g. `EDT`) in place of the
+  old hard-coded `UTC`. (`app/visitor_metrics.py`, `app/templates/watchtower/visitors.html`, `app/routes.py`.)
+- **Watchtower failed-login hourly chart** (`watchtower.hourly_failed_logins`)
+  builds its rolling 24-hour window and buckets per row in site-local time
+  (DST-correct), and the card now labels the active zone. (`app/watchtower.py`,
+  `app/templates/watchtower/overview.html`, `app/routes.py`.)
+- New `site_offset_seconds()` and `site_tz_label()` helpers in `app/timezone.py`.
+
+Note: SQLite has no IANA-tz support, so the visitor chart applies the zone's
+*current* offset — a window straddling a DST change is approximate by one hour
+at the boundary. The Watchtower chart converts per row and is fully DST-correct.
+
 ## [2.11.0] — 2026-06-07
 
 Adds **remote restore**: the off-site TS Pro Backup server can push a stored

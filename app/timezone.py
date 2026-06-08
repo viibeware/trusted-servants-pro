@@ -52,6 +52,26 @@ def now_in_name(name):
     return datetime.now(tz=_zone(name or "UTC"))
 
 
+def site_offset_seconds(site):
+    """Current UTC offset of the site tz, in seconds (east of UTC is
+    positive). Used to shift UTC-stored timestamps into local wall-clock
+    inside a SQLite ``strftime`` rollup so hour-of-day charts read in the
+    fellowship's timezone. Uses the tz's offset *right now*, so a window
+    spanning a DST change is approximate by an hour at the transition —
+    fine for an aggregate histogram."""
+    off = now_in(site).utcoffset()
+    return int(off.total_seconds()) if off else 0
+
+
+def site_tz_label(site):
+    """Short label for the site tz at the current moment — the zone's
+    abbreviation if the platform supplies one (e.g. ``PDT``), else the
+    IANA name (e.g. ``America/Los_Angeles``). For chart captions."""
+    name = (getattr(site, "timezone", None) or "UTC").strip() or "UTC"
+    abbr = now_in(site).strftime("%Z")
+    return abbr or name
+
+
 def now_local_naive(site):
     """Return the current site-local datetime as a *naive* value
     (tzinfo stripped). Use this when stamping a model column whose

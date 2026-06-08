@@ -107,20 +107,33 @@ def daily_visits(days=30):
     return out
 
 
-def hourly_failed_logins(hours=24):
+def hourly_failed_logins(hours=24, site=None):
     """Hourly bucket of failed-login attempts. Returns a list ``[{hour,
     count}, …]`` covering the last ``hours`` hours, oldest first. The
     overview tab renders this as a small bar chart so a sudden spike
-    (brute-force run) is obvious at a glance."""
-    now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
-    start = now - timedelta(hours=hours - 1)
+    (brute-force run) is obvious at a glance.
+
+    Buckets are labelled and grouped in the site's configured timezone
+    (``failed_at`` is stored naive-UTC) so the chart's hour labels match
+    the fellowship's wall clock."""
+    from datetime import timezone as _tz
+    from .models import SiteSetting
+    from .timezone import site_timezone
+    if site is None:
+        site = SiteSetting.query.first()
+    tz = site_timezone(site)
+    now_local = datetime.now(tz=tz).replace(minute=0, second=0, microsecond=0)
+    start_local = now_local - timedelta(hours=hours - 1)
+    # Filter in UTC (the storage convention) but bucket in local time.
+    start_utc = start_local.astimezone(_tz.utc).replace(tzinfo=None)
     rows = (db.session.query(LoginFailure.failed_at)
             .filter(LoginFailure.kind == "ip",
-                    LoginFailure.failed_at >= start).all())
-    buckets = {(start + timedelta(hours=i)).strftime("%Y-%m-%d %H"): 0
+                    LoginFailure.failed_at >= start_utc).all())
+    buckets = {(start_local + timedelta(hours=i)).strftime("%Y-%m-%d %H"): 0
                for i in range(hours)}
     for (ts,) in rows:
-        bucket = ts.replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%d %H")
+        local = ts.replace(tzinfo=_tz.utc).astimezone(tz)
+        bucket = local.strftime("%Y-%m-%d %H")
         if bucket in buckets:
             buckets[bucket] += 1
     return [{"hour": k, "count": v} for k, v in sorted(buckets.items())]

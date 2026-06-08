@@ -440,20 +440,30 @@ def _count_expr(metric):
     return func.count(VisitorEvent.id)
 
 
-def hourly_distribution(days=14, metric="views"):
+def hourly_distribution(days=14, metric="views", site=None):
     """Hits or unique visitors per hour-of-day across the window.
     Returns a list of 24 dicts ``[{hour, count}, ...]`` covering 0..23.
     The metrics page uses this for the 24-bar "when do people visit"
     chart. Pass ``metric="uniques"`` to count distinct visitors per
     hour instead of every hit.
 
-    SQLite stores `created_at` as text; we slice the hour with `strftime`
-    so the rollup runs server-side without pulling rows into Python.
+    SQLite stores `created_at` as text (UTC); we slice the hour with
+    `strftime` so the rollup runs server-side without pulling rows into
+    Python. The hour is bucketed in the site's configured timezone by
+    shifting the timestamp by the site's current UTC offset before
+    extracting `%H`, so the chart reads in the fellowship's wall clock.
     """
+    from .models import SiteSetting
+    from .timezone import site_offset_seconds
+    if site is None:
+        site = SiteSetting.query.first()
+    # SQLite has no IANA-tz support; apply the site's current offset as a
+    # date modifier ("+/-N seconds") so the extracted hour is local.
+    shift = "%+d seconds" % site_offset_seconds(site)
     today = datetime.utcnow().date()
     cutoff = (today - timedelta(days=days - 1)).strftime("%Y-%m-%d")
     q = (db.session.query(
-            func.strftime("%H", VisitorEvent.created_at).label("hour"),
+            func.strftime("%H", VisitorEvent.created_at, shift).label("hour"),
             _count_expr(metric))
          .filter(VisitorEvent.day >= cutoff)
          .filter(_NO_API))
