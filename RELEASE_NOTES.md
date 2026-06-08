@@ -7,7 +7,18 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.11.0 — 2026-06-07 (latest) — Recover a corrupted or locked-out portal from your backup server
+## 2.12.0 — 2026-06-08 (latest) — Sync your website's frontend from a dev copy to your live site
+
+- **You can now build your public website on a separate copy and push it to your live site over the network.** Run a second "staging" install to redesign the site — theme, colors, navigation and mega-menus, layouts, fonts, icons, and your page-builder Pages — then send the finished result to production with one click, instead of downloading a bundle and re-uploading it. It works both ways: **Pull** brings your live site's current frontend down to the staging copy to start from, and **Push** sends your changes back up when they're ready.
+- **Only the frontend moves — nothing else.** The look-and-feel, navigation, and Pages (plus every image and file they reference) transfer. Your recovery Stories, users, meetings, libraries, and meeting uploads on the receiving site are left exactly as they were. (Stories are usually submitted or edited on the live site, so a push never touches them.)
+- **Safe by default.** Before either site is overwritten, it automatically saves a complete rollback snapshot of its current frontend — if a sync isn't what you wanted, you can put it back from **Settings → Data → Frontend bundle**. Each install also has to opt in to being synced ("Allow inbound"), every request is protected by a shared secret token you set on both installs, and repeated bad attempts are rate-limited. Use an `https://` address between the two sites.
+- **Where to find it:** **Settings → Data → Frontend staging sync.** Enter the other install's address, paste the same token on both, tick **Allow inbound** on whichever side should receive, then use **Test connection**, **Pull**, or **Push**.
+
+## 2.11.1 — 2026-06-08 — Hour-of-day charts follow your portal's timezone
+
+- **The "when do people visit" and failed-login charts now read in your timezone, not UTC.** The Web Frontend visitor metrics' **Hour of day** chart and Watchtower's **Failed logins · last 24 hours** chart used to bucket activity by UTC hour, so the busy-hour bars could sit hours off from your fellowship's actual clock. They now follow the timezone set in **Settings → Server Timezone**, and the charts are labelled with the active zone (e.g. `EDT`).
+
+## 2.11.0 — 2026-06-07 — Recover a corrupted or locked-out portal from your backup server
 
 - **You can now restore from your off-site backup server even when you can't get into the portal.** Until now, restoring a backup meant logging into the portal and importing it from the inside — no help at all on the day the portal's data is corrupted, or you're locked out and can't sign in. There's now an out-of-band path: from the **TS Pro Backup** server's own console (a separate machine you can still reach), pick a stored full backup, paste the site's private key, and it pushes the backup straight back into your portal, which restores itself — no portal login required. Your old data is set aside with a timestamp first, and login lockouts are cleared so you can sign back in right after.
 - **It's off until you turn it on, per backup target.** Because this is a powerful recovery path, it stays disabled until you opt in. On the backup target for your TS Pro Backup server (**Settings → Off-site backups →** your target → **Edit**), tick **"Allow remote restore"** and fill in your portal's public URL. Save or test the connection and it pairs with the backup server automatically — after that, the backup server's console offers a **Remote restore** button on your full backups. Requires **TS Pro Backup 1.3.0 or later**.

@@ -26,7 +26,8 @@ from flask import url_for
 from sqlalchemy import func
 
 from .models import (db, NotificationDismissal, AccessRequest,
-                     ContactSubmission, Post, Story, SiteSetting)
+                     ContactSubmission, Post, Story, RecoveryContact,
+                     SiteSetting)
 
 
 def _site():
@@ -144,6 +145,36 @@ def _items(user):
                 "url": url_for("main.stories", show="pending"),
                 "ts": s.submitted_at or s.created_at,
             })
+    # Pending Recovery Contacts submissions — same source + role gate as the
+    # sidebar's pending chip (routes.py builds counts["pending_recovery_contacts"]
+    # the same way). Unapproved rows include new listings plus self-service
+    # update/removal requests; the verb in the title reflects which.
+    if site and getattr(site, "recovery_contacts_enabled", False):
+        try:
+            from .permissions import user_meets_role
+            allowed = user_meets_role(
+                user, getattr(site, "recovery_contacts_required_role", "admin") or "admin")
+        except Exception:  # noqa: BLE001
+            allowed = False
+        if allowed:
+            for rc in (RecoveryContact.query
+                       .filter_by(approved=False)
+                       .order_by(RecoveryContact.created_at.desc()).all()):
+                if rc.wants_removal:
+                    verb, icon = "Removal request", "trash"
+                elif rc.wants_update:
+                    verb, icon = "Update request", "rotate-cw"
+                else:
+                    verb, icon = "New listing awaiting review", "user-plus"
+                out.append({
+                    "key": f"recovery_contact:{rc.id}",
+                    "category": "Recovery Contacts",
+                    "icon": icon,
+                    "title": f"{verb}: {rc.name}",
+                    "body": " · ".join(p for p in (rc.email, rc.phone) if p),
+                    "url": url_for("main.recovery_contacts"),
+                    "ts": rc.created_at,
+                })
     return out
 
 

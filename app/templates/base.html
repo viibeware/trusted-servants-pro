@@ -1756,6 +1756,91 @@
           </div>
         </section>
 
+        {# ── Frontend staging sync — push/pull between two installs ── #}
+        <section class="card data-card">
+          <div class="data-card-head">
+            {{ icon('refresh-cw') }}
+            <span>Frontend staging sync</span>
+          </div>
+          <p class="muted small data-card-lead">
+            Pair this install with a sibling (e.g. a <strong>dev</strong> copy and your
+            <strong>prod</strong> site) to move the frontend over the network instead of
+            downloading and re-uploading a bundle. <strong>Pull</strong> brings the peer's
+            current frontend here to work on; <strong>Push</strong> sends this install's
+            frontend to the peer. Scope is presentation + page-builder Pages + assets —
+            recovery <em>Stories</em>, users, meetings, and libraries are left alone. The
+            receiving side auto-saves a rollback snapshot before applying. Use the same
+            shared token on both installs; an <code>https://</code> peer URL is strongly
+            recommended.
+          </p>
+          <form class="form" method="post" action="{{ url_for('main.frontend_sync_save') }}" data-no-ajax="1">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="data-card-grid">
+              <div class="data-card-col">
+                <label>Peer label
+                  <input type="text" name="label" placeholder="Production"
+                         value="{{ fe_sync_peer.label if fe_sync_peer else '' }}" autocomplete="off">
+                </label>
+                <label>Peer base URL
+                  <input type="url" name="base_url" placeholder="https://prod.example.org"
+                         value="{{ fe_sync_peer.base_url if fe_sync_peer else '' }}" autocomplete="off">
+                </label>
+              </div>
+              <div class="data-card-col">
+                <label>Shared token
+                  <input type="text" name="token" placeholder="{{ 'unchanged — leave blank to keep' if (fe_sync_peer and fe_sync_peer.token_enc) else 'paste the token from the peer' }}" autocomplete="off">
+                </label>
+                <label class="row-check" style="display:flex;align-items:center;gap:.5rem;">
+                  <input type="checkbox" name="allow_inbound" value="1"
+                         {{ 'checked' if (fe_sync_peer and fe_sync_peer.allow_inbound) else '' }}>
+                  Allow this install to be pulled/pushed by the peer (inbound)
+                </label>
+              </div>
+            </div>
+            <div class="form-actions" style="display:flex;gap:.5rem;flex-wrap:wrap;">
+              <button class="btn btn-primary">Save peer</button>
+              <button class="btn" name="generate" value="1"
+                      title="Mint a fresh shared token to copy into the peer install">Generate token</button>
+            </div>
+          </form>
+          {% if fe_sync_peer and fe_sync_peer.base_url %}
+          <div class="data-card-grid" style="margin-top:1rem;">
+            <div class="data-card-col">
+              <div class="u-name">Pull from peer → here</div>
+              <p class="muted small">
+                Overwrites <strong>this install's</strong> frontend with the peer's.
+                A rollback snapshot is saved first. Type <code>REPLACE</code> to confirm.
+              </p>
+              <form class="form" method="post" action="{{ url_for('main.frontend_sync_pull') }}" data-no-ajax="1">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label>Type <code>REPLACE</code> to confirm<input type="text" name="confirm" placeholder="REPLACE" autocomplete="off" required></label>
+                <div class="form-actions"><button class="btn btn-danger">Pull from peer</button></div>
+              </form>
+            </div>
+            <div class="data-card-col">
+              <div class="u-name">Push here → peer</div>
+              <p class="muted small">
+                Overwrites <strong>the peer's</strong> frontend with this install's.
+                The peer saves a rollback snapshot first. Type <code>REPLACE</code> to confirm.
+              </p>
+              <form class="form" method="post" action="{{ url_for('main.frontend_sync_push') }}" data-no-ajax="1">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label>Type <code>REPLACE</code> to confirm<input type="text" name="confirm" placeholder="REPLACE" autocomplete="off" required></label>
+                <div class="form-actions" style="display:flex;gap:.5rem;flex-wrap:wrap;">
+                  <button class="btn btn-danger">Push to peer</button>
+                  <button class="btn" formaction="{{ url_for('main.frontend_sync_test') }}" formnovalidate>Test connection</button>
+                </div>
+              </form>
+            </div>
+          </div>
+          <p class="muted small" style="margin-top:.75rem;">
+            {% if fe_sync_peer.last_pulled_at %}Last pulled {{ fe_sync_peer.last_pulled_at.strftime('%Y-%m-%d %H:%M') }} UTC. {% endif %}
+            {% if fe_sync_peer.last_pushed_at %}Last pushed {{ fe_sync_peer.last_pushed_at.strftime('%Y-%m-%d %H:%M') }} UTC. {% endif %}
+            {% if fe_sync_peer.last_inbound_at %}Last inbound {{ fe_sync_peer.last_inbound_at.strftime('%Y-%m-%d %H:%M') }} UTC.{% endif %}
+          </p>
+          {% endif %}
+        </section>
+
         {# ── Off-site backups ──────────────────────────────────── #}
         <section class="card data-card">
           <div class="data-card-head">

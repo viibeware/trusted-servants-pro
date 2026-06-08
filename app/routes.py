@@ -160,6 +160,15 @@ public_bp = Blueprint("public", __name__)
 # /tspro prefix. CSRF-exempt as a whole in create_app (token-authenticated).
 restore_bp = Blueprint("restore_api", __name__)
 
+# Inbound machine-to-machine API for frontend *staging sync*, also at the
+# root. A paired sibling install (dev⇄prod) pulls our scoped frontend
+# bundle from ``/api/v1/frontend-sync/pull`` or pushes one to
+# ``/api/v1/frontend-sync/push``. Shared-secret token auth; CSRF-exempt as a
+# whole in create_app. Distinct from restore_bp because the scope is just
+# the public frontend (settings/theme/nav/layouts + Pages + assets), never
+# the whole database.
+frontend_sync_bp = Blueprint("frontend_sync_api", __name__)
+
 CATEGORY_LABELS = {
     "readings": "Readings",
     "scripts": "Scripts",
@@ -400,8 +409,14 @@ def inject_globals():
             disk_warning = _disk_warning(current_app.config.get("DATA_DIR"))
     except Exception:
         disk_warning = None
+    try:
+        from .models import FrontendSyncPeer
+        fe_sync_peer = FrontendSyncPeer.query.first()
+    except Exception:
+        fe_sync_peer = None
     return {"CATEGORY_LABELS": CATEGORY_LABELS, "FILE_CATEGORIES": FILE_CATEGORIES,
             "DAYS_OF_WEEK": DAYS_OF_WEEK, "site": site, "nav_links": nav_links,
+            "fe_sync_peer": fe_sync_peer,
             "pending_access_count": pending_access_count,
             "unread_contact_count": unread_contact_count,
             "locked_accounts_count": locked_accounts_count,
@@ -4689,6 +4704,156 @@ def remote_restore_finalize():
         private_key = None
 
 
+# ─── Frontend staging sync — inbound API + shared helpers ────────────
+# Mirrors the remote-restore security shape (shared token, per-IP rate
+# limit) but applies only the scoped frontend bundle. See FrontendSyncPeer
+# in models.py for the pairing model.
+
+def _frontend_sync_peer_for_token(token):
+    """The FrontendSyncPeer that authorized this request, or None.
+    Constant-time match across every peer with inbound sync enabled."""
+    from .models import FrontendSyncPeer
+    if not token:
+        return None
+    for p in FrontendSyncPeer.query.filter_by(allow_inbound=True).all():
+        if p.verify_token(token):
+            return p
+    return None
+
+
+def _frontend_sync_rate_limited(ip):
+    """Cap failed sync-auth attempts per IP — defence-in-depth on top of
+    the shared token. Distinct LoginFailure ``kind`` so it never touches
+    the console login or restore limiters."""
+    from .models import LoginFailure
+    window = datetime.utcnow() - timedelta(minutes=15)
+    return LoginFailure.query.filter(
+        LoginFailure.kind == "frontend_sync",
+        LoginFailure.key == (ip or "?"),
+        LoginFailure.failed_at >= window).count() >= 10
+
+
+def _record_frontend_sync_failure(ip):
+    from .models import LoginFailure
+    try:
+        db.session.add(LoginFailure(kind="frontend_sync", key=(ip or "?")))
+        db.session.commit()
+    except Exception:  # noqa: BLE001
+        db.session.rollback()
+
+
+def _frontend_sync_snapshot():
+    """Write a FULL frontend bundle (incl. stories) of the current state to
+    the snapshots dir and return its filename. The rollback point taken
+    before a sync overwrites this install's frontend — an admin can restore
+    it via the Frontend bundle import form. Pruned to the most recent 10."""
+    upload_dir = current_app.config["UPLOAD_FOLDER"]
+    data_dir = os.path.dirname(upload_dir.rstrip("/"))
+    root = os.path.join(data_dir, "frontend-sync-snapshots")
+    os.makedirs(root, exist_ok=True)
+    stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    name = f"frontend-pre-sync-{stamp}.zip"
+    _write_frontend_bundle_zip(os.path.join(root, name), include_stories=True)
+    # Prune oldest beyond the 10 most recent.
+    try:
+        snaps = sorted(n for n in os.listdir(root)
+                       if n.startswith("frontend-pre-sync-") and n.endswith(".zip"))
+        for old in snaps[:-10]:
+            try: os.unlink(os.path.join(root, old))
+            except OSError: pass
+    except OSError:
+        pass
+    return name
+
+
+@frontend_sync_bp.route("/api/v1/frontend-sync/ping")
+def frontend_sync_ping():
+    """Reachability + compatibility probe for the peer's "Test connection"
+    button. Token-authenticated so a stranger can't fingerprint the install."""
+    from .version import __version__
+    ip = request.remote_addr
+    if _frontend_sync_rate_limited(ip):
+        return jsonify(ok=False, error="too many attempts; try again later"), 429
+    peer = _frontend_sync_peer_for_token((request.headers.get("X-Frontend-Sync-Token") or "").strip())
+    if peer is None:
+        _record_frontend_sync_failure(ip)
+        return jsonify(ok=False, error="invalid sync token"), 401
+    s = _get_site_setting()
+    return jsonify(ok=True, app="trusted-servants-pro", version=__version__,
+                   format_version=5,
+                   name=(getattr(s, "frontend_title", None) or "Trusted Servants Pro"))
+
+
+@frontend_sync_bp.route("/api/v1/frontend-sync/pull")
+def frontend_sync_pull():
+    """Stream our scoped frontend bundle (presentation + Pages, no Stories)
+    to a paired peer that's pulling our live frontend down to work on."""
+    import tempfile
+    from flask import send_file
+    ip = request.remote_addr
+    if _frontend_sync_rate_limited(ip):
+        return jsonify(ok=False, error="too many attempts; try again later"), 429
+    peer = _frontend_sync_peer_for_token((request.headers.get("X-Frontend-Sync-Token") or "").strip())
+    if peer is None:
+        _record_frontend_sync_failure(ip)
+        return jsonify(ok=False, error="invalid sync token"), 401
+
+    upload_dir = current_app.config["UPLOAD_FOLDER"]
+    data_dir = os.path.dirname(upload_dir.rstrip("/"))
+    tmp = tempfile.NamedTemporaryFile(prefix="tsp-fe-sync-pull-", suffix=".zip",
+                                      delete=False, dir=data_dir)
+    tmp.close()
+    _write_frontend_bundle_zip(tmp.name, include_stories=False)
+    peer.last_inbound_at = datetime.utcnow()
+    db.session.commit()
+
+    stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    response = send_file(tmp.name, mimetype="application/zip",
+                         as_attachment=True, download_name=f"tsp-frontend-sync-{stamp}.zip")
+    @response.call_on_close
+    def _cleanup():
+        try: os.unlink(tmp.name)
+        except OSError: pass
+    return response
+
+
+@frontend_sync_bp.route("/api/v1/frontend-sync/push", methods=["POST"])
+def frontend_sync_push():
+    """Accept a frontend bundle pushed by a paired peer, snapshot our
+    current frontend first (rollback point), then apply it. Returns a JSON
+    summary of what changed."""
+    import tempfile
+    ip = request.remote_addr
+    if _frontend_sync_rate_limited(ip):
+        return jsonify(ok=False, error="too many attempts; try again later"), 429
+    peer = _frontend_sync_peer_for_token((request.headers.get("X-Frontend-Sync-Token") or "").strip())
+    if peer is None:
+        _record_frontend_sync_failure(ip)
+        return jsonify(ok=False, error="invalid sync token"), 401
+
+    f = request.files.get("archive")
+    if not f or not f.filename:
+        return jsonify(ok=False, error="missing 'archive' part"), 400
+
+    upload_dir = current_app.config["UPLOAD_FOLDER"]
+    data_dir = os.path.dirname(upload_dir.rstrip("/"))
+    fd, zip_path = tempfile.mkstemp(prefix="tsp-fe-sync-push-", suffix=".zip", dir=data_dir)
+    os.close(fd)
+    try:
+        f.save(zip_path)
+        snapshot = _frontend_sync_snapshot()
+        ok, result = _import_frontend_bundle_zip(zip_path)
+    finally:
+        try: os.unlink(zip_path)
+        except OSError: pass
+
+    if not ok:
+        return jsonify(ok=False, error=result), 400
+    peer.last_inbound_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify(ok=True, applied=result, snapshot=snapshot)
+
+
 # Settings on SiteSetting that make up the public frontend. Used by the
 # scoped frontend export/import so a single site can ship its look-and-feel
 # (content + navigation + assets) without carrying the whole database.
@@ -4757,8 +4922,14 @@ def _collect_asset_refs(value):
     return set(_ASSET_REF_RE.findall(text))
 
 
-def _frontend_export_payload():
+def _frontend_export_payload(include_stories=True):
     """Build a content-complete frontend bundle.
+
+    ``include_stories=False`` drops the recovery-stories list (and its
+    asset scan) from the payload. The frontend *staging sync* uses this:
+    stories are often submitted/edited on the production copy, so a
+    dev→prod push must not clobber them. The import side already no-ops
+    when the ``stories`` key is absent, so omitting it here is enough.
 
     The payload covers everything that shapes the public site:
 
@@ -4977,7 +5148,7 @@ def _frontend_export_payload():
     # a frontend usually want the full editorial state) but body /
     # summary blobs feed asset_refs so embedded images come along.
     stories = []
-    for st in Story.query.order_by(Story.id).all():
+    for st in (Story.query.order_by(Story.id).all() if include_stories else []):
         stories.append({
             "slug": st.slug, "title": st.title,
             "summary": st.summary, "body": st.body,
@@ -5092,7 +5263,7 @@ def _frontend_export_payload():
             "mime_type": m.mime_type,
         })
 
-    return {
+    payload = {
         "kind": "frontend", "format_version": 5,
         "settings": settings,
         "nav_items": nav_items,
@@ -5102,10 +5273,14 @@ def _frontend_export_payload():
         "custom_icons": custom_icons,
         "pages": pages,
         "intergroup_officers": intergroup_officers,
-        "stories": stories,
         "media_items": media_items,
         "assets": sorted(final_assets),
     }
+    # Omit the key entirely (not an empty list) when stories are excluded,
+    # so the import side's "stories in payload" guard leaves them alone.
+    if include_stories:
+        payload["stories"] = stories
+    return payload
 
 
 @bp.route("/settings/db-snapshot/<name>")
@@ -6403,19 +6578,25 @@ def wp_import_cancel(token):
     return redirect(url_for("main.wp_import_start", **_wp_embed_kwargs()))
 
 
-@bp.route("/settings/frontend-export")
-@admin_required
-def data_frontend_export():
-    import io, json, tempfile, zipfile
+def _write_frontend_bundle_zip(dest_path, *, include_stories=True):
+    """Build a frontend bundle (``manifest.json`` + ``frontend.json`` +
+    ``assets/``) and write it to ``dest_path``. Shared by the manual
+    export route, the staging-sync pull/push, and the pre-apply snapshot.
+
+    ``include_stories`` rides through to ``_frontend_export_payload`` and
+    is recorded in the manifest as ``sync_scope`` so the receiving side
+    can tell a presentation-only sync from a full bundle.
+    """
+    import json, zipfile
     from datetime import datetime
-    from flask import send_file
 
     upload_dir = current_app.config["UPLOAD_FOLDER"]
-    payload = _frontend_export_payload()
+    payload = _frontend_export_payload(include_stories=include_stories)
     manifest = {
         "app": "trusted-servants-pro",
         "kind": "frontend",
         "format_version": 5,
+        "sync_scope": "full" if include_stories else "presentation_pages",
         "exported_at": datetime.utcnow().isoformat() + "Z",
         "content_filename": "frontend.json",
         "assets_dir": "assets/",
@@ -6431,10 +6612,10 @@ def data_frontend_export():
                  "per-page spacing controls pad_top / pad_bottom / "
                  "pad_x / section_gap / block_margin_y and the per-page "
                  "Open Graph title / description / image overrides), "
-                 "intergroup officers, stories (with publication "
-                 "timestamp), posts (drafts and archives "
-                 "included; pending submissions skipped), post slug "
-                 "history, MediaItem catalog, plus every uploaded "
+                 "intergroup officers, " +
+                 ("stories (with publication timestamp), " if include_stories
+                  else "(stories omitted — presentation+pages sync scope), ") +
+                 "MediaItem catalog, plus every uploaded "
                  "file referenced from any of the above. Import via "
                  "the Data tab on another install to overlay the "
                  "public site without touching users, meetings, or "
@@ -6444,15 +6625,26 @@ def data_frontend_export():
                  "auto-seed wrote."),
     }
 
-    tmp_zip = tempfile.NamedTemporaryFile(prefix="tsp-fe-export-", suffix=".zip", delete=False)
-    tmp_zip.close()
-    with zipfile.ZipFile(tmp_zip.name, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True) as z:
+    with zipfile.ZipFile(dest_path, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True) as z:
         z.writestr("manifest.json", json.dumps(manifest, indent=2))
         z.writestr("frontend.json", json.dumps(payload, indent=2))
         for fn in payload["assets"]:
             src = os.path.join(upload_dir, fn)
             if os.path.isfile(src):
                 z.write(src, arcname=os.path.join("assets", fn))
+    return dest_path
+
+
+@bp.route("/settings/frontend-export")
+@admin_required
+def data_frontend_export():
+    import tempfile
+    from datetime import datetime
+    from flask import send_file
+
+    tmp_zip = tempfile.NamedTemporaryFile(prefix="tsp-fe-export-", suffix=".zip", delete=False)
+    tmp_zip.close()
+    _write_frontend_bundle_zip(tmp_zip.name, include_stories=True)
 
     stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     response = send_file(tmp_zip.name, mimetype="application/zip",
@@ -6464,60 +6656,50 @@ def data_frontend_export():
     return response
 
 
-@bp.route("/settings/frontend-import", methods=["POST"])
-@admin_required
-def data_frontend_import():
+def _import_frontend_bundle_zip(zip_path):
+    """Validate + apply a frontend bundle ``.zip`` already saved at
+    ``zip_path``. Returns ``(ok, result)`` — ``result`` is a summary dict
+    of what was applied on success, or a human-readable error string on
+    failure. Shared by the admin import form (``data_frontend_import``)
+    and the staging-sync push endpoint, so the apply logic lives in one
+    place. Stories are only touched when the payload carries a ``stories``
+    key — a presentation+pages sync omits it and leaves them alone.
+    """
     import json, shutil, tempfile, zipfile
-
-    f = request.files.get("archive")
-    if not f or not f.filename:
-        flash("Choose a frontend bundle (.zip) to import", "danger")
-        return redirect(_safe_referrer() or url_for("main.index"))
-    if request.form.get("confirm") != "REPLACE":
-        flash('Type REPLACE in the confirmation box to overwrite frontend content', "danger")
-        return redirect(_safe_referrer() or url_for("main.index"))
 
     upload_dir = current_app.config["UPLOAD_FOLDER"]
     data_dir = os.path.dirname(upload_dir.rstrip("/"))
     staging = tempfile.mkdtemp(prefix="tsp-fe-import-", dir=data_dir)
     try:
-        zip_path = os.path.join(staging, "in.zip")
-        f.save(zip_path)
         try:
             with zipfile.ZipFile(zip_path) as z:
                 names = z.namelist()
                 for n in names:
                     if n.startswith("/") or ".." in n.split("/"):
-                        flash(f"Archive contains unsafe path: {n}", "danger")
-                        return redirect(_safe_referrer() or url_for("main.index"))
+                        return (False, f"Archive contains unsafe path: {n}")
                 if "frontend.json" not in names or "manifest.json" not in names:
-                    flash("Archive is missing frontend.json or manifest.json — not a valid frontend bundle", "danger")
-                    return redirect(_safe_referrer() or url_for("main.index"))
+                    return (False, "Archive is missing frontend.json or manifest.json — not a valid frontend bundle")
                 try:
                     manifest = json.loads(z.read("manifest.json").decode("utf-8"))
                 except (ValueError, UnicodeDecodeError):
-                    flash("Archive manifest.json is invalid", "danger")
-                    return redirect(_safe_referrer() or url_for("main.index"))
+                    return (False, "Archive manifest.json is invalid")
                 if manifest.get("app") not in ("trusted-servants-pro", "trusted-servants-portal"):
-                    flash("Archive manifest does not identify a Trusted Servants Pro export", "danger")
-                    return redirect(_safe_referrer() or url_for("main.index"))
+                    return (False, "Archive manifest does not identify a Trusted Servants Pro export")
                 if manifest.get("kind") != "frontend":
-                    flash("This looks like a full archive, not a frontend bundle. Use the Import &amp; Replace form instead.", "danger")
-                    return redirect(_safe_referrer() or url_for("main.index"))
+                    return (False, "This looks like a full archive, not a frontend bundle.")
                 try:
                     payload = json.loads(z.read("frontend.json").decode("utf-8"))
                 except (ValueError, UnicodeDecodeError):
-                    flash("Archive frontend.json is invalid", "danger")
-                    return redirect(_safe_referrer() or url_for("main.index"))
+                    return (False, "Archive frontend.json is invalid")
                 extract_dir = os.path.join(staging, "extracted")
                 os.makedirs(extract_dir, exist_ok=True)
                 z.extractall(extract_dir)
         except zipfile.BadZipFile:
-            flash("File is not a valid zip archive", "danger")
-            return redirect(_safe_referrer() or url_for("main.index"))
+            return (False, "File is not a valid zip archive")
 
         # 1. Copy assets into uploads/ (preserve filenames — they're already
         #    UUID-prefixed on the source install and won't collide in practice).
+        assets_copied = 0
         assets_src = os.path.join(extract_dir, "assets")
         os.makedirs(upload_dir, exist_ok=True)
         if os.path.isdir(assets_src):
@@ -6525,6 +6707,7 @@ def data_frontend_import():
                 src = os.path.join(assets_src, entry)
                 if os.path.isfile(src):
                     shutil.copy2(src, os.path.join(upload_dir, entry))
+                    assets_copied += 1
 
         # 2. Apply settings onto the singleton SiteSetting row.
         # Use the dynamic key list so a column added after the bundle
@@ -6533,9 +6716,11 @@ def data_frontend_import():
         s = _get_site_setting()
         incoming = payload.get("settings") or {}
         valid_keys = set(_frontend_setting_keys())
+        settings_applied = 0
         for key in valid_keys:
             if key in incoming:
                 setattr(s, key, incoming[key])
+                settings_applied += 1
 
         # 3. Rebuild the nav tree. Cascade deletes columns + links.
         for it in FrontendNavItem.query.all():
@@ -6943,10 +7128,165 @@ def data_frontend_import():
         from . import _backfill_media
         _backfill_media(current_app)
 
-        flash("Frontend bundle imported — content, navigation, layouts, fonts, icons, and assets are in place.", "success")
-        return redirect(_safe_referrer() or url_for("main.frontend_dashboard"))
+        summary = {
+            "sync_scope": manifest.get("sync_scope")
+                          or ("full" if "stories" in payload else "presentation_pages"),
+            "settings": settings_applied,
+            "nav_items": len(payload.get("nav_items") or []),
+            "hero_buttons": len(payload.get("hero_buttons") or []),
+            "custom_layouts": len(payload.get("custom_layouts") or []),
+            "custom_fonts": len(payload.get("custom_fonts") or []),
+            "custom_icons": len(payload.get("custom_icons") or []),
+            "pages": len(payload.get("pages") or []),
+            "stories": len(payload.get("stories") or []),
+            "assets": assets_copied,
+        }
+        return (True, summary)
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.exception("frontend bundle import failed")
+        return (False, f"Import failed: {exc}")
     finally:
         shutil.rmtree(staging, ignore_errors=True)
+
+
+@bp.route("/settings/frontend-import", methods=["POST"])
+@admin_required
+def data_frontend_import():
+    import tempfile
+
+    f = request.files.get("archive")
+    if not f or not f.filename:
+        flash("Choose a frontend bundle (.zip) to import", "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+    if request.form.get("confirm") != "REPLACE":
+        flash('Type REPLACE in the confirmation box to overwrite frontend content', "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+
+    upload_dir = current_app.config["UPLOAD_FOLDER"]
+    data_dir = os.path.dirname(upload_dir.rstrip("/"))
+    fd, zip_path = tempfile.mkstemp(prefix="tsp-fe-import-", suffix=".zip", dir=data_dir)
+    os.close(fd)
+    try:
+        f.save(zip_path)
+        ok, result = _import_frontend_bundle_zip(zip_path)
+    finally:
+        try: os.unlink(zip_path)
+        except OSError: pass
+
+    if not ok:
+        flash(result, "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+    flash("Frontend bundle imported — content, navigation, layouts, fonts, icons, and assets are in place.", "success")
+    return redirect(_safe_referrer() or url_for("main.frontend_dashboard"))
+
+
+# ─── Frontend staging sync — admin (outbound) routes ────────────────
+def _get_frontend_sync_peer(create=False):
+    """The single configured sync peer (or None). One pairing per install
+    keeps the UI simple; the model could hold more if that ever changes."""
+    from .models import FrontendSyncPeer
+    peer = FrontendSyncPeer.query.order_by(FrontendSyncPeer.id).first()
+    if peer is None and create:
+        peer = FrontendSyncPeer()
+        db.session.add(peer)
+    return peer
+
+
+def _fe_sync_summary_msg(applied):
+    """Human one-liner from an apply-summary dict for the flash."""
+    parts = []
+    for key, label in (("pages", "pages"), ("nav_items", "nav items"),
+                       ("custom_layouts", "layouts"), ("custom_fonts", "fonts"),
+                       ("custom_icons", "icons"), ("assets", "assets")):
+        n = applied.get(key)
+        if n:
+            parts.append(f"{n} {label}")
+    return ", ".join(parts) if parts else "settings only"
+
+
+@bp.route("/settings/frontend-sync/save", methods=["POST"])
+@admin_required
+def frontend_sync_save():
+    peer = _get_frontend_sync_peer(create=True)
+    peer.label = (request.form.get("label") or "").strip()[:128]
+    peer.base_url = (request.form.get("base_url") or "").strip()[:500]
+    peer.allow_inbound = bool(request.form.get("allow_inbound"))
+    # Token: "generate" mints a fresh one to paste into the peer; otherwise
+    # a non-blank token field is stored verbatim (paired from the peer). A
+    # blank token field with no generate leaves the existing token alone.
+    if request.form.get("generate"):
+        peer.token_enc = None  # force a brand-new value even if one existed
+        new = peer.ensure_token()
+        db.session.commit()
+        flash(f"New sync token generated — copy it into the peer install: {new}", "success")
+        return redirect(_safe_referrer() or url_for("main.index"))
+    token_field = (request.form.get("token") or "").strip()
+    if token_field:
+        peer.set_token(token_field)
+    db.session.commit()
+    flash("Frontend sync peer saved.", "success")
+    return redirect(_safe_referrer() or url_for("main.index"))
+
+
+@bp.route("/settings/frontend-sync/test", methods=["POST"])
+@admin_required
+def frontend_sync_test():
+    from . import frontend_sync as fs
+    peer = _get_frontend_sync_peer()
+    if peer is None or not peer.base_url:
+        flash("Configure a peer URL and token first.", "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+    try:
+        info = fs.ping(peer)
+    except fs.FrontendSyncError as exc:
+        flash(f"Connection test failed: {exc}", "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+    flash(f"Connected to “{info.get('name')}” (v{info.get('version')}).", "success")
+    return redirect(_safe_referrer() or url_for("main.index"))
+
+
+@bp.route("/settings/frontend-sync/pull", methods=["POST"])
+@admin_required
+def frontend_sync_pull():
+    from . import frontend_sync as fs
+    if request.form.get("confirm") != "REPLACE":
+        flash("Type REPLACE to confirm overwriting this install's frontend.", "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+    peer = _get_frontend_sync_peer()
+    if peer is None or not peer.base_url:
+        flash("Configure a peer URL and token first.", "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+    try:
+        applied, snapshot = fs.pull_from_peer(peer)
+    except fs.FrontendSyncError as exc:
+        flash(f"Pull failed: {exc}", "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+    flash(f"Pulled frontend from peer ({_fe_sync_summary_msg(applied)}). "
+          f"Rollback snapshot saved as {snapshot}.", "success")
+    return redirect(_safe_referrer() or url_for("main.frontend_dashboard"))
+
+
+@bp.route("/settings/frontend-sync/push", methods=["POST"])
+@admin_required
+def frontend_sync_push():
+    from . import frontend_sync as fs
+    if request.form.get("confirm") != "REPLACE":
+        flash("Type REPLACE to confirm overwriting the peer's frontend.", "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+    peer = _get_frontend_sync_peer()
+    if peer is None or not peer.base_url:
+        flash("Configure a peer URL and token first.", "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+    try:
+        applied = fs.push_to_peer(peer)
+    except fs.FrontendSyncError as exc:
+        flash(f"Push failed: {exc}", "danger")
+        return redirect(_safe_referrer() or url_for("main.index"))
+    snap = applied.get("snapshot")
+    flash(f"Pushed frontend to peer ({_fe_sync_summary_msg(applied)})."
+          + (f" Peer saved rollback snapshot {snap}." if snap else ""), "success")
+    return redirect(_safe_referrer() or url_for("main.index"))
 
 
 @bp.route("/uploads/<path:stored>")

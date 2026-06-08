@@ -6,6 +6,62 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.12.0] — 2026-06-08
+
+Adds **frontend staging sync**: an authenticated, bidirectional HTTP sync that
+moves the scoped frontend bundle between two paired installs, so a developer can
+iterate on a dev/staging copy and push the result to production (or pull prod's
+live frontend down to work on). Only the public frontend moves — presentation
+(theme / nav / mega-menus / layouts / fonts / icons / `frontend_*` settings),
+page-builder Pages, and referenced assets — never users, meetings, libraries,
+Zoom accounts, backups, or recovery Stories. Built on the existing scoped
+frontend bundle (`_frontend_export_payload` / frontend import), wrapped in a
+network API that mirrors the remote-restore security shape.
+
+### Added
+
+- **`FrontendSyncPeer` model** (`app/models.py`) — one paired sibling install:
+  `base_url` + a Fernet-encrypted shared `token` (the same secret lives on both
+  installs and authenticates traffic in both directions, constant-time compared)
+  + `allow_inbound` (off by default; gates whether this install will serve a
+  pull or accept a push) + `last_pulled_at` / `last_pushed_at` / `last_inbound_at`
+  audit columns. Kept in its own table rather than on `SiteSetting` so a
+  `frontend_*` column can't sweep the token into the synced bundle. New table is
+  auto-created by `db.create_all()` at boot — no `_migrate_sqlite` entry needed.
+- **Inbound API** on a new CSRF-exempt `frontend_sync_bp` blueprint
+  (`app/routes.py`, registered + exempted in `app/__init__.py`), token in the
+  `X-Frontend-Sync-Token` header, rate-limited per IP via
+  `LoginFailure(kind="frontend_sync")`: `GET /api/v1/frontend-sync/ping`
+  (reachability + version probe), `GET /api/v1/frontend-sync/pull` (streams a
+  scoped bundle), `POST /api/v1/frontend-sync/push` (snapshots the current
+  frontend, then applies the pushed bundle, returning a JSON summary).
+- **Outbound client** (`app/frontend_sync.py`) — `ping` / `pull_from_peer` /
+  `push_to_peer` using `requests`, with friendly error mapping (unreachable,
+  bad token, rate-limited, version mismatch) and audit-timestamp updates.
+- **Admin UI** — a "Frontend staging sync" card in **Settings → Data**
+  (`app/templates/base.html`) with peer label / base URL / shared-token fields,
+  a **Generate token** action, an **Allow inbound** toggle, and
+  **Test connection** / **Pull from peer** / **Push to peer** actions (typed
+  `REPLACE` confirm). Backed by four `@admin_required` routes
+  (`/settings/frontend-sync/{save,test,pull,push}`). The configured peer is
+  injected into templates via `inject_globals`.
+- **Pre-apply snapshot** (`_frontend_sync_snapshot`) — the receiving side writes
+  a FULL frontend bundle (including Stories) to
+  `<data>/frontend-sync-snapshots/frontend-pre-sync-<stamp>.zip` before applying
+  (pruned to the 10 most recent), so any sync is reversible via the existing
+  Frontend bundle import.
+
+### Changed
+
+- Refactored the existing frontend export/import into reusable helpers shared by
+  the manual admin forms and the new sync (`app/routes.py`):
+  `_frontend_export_payload(include_stories=…)` (omits the `stories` key for the
+  presentation+pages sync scope — import already no-ops when it's absent),
+  `_write_frontend_bundle_zip(dest, include_stories)` (manifest now records a
+  `sync_scope`), and `_import_frontend_bundle_zip(zip) -> (ok, summary)`. The
+  `/settings/frontend-import` form route is now a thin wrapper over the helper;
+  its REPLACE-confirm + flash behavior is unchanged.
+
 ## [2.11.1] — 2026-06-08
 
 Makes the **hour-of-day charts read in the portal's configured timezone**

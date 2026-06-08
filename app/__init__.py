@@ -415,16 +415,19 @@ def create_app():
         return u
 
     from .auth import bp as auth_bp
-    from .routes import bp as main_bp, public_bp, restore_bp
+    from .routes import bp as main_bp, public_bp, restore_bp, frontend_sync_bp
     from .frontend import bp as frontend_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(public_bp)
     app.register_blueprint(frontend_bp)
     app.register_blueprint(restore_bp)
-    # Inbound remote-restore API is authenticated by a per-target token, not
-    # a session cookie — exempt the whole blueprint from form-CSRF.
+    app.register_blueprint(frontend_sync_bp)
+    # Inbound remote-restore + frontend-sync APIs are authenticated by a
+    # shared token, not a session cookie — exempt the whole blueprints from
+    # form-CSRF.
     csrf.exempt(restore_bp)
+    csrf.exempt(frontend_sync_bp)
 
     # Common attacker probe paths (env files, git internals, server config
     # files, off-the-shelf admin panels). We don't serve any of these — Flask
