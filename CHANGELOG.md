@@ -6,6 +6,22 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.12.4] — 2026-06-09
+
+### Added
+
+- **Rollback snapshots modal on the Staging Sync card** (`app/routes.py`,
+  `app/templates/frontend_dashboard.html`, `app/static/css/app.css`,
+  `app/static/js/app.js`). A "Rollback snapshots" button opens a popup listing
+  the auto-saved pre-sync bundles (newest first) with date, size, and a download
+  link each, plus step-by-step restore instructions (download → Settings → Data
+  → Frontend bundle → Import frontend). Two new admin-only routes back it:
+  `GET /settings/frontend-sync/snapshots` (JSON list) and
+  `…/snapshots/<name>` (download, filename-pattern validated like the DB-snapshot
+  route). The snapshot directory is now a shared `_frontend_sync_snapshot_dir()`
+  helper. The list is fetched on each open so it stays fresh after a Pull/Push.
+  Staging-install only, matching the sync controls.
+
 ## [2.12.3] — 2026-06-09
 
 ### Added

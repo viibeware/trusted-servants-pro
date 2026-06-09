@@ -4742,14 +4742,20 @@ def _record_frontend_sync_failure(ip):
         db.session.rollback()
 
 
+def _frontend_sync_snapshot_dir():
+    """Directory holding the pre-sync rollback bundles. Lives next to
+    ``uploads/`` under the data dir so it rides the same volume + backups."""
+    upload_dir = current_app.config["UPLOAD_FOLDER"]
+    data_dir = os.path.dirname(upload_dir.rstrip("/"))
+    return os.path.join(data_dir, "frontend-sync-snapshots")
+
+
 def _frontend_sync_snapshot():
     """Write a FULL frontend bundle (incl. stories) of the current state to
     the snapshots dir and return its filename. The rollback point taken
     before a sync overwrites this install's frontend — an admin can restore
     it via the Frontend bundle import form. Pruned to the most recent 10."""
-    upload_dir = current_app.config["UPLOAD_FOLDER"]
-    data_dir = os.path.dirname(upload_dir.rstrip("/"))
-    root = os.path.join(data_dir, "frontend-sync-snapshots")
+    root = _frontend_sync_snapshot_dir()
     os.makedirs(root, exist_ok=True)
     stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     name = f"frontend-pre-sync-{stamp}.zip"
@@ -7365,6 +7371,57 @@ def frontend_sync_push():
                        if peer.last_pushed_at else None)
     flash(msg, "success")
     return redirect(_safe_referrer() or url_for("main.index"))
+
+
+def _fe_snapshot_human_size(n):
+    """Compact size label for a snapshot zip (KB / MB / GB)."""
+    n = float(n or 0)
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024 or unit == "GB":
+            return (f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}")
+        n /= 1024
+
+
+@bp.route("/settings/frontend-sync/snapshots")
+@admin_required
+def frontend_sync_snapshots():
+    """JSON list of the pre-sync rollback bundles, newest first, for the
+    dashboard snapshots modal. Each entry carries a download URL."""
+    root = _frontend_sync_snapshot_dir()
+    try:
+        names = [n for n in os.listdir(root)
+                 if n.startswith("frontend-pre-sync-") and n.endswith(".zip")]
+    except OSError:
+        names = []
+    items = []
+    for n in sorted(names, reverse=True):
+        try:
+            size = os.path.getsize(os.path.join(root, n))
+        except OSError:
+            continue
+        stamp = n[len("frontend-pre-sync-"):-len(".zip")]
+        try:
+            date = datetime.strptime(stamp, "%Y%m%d-%H%M%S").strftime("%Y-%m-%d %H:%M UTC")
+        except ValueError:
+            date = ""
+        items.append({"name": n, "size": _fe_snapshot_human_size(size), "date": date,
+                      "url": url_for("main.frontend_sync_snapshot_download", name=n)})
+    return jsonify(ok=True, snapshots=items)
+
+
+@bp.route("/settings/frontend-sync/snapshots/<name>")
+@admin_required
+def frontend_sync_snapshot_download(name):
+    """Download one rollback bundle. Filename is validated against the
+    snapshot naming pattern so this can't read arbitrary files."""
+    safe = secure_filename(name)
+    if not (safe.startswith("frontend-pre-sync-") and safe.endswith(".zip")):
+        abort(404)
+    root = _frontend_sync_snapshot_dir()
+    if not os.path.isfile(os.path.join(root, safe)):
+        abort(404)
+    return send_from_directory(root, safe, as_attachment=True,
+                               download_name=safe, mimetype="application/zip")
 
 
 @bp.route("/uploads/<path:stored>")

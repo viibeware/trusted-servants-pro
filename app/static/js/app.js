@@ -6324,6 +6324,53 @@
     document.addEventListener("click", e => {
       if (armed && !e.target.closest("[data-dash-sync-action]")) disarm();
     });
+
+    // ── Rollback snapshots modal ──
+    // The button carries data-open-modal (app.js opens the modal); this also
+    // (re)loads the list each time it's clicked so it stays fresh after a sync.
+    const snapBtn = document.querySelector("[data-fe-snap-open]");
+    const snapModal = document.getElementById("fe-sync-snapshots-modal");
+    if (snapBtn && snapModal) {
+      const list = snapModal.querySelector("[data-fe-snap-list]");
+      const url = snapModal.dataset.snapshotsUrl;
+      async function loadSnaps() {
+        list.innerHTML = '<li class="fe-snap-empty muted small">Loading…</li>';
+        try {
+          const r = await fetch(url, { headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" });
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const data = await r.json();
+          const snaps = (data && data.snapshots) || [];
+          if (!snaps.length) {
+            list.innerHTML = '<li class="fe-snap-empty muted small">No snapshots yet — one is saved automatically before each Pull or Push.</li>';
+            return;
+          }
+          list.innerHTML = "";
+          snaps.forEach(s => {
+            const li = document.createElement("li");
+            li.className = "fe-snap-row";
+            const info = document.createElement("div");
+            info.className = "fe-snap-info";
+            const date = document.createElement("span");
+            date.className = "fe-snap-date";
+            date.textContent = s.date || s.name;
+            const meta = document.createElement("span");
+            meta.className = "fe-snap-meta";
+            meta.textContent = (s.size || "") + " · " + s.name;
+            info.appendChild(date); info.appendChild(meta);
+            const dl = document.createElement("a");
+            dl.className = "btn btn-sm";
+            dl.href = s.url;
+            dl.setAttribute("download", "");
+            dl.textContent = "Download";
+            li.appendChild(info); li.appendChild(dl);
+            list.appendChild(li);
+          });
+        } catch (err) {
+          list.innerHTML = '<li class="fe-snap-empty is-err">Couldn’t load snapshots: ' + err.message + "</li>";
+        }
+      }
+      snapBtn.addEventListener("click", loadSnaps);
+    }
   }
 
   if (document.readyState === "loading") {

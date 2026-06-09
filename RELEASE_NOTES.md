@@ -7,7 +7,12 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.12.3 — 2026-06-09 (latest) — Pull/Push your Live site right from the Web Frontend overview
+## 2.12.4 — 2026-06-09 (latest) — Download a rollback snapshot to undo a sync
+
+- **The Staging Sync card now has a "Rollback snapshots" button.** Every sync automatically saves a complete rollback bundle of your frontend (including recovery Stories) before it overwrites anything — this opens a popup listing those bundles, newest first, with the date, size, and a one-click **Download** for each.
+- **Built-in restore instructions.** The popup explains exactly how to put a snapshot back: download the `.zip`, then go to **Settings → Data → Frontend bundle → Import frontend** and import it. The 10 most recent snapshots are kept automatically.
+
+## 2.12.3 — 2026-06-09 — Pull/Push your Live site right from the Web Frontend overview
 
 - **On your Staging copy, the Web Frontend overview now has Pull and Push buttons built into its Status card.** Once staging sync is set up, you can bring your Live site's frontend down to keep working on it, or send your changes up to Live, in one click — with a live "Connected / Unreachable" check and a last-pulled/pushed timestamp — without ever opening Settings. Each direction asks for a quick second-click confirmation before it overwrites anything.
 - **It only appears on the Staging copy, never on the Live site** — the Live install is the receiver, so there's nothing for it to push or pull.

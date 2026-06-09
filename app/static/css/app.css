@@ -13635,7 +13635,35 @@ body.embed .backups-wrap {
 .dash-sync-msg.is-err { color: #991b1b; }
 [data-theme="dark"] .dash-sync-msg.is-ok  { color: #bbf7d0; }
 [data-theme="dark"] .dash-sync-msg.is-err { color: #fecaca; }
+.dash-sync-foot { margin-top: .15rem; }
 @media (max-width: 480px) { .dash-sync-actions { grid-template-columns: 1fr; } }
+
+/* Rollback snapshots modal — restore how-to + downloadable bundle list. */
+.fe-snap-howto {
+  margin: .9rem 0;
+  padding: .85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2, var(--panel));
+}
+.fe-snap-howto-head { font-weight: 600; margin-bottom: .35rem; }
+.fe-snap-howto-steps { margin: 0; padding-left: 1.2rem; }
+.fe-snap-howto-steps li { margin: .3rem 0; line-height: 1.45; }
+.fe-snap-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+.fe-snap-row {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .6rem .75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.fe-snap-info { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.fe-snap-date { font-weight: 600; font-variant-numeric: tabular-nums; }
+.fe-snap-meta { color: var(--muted, var(--text)); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fe-snap-row .btn { flex: 0 0 auto; }
+.fe-snap-empty { padding: .5rem 0; }
 
 /* Backend-kind chip — colour-coded icon + name so each configured target
    makes its backend (TS Pro Backup / SFTP / FTP / Dropbox) obvious at a

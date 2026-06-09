@@ -119,6 +119,12 @@
               {% if fe_sync_peer.last_pushed_at %}Pushed {{ fe_sync_peer.last_pushed_at.strftime('%Y-%m-%d %H:%M') }} UTC.{% endif %}
             </p>
             <p class="dash-sync-msg" data-dash-sync-msg hidden></p>
+            <div class="dash-sync-foot">
+              <button type="button" class="btn btn-sm"
+                      data-open-modal="fe-sync-snapshots-modal" data-fe-snap-open>
+                {{ icon('history') }} Rollback snapshots
+              </button>
+            </div>
           </div>
           {% endif %}
         {% endcall %}
@@ -349,4 +355,42 @@
     </form>
   </div>
 </div>
+
+{# Frontend rollback snapshots — only emitted on the initiator (Staging)
+   install, where syncs run. Lists the auto-saved pre-sync bundles with
+   download links and restore instructions. Populated via AJAX on open
+   so it stays fresh after a Pull/Push without a page reload. #}
+{% if fe_sync_peer and fe_sync_peer.self_role == 'staging' and fe_sync_peer.token_enc and fe_sync_peer.base_url %}
+<div class="modal" id="fe-sync-snapshots-modal" aria-hidden="true"
+     data-snapshots-url="{{ url_for('main.frontend_sync_snapshots') }}">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2>Frontend rollback snapshots</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted small">
+        Before every sync overwrites this site's frontend, a complete rollback
+        bundle — including recovery Stories — is saved automatically. The 10 most
+        recent are kept.
+      </p>
+      <div class="fe-snap-howto">
+        <div class="fe-snap-howto-head">How to restore one</div>
+        <ol class="fe-snap-howto-steps">
+          <li>Download the snapshot you want below (a <code>.zip</code> bundle).</li>
+          <li>Open <strong>Settings → Data → Frontend bundle → Import frontend</strong>.</li>
+          <li>Choose the downloaded <code>.zip</code> and click <strong>Import frontend bundle</strong>. It replaces the frontend (settings, navigation, layouts, fonts, icons, assets, and Pages) with the snapshot — users, meetings, and libraries are left untouched.</li>
+        </ol>
+      </div>
+      <ul class="fe-snap-list" data-fe-snap-list>
+        <li class="fe-snap-empty muted small">Loading…</li>
+      </ul>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" data-close>Close</button>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
