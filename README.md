@@ -71,6 +71,11 @@ Flask + SQLAlchemy + SQLite, packaged to run in a single Docker container with a
 - One-click **Export** produces a zip containing a VACUUM-copied SQLite database, every upload, and the `zoom.key` file used to decrypt stored Zoom credentials.
 - One-click **Import** takes an export archive, validates it, moves the existing database + uploads + key to a timestamped `backup-YYYYMMDD-HHMMSS/` folder inside `./data`, restores the archive in place, re-runs migrations, and signs the user out. No command-line access required.
 
+### Frontend staging sync
+- Build your public website on a separate **Staging** copy of the app and move it to your **Live** site over the network — no bundle to download and re-upload. Only the frontend travels (theme, navigation, mega-menus, layouts, fonts, icons, page-builder Pages, and the assets they reference); recovery Stories, users, meetings, libraries, and uploads on the receiving side are never touched.
+- A role-aware setup wizard (Settings → Data → **Frontend staging sync**) asks whether each install is the Live site or the Staging copy and shows only that side's fields. The Live site mints a shared token and is set to receive; the Staging copy pastes the token, points at the Live URL, tests the connection, then pulls or pushes. Pairing is a single Fernet-encrypted shared secret authenticated in both directions, with rate-limiting and a `REPLACE`-style confirm; the receiving side auto-saves a rollback snapshot before applying.
+- On the Staging copy, the **Web Frontend → Overview** Status card gains one-click **Pull from Live** / **Push to Live** controls with a live connection indicator — deploy without opening Settings.
+
 ### Session
 - 6-month remember-me cookie so users aren't repeatedly prompted for credentials.
 
