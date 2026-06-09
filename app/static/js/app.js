@@ -6220,3 +6220,115 @@
     init();
   }
 })();
+
+/* ── Staging Sync dashboard widget ─────────────────────────────
+   One-click Pull/Push to the paired Live site from the dashboard,
+   without opening Settings. Pings the peer for a live connection
+   status on load, and arms each destructive action with a second
+   click (sending the REPLACE confirm the routes require). All over
+   AJAX — feedback shows inline in the widget. */
+(function dashStagingSync () {
+  function init() {
+    const root = document.querySelector("[data-dash-sync]");
+    if (!root) return;
+    const pill = root.querySelector("[data-dash-sync-pill]");
+    const msg = root.querySelector("[data-dash-sync-msg]");
+    const whenEl = root.querySelector("[data-dash-sync-when]");
+    const buttons = Array.from(root.querySelectorAll("[data-dash-sync-action]"));
+
+    const csrf = () => {
+      const el = root.querySelector("[data-dash-sync-csrf]");
+      return el ? el.value : "";
+    };
+    function setPill(state, text, title) {
+      pill.className = "backup-status-pill backup-status-" + state;
+      pill.textContent = text;
+      pill.title = title || "";
+    }
+    function showMsg(text, ok) {
+      if (!msg) return;
+      msg.hidden = false;
+      msg.textContent = text;
+      msg.className = "dash-sync-msg " + (ok ? "is-ok" : "is-err");
+    }
+    async function post(url, fields) {
+      const fd = new FormData();
+      fd.set("csrf_token", csrf());
+      Object.keys(fields || {}).forEach(k => fd.set(k, fields[k]));
+      const r = await fetch(url, {
+        method: "POST", body: fd,
+        headers: { "X-Requested-With": "fetch" },
+        credentials: "same-origin",
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }
+
+    // Live connection check on load (a real ping to the peer).
+    setPill("running", "Checking…");
+    post(root.dataset.pingUrl)
+      .then(d => d.ok ? setPill("ok", "Connected", d.message)
+                      : setPill("failed", "Unreachable", d.message))
+      .catch(() => setPill("failed", "Unreachable"));
+
+    // Arm-then-confirm: first click reveals the danger label, second runs it.
+    let armed = null, armTimer = null;
+    function labelOf(b) { return b.querySelector(".dash-sync-label"); }
+    function disarm() {
+      if (!armed) return;
+      armed.classList.remove("btn-danger");
+      labelOf(armed).textContent = armed.dataset.idleLabel;
+      armed = null;
+      clearTimeout(armTimer);
+    }
+    function arm(b) {
+      disarm();
+      armed = b;
+      b.classList.add("btn-danger");
+      labelOf(b).textContent = b.dataset.armLabel;
+      armTimer = setTimeout(disarm, 4500);
+    }
+    async function run(b) {
+      const action = b.dataset.dashSyncAction;
+      const url = action === "pull" ? root.dataset.pullUrl : root.dataset.pushUrl;
+      disarm();
+      buttons.forEach(x => { x.disabled = true; });
+      labelOf(b).textContent = b.dataset.busyLabel;
+      if (msg) msg.hidden = true;
+      try {
+        const d = await post(url, { confirm: "REPLACE" });
+        showMsg(d.message || (d.ok ? "Done." : "Failed."), !!d.ok);
+        if (d.ok) {
+          if (action === "pull" && d.last_pulled_at) root.dataset.lastPulled = d.last_pulled_at;
+          if (action === "push" && d.last_pushed_at) root.dataset.lastPushed = d.last_pushed_at;
+          if (whenEl) {
+            const parts = [];
+            if (root.dataset.lastPulled) parts.push("Pulled " + root.dataset.lastPulled + " UTC.");
+            if (root.dataset.lastPushed) parts.push("Pushed " + root.dataset.lastPushed + " UTC.");
+            whenEl.textContent = parts.join(" ");
+          }
+          setPill("ok", "Connected");   // a successful sync proves reachability
+        }
+      } catch (err) {
+        showMsg("Failed: " + err.message, false);
+      } finally {
+        buttons.forEach(x => { x.disabled = false; });
+        labelOf(b).textContent = b.dataset.idleLabel;
+      }
+    }
+
+    buttons.forEach(b => {
+      b.addEventListener("click", () => { (armed === b) ? run(b) : arm(b); });
+    });
+    // A click anywhere outside the action buttons cancels a pending confirm.
+    document.addEventListener("click", e => {
+      if (armed && !e.target.closest("[data-dash-sync-action]")) disarm();
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();

@@ -76,6 +76,51 @@
               </form>
             </li>
           </ul>
+          {# ── Staging sync, nested inside Status — one-click Pull/Push to
+             the paired Live site with a live connection check, without
+             opening Settings. Only an initiator (Staging) install reaches
+             this: a token + Live URL must be configured. A Live install has
+             no base_url, so it's skipped. Reuses the AJAX frontend-sync
+             routes (see app.js). #}
+          {% if fe_sync_peer and fe_sync_peer.self_role == 'staging' and fe_sync_peer.token_enc and fe_sync_peer.base_url %}
+          <div class="fe-status-sync dash-sync" data-dash-sync
+               data-ping-url="{{ url_for('main.frontend_sync_test') }}"
+               data-pull-url="{{ url_for('main.frontend_sync_pull') }}"
+               data-push-url="{{ url_for('main.frontend_sync_push') }}"
+               data-last-pulled="{{ fe_sync_peer.last_pulled_at.strftime('%Y-%m-%d %H:%M') if fe_sync_peer.last_pulled_at else '' }}"
+               data-last-pushed="{{ fe_sync_peer.last_pushed_at.strftime('%Y-%m-%d %H:%M') if fe_sync_peer.last_pushed_at else '' }}">
+            <input type="hidden" data-dash-sync-csrf value="{{ csrf_token() }}">
+            <div class="fe-status-sync-head">Staging sync</div>
+            <div class="dash-sync-status">
+              <span class="backup-status-pill backup-status-never_run" data-dash-sync-pill>Checking…</span>
+              <span class="dash-sync-peer">
+                <strong>{{ fe_sync_peer.label or 'Live site' }}</strong>
+                <span class="muted small">{{ fe_sync_peer.base_url }}</span>
+              </span>
+            </div>
+            <div class="dash-sync-actions">
+              <button type="button" class="btn dash-sync-btn" data-dash-sync-action="pull"
+                      data-idle-label="Pull from Live"
+                      data-arm-label="Confirm — overwrite this site"
+                      data-busy-label="Pulling…"
+                      title="Overwrite this site's frontend with the Live site's">
+                {{ icon('download') }} <span class="dash-sync-label">Pull from Live</span>
+              </button>
+              <button type="button" class="btn dash-sync-btn" data-dash-sync-action="push"
+                      data-idle-label="Push to Live"
+                      data-arm-label="Confirm — overwrite Live"
+                      data-busy-label="Pushing…"
+                      title="Overwrite the Live site's frontend with this site's">
+                {{ icon('upload') }} <span class="dash-sync-label">Push to Live</span>
+              </button>
+            </div>
+            <p class="muted small dash-sync-when" data-dash-sync-when>
+              {% if fe_sync_peer.last_pulled_at %}Pulled {{ fe_sync_peer.last_pulled_at.strftime('%Y-%m-%d %H:%M') }} UTC. {% endif %}
+              {% if fe_sync_peer.last_pushed_at %}Pushed {{ fe_sync_peer.last_pushed_at.strftime('%Y-%m-%d %H:%M') }} UTC.{% endif %}
+            </p>
+            <p class="dash-sync-msg" data-dash-sync-msg hidden></p>
+          </div>
+          {% endif %}
         {% endcall %}
       {% endif %}
 
@@ -267,7 +312,7 @@
         <ul class="special-pages-list">
           {% for slug, label, desc in [
             ('fe-status', 'Status',
-              'Public-frontend on/off toggle plus the per-user sidebar auto-hide preference.'),
+              'Public-frontend on/off toggle, the per-user sidebar auto-hide preference, and (when staging sync is configured) one-click Pull/Push to your Live site.'),
             ('fe-visitor-metrics', 'Visitor metrics',
               'Five-tile traffic overview — views, unique visitors, today / yesterday / 7-day windows. Same numbers as the full metrics page.'),
             ('fe-pages', 'Pages',

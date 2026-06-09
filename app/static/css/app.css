@@ -13613,6 +13613,30 @@ body.embed .backups-wrap {
 [data-theme="dark"] .backup-status-never_run { background: #1e293b; color: #94a3b8; border-color: #334155; }
 [data-theme="dark"] .backup-status-encrypted { background: #2e1065; color: #ddd6fe; border-color: #6d28d9; }
 
+/* ── Staging Sync dashboard widget ─────────────────────────────
+   Connection pill (reusing the .backup-status-* palette) + a peer
+   summary, two arm-then-confirm Pull/Push buttons, and an inline
+   result line. Lives only on initiator (Staging) installs. */
+.dash-sync { display: flex; flex-direction: column; gap: .8rem; padding: .3rem .15rem 0; }
+/* When nested inside the Status widget, set it off from the toggle list above. */
+.fe-status-sync { margin-top: .9rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.fe-status-sync-head { font-weight: 600; font-size: .9rem; }
+.dash-sync-status { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; }
+.dash-sync-peer { display: flex; flex-direction: column; line-height: 1.3; min-width: 0; }
+.dash-sync-peer .muted {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+}
+.dash-sync-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.dash-sync-btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; }
+.dash-sync-btn .icon { font-size: 1.05rem; }
+.dash-sync-when { margin: 0; font-variant-numeric: tabular-nums; }
+.dash-sync-msg { margin: 0; font-size: .86rem; }
+.dash-sync-msg.is-ok  { color: #166534; }
+.dash-sync-msg.is-err { color: #991b1b; }
+[data-theme="dark"] .dash-sync-msg.is-ok  { color: #bbf7d0; }
+[data-theme="dark"] .dash-sync-msg.is-err { color: #fecaca; }
+@media (max-width: 480px) { .dash-sync-actions { grid-template-columns: 1fr; } }
+
 /* Backend-kind chip — colour-coded icon + name so each configured target
    makes its backend (TS Pro Backup / SFTP / FTP / Dropbox) obvious at a
    glance. Sits beside the status pill in each target row. */

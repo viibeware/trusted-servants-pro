@@ -6,6 +6,21 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.12.3] — 2026-06-09
+
+### Added
+
+- **Staging-sync Pull/Push controls on the Web Frontend overview**
+  (`app/templates/frontend_dashboard.html`, `app/static/css/app.css`,
+  `app/static/js/app.js`). Nested inside the existing **Status** widget on a
+  **Staging** install: a live connection pill (an async ping to the peer via the
+  frontend-sync `test` route), the paired Live site's label + URL, and
+  arm-then-confirm **Pull from Live** / **Push to Live** buttons that reuse the
+  AJAX `frontend_sync_pull` / `frontend_sync_push` routes — so the frontend can
+  be moved without opening Settings. Results and last-pulled/pushed timestamps
+  update in place. Gated on `self_role == 'staging'` + a configured token and
+  Live URL, so it never renders on the Live (receiver) install.
+
 ## [2.12.2] — 2026-06-09
 
 Reshapes the frontend staging-sync wizard (2.12.1) around an explicit **role**

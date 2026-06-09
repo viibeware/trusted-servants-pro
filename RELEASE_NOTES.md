@@ -7,7 +7,12 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.12.2 — 2026-06-09 (latest) — Staging sync asks which site is Live vs Staging
+## 2.12.3 — 2026-06-09 (latest) — Pull/Push your Live site right from the Web Frontend overview
+
+- **On your Staging copy, the Web Frontend overview now has Pull and Push buttons built into its Status card.** Once staging sync is set up, you can bring your Live site's frontend down to keep working on it, or send your changes up to Live, in one click — with a live "Connected / Unreachable" check and a last-pulled/pushed timestamp — without ever opening Settings. Each direction asks for a quick second-click confirmation before it overwrites anything.
+- **It only appears on the Staging copy, never on the Live site** — the Live install is the receiver, so there's nothing for it to push or pull.
+
+## 2.12.2 — 2026-06-09 — Staging sync asks which site is Live vs Staging
 
 - **The wizard now starts by asking which install this is — your Live site or your Staging copy — and shows only the fields that side needs.** Pick *“This is my Live site”* and it just creates the shared token for you to copy; pick *“This is my Staging copy”* and it asks for the token, your Live site's address, then a connection test and the Pull/Push controls. No more guessing which boxes to fill on which install.
 - **You're guided to set up the Live site first.** Choosing Staging reminds you to run the wizard on your Live site first and copy the token it generates — so the two installs always end up paired correctly, in the right order.
