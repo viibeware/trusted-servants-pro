@@ -7,7 +7,14 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.12.1 — 2026-06-09 (latest) — A guided setup wizard for frontend staging sync
+## 2.12.2 — 2026-06-09 (latest) — Staging sync asks which site is Live vs Staging
+
+- **The wizard now starts by asking which install this is — your Live site or your Staging copy — and shows only the fields that side needs.** Pick *“This is my Live site”* and it just creates the shared token for you to copy; pick *“This is my Staging copy”* and it asks for the token, your Live site's address, then a connection test and the Pull/Push controls. No more guessing which boxes to fill on which install.
+- **You're guided to set up the Live site first.** Choosing Staging reminds you to run the wizard on your Live site first and copy the token it generates — so the two installs always end up paired correctly, in the right order.
+- **The whole setup now happens without the Settings window ever closing.** Generating the token, saving, testing, and syncing all complete in place — no page reloads, no being bounced out of Settings mid-step.
+- **Where to find it:** **Settings → Data → Frontend staging sync.**
+
+## 2.12.1 — 2026-06-09 — A guided setup wizard for frontend staging sync
 
 - **Setting up staging sync is now a step-by-step wizard.** The old single panel left it unclear which install you were on and which way your website would move. The new wizard walks you through it: an **Overview** that draws both sites with Push/Pull arrows, **Pair token**, **Peer address**, **Test**, and **Sync** — one step at a time, with a progress bar across the top you can click to jump around.
 - **The shared token is easier to copy between the two sites.** Step 2 now shows the actual token in a box with a **Copy** button, so you can paste it into the other install at any time — not just in the one-time message when you first generate it. It also makes clear that both sites must end up with the same token, and that you can start the wizard on either one.

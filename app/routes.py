@@ -7205,27 +7205,71 @@ def _fe_sync_summary_msg(applied):
     return ", ".join(parts) if parts else "settings only"
 
 
+def _fe_sync_wants_json():
+    """The wizard submits via fetch with an X-Requested-With header so it can
+    stay in the settings modal (no full-page reload). Anything else — a
+    no-JS form post — falls back to the flash + redirect path."""
+    return request.headers.get("X-Requested-With") == "fetch"
+
+
+def _fe_sync_state(peer):
+    """Snapshot of the peer used to drive the wizard client-side."""
+    return dict(self_role=peer.self_role if peer else "",
+                has_token=bool(peer and peer.token_enc),
+                has_url=bool(peer and peer.base_url),
+                token=(peer.token if (peer and peer.token_enc) else ""),
+                base_url=(peer.base_url if peer else ""),
+                allow_inbound=bool(peer and peer.allow_inbound))
+
+
 @bp.route("/settings/frontend-sync/save", methods=["POST"])
 @admin_required
 def frontend_sync_save():
     peer = _get_frontend_sync_peer(create=True)
-    peer.label = (request.form.get("label") or "").strip()[:128]
-    peer.base_url = (request.form.get("base_url") or "").strip()[:500]
-    peer.allow_inbound = bool(request.form.get("allow_inbound"))
-    # Token: "generate" mints a fresh one to paste into the peer; otherwise
-    # a non-blank token field is stored verbatim (paired from the peer). A
-    # blank token field with no generate leaves the existing token alone.
+    # Role drives the asymmetric pairing: a Live install mints the token and
+    # serves/accepts syncs (inbound on); a Staging install pastes the token,
+    # stores the Live URL, and initiates pull/push (inbound off). Deriving
+    # allow_inbound from the role keeps the two consistent without a checkbox.
+    role = (request.form.get("self_role") or "").strip().lower()
+    if role in ("live", "staging"):
+        peer.self_role = role
+        peer.allow_inbound = (role == "live")
+        # The Live install never initiates, so it carries no peer URL; clear
+        # any stale value left from a prior Staging setup on this install.
+        if role == "live":
+            peer.base_url = ""
+            peer.label = peer.label or "Staging copy"
+        else:
+            peer.label = peer.label or "Live site"
+    # Only overwrite fields actually present in this (role-scoped) POST so a
+    # form that omits a field doesn't wipe it.
+    if "base_url" in request.form:
+        peer.base_url = (request.form.get("base_url") or "").strip()[:500]
+    if "label" in request.form:
+        peer.label = (request.form.get("label") or "").strip()[:128]
+    # Token: "generate" mints a fresh one to paste into the peer; otherwise a
+    # non-blank token field is stored verbatim (paired from the peer). A blank
+    # token field with no generate leaves the existing token alone.
+    generated = False
     if request.form.get("generate"):
         peer.token_enc = None  # force a brand-new value even if one existed
-        new = peer.ensure_token()
-        db.session.commit()
-        flash(f"New sync token generated — copy it into the peer install: {new}", "success")
-        return redirect(_safe_referrer() or url_for("main.index"))
-    token_field = (request.form.get("token") or "").strip()
-    if token_field:
-        peer.set_token(token_field)
+        peer.ensure_token()
+        generated = True
+    else:
+        token_field = (request.form.get("token") or "").strip()
+        if token_field:
+            peer.set_token(token_field)
     db.session.commit()
-    flash("Frontend sync peer saved.", "success")
+    if _fe_sync_wants_json():
+        state = _fe_sync_state(peer)
+        state["ok"] = True
+        state["generated"] = generated
+        state["message"] = "New shared token generated." if generated else "Saved."
+        return jsonify(state)
+    if generated:
+        flash(f"New sync token generated — copy it into the peer install: {peer.token}", "success")
+    else:
+        flash("Frontend sync peer saved.", "success")
     return redirect(_safe_referrer() or url_for("main.index"))
 
 
@@ -7235,14 +7279,22 @@ def frontend_sync_test():
     from . import frontend_sync as fs
     peer = _get_frontend_sync_peer()
     if peer is None or not peer.base_url:
-        flash("Configure a peer URL and token first.", "danger")
+        msg = "Enter your Live site's address and token first."
+        if _fe_sync_wants_json():
+            return jsonify(ok=False, message=msg)
+        flash(msg, "danger")
         return redirect(_safe_referrer() or url_for("main.index"))
     try:
         info = fs.ping(peer)
     except fs.FrontendSyncError as exc:
+        if _fe_sync_wants_json():
+            return jsonify(ok=False, message=f"Connection test failed: {exc}")
         flash(f"Connection test failed: {exc}", "danger")
         return redirect(_safe_referrer() or url_for("main.index"))
-    flash(f"Connected to “{info.get('name')}” (v{info.get('version')}).", "success")
+    msg = f"Connected to “{info.get('name')}” (v{info.get('version')})."
+    if _fe_sync_wants_json():
+        return jsonify(ok=True, message=msg)
+    flash(msg, "success")
     return redirect(_safe_referrer() or url_for("main.index"))
 
 
@@ -7251,19 +7303,32 @@ def frontend_sync_test():
 def frontend_sync_pull():
     from . import frontend_sync as fs
     if request.form.get("confirm") != "REPLACE":
-        flash("Type REPLACE to confirm overwriting this install's frontend.", "danger")
+        msg = "Type REPLACE to confirm overwriting this install's frontend."
+        if _fe_sync_wants_json():
+            return jsonify(ok=False, message=msg)
+        flash(msg, "danger")
         return redirect(_safe_referrer() or url_for("main.index"))
     peer = _get_frontend_sync_peer()
     if peer is None or not peer.base_url:
-        flash("Configure a peer URL and token first.", "danger")
+        msg = "Enter your Live site's address and token first."
+        if _fe_sync_wants_json():
+            return jsonify(ok=False, message=msg)
+        flash(msg, "danger")
         return redirect(_safe_referrer() or url_for("main.index"))
     try:
         applied, snapshot = fs.pull_from_peer(peer)
     except fs.FrontendSyncError as exc:
+        if _fe_sync_wants_json():
+            return jsonify(ok=False, message=f"Pull failed: {exc}")
         flash(f"Pull failed: {exc}", "danger")
         return redirect(_safe_referrer() or url_for("main.index"))
-    flash(f"Pulled frontend from peer ({_fe_sync_summary_msg(applied)}). "
-          f"Rollback snapshot saved as {snapshot}.", "success")
+    msg = (f"Pulled frontend from peer ({_fe_sync_summary_msg(applied)}). "
+           f"Rollback snapshot saved as {snapshot}.")
+    if _fe_sync_wants_json():
+        return jsonify(ok=True, message=msg,
+                       last_pulled_at=peer.last_pulled_at.strftime('%Y-%m-%d %H:%M')
+                       if peer.last_pulled_at else None)
+    flash(msg, "success")
     return redirect(_safe_referrer() or url_for("main.frontend_dashboard"))
 
 
@@ -7272,20 +7337,33 @@ def frontend_sync_pull():
 def frontend_sync_push():
     from . import frontend_sync as fs
     if request.form.get("confirm") != "REPLACE":
-        flash("Type REPLACE to confirm overwriting the peer's frontend.", "danger")
+        msg = "Type REPLACE to confirm overwriting the peer's frontend."
+        if _fe_sync_wants_json():
+            return jsonify(ok=False, message=msg)
+        flash(msg, "danger")
         return redirect(_safe_referrer() or url_for("main.index"))
     peer = _get_frontend_sync_peer()
     if peer is None or not peer.base_url:
-        flash("Configure a peer URL and token first.", "danger")
+        msg = "Enter your Live site's address and token first."
+        if _fe_sync_wants_json():
+            return jsonify(ok=False, message=msg)
+        flash(msg, "danger")
         return redirect(_safe_referrer() or url_for("main.index"))
     try:
         applied = fs.push_to_peer(peer)
     except fs.FrontendSyncError as exc:
+        if _fe_sync_wants_json():
+            return jsonify(ok=False, message=f"Push failed: {exc}")
         flash(f"Push failed: {exc}", "danger")
         return redirect(_safe_referrer() or url_for("main.index"))
     snap = applied.get("snapshot")
-    flash(f"Pushed frontend to peer ({_fe_sync_summary_msg(applied)})."
-          + (f" Peer saved rollback snapshot {snap}." if snap else ""), "success")
+    msg = (f"Pushed frontend to peer ({_fe_sync_summary_msg(applied)})."
+           + (f" Peer saved rollback snapshot {snap}." if snap else ""))
+    if _fe_sync_wants_json():
+        return jsonify(ok=True, message=msg,
+                       last_pushed_at=peer.last_pushed_at.strftime('%Y-%m-%d %H:%M')
+                       if peer.last_pushed_at else None)
+    flash(msg, "success")
     return redirect(_safe_referrer() or url_for("main.index"))
 
 

@@ -3267,6 +3267,12 @@ class FrontendSyncPeer(db.Model):
     base_url = db.Column(db.String(500), nullable=False, default="")
     token_enc = db.Column(db.LargeBinary)
     allow_inbound = db.Column(db.Boolean, nullable=False, default=False)
+    # Which install THIS one is in the pair: "live" (production source of
+    # truth — mints the token, serves pulls, accepts pushes) or "staging"
+    # (the dev copy that pulls/pushes). Drives the setup wizard's role-scoped
+    # fields; "" until the admin picks one. allow_inbound is derived from it
+    # (live ⇒ inbound on, staging ⇒ off), so the two stay consistent.
+    self_role = db.Column(db.String(16), nullable=False, default="")
 
     last_pulled_at = db.Column(db.DateTime)   # we pulled FROM the peer
     last_pushed_at = db.Column(db.DateTime)   # we pushed TO the peer

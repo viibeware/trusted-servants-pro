@@ -5645,11 +5645,13 @@ body.embed .wp-wizard-header {
 .wp-step-label { font-weight: 500; }
 
 /* ── Frontend staging sync wizard ──────────────────────────────
-   A stepper + one-panel-at-a-time flow layered on the staging-sync
-   data-card. Visual language mirrors `.wp-wizard-stepper`; the
-   number badges double as clickable tabs (`button[data-fe-sync-go]`),
-   and `.fe-sync-panel.is-active` is the only visible step. */
+   A role chooser + one-panel-at-a-time flow layered on the staging-
+   sync data-card. The stepper is built client-side from the chosen
+   role's step list (`[data-fe-sync-stepper]`); visual language mirrors
+   `.wp-wizard-stepper`. `.fe-sync-panel.is-active` is the only visible
+   step once JS sets `data-fe-sync-js` on the wizard. */
 .fe-sync-stepper { margin: .25rem 0 1.25rem; }
+.fe-sync-stepper:empty { display: none; }
 .fe-sync-stepper ol {
   list-style: none;
   padding: 0;
@@ -5658,7 +5660,7 @@ body.embed .wp-wizard-header {
   flex-wrap: wrap;
   gap: .5rem;
 }
-.fe-sync-stepper li { flex: 1 1 0; min-width: 130px; }
+.fe-sync-stepper li { flex: 1 1 0; min-width: 120px; }
 .fe-sync-stepper button {
   width: 100%;
   display: flex;
@@ -5700,10 +5702,10 @@ body.embed .wp-wizard-header {
 .fe-sync-stepper li.is-done .fe-sync-num { background: #1f9d55; color: #fff; border-color: #1f9d55; }
 .fe-sync-step-label { font-weight: 500; }
 
-/* Panels — hidden until JS marks one active. The no-JS fallback below
-   keeps every panel visible so the card still works without scripting. */
-.fe-sync-wizard[data-fe-sync-ready] .fe-sync-panel { display: none; }
-.fe-sync-wizard[data-fe-sync-ready] .fe-sync-panel.is-active { display: block; }
+/* Panels — hidden until JS marks one active. Without JS (`data-fe-sync-js`
+   absent) every panel stays visible so the card degrades gracefully. */
+.fe-sync-wizard[data-fe-sync-js] .fe-sync-panel { display: none; }
+.fe-sync-wizard[data-fe-sync-js] .fe-sync-panel.is-active { display: block; }
 .fe-sync-panel { animation: fe-sync-fade .15s ease; }
 @keyframes fe-sync-fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 
@@ -5711,43 +5713,55 @@ body.embed .wp-wizard-header {
 .fe-sync-subhead { font-weight: 600; margin-bottom: .35rem; }
 .fe-sync-hint { margin-top: .75rem; }
 
-/* Step-1 diagram — two install "nodes" with push/pull arrows between. */
-.fe-sync-diagram {
-  display: flex;
-  align-items: stretch;
+/* Role chooser — two stacked option cards. */
+.fe-sync-roles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: .75rem;
-  margin: .25rem 0 1rem;
+  margin: .25rem 0 .5rem;
 }
-.fe-sync-node {
-  flex: 1 1 0;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: .7rem .85rem;
+.fe-sync-role-card {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  text-align: left;
+  padding: .9rem 1rem;
   background: var(--panel-2, var(--panel));
-  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text);
+  transition: border-color .12s, background .12s, box-shadow .12s;
 }
-.fe-sync-node-tag { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, var(--text)); }
-.fe-sync-node-name { font-weight: 600; margin-top: .2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fe-sync-arrows { flex: 0 0 auto; display: flex; flex-direction: column; justify-content: center; gap: .35rem; }
-.fe-sync-arrow span {
-  display: inline-block;
-  font-size: .78rem;
-  color: var(--brand);
-  white-space: nowrap;
-  font-weight: 600;
+.fe-sync-role-card:hover {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
 }
-.fe-sync-arrow.rev span { color: var(--muted, var(--text)); }
+.fe-sync-role-name { font-weight: 700; font-size: 1.02rem; }
+.fe-sync-role-desc { color: var(--muted, var(--text)); font-size: .86rem; line-height: 1.4; }
 
-.fe-sync-points { margin: 0 0 .25rem; padding-left: 1.1rem; }
-.fe-sync-points li { margin: .35rem 0; line-height: 1.45; }
+/* Force-Live gate shown when "Staging" is picked. */
+.fe-sync-gate {
+  margin-top: .85rem;
+  padding: .85rem 1rem;
+  border: 1px solid var(--brand);
+  border-radius: 10px;
+  background: var(--brand-soft);
+}
+.fe-sync-gate p { margin: 0 0 .6rem; }
 
-.fe-sync-token-grid { margin-top: .5rem; }
-.fe-sync-token-box {
+/* Token / address readout box with a Copy button. */
+.fe-sync-tokenbox {
   display: flex;
   align-items: center;
   gap: .5rem;
   margin: .4rem 0 .6rem;
 }
+/* `display:flex` above would otherwise override the HTML `hidden` attribute
+   (UA `[hidden]{display:none}` loses on specificity), leaving an empty token
+   box visible before a token has been generated. */
+.fe-sync-tokenbox[hidden] { display: none; }
 .fe-sync-token-value {
   flex: 1 1 auto;
   min-width: 0;
@@ -5762,9 +5776,20 @@ body.embed .wp-wizard-header {
   white-space: nowrap;
 }
 
+/* Live → Staging handoff rows on the "done" panel. */
+.fe-sync-handoff { margin: .5rem 0; }
+.fe-sync-handoff-row { margin-bottom: .6rem; }
+.fe-sync-handoff-label {
+  display: block;
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted, var(--text));
+  margin-bottom: .15rem;
+}
+
 @media (max-width: 560px) {
-  .fe-sync-diagram { flex-direction: column; }
-  .fe-sync-arrows { flex-direction: row; justify-content: center; }
+  .fe-sync-roles { grid-template-columns: 1fr; }
 }
 
 /* Feature card chrome — `.data-card` layers a brand-colour left accent

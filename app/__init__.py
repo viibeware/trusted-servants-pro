@@ -2036,6 +2036,12 @@ def _migrate_sqlite(app):
         # IPs (the column was added after the fact); new 404s carry IPs.
         add("not_found_event", "ip", "VARCHAR(45)")
 
+        # FrontendSyncPeer.self_role — added in 2.12.1. The 2.12.0 table was
+        # created without it, so existing paired installs need the column
+        # back-filled. "" means "role not chosen yet"; the setup wizard sets
+        # it to 'live' or 'staging'.
+        add("frontend_sync_peer", "self_role", "VARCHAR(16) NOT NULL DEFAULT ''")
+
         # One-shot data migration: when the new frontend_og_* columns are
         # added on an existing deployment, seed them from the legacy og_*
         # columns. The frontend Branding admin page used to write to og_*,

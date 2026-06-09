@@ -6,6 +6,43 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.12.2] — 2026-06-09
+
+Reshapes the frontend staging-sync wizard (2.12.1) around an explicit **role**
+choice and moves every wizard action to AJAX so the settings modal never reloads.
+
+### Added
+
+- **`FrontendSyncPeer.self_role`** (`app/models.py`) — `'live'` or `'staging'`
+  (`''` until chosen). The wizard's first step asks which install this is and
+  then shows only that role's fields. `allow_inbound` is derived from the role
+  (live ⇒ on, staging ⇒ off) instead of a separate checkbox, so the two stay
+  consistent. Back-filled on existing 2.12.0/2.12.1 installs by a new
+  `_migrate_sqlite` entry (`app/__init__.py`); fresh installs get it from
+  `db.create_all()`.
+
+### Changed
+
+- **Role-scoped wizard** (`app/templates/base.html`, `app/static/js/app.js`,
+  `app/static/css/app.css`). A **Live** install only mints the shared token and
+  is set to receive (its "Finish" step hands off the token + this site's address
+  to paste into Staging). A **Staging** install pastes the token, enters the Live
+  URL, tests, then Pulls/Pushes. The stepper is built client-side from the chosen
+  role's step list. Choosing Staging is gated behind a "set up your Live site
+  first" confirmation, enforcing the pairing order.
+- **All wizard actions submit over AJAX** (save / generate / test / pull / push).
+  The outbound routes (`app/routes.py`) return JSON when called with
+  `X-Requested-With: fetch` and keep the flash + redirect path as a no-JS
+  fallback. Field updates (the new token, paired state, last-synced timestamps)
+  apply in place, so the settings modal stays open throughout.
+
+### Fixed
+
+- **The settings modal no longer closes/reopens on every wizard action.** 2.12.1
+  worked around the full-page reload by reopening the modal afterward, which
+  flickered on each "Save & continue"; the AJAX submit path removes the reload
+  entirely.
+
 ## [2.12.1] — 2026-06-09
 
 Reworks the **frontend staging sync** setup UI (shipped in 2.12.0) from a single

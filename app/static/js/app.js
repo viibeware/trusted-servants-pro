@@ -656,6 +656,9 @@
       clearTimeout(showSettingsToast._h);
       showSettingsToast._h = setTimeout(() => t.classList.remove("show"), 2200);
     }
+    // Exposed so the frontend-sync wizard (a separate IIFE) can surface its
+    // own AJAX results in the same in-modal toast.
+    window.showSettingsToast = showSettingsToast;
 
     // Shared AJAX submit for any settings-modal form. Returns a promise
     // that resolves with the parsed JSON body (if any) on success and
@@ -5962,83 +5965,230 @@
      • [data-fe-sync-go="N"] navigates in-page without submitting.
    Landing step is kept in sessionStorage so it survives the reload;
    the server-rendered data-start-step is the first-visit default. */
+/* ── Frontend staging sync wizard ──────────────────────────────
+   Role-aware setup flow that submits every action over AJAX so the
+   settings modal never reloads (and so never closes mid-setup). The
+   admin first declares whether this install is the Live site or the
+   Staging copy; each role then shows only the fields it needs. */
 (function feSyncWizard () {
-  const STORE = "feSyncStep";
-  const REOPEN = "feSyncReopen";
+  const STORE = "feSyncStepKey";
 
-  function clamp(n) { return Math.min(5, Math.max(1, n | 0)); }
-
-  // The wizard's forms do full-page POSTs (data-no-ajax), so the settings
-  // modal — pure client-side state — closes on the resulting reload. When a
-  // wizard submit set the REOPEN flag, reopen the modal to the Data tab on
-  // the way back so the admin lands where they left off. Mirrors openModal()
-  // (add `.open`, unhide, lock body scroll); the Data pane is inline, so a
-  // click on its tab button drives the real tab-activation logic.
-  function reopenIfFlagged() {
-    let flagged = false;
-    try { flagged = sessionStorage.getItem(REOPEN) === "1"; } catch (e) {}
-    if (!flagged) return;
-    try { sessionStorage.removeItem(REOPEN); } catch (e) {}
-    const modal = document.getElementById("settings-modal");
-    if (!modal) return;
-    modal.classList.add("open");
-    modal.setAttribute("aria-hidden", "false");
-    document.body.style.overflow = "hidden";
-    const dataTab = modal.querySelector('.settings-tab[data-tab="data"]');
-    if (dataTab) dataTab.click();
-  }
+  // Ordered per-role flows. The "role" chooser is always step 1.
+  const ROLE_STEP = { key: "role", label: "This install" };
+  const FLOWS = {
+    "": [],
+    live: [
+      { key: "live-token", label: "Token" },
+      { key: "live-done",  label: "Finish" },
+    ],
+    staging: [
+      { key: "stg-token", label: "Token" },
+      { key: "stg-url",   label: "Live URL" },
+      { key: "stg-test",  label: "Test" },
+      { key: "stg-sync",  label: "Sync" },
+    ],
+  };
 
   function init() {
-    reopenIfFlagged();
     const root = document.querySelector("[data-fe-sync-wizard]");
     if (!root) return;
+    // Enables single-panel mode in CSS; without JS every panel stays visible.
+    root.setAttribute("data-fe-sync-js", "1");
 
-    const tabs = Array.from(root.querySelectorAll("[data-fe-sync-tab]"));
+    const stepperOl = root.querySelector("[data-fe-sync-stepper]");
     const panels = Array.from(root.querySelectorAll("[data-fe-sync-panel]"));
-    // Switching panels with JS active; the attribute flips the CSS that
-    // hides inactive panels (without it, every panel stays visible).
-    root.setAttribute("data-fe-sync-ready", "1");
+    let role = root.dataset.selfRole || "";
 
-    function show(step) {
-      step = clamp(step);
-      panels.forEach(p => p.classList.toggle("is-active", +p.dataset.feSyncPanel === step));
-      tabs.forEach(li => {
-        const n = +li.dataset.feSyncTab;
-        li.classList.toggle("is-active", n === step);
-        li.classList.toggle("is-done", n < step);
-      });
-      try { sessionStorage.setItem(STORE, String(step)); } catch (e) {}
+    const flow = () => [ROLE_STEP].concat(FLOWS[role] || []);
+    const inFlow = key => flow().some(s => s.key === key);
+
+    function csrf() {
+      const el = root.querySelector("[data-fe-sync-csrf]")
+              || root.querySelector('input[name="csrf_token"]');
+      return el ? el.value : "";
+    }
+    function saveAction() {
+      const f = root.querySelector('form[data-fe-sync-action="save"]');
+      return f ? f.action : "";
+    }
+    function toast(msg, kind) {
+      if (window.showSettingsToast) window.showSettingsToast(msg, kind);
     }
 
-    // In-page navigation (Next / Back / stepper tabs).
-    root.querySelectorAll("[data-fe-sync-go]").forEach(btn => {
-      btn.addEventListener("click", () => show(+btn.dataset.feSyncGo));
+    async function postFields(action, fields) {
+      const fd = new FormData();
+      fd.set("csrf_token", csrf());
+      Object.keys(fields).forEach(k => fd.set(k, fields[k]));
+      const r = await fetch(action, {
+        method: "POST", body: fd,
+        headers: { "X-Requested-With": "fetch" },
+        credentials: "same-origin",
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }
+
+    function buildStepper(activeKey) {
+      const steps = flow();
+      const activeIdx = steps.findIndex(s => s.key === activeKey);
+      stepperOl.innerHTML = "";
+      steps.forEach((s, i) => {
+        const li = document.createElement("li");
+        if (s.key === activeKey) li.className = "is-active";
+        else if (i < activeIdx) li.className = "is-done";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        const num = document.createElement("span");
+        num.className = "fe-sync-num";
+        num.textContent = String(i + 1);
+        const lbl = document.createElement("span");
+        lbl.className = "fe-sync-step-label";
+        lbl.textContent = s.label;
+        btn.appendChild(num);
+        btn.appendChild(lbl);
+        btn.addEventListener("click", () => show(s.key));
+        li.appendChild(btn);
+        stepperOl.appendChild(li);
+      });
+    }
+
+    function show(key) {
+      if (!inFlow(key)) key = "role";
+      panels.forEach(p => p.classList.toggle("is-active", p.dataset.feSyncPanel === key));
+      buildStepper(key);
+      try { sessionStorage.setItem(STORE, key); } catch (e) {}
+    }
+
+    function setRole(r) { role = r; root.dataset.selfRole = r; }
+
+    // Reflect a save payload into the Live token boxes + Next button.
+    function applyState(data) {
+      if (data && data.token) {
+        root.querySelectorAll("[data-fe-sync-token]").forEach(c => { c.textContent = data.token; });
+        root.querySelectorAll("[data-fe-sync-tokenbox]").forEach(b => {
+          b.hidden = false;
+          const copyBtn = b.querySelector("[data-copy-text]");
+          if (copyBtn && b.querySelector("[data-fe-sync-token]")) copyBtn.dataset.copyText = data.token;
+        });
+        const next = root.querySelector("[data-fe-sync-next]");
+        if (next) next.removeAttribute("disabled");
+        // The Generate button's "Regenerate" relabel is handled by the submit
+        // handler's restoreLabel (the finally block would otherwise clobber it).
+      }
+      if (data && typeof data.has_url !== "undefined") {
+        root.dataset.hasUrl = data.has_url ? "1" : "0";
+      }
+    }
+
+    // ── Role selection (force Live first) ──
+    root.querySelectorAll("[data-fe-sync-role]").forEach(card => {
+      card.addEventListener("click", async () => {
+        const r = card.dataset.feSyncRole;
+        if (r === "staging") {
+          const gate = root.querySelector("[data-fe-sync-gate]");
+          if (gate) gate.hidden = false;   // gate: must confirm Live is done
+          return;
+        }
+        setRole("live");
+        try { await postFields(saveAction(), { self_role: "live" }); } catch (e) {}
+        show("live-token");
+      });
+    });
+    const gateCancel = root.querySelector("[data-fe-sync-gate-cancel]");
+    if (gateCancel) gateCancel.addEventListener("click", () => {
+      const gate = root.querySelector("[data-fe-sync-gate]");
+      if (gate) gate.hidden = true;
+    });
+    const gateConfirm = root.querySelector("[data-fe-sync-role-confirm]");
+    if (gateConfirm) gateConfirm.addEventListener("click", async () => {
+      setRole("staging");
+      try { await postFields(saveAction(), { self_role: "staging" }); } catch (e) {}
+      const gate = root.querySelector("[data-fe-sync-gate]");
+      if (gate) gate.hidden = true;
+      show("stg-token");
     });
 
-    // Submit buttons: these trigger a full-page POST that closes the modal,
-    // so remember both where to land and that the modal should reopen.
-    root.querySelectorAll("[data-fe-sync-land]").forEach(btn => {
-      btn.addEventListener("click", () => {
+    // ── In-panel navigation ──
+    root.querySelectorAll("[data-fe-sync-go]").forEach(btn => {
+      btn.addEventListener("click", () => show(btn.dataset.feSyncGo));
+    });
+
+    // ── AJAX form submits — no reload, modal stays open ──
+    root.querySelectorAll("form[data-fe-sync-action]").forEach(form => {
+      form.addEventListener("submit", async e => {
+        e.preventDefault();
+        const action = form.dataset.feSyncAction;
+        const submitter = e.submitter;
+        const btn = submitter || form.querySelector('button[type="submit"], button:not([type])');
+        const orig = btn ? btn.textContent : null;
+        let restoreLabel = orig;   // finally restores this; success may change it
+        const busy = action === "test" ? "Testing…"
+                   : (action === "pull" || action === "push") ? "Working…" : "Saving…";
+        if (btn) { btn.disabled = true; btn.textContent = busy; }
         try {
-          sessionStorage.setItem(STORE, String(clamp(+btn.dataset.feSyncLand)));
-          sessionStorage.setItem(REOPEN, "1");
-        } catch (e) {}
+          const fd = new FormData(form);
+          if (submitter && submitter.name) fd.set(submitter.name, submitter.value || "");
+          const r = await fetch(form.action, {
+            method: "POST", body: fd,
+            headers: { "X-Requested-With": "fetch" },
+            credentials: "same-origin",
+          });
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const data = await r.json();
+          if (action === "save") {
+            applyState(data);
+            const generated = !!(submitter && submitter.dataset && "feSyncGenerate" in submitter.dataset);
+            toast(data.message || "Saved", "success");
+            // Generate keeps you on the token panel to copy the new value (and
+            // its button now offers to mint a replacement); Save & continue
+            // advances to the form's declared next step.
+            if (generated) restoreLabel = "Regenerate token";
+            else if (form.dataset.feSyncLand) show(form.dataset.feSyncLand);
+          } else if (action === "test") {
+            toast(data.message || (data.ok ? "Connected" : "Test failed"), data.ok ? "success" : "danger");
+          } else if (action === "pull" || action === "push") {
+            toast(data.message || (data.ok ? "Done" : "Failed"), data.ok ? "success" : "danger");
+            if (data.ok) {
+              const ts = root.querySelector("[data-fe-sync-timestamps]");
+              if (ts && (data.last_pulled_at || data.last_pushed_at)) {
+                const parts = [];
+                if (data.last_pulled_at) parts.push("Last pulled " + data.last_pulled_at + " UTC.");
+                if (data.last_pushed_at) parts.push("Last pushed " + data.last_pushed_at + " UTC.");
+                if (parts.length) ts.textContent = parts.join(" ");
+              }
+              form.reset();
+            }
+          }
+        } catch (err) {
+          const pfx = action === "save" ? "Save failed: "
+                    : action === "test" ? "Test failed: " : "Failed: ";
+          toast(pfx + err.message, "danger");
+        } finally {
+          if (btn) { btn.disabled = false; btn.textContent = restoreLabel; }
+        }
       });
     });
 
-    // Initial step: a remembered one from this session wins, else the
-    // server's first-visit default.
-    let start = +(root.dataset.startStep || 1);
-    try {
-      const saved = sessionStorage.getItem(STORE);
-      if (saved !== null) start = +saved;
-    } catch (e) {}
-    show(start);
+    // ── Initial step ──
+    function startKey() {
+      let saved = null;
+      try { saved = sessionStorage.getItem(STORE); } catch (e) {}
+      if (saved && inFlow(saved)) return saved;
+      const hasToken = root.dataset.hasToken === "1";
+      const hasUrl = root.dataset.hasUrl === "1";
+      if (role === "live") return hasToken ? "live-done" : "live-token";
+      if (role === "staging") {
+        if (hasToken && hasUrl) return "stg-sync";
+        if (hasToken) return "stg-url";
+        return "stg-token";
+      }
+      return "role";
+    }
+    show(startKey());
   }
 
-  // Copy-token buttons: <button data-copy-text="…">. Mirrors the
-  // [data-copy-url] helper's "Copied!" feedback but copies a literal
-  // string rather than resolving a URL.
+  // Copy buttons: <button data-copy-text="…"> — mirrors the [data-copy-url]
+  // helper's "Copied!" feedback but copies a literal string.
   document.addEventListener("click", e => {
     const btn = e.target.closest("[data-copy-text]");
     if (!btn) return;
