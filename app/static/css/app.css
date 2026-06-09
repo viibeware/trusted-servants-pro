@@ -5644,6 +5644,129 @@ body.embed .wp-wizard-header {
 }
 .wp-step-label { font-weight: 500; }
 
+/* ── Frontend staging sync wizard ──────────────────────────────
+   A stepper + one-panel-at-a-time flow layered on the staging-sync
+   data-card. Visual language mirrors `.wp-wizard-stepper`; the
+   number badges double as clickable tabs (`button[data-fe-sync-go]`),
+   and `.fe-sync-panel.is-active` is the only visible step. */
+.fe-sync-stepper { margin: .25rem 0 1.25rem; }
+.fe-sync-stepper ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+.fe-sync-stepper li { flex: 1 1 0; min-width: 130px; }
+.fe-sync-stepper button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .6rem .85rem;
+  background: var(--panel-2, var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted, var(--text));
+  font: inherit;
+  font-size: .92rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.fe-sync-stepper button:hover { border-color: var(--brand); }
+.fe-sync-stepper li.is-active button {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--text);
+}
+.fe-sync-stepper li.is-done button { border-color: #1f9d55; color: #1f9d55; }
+.fe-sync-num {
+  flex: 0 0 auto;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 1px solid currentColor;
+  display: inline-grid; place-items: center;
+  font-weight: 600;
+  font-size: .82rem;
+}
+.fe-sync-stepper li.is-active .fe-sync-num {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+.fe-sync-stepper li.is-done .fe-sync-num { background: #1f9d55; color: #fff; border-color: #1f9d55; }
+.fe-sync-step-label { font-weight: 500; }
+
+/* Panels — hidden until JS marks one active. The no-JS fallback below
+   keeps every panel visible so the card still works without scripting. */
+.fe-sync-wizard[data-fe-sync-ready] .fe-sync-panel { display: none; }
+.fe-sync-wizard[data-fe-sync-ready] .fe-sync-panel.is-active { display: block; }
+.fe-sync-panel { animation: fe-sync-fade .15s ease; }
+@keyframes fe-sync-fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+
+.fe-sync-nav { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: 1rem; }
+.fe-sync-subhead { font-weight: 600; margin-bottom: .35rem; }
+.fe-sync-hint { margin-top: .75rem; }
+
+/* Step-1 diagram — two install "nodes" with push/pull arrows between. */
+.fe-sync-diagram {
+  display: flex;
+  align-items: stretch;
+  gap: .75rem;
+  margin: .25rem 0 1rem;
+}
+.fe-sync-node {
+  flex: 1 1 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: .7rem .85rem;
+  background: var(--panel-2, var(--panel));
+  min-width: 0;
+}
+.fe-sync-node-tag { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, var(--text)); }
+.fe-sync-node-name { font-weight: 600; margin-top: .2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fe-sync-arrows { flex: 0 0 auto; display: flex; flex-direction: column; justify-content: center; gap: .35rem; }
+.fe-sync-arrow span {
+  display: inline-block;
+  font-size: .78rem;
+  color: var(--brand);
+  white-space: nowrap;
+  font-weight: 600;
+}
+.fe-sync-arrow.rev span { color: var(--muted, var(--text)); }
+
+.fe-sync-points { margin: 0 0 .25rem; padding-left: 1.1rem; }
+.fe-sync-points li { margin: .35rem 0; line-height: 1.45; }
+
+.fe-sync-token-grid { margin-top: .5rem; }
+.fe-sync-token-box {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin: .4rem 0 .6rem;
+}
+.fe-sync-token-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: .45rem .6rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .85rem;
+  color: var(--brand);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .fe-sync-diagram { flex-direction: column; }
+  .fe-sync-arrows { flex-direction: row; justify-content: center; }
+}
+
 /* Feature card chrome — `.data-card` layers a brand-colour left accent
    on the standard `.card` (background, border, radius, padding,
    shadow). Block flow only — no positioning pseudo-elements — so the

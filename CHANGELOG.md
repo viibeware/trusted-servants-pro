@@ -6,6 +6,36 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.12.1] — 2026-06-09
+
+Reworks the **frontend staging sync** setup UI (shipped in 2.12.0) from a single
+flat card into a guided five-step wizard, and fixes the settings modal closing
+out from under the admin on every sync action. No model, route, or wire-format
+changes — purely the admin-facing setup experience in **Settings → Data**.
+
+### Changed
+
+- **Frontend staging sync is now a step-by-step wizard** (`app/templates/base.html`)
+  — Overview → Pair token → Peer address → Test → Sync, driven by a clickable
+  stepper. The overview draws the two installs with explicit Push/Pull arrows so
+  "which side am I on, and which way does the frontend move" is no longer
+  ambiguous. The token step now renders the actual shared token in a copy-to-
+  clipboard box (the model already exposes a decrypt `token` property) instead of
+  only flashing it once at generation, and the inbound checkbox spells out which
+  install should tick it. Styles live under `.fe-sync-*` in `app/static/css/app.css`,
+  mirroring the existing `.wp-wizard-stepper` pattern; with JS disabled every step
+  stays visible so the card still works.
+
+### Fixed
+
+- **The settings modal no longer closes when you run a sync action.** The wizard's
+  forms do full-page POSTs (`data-no-ajax`), which dropped the admin back to the
+  page behind the modal after Generate / Save / Test / Pull / Push. A new
+  `feSyncWizard` handler in `app/static/js/app.js` records a reopen flag plus the
+  target step before each submit and, on the resulting reload, reopens the modal to
+  the **Data** tab and restores the wizard step — so generating a token leaves you
+  looking at the freshly minted token with its Copy button.
+
 ## [2.12.0] — 2026-06-08
 
 Adds **frontend staging sync**: an authenticated, bidirectional HTTP sync that

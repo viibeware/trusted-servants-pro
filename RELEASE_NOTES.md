@@ -7,7 +7,14 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.12.0 — 2026-06-08 (latest) — Sync your website's frontend from a dev copy to your live site
+## 2.12.1 — 2026-06-09 (latest) — A guided setup wizard for frontend staging sync
+
+- **Setting up staging sync is now a step-by-step wizard.** The old single panel left it unclear which install you were on and which way your website would move. The new wizard walks you through it: an **Overview** that draws both sites with Push/Pull arrows, **Pair token**, **Peer address**, **Test**, and **Sync** — one step at a time, with a progress bar across the top you can click to jump around.
+- **The shared token is easier to copy between the two sites.** Step 2 now shows the actual token in a box with a **Copy** button, so you can paste it into the other install at any time — not just in the one-time message when you first generate it. It also makes clear that both sites must end up with the same token, and that you can start the wizard on either one.
+- **The Settings window no longer closes on you mid-setup.** Generating a token, saving, testing, or running a sync used to bounce you out of Settings and back to the page behind it. It now stays open on **Settings → Data**, right where you left off — so after you generate a token you're looking straight at it, Copy button ready.
+- **Where to find it:** **Settings → Data → Frontend staging sync.**
+
+## 2.12.0 — 2026-06-08 — Sync your website's frontend from a dev copy to your live site
 
 - **You can now build your public website on a separate copy and push it to your live site over the network.** Run a second "staging" install to redesign the site — theme, colors, navigation and mega-menus, layouts, fonts, icons, and your page-builder Pages — then send the finished result to production with one click, instead of downloading a bundle and re-uploading it. It works both ways: **Pull** brings your live site's current frontend down to the staging copy to start from, and **Push** sends your changes back up when they're ready.
 - **Only the frontend moves — nothing else.** The look-and-feel, navigation, and Pages (plus every image and file they reference) transfer. Your recovery Stories, users, meetings, libraries, and meeting uploads on the receiving site are left exactly as they were. (Stories are usually submitted or edited on the live site, so a push never touches them.)

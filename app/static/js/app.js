@@ -5952,3 +5952,121 @@
     });
   });
 })();
+
+/* ── Frontend staging sync wizard ──────────────────────────────
+   Drives the stepped pairing UI in the settings "Data" tab. The
+   underlying forms still do full-page POSTs (data-no-ajax), so the
+   wizard resumes on the right step after each reload:
+     • A button with [data-fe-sync-land="N"] (a submit) records N as the
+       step to show once the page comes back.
+     • [data-fe-sync-go="N"] navigates in-page without submitting.
+   Landing step is kept in sessionStorage so it survives the reload;
+   the server-rendered data-start-step is the first-visit default. */
+(function feSyncWizard () {
+  const STORE = "feSyncStep";
+  const REOPEN = "feSyncReopen";
+
+  function clamp(n) { return Math.min(5, Math.max(1, n | 0)); }
+
+  // The wizard's forms do full-page POSTs (data-no-ajax), so the settings
+  // modal — pure client-side state — closes on the resulting reload. When a
+  // wizard submit set the REOPEN flag, reopen the modal to the Data tab on
+  // the way back so the admin lands where they left off. Mirrors openModal()
+  // (add `.open`, unhide, lock body scroll); the Data pane is inline, so a
+  // click on its tab button drives the real tab-activation logic.
+  function reopenIfFlagged() {
+    let flagged = false;
+    try { flagged = sessionStorage.getItem(REOPEN) === "1"; } catch (e) {}
+    if (!flagged) return;
+    try { sessionStorage.removeItem(REOPEN); } catch (e) {}
+    const modal = document.getElementById("settings-modal");
+    if (!modal) return;
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    const dataTab = modal.querySelector('.settings-tab[data-tab="data"]');
+    if (dataTab) dataTab.click();
+  }
+
+  function init() {
+    reopenIfFlagged();
+    const root = document.querySelector("[data-fe-sync-wizard]");
+    if (!root) return;
+
+    const tabs = Array.from(root.querySelectorAll("[data-fe-sync-tab]"));
+    const panels = Array.from(root.querySelectorAll("[data-fe-sync-panel]"));
+    // Switching panels with JS active; the attribute flips the CSS that
+    // hides inactive panels (without it, every panel stays visible).
+    root.setAttribute("data-fe-sync-ready", "1");
+
+    function show(step) {
+      step = clamp(step);
+      panels.forEach(p => p.classList.toggle("is-active", +p.dataset.feSyncPanel === step));
+      tabs.forEach(li => {
+        const n = +li.dataset.feSyncTab;
+        li.classList.toggle("is-active", n === step);
+        li.classList.toggle("is-done", n < step);
+      });
+      try { sessionStorage.setItem(STORE, String(step)); } catch (e) {}
+    }
+
+    // In-page navigation (Next / Back / stepper tabs).
+    root.querySelectorAll("[data-fe-sync-go]").forEach(btn => {
+      btn.addEventListener("click", () => show(+btn.dataset.feSyncGo));
+    });
+
+    // Submit buttons: these trigger a full-page POST that closes the modal,
+    // so remember both where to land and that the modal should reopen.
+    root.querySelectorAll("[data-fe-sync-land]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        try {
+          sessionStorage.setItem(STORE, String(clamp(+btn.dataset.feSyncLand)));
+          sessionStorage.setItem(REOPEN, "1");
+        } catch (e) {}
+      });
+    });
+
+    // Initial step: a remembered one from this session wins, else the
+    // server's first-visit default.
+    let start = +(root.dataset.startStep || 1);
+    try {
+      const saved = sessionStorage.getItem(STORE);
+      if (saved !== null) start = +saved;
+    } catch (e) {}
+    show(start);
+  }
+
+  // Copy-token buttons: <button data-copy-text="…">. Mirrors the
+  // [data-copy-url] helper's "Copied!" feedback but copies a literal
+  // string rather than resolving a URL.
+  document.addEventListener("click", e => {
+    const btn = e.target.closest("[data-copy-text]");
+    if (!btn) return;
+    e.preventDefault();
+    const text = btn.dataset.copyText || "";
+    const done = ok => {
+      const orig = btn.textContent;
+      btn.textContent = ok ? "Copied!" : "Copy failed";
+      setTimeout(() => { btn.textContent = orig; }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => done(true)).catch(() => done(false));
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;left:-9999px;top:-9999px;opacity:0";
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch (err) {}
+      document.body.removeChild(ta);
+      done(ok);
+    }
+  });
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
