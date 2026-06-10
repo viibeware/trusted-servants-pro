@@ -910,6 +910,8 @@ html[data-theme="dark"] .perm-badge-viewer { background: rgba(100, 116, 139, 0.2
 .post-chip-event        { background: rgba(11, 92, 255, 0.12);  color: #1d4ed8; border-color: rgba(11, 92, 255, 0.32); }
 .post-chip-online       { background: rgba(20, 184, 166, 0.12); color: #0f766e; border-color: rgba(20, 184, 166, 0.32); }
 .post-chip-draft        { background: rgba(100, 116, 139, 0.14); color: #475569; border-color: rgba(100, 116, 139, 0.34); }
+.post-chip-scheduled    { background: rgba(13, 148, 136, 0.14); color: #0f766e; border-color: rgba(13, 148, 136, 0.4); }
+html[data-theme="dark"] .post-chip-scheduled { background: rgba(20, 184, 166, 0.22); color: #5eead4; border-color: rgba(20, 184, 166, 0.5); }
 .post-chip-warning      { background: rgba(245, 158, 11, 0.18);  color: #b45309; border-color: rgba(245, 158, 11, 0.5); }
 .post-chip-private      { background: rgba(168, 85, 247, 0.14); color: #6b21a8; border-color: rgba(168, 85, 247, 0.36); }
 .post-chip-pending-draft { background: rgba(245, 158, 11, 0.14); color: #92400e; border-color: rgba(245, 158, 11, 0.4); display: inline-flex; align-items: center; gap: 4px; }
@@ -970,6 +972,21 @@ html[data-theme="dark"] .post-chip-private      { background: rgba(168, 85, 247,
 /* Reusable two-column row for short fields (start/end, phone/email, etc.) */
 .post-form .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 720px) { .post-form .form-row { grid-template-columns: 1fr; } }
+
+/* Mobile: nothing in the editor may force horizontal page scroll. Grid and
+   flex children default to min-width:auto, so a long unbreakable value (a
+   pasted URL, the slug prefix, a wide field) can widen a column past the
+   viewport and spawn a horizontal scrollbar. Pin min-width:0, keep every
+   field fluid, and clip as a final guarantee (the body is a plain textarea,
+   so there's no toolbar to hide). */
+.post-form { max-width: 100%; overflow-x: clip; }
+.post-form .form-row,
+.post-form .form-row > * { min-width: 0; }
+.post-form label { min-width: 0; }
+.post-form input,
+.post-form select,
+.post-form textarea { max-width: 100%; box-sizing: border-box; }
+.post-form textarea { resize: vertical; }
 
 .post-form .post-subhead {
   margin: 1.5rem 0 0.5rem; font-size: 0.85rem; font-weight: 700;
@@ -3412,6 +3429,35 @@ button.chip { font-family: inherit; }
 }
 .tbl td.users-actions form { display: inline-flex; margin: 0; }
 
+/* Users list: filter + bulk toolbar, sortable headers, checkbox column. */
+.users-toolbar {
+  display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+  margin: 0 0 .85rem;
+}
+.users-filter {
+  flex: 1 1 280px; min-width: 0;
+  padding: 7px 11px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel); color: var(--text); font-size: .92rem;
+}
+.users-filter:focus { border-color: var(--brand); outline: none; }
+.users-bulkbar {
+  display: flex; align-items: center; gap: .5rem; flex: 0 0 auto;
+  padding: .35rem .5rem; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--brand-soft);
+}
+.users-bulkbar-count { font-size: .85rem; font-weight: 600; }
+.users-count { margin-left: .4rem; }
+
+.users-th-check, .users-td-check { width: 1%; white-space: nowrap; text-align: center; }
+.users-check-wrap { display: inline-flex; align-items: center; cursor: pointer; margin: 0; }
+.users-check-wrap input { width: 16px; height: 16px; cursor: pointer; }
+
+.users-th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.users-th-sort:hover { color: var(--brand); }
+.users-th-sort::after { content: "\2195"; opacity: .3; margin-left: .35rem; font-size: .85em; }
+.users-th-sort.sort-asc::after  { content: "\2191"; opacity: .9; }
+.users-th-sort.sort-desc::after { content: "\2193"; opacity: .9; }
+
 .reading-body {
   white-space: pre-wrap; font-family: Georgia, "Times New Roman", serif;
   font-size: 1rem; line-height: 1.7; margin: 0; background: transparent; color: var(--text);
@@ -4014,6 +4060,31 @@ button.chip { font-family: inherit; }
 .sidebar-notif-label { flex: 1; text-align: left; }
 .sidebar-notif-chip { flex: 0 0 auto; margin-left: 0; }
 .sidebar-notif-chip[hidden] { display: none; }
+
+/* Dashboard button — same pill treatment as the Notifications / Watchtower
+   buttons, pinned at the top of the sidebar in place of a nav link. */
+.sidebar-dash-btn {
+  display: flex; align-items: center; gap: 8px;
+  margin: 10px 12px 0; padding: 9px 12px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel-2); color: var(--muted);
+  text-decoration: none; cursor: pointer;
+  font-size: 0.875rem; font-weight: 500;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.sidebar-dash-btn:hover {
+  background: var(--panel); color: var(--text);
+  border-color: color-mix(in srgb, var(--brand) 35%, var(--border));
+  text-decoration: none;
+}
+.sidebar-dash-btn.is-active {
+  background: color-mix(in srgb, var(--brand) 12%, var(--panel-2));
+  border-color: color-mix(in srgb, var(--brand) 50%, var(--border));
+  color: var(--text);
+}
+.sidebar-dash-icon { display: inline-flex; flex: 0 0 auto; }
+.sidebar-dash-icon .icon { width: 16px; height: 16px; display: block; }
+.sidebar-dash-label { flex: 1; text-align: left; }
 
 /* Modal */
 .modal-panel-notifications { width: min(480px, 100%); }
@@ -5253,6 +5324,11 @@ body.embed .card.data-card:last-child {
 
 /* "/meetings/" static prefix sitting flush against the slug input —
    visually communicates that only the trailing slug is editable. */
+/* Event datetime field + inline "Today" button. */
+.dt-field { display: flex; align-items: center; gap: .4rem; }
+.dt-field > input[type="datetime-local"] { flex: 1 1 auto; min-width: 0; }
+.dt-field > .dt-today { flex: 0 0 auto; white-space: nowrap; }
+
 .slug-input-row {
   display: flex; align-items: stretch; width: 100%;
   border: 1px solid var(--border); border-radius: 6px;
@@ -6742,6 +6818,9 @@ body.fe-admin-autohide .menu-btn { display: grid; place-items: center; }
     letter-spacing: 0.04em; margin-bottom: 2px; }
   .users-tbl td select,
   .users-tbl td input { width: 100%; box-sizing: border-box; }
+  /* Keep the row checkbox a checkbox (not a full-width bar) in card mode. */
+  .users-tbl td.users-td-check { padding: 2px 0 6px; }
+  .users-tbl td.users-td-check input { width: 16px; height: 16px; }
   .users-tbl td.users-actions { padding-top: 10px; }
   .users-tbl td.users-actions .users-actions-row { display: flex; gap: 8px; }
   .users-tbl td.users-actions .users-actions-row > .btn,
@@ -13636,6 +13715,8 @@ body.embed .backups-wrap {
 [data-theme="dark"] .dash-sync-msg.is-ok  { color: #bbf7d0; }
 [data-theme="dark"] .dash-sync-msg.is-err { color: #fecaca; }
 .dash-sync-foot { margin-top: .15rem; }
+/* Rollback-snapshots button row in the Settings staging-sync card. */
+.fe-sync-snap-row { margin: .1rem 0 1rem; }
 @media (max-width: 480px) { .dash-sync-actions { grid-template-columns: 1fr; } }
 
 /* Rollback snapshots modal — restore how-to + downloadable bundle list. */

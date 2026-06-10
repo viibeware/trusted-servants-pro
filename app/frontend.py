@@ -1433,6 +1433,20 @@ def _frontend_gate(site):
     return None
 
 
+def _post_live_clause():
+    """Public-visibility gate for scheduled posts. A post whose
+    ``published_at`` is in the future is hidden from every public surface
+    (lists, detail pages, sitemap, calendar feeds) until that moment, when
+    it appears automatically. A NULL ``published_at`` (legacy / WP imports)
+    is always visible. Compared in site-local-naive to match how
+    ``published_at`` is stored and parsed from the editor's datetime input.
+    Chain it onto any public ``Post.query``."""
+    from .timezone import now_local_naive
+    from sqlalchemy import or_
+    return or_(Post.published_at.is_(None),
+               Post.published_at <= now_local_naive(_site()))
+
+
 def _post_in_archive(post):
     """True when the post is in the unified /archive — either explicitly
     archived OR an event whose end-time has already passed (in case the
@@ -2988,6 +3002,7 @@ def events_list():
     # so events drop off at midnight local, not at midnight UTC.
     _now = now_local_naive(site)
     _rows = (Post.query
+             .filter(_post_live_clause())
              .filter(Post.is_event.is_(True),
                      Post.is_archived.is_(False),
                      Post.is_draft.is_(False),
@@ -3057,6 +3072,7 @@ def archive():
 
     # Past events: ended OR is_archived. Skip the ones with no date.
     event_rows = (Post.query
+                  .filter(_post_live_clause())
                   .filter(Post.is_event.is_(True),
                           Post.is_draft.is_(False),
                           Post.is_pending_review.is_(False))
@@ -3073,6 +3089,7 @@ def archive():
     # Archived announcements (excludes anything also tagged is_event so
     # mixed posts only appear once, on the events side).
     ann_rows = (Post.query
+                .filter(_post_live_clause())
                 .filter(Post.is_announcement.is_(True),
                         Post.is_event.is_(False),
                         Post.is_archived.is_(True),
@@ -3232,6 +3249,7 @@ def archive_detail(slug):
     if not site or not getattr(site, "posts_enabled", True):
         abort(404)
     candidates = (Post.query
+                  .filter(_post_live_clause())
                   .filter(Post.is_draft.is_(False),
                           Post.is_pending_review.is_(False))
                   .order_by(Post.id)
@@ -3300,6 +3318,7 @@ def _active_announcements():
     """
     from sqlalchemy import func as _sql_func
     return (Post.query
+            .filter(_post_live_clause())
             .filter(Post.is_announcement.is_(True),
                     Post.is_archived.is_(False),
                     Post.is_draft.is_(False),
@@ -3900,6 +3919,7 @@ def event_detail(slug):
     if not site or not getattr(site, "posts_enabled", True):
         abort(404)
     candidates = (Post.query
+                  .filter(_post_live_clause())
                   .filter(Post.is_event.is_(True),
                           Post.is_draft.is_(False),
                           Post.is_pending_review.is_(False))
@@ -3969,6 +3989,7 @@ def event_calendar_ics(slug):
     if not site or not getattr(site, "posts_enabled", True):
         abort(404)
     candidates = (Post.query
+                  .filter(_post_live_clause())
                   .filter(Post.is_event.is_(True),
                           Post.is_draft.is_(False),
                           Post.is_pending_review.is_(False))
@@ -4013,6 +4034,7 @@ def announcement_detail(slug):
     if not site or not getattr(site, "posts_enabled", True):
         abort(404)
     candidates = (Post.query
+                  .filter(_post_live_clause())
                   .filter(Post.is_announcement.is_(True),
                           Post.is_draft.is_(False),
                           Post.is_pending_review.is_(False))
@@ -5233,6 +5255,7 @@ def _site_index_groups(site):
     if getattr(site, "frontend_site_index_show_events", True):
         items = []
         q = (Post.query.filter_by(is_event=True, is_draft=False, is_pending_review=False)
+             .filter(_post_live_clause())
              .filter(Post.is_archived.is_(False))
              .order_by(Post.title.asc()))
         for ev in q.all():
@@ -5253,6 +5276,7 @@ def _site_index_groups(site):
     if getattr(site, "frontend_site_index_show_announcements", True):
         items = []
         q = (Post.query.filter_by(is_announcement=True, is_draft=False, is_pending_review=False)
+             .filter(_post_live_clause())
              .filter(Post.is_archived.is_(False))
              .order_by(Post.title.asc()))
         for an in q.all():

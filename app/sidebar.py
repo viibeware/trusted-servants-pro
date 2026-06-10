@@ -95,7 +95,11 @@ def _is_visible(key, site, user):
     from .permissions import user_meets_role
     if not user or not user.is_authenticated:
         return False
-    if key == "dashboard":      return True
+    # Dashboard renders as a pinned button at the top of the sidebar (see
+    # base.html, styled like the Notifications / Watchtower buttons), so it's
+    # hidden from the regular nav list to avoid two entry points — same
+    # treatment as Watchtower and Web Frontend below.
+    if key == "dashboard":      return False
     if key == "meetings":       return True
     if key == "libraries":      return True
     if key == "media":          return True

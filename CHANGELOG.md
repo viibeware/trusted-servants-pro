@@ -6,6 +6,50 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.12.5] — 2026-06-10
+
+### Added
+
+- **Scheduled / future posts.** A published announcement/event with a future
+  `published_at` is now hidden from every public surface until that moment, then
+  appears automatically. Centralized in `frontend._post_live_clause()` (NULL =
+  legacy/always visible; site-local-naive comparison) and chained onto all nine
+  public `Post` queries (lists, past/archive, canonical resolver, the three
+  detail routes, both sitemap feeds). `post_save` keeps a future date on publish
+  instead of stamping "now"; the admin list shows a teal "Scheduled" badge
+  (`posts.html`, `posts()` passes `now_local`); the editor relabels the field
+  and adds a "Today" button.
+- **Exhaustive backend search** (`api_search`). All post states (drafts,
+  archived, pending) with type/state labels, plus Stories, Blog posts, and
+  page-builder Pages. New role-gated navigation results jump to a Settings tab
+  (opens the modal) or a Web Frontend section. Non-admins never receive
+  admin-only destinations.
+- **Users tab: filter, sort, multi-delete** (`users.html`). Client-side filter
+  box, sortable columns (username/name/email/phone/role), and checkbox
+  multi-select backed by a new admin-only `auth.users_bulk_delete` route (skips
+  self + invalid ids).
+- **Rollback snapshots button in Settings → Data.** The snapshots modal is now
+  shared chrome in `base.html` (de-duped from `frontend_dashboard.html`) and
+  opened from both the staging-sync card and the Web Frontend overview; the
+  staging-sync card's header icon now matches the Frontend bundle card.
+- **"Today" button** on the event start/end datetime fields, which also keeps
+  the end ≥ start automatically.
+
+### Changed
+
+- **Dashboard moved to a pinned sidebar button** styled like the Notifications /
+  Watchtower buttons (`_is_visible('dashboard')` → False, button in `base.html`).
+- **Custom post URL is honored on drafts.** `post_save` honors an explicit slug
+  whenever the post isn't publicly addressable yet, and the editor stops
+  auto-deriving the slug once the admin customizes it — so a draft publishes at
+  the chosen URL with no redirect.
+
+### Fixed
+
+- **Mobile horizontal overflow on the post editor.** `.post-form` pins
+  `min-width: 0` on grid rows/fields, keeps inputs fluid, and clips horizontal
+  overflow so long URLs/fields no longer cause a horizontal scrollbar.
+
 ## [2.12.4] — 2026-06-09
 
 ### Added

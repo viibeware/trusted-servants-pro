@@ -7,7 +7,17 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.12.4 — 2026-06-09 (latest) — Download a rollback snapshot to undo a sync
+## 2.12.5 — 2026-06-10 (latest) — Schedule posts, a smarter search, and Users/editor polish
+
+- **Schedule announcements & events for the future.** In the post editor, set the "Posted on / schedule for" field to a future date & time and Publish — the post stays hidden from the public site until then, then appears automatically. The admin list flags it with a teal "Scheduled · <date>" badge, and there's a one-click "Today" button on the date fields.
+- **Exhaustive backend search.** Search now finds every post type and state (announcements, events — including drafts, archived, and pending), plus Stories, Blog posts, and page-builder Pages. It also jumps to sections: type "data" or "security" to open that Settings tab, or "branding"/"navigation" to open the matching Web Frontend page — all role-gated so people only see what they're allowed to.
+- **Users tab: filter, sort, and multi-delete.** Type to filter the user list by name/username/email/phone/role, click any column header to sort, and use the new checkboxes to delete several users at once (you can never select yourself).
+- **Set a custom URL while a post is still a draft.** A hand-picked URL now sticks through editing and publishing, so a draft goes live at the right address with no after-the-fact rename or redirect.
+- **Download a rollback snapshot from Settings too.** The "Rollback snapshots" button now also lives on the Settings → Data staging-sync card (with the matching card icon), not just the Web Frontend overview.
+- **Dashboard is now a button.** The sidebar Dashboard link moved into the fixed button cluster at the top, styled like the Notifications and Watchtower buttons.
+- **No more sideways scrolling on the post editor on phones.** Long links and fields no longer overflow the screen.
+
+## 2.12.4 — 2026-06-09 — Download a rollback snapshot to undo a sync
 
 - **The Staging Sync card now has a "Rollback snapshots" button.** Every sync automatically saves a complete rollback bundle of your frontend (including recovery Stories) before it overwrites anything — this opens a popup listing those bundles, newest first, with the date, size, and a one-click **Download** for each.
 - **Built-in restore instructions.** The popup explains exactly how to put a snapshot back: download the `.zip`, then go to **Settings → Data → Frontend bundle → Import frontend** and import it. The 10 most recent snapshots are kept automatically.

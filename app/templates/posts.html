@@ -138,6 +138,7 @@
         </td>
         <td class="hide-sm">
           {% if p.is_draft %}<span class="post-chip post-chip-draft">Draft</span>{% endif %}
+          {% if not p.is_draft and not p.is_archived and not p.is_pending_review and p.published_at and now_local and p.published_at > now_local %}<span class="post-chip post-chip-scheduled" title="Scheduled — hidden from the public until {{ p.published_at.strftime('%Y-%m-%d %H:%M') }}">Scheduled · {{ p.published_at.strftime('%b %-d, %H:%M') }}</span>{% endif %}
           {% if p.is_announcement %}<span class="post-chip post-chip-announcement">Announcement</span>{% endif %}
           {% if p.is_event %}<span class="post-chip post-chip-event">Event</span>{% endif %}
         </td>

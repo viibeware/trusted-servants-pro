@@ -89,10 +89,42 @@
   <div class="data-card-head">
     {{ icon('users') }}
     <span>All users</span>
+    <span class="muted smaller users-count" data-users-count></span>
   </div>
-  <table class="tbl users-tbl">
-    <thead><tr><th>Username</th><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Password</th><th></th></tr></thead>
-    <tbody>
+
+  {# Standalone form carries the checked ids for bulk delete; row checkboxes
+     associate via form="users-bulk-form" so the inline per-row action forms
+     can stay un-nested. #}
+  <form id="users-bulk-form" method="post"
+        action="{{ url_for('auth.users_bulk_delete') }}"
+        onsubmit="return confirm('Delete the selected users? This cannot be undone.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
+  </form>
+
+  <div class="users-toolbar">
+    <input type="search" class="users-filter" data-users-filter autocomplete="off"
+           placeholder="Filter by username, name, email, phone, or role…"
+           aria-label="Filter users">
+    <div class="users-bulkbar" data-users-bulkbar hidden>
+      <span class="users-bulkbar-count" data-users-bulk-count>0 selected</span>
+      <button type="submit" form="users-bulk-form" class="btn btn-sm btn-danger">Delete selected</button>
+      <button type="button" class="btn btn-sm" data-users-bulk-clear>Clear</button>
+    </div>
+  </div>
+
+  <table class="tbl users-tbl" data-users-table>
+    <thead><tr>
+      <th class="users-th-check"><label class="users-check-wrap" title="Select all shown"><input type="checkbox" data-users-selectall aria-label="Select all shown"></label></th>
+      <th class="users-th-sort" data-sort-key="username" tabindex="0" role="button" aria-label="Sort by username">Username</th>
+      <th class="users-th-sort" data-sort-key="name" tabindex="0" role="button" aria-label="Sort by name">Name</th>
+      <th class="users-th-sort" data-sort-key="email" tabindex="0" role="button" aria-label="Sort by email">Email</th>
+      <th class="users-th-sort" data-sort-key="phone" tabindex="0" role="button" aria-label="Sort by phone">Phone</th>
+      <th class="users-th-sort" data-sort-key="role" tabindex="0" role="button" aria-label="Sort by role">Role</th>
+      <th>Password</th>
+      <th></th>
+    </tr></thead>
+    <tbody data-users-tbody>
     {% for u in users %}
     {% set _lock_seconds = lockouts.get(u.id, 0) %}
     <tr{% if _lock_seconds or u.disabled %} class="{% if _lock_seconds %}user-locked-row{% endif %}{% if u.disabled %}{% if _lock_seconds %} {% endif %}user-disabled-row{% endif %}"{% endif %}
@@ -104,6 +136,11 @@
         data-role="{{ u.role }}"
         data-disabled="{{ '1' if u.disabled else '0' }}"
         data-reset-allowed="{{ '1' if u.password_reset_allowed else '0' }}">
+      <td class="users-td-check">
+        {% if u.id != current_user.id %}
+        <label class="users-check-wrap"><input type="checkbox" name="ids" value="{{ u.id }}" form="users-bulk-form" data-users-row-check aria-label="Select {{ u.username }}"></label>
+        {% endif %}
+      </td>
       <td data-label="Username">
         <span class="users-cell-text">{{ u.username }}</span>
         {% if _lock_seconds %}
@@ -525,6 +562,102 @@
       bar.style.width = '';
     }
   });
+})();
+</script>
+
+{# Users list: live filter, column sorting, and checkbox multi-delete. All
+   client-side over the rows already in the DOM (each <tr> carries
+   data-username / data-name / data-email / data-phone / data-role). #}
+<script>
+(function () {
+  const table = document.querySelector('[data-users-table]');
+  const tbody = document.querySelector('[data-users-tbody]');
+  if (!table || !tbody) return;
+  const filterInput = document.querySelector('[data-users-filter]');
+  const bulkbar = document.querySelector('[data-users-bulkbar]');
+  const bulkCount = document.querySelector('[data-users-bulk-count]');
+  const bulkClear = document.querySelector('[data-users-bulk-clear]');
+  const selectAll = document.querySelector('[data-users-selectall]');
+  const countEl = document.querySelector('[data-users-count]');
+  const SORT_KEYS = ['username', 'name', 'email', 'phone', 'role'];
+
+  const rows = () => Array.from(tbody.querySelectorAll('[data-user-row]'));
+  const rowChecks = () => Array.from(tbody.querySelectorAll('[data-users-row-check]'));
+
+  function haystack(tr) {
+    return SORT_KEYS.map(k => (tr.dataset[k] || '')).join(' ').toLowerCase();
+  }
+
+  // ── Filter ──
+  function applyFilter() {
+    const q = (filterInput ? filterInput.value : '').trim().toLowerCase();
+    let shown = 0;
+    rows().forEach(tr => {
+      const hit = !q || haystack(tr).indexOf(q) !== -1;
+      tr.hidden = !hit;
+      if (hit) shown++;
+    });
+    if (countEl) {
+      const total = rows().length;
+      countEl.textContent = q ? (shown + ' of ' + total + ' shown') : (total + ' total');
+    }
+    refreshBulk();
+  }
+
+  // ── Sort ──
+  let sortKey = null, sortDir = 1;
+  function applySort(key) {
+    if (sortKey === key) sortDir = -sortDir; else { sortKey = key; sortDir = 1; }
+    const sorted = rows().sort((a, b) => {
+      const av = (a.dataset[key] || '').toLowerCase();
+      const bv = (b.dataset[key] || '').toLowerCase();
+      if (av === bv) return 0;
+      return (av < bv ? -1 : 1) * sortDir;
+    });
+    sorted.forEach(tr => tbody.appendChild(tr));   // reorder in place
+    table.querySelectorAll('.users-th-sort').forEach(th => {
+      th.classList.toggle('sort-asc', th.dataset.sortKey === key && sortDir === 1);
+      th.classList.toggle('sort-desc', th.dataset.sortKey === key && sortDir === -1);
+    });
+  }
+  table.querySelectorAll('.users-th-sort').forEach(th => {
+    th.addEventListener('click', () => applySort(th.dataset.sortKey));
+    th.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); applySort(th.dataset.sortKey); }
+    });
+  });
+
+  // ── Bulk selection ──
+  function refreshBulk() {
+    const checks = rowChecks();
+    const visibleChecks = checks.filter(c => !c.closest('[data-user-row]').hidden);
+    const checked = checks.filter(c => c.checked);
+    if (bulkCount) bulkCount.textContent = checked.length + ' selected';
+    if (bulkbar) bulkbar.hidden = checked.length === 0;
+    if (selectAll) {
+      const vc = visibleChecks.filter(c => c.checked).length;
+      selectAll.checked = vc > 0 && vc === visibleChecks.length;
+      selectAll.indeterminate = vc > 0 && vc < visibleChecks.length;
+    }
+  }
+  rowChecks().forEach(c => c.addEventListener('change', refreshBulk));
+  if (selectAll) {
+    selectAll.addEventListener('change', () => {
+      rowChecks().forEach(c => {
+        if (!c.closest('[data-user-row]').hidden) c.checked = selectAll.checked;
+      });
+      refreshBulk();
+    });
+  }
+  if (bulkClear) {
+    bulkClear.addEventListener('click', () => {
+      rowChecks().forEach(c => { c.checked = false; });
+      refreshBulk();
+    });
+  }
+
+  if (filterInput) filterInput.addEventListener('input', applyFilter);
+  applyFilter();   // sets the initial count
 })();
 </script>
 

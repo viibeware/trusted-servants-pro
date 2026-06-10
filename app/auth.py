@@ -952,3 +952,35 @@ def users_delete(uid):
         db.session.commit()
         flash("User deleted", "success")
     return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
+
+
+@bp.route("/users/bulk-delete", methods=["POST"])
+@login_required
+def users_bulk_delete():
+    """Delete the checked users in one POST. Mirrors ``users_delete``'s
+    guards: admin-only, and the current admin is never deleted (their id
+    is silently skipped even if it arrives in the list)."""
+    embed = request.form.get("embed") == "1"
+    back = url_for("auth.users", embed=1) if embed else url_for("auth.users")
+    if not current_user.is_admin():
+        return redirect(url_for("main.index"))
+    ids = []
+    for raw in request.form.getlist("ids"):
+        try:
+            ids.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+    ids = [i for i in set(ids) if i != current_user.id]
+    if not ids:
+        flash("No users selected.", "info")
+        return redirect(back)
+    from . import activity
+    deleted = 0
+    for u in User.query.filter(User.id.in_(ids)).all():
+        activity.log("user.delete", entity_type="user", entity_id=u.id,
+                     summary=f"Deleted user {u.username}")
+        db.session.delete(u)
+        deleted += 1
+    db.session.commit()
+    flash(f"Deleted {deleted} user{'s' if deleted != 1 else ''}.", "success")
+    return redirect(back)

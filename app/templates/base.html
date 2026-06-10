@@ -76,6 +76,15 @@
         <div class="brand-sub">Pro</div>
       </div>
     </div>
+    {# Dashboard — pinned button (styled like the Notifications / Watchtower
+       buttons) rather than a regular nav link, so the home view always has
+       a fixed entry point at the top. Its catalog entry is hidden from the
+       nav list via _is_visible('dashboard') → False in app/sidebar.py. #}
+    <a class="sidebar-dash-btn{% if request.endpoint == 'main.index' %} is-active{% endif %}"
+       href="{{ url_for('main.index') }}" title="Dashboard — your home view">
+      <span class="sidebar-dash-icon" aria-hidden="true">{{ icon('home') }}</span>
+      <span class="sidebar-dash-label">Dashboard</span>
+    </a>
     {# Sidebar quick-jump cluster — pinned buttons that replace their
        regular sidebar links. Each button's gate matches the legacy
        link's visibility predicate in app/sidebar.py so the user
@@ -828,7 +837,7 @@
               </div>
             </div>
             <p class="muted small data-card-lead">
-              Reorder the items in the main sidebar and manage external links inline. Dashboard is always pinned at the top. Auto modes alphabetise items inside each section (Main → External → Admin order); pick Manual to drag any item or section to a new position.
+              Reorder the items in the main sidebar and manage external links inline. Dashboard, Watchtower, and Web Frontend sit in the fixed button cluster at the top and aren't part of this list. Auto modes alphabetise items inside each section (Main → External → Admin order); pick Manual to drag any item or section to a new position.
             </p>
 
             <fieldset class="sidebar-mode-fieldset">
@@ -1765,7 +1774,7 @@
                  data-has-token="{{ '1' if _fs_has_token else '0' }}"
                  data-has-url="{{ '1' if _fs_has_url else '0' }}">
           <div class="data-card-head">
-            {{ icon('refresh-cw') }}
+            {{ icon('layout-grid') }}
             <span>Frontend staging sync</span>
           </div>
           <p class="muted small data-card-lead">
@@ -1776,6 +1785,14 @@
             use); recovery <em>Stories</em>, users, meetings, and libraries are never
             touched, and the receiving side auto-saves a rollback snapshot first.
           </p>
+          {% if _fs_has_token %}
+          <div class="fe-sync-snap-row">
+            <button type="button" class="btn btn-sm"
+                    data-open-modal="fe-sync-snapshots-modal" data-fe-snap-open>
+              {{ icon('history') }} Rollback snapshots
+            </button>
+          </div>
+          {% endif %}
           <input type="hidden" data-fe-sync-csrf value="{{ csrf_token() }}">
 
           <nav class="fe-sync-stepper" aria-label="Staging sync setup steps">
@@ -2296,6 +2313,45 @@
   </div>
 </div>
 
+{# Frontend rollback snapshots modal (shared). Opened from the Settings →
+   Data staging-sync card and the Web Frontend overview Status card. Lists
+   the auto-saved pre-sync bundles with download links + restore steps;
+   populated via AJAX on open so it stays current after a Pull/Push.
+   Rendered whenever staging sync is configured on this install. #}
+{% if fe_sync_peer and fe_sync_peer.token_enc %}
+<div class="modal" id="fe-sync-snapshots-modal" aria-hidden="true"
+     data-snapshots-url="{{ url_for('main.frontend_sync_snapshots') }}">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2>Frontend rollback snapshots</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close">{{ icon('x') }}</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted small">
+        Before every sync overwrites this site's frontend, a complete rollback
+        bundle — including recovery Stories — is saved automatically. The 10 most
+        recent are kept.
+      </p>
+      <div class="fe-snap-howto">
+        <div class="fe-snap-howto-head">How to restore one</div>
+        <ol class="fe-snap-howto-steps">
+          <li>Download the snapshot you want below (a <code>.zip</code> bundle).</li>
+          <li>Open <strong>Settings → Data → Frontend bundle → Import frontend</strong>.</li>
+          <li>Choose the downloaded <code>.zip</code> and click <strong>Import frontend bundle</strong>. It replaces the frontend (settings, navigation, layouts, fonts, icons, assets, and Pages) with the snapshot — users, meetings, and libraries are left untouched.</li>
+        </ol>
+      </div>
+      <ul class="fe-snap-list" data-fe-snap-list>
+        <li class="fe-snap-empty muted small">Loading…</li>
+      </ul>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" data-close>Close</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% else %}
 {# embed mode: render only the page content, no chrome #}
 <main class="embed-content">
@@ -2384,6 +2440,27 @@
   modal.querySelectorAll('[data-close]').forEach(el =>
     el.addEventListener('click', closeSearch));
 
+  // Settings-tab results open the Settings modal to a specific tab. Search
+  // results are inserted dynamically, so app.js's static [data-open-modal]
+  // binding doesn't reach them — replicate openModal here (the .settings-tab
+  // click handlers themselves are bound to static markup at init, so the
+  // tab switch works). Non-admins never receive admin-only tab results, and
+  // the matching tab button only exists in the DOM for admins anyway.
+  body.addEventListener('click', e => {
+    const link = e.target.closest('[data-settings-tab]');
+    if (!link) return;
+    e.preventDefault();
+    const tab = link.getAttribute('data-settings-tab');
+    closeSearch();
+    const sm = document.getElementById('settings-modal');
+    if (!sm) return;
+    sm.classList.add('open');
+    sm.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    const tabBtn = sm.querySelector('.settings-tab[data-tab="' + tab + '"]');
+    if (tabBtn) tabBtn.click();
+  });
+
   // Sidebar Search button (and any other) toggle the modal open.
   document.querySelectorAll('[data-open-search]').forEach(el =>
     el.addEventListener('click', e => { e.preventDefault(); openSearch(); }));
@@ -2417,7 +2494,13 @@
         + '</div>'
         + '<ul class="search-results">';
       section.items.forEach(item => {
-        html += '<li><a class="search-result" href="' + escapeHtml(item.url) + '" data-search-result>'
+        // Most results navigate to item.url. Settings-tab results have no
+        // URL — they open the Settings modal to the named tab instead
+        // (handled by the delegated click below).
+        const href = item.url ? escapeHtml(item.url) : '#';
+        const tabAttr = item.settings_tab
+          ? ' data-settings-tab="' + escapeHtml(item.settings_tab) + '"' : '';
+        html += '<li><a class="search-result" href="' + href + '" data-search-result' + tabAttr + '>'
           + '<span class="search-result-label">' + highlight(item.label || '', tokens) + '</span>'
           + (item.snippet
               ? '<span class="search-result-snippet muted smaller">' + highlight(item.snippet, tokens) + '</span>'

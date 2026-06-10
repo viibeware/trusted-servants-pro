@@ -181,14 +181,19 @@
       <textarea name="body" rows="8"
                 placeholder="The full body of the post. Markdown supported.">{{ (_p.body if _p else '') or '' }}</textarea>
     </label>
-    <label>Posted on <span class="muted small">(timestamp shown wherever the post surfaces; defaults to now on a new post and is preserved as-is on WordPress imports)</span>
+    <label>Posted on / schedule for
+      <span class="muted small">(the timestamp shown wherever the post surfaces — defaults to now. <strong>Set a future date &amp; time and Publish to schedule it</strong>: the post stays hidden from the public site until then, then appears automatically.)</span>
       {# Fall back to ``display_posted`` so legacy rows whose
          ``published_at`` is NULL still surface a value here — same
          logic the list table uses to render the "Posted on" column.
          Saving keeps writing to ``published_at`` so an explicit edit
-         (or a brand-new post) still stores the admin's chosen value. #}
-      <input type="datetime-local" name="published_at"
-             value="{% if _p and _p.display_posted %}{{ _p.display_posted.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+         (or a brand-new post) still stores the admin's chosen value.
+         A future value gates public visibility (frontend._post_live_clause). #}
+      <span class="dt-field">
+        <input type="datetime-local" name="published_at"
+               value="{% if _p and _p.display_posted %}{{ _p.display_posted.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+        <button type="button" class="btn btn-sm dt-today" data-dt-today="published" title="Jump to today">Today</button>
+      </span>
     </label>
 
     {# Announcement-only auto-archive deadline. Hidden whenever the
@@ -520,12 +525,20 @@
 
     <div class="form-row">
       <label>Starts
-        <input type="datetime-local" name="event_starts_at"
-               value="{% if _p and _p.event_starts_at %}{{ _p.event_starts_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+        <span class="dt-field">
+          <input type="datetime-local" name="event_starts_at" data-event-start
+                 value="{% if _p and _p.event_starts_at %}{{ _p.event_starts_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+          <button type="button" class="btn btn-sm dt-today" data-dt-today="start"
+                  title="Jump to today">Today</button>
+        </span>
       </label>
       <label>Ends
-        <input type="datetime-local" name="event_ends_at"
-               value="{% if _p and _p.event_ends_at %}{{ _p.event_ends_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+        <span class="dt-field">
+          <input type="datetime-local" name="event_ends_at" data-event-end
+                 value="{% if _p and _p.event_ends_at %}{{ _p.event_ends_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+          <button type="button" class="btn btn-sm dt-today" data-dt-today="end"
+                  title="Jump to today">Today</button>
+        </span>
       </label>
     </div>
 
@@ -604,9 +617,10 @@
    and trailing hyphens stripped, capped at 200 chars. Fires on every
    `input` event from the title field, briefly highlights the slug
    field so the editor sees the URL changing alongside the title.
-   Matches the server-side "title changed → re-derive slug" rule on
-   save, so the client preview never disagrees with what the server
-   will persist. #}
+   Stops mirroring once the editor sets a custom slug (or the post
+   already has one), so a hand-picked URL survives further title edits
+   and a draft publishes with exactly that URL — matching the server's
+   "explicit slug wins on a draft" rule in `post_save`. #}
 <script>
 (function () {
   const form = document.getElementById('post-edit-form');
@@ -620,8 +634,18 @@
       .replace(/^-+|-+$/g, '')
       .slice(0, 200);
   }
+  // Once the editor takes control of the URL — either the post already
+  // carries a custom slug, or they type one here — stop mirroring the
+  // title so their chosen URL survives further title edits (and so a
+  // draft publishes with exactly the URL they set). Clearing the field
+  // hands control back: blank → resume deriving from the title.
+  let slugEdited = slugInput.value.trim() !== '';
+  slugInput.addEventListener('input', () => {
+    slugEdited = slugInput.value.trim() !== '';
+  });
   let highlightTimer = null;
   titleInput.addEventListener('input', () => {
+    if (slugEdited) return;
     const next = slugify(titleInput.value);
     if (slugInput.value === next) return;
     slugInput.value = next;
@@ -637,6 +661,58 @@
     highlightTimer = setTimeout(() => {
       slugInput.classList.remove('slug-input-field--synced');
     }, 1400);
+  });
+})();
+</script>
+
+{# Event date helpers: a "Today" button beside each datetime field jumps
+   the native calendar to the present (sets the value to now and opens the
+   picker), and the Ends field auto-tracks Starts — its min is pinned to
+   the start and it's bumped forward whenever it would land before the
+   start, so an event can't end before it begins. #}
+<script>
+(function () {
+  const form = document.getElementById('post-edit-form');
+  if (!form) return;
+  const startEl = form.querySelector('[data-event-start]');
+  const endEl = form.querySelector('[data-event-end]');
+
+  // Current local wall-clock as the datetime-local value (YYYY-MM-DDTHH:MM).
+  function nowLocalValue() {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 16);
+  }
+
+  // Keep Ends ≥ Starts: pin the end's min to the start, and pull a blank or
+  // earlier end forward to match the start. (Only when both fields exist.)
+  function syncEnd() {
+    if (!startEl || !endEl) return;
+    if (!startEl.value) { endEl.removeAttribute('min'); return; }
+    endEl.min = startEl.value;
+    if (!endEl.value || endEl.value < startEl.value) endEl.value = startEl.value;
+  }
+  if (startEl) {
+    startEl.addEventListener('change', syncEnd);
+    startEl.addEventListener('input', syncEnd);
+    syncEnd();
+  }
+
+  // Each "Today" button drives the datetime input in its own .dt-field —
+  // works for Starts, Ends, and the Posted-on / schedule field alike.
+  form.querySelectorAll('[data-dt-today]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.preventDefault();   // also stops the wrapping <label> from re-focusing
+      const field = btn.closest('.dt-field');
+      const target = field && field.querySelector('input[type="datetime-local"]');
+      if (!target) return;
+      target.value = nowLocalValue();
+      if (target === startEl) syncEnd();
+      target.focus();
+      if (typeof target.showPicker === 'function') {
+        try { target.showPicker(); } catch (_) { /* not all browsers */ }
+      }
+    });
   });
 })();
 </script>

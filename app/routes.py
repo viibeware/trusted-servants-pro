@@ -1170,26 +1170,88 @@ def api_search():
             } for f in mfiles],
         })
 
-    # --- Posts (announcements & events) ------------------------------------
+    # --- Content state/trim helpers (shared by posts/stories/blog) ---------
+    def _state_label(obj):
+        if getattr(obj, "is_pending_review", False):
+            return "Pending review"
+        if getattr(obj, "is_draft", False):
+            return "Draft"
+        if getattr(obj, "is_archived", False):
+            return "Archived"
+        return "Published"
+
+    def _trim(text, n=110):
+        return (text or "").strip()[:n]
+
+    # --- Posts (announcements & events) — all states, exhaustive -----------
     s = _get_site_setting()
     if s and s.posts_enabled:
         posts = (Post.query
-                 .filter(Post.is_archived.is_(False))
                  .filter(_match([Post.title, Post.summary, Post.body,
                                  Post.location_name]))
                  .order_by(Post.updated_at.desc())
                  .limit(PER_SECTION).all())
         if posts:
+            def _post_kind(p):
+                k = []
+                if p.is_announcement:
+                    k.append("Announcement")
+                if p.is_event:
+                    k.append("Event")
+                return " / ".join(k) or "Post"
             sections.append({
                 "type": "post",
                 "label": "Announcements & events",
                 "icon": "megaphone",
                 "items": [{
                     "label": p.title,
-                    "snippet": (p.summary or (p.body or ""))[:140],
+                    "snippet": f"{_post_kind(p)} · {_state_label(p)}"
+                               + (f" · {_trim(p.summary or p.body)}" if (p.summary or p.body) else ""),
                     "url": url_for("main.post_edit", pid=p.id),
                     "icon": "megaphone",
                 } for p in posts],
+            })
+
+    # --- Stories (editors+, module enabled) — all states -------------------
+    if s and getattr(s, "stories_enabled", False) and current_user.can_edit():
+        stories = (Story.query
+                   .filter(_match([Story.title, Story.summary, Story.body,
+                                   Story.author_name]))
+                   .order_by(Story.updated_at.desc())
+                   .limit(PER_SECTION).all())
+        if stories:
+            sections.append({
+                "type": "story",
+                "label": "Stories",
+                "icon": "book-open",
+                "items": [{
+                    "label": st.title or "(untitled story)",
+                    "snippet": _state_label(st)
+                               + (f" · {st.author_name}" if st.author_name else ""),
+                    "url": url_for("main.story_edit", sid=st.id),
+                    "icon": "book-open",
+                } for st in stories],
+            })
+
+    # --- Blog posts (editors+, module enabled) — all states ----------------
+    if s and getattr(s, "blog_enabled", False) and current_user.can_edit():
+        blogs = (BlogPost.query
+                 .filter(_match([BlogPost.title, BlogPost.summary, BlogPost.body,
+                                 BlogPost.author_name]))
+                 .order_by(BlogPost.updated_at.desc())
+                 .limit(PER_SECTION).all())
+        if blogs:
+            sections.append({
+                "type": "blog",
+                "label": "Blog posts",
+                "icon": "rss",
+                "items": [{
+                    "label": b.title or "(untitled)",
+                    "snippet": _state_label(b)
+                               + (f" · {_trim(b.summary or b.body)}" if (b.summary or b.body) else ""),
+                    "url": url_for("main.blog_edit", bid=b.id),
+                    "icon": "rss",
+                } for b in blogs],
             })
 
     # --- Media files (the File Browser) ------------------------------------
@@ -1256,6 +1318,114 @@ def api_search():
                     "icon": "user",
                 } for u in users],
             })
+
+    # --- Frontend pages (page builder) — frontend editors only -------------
+    if current_user.can_edit_frontend():
+        pages = (Page.query
+                 .filter(_match([Page.title, Page.slug]))
+                 .order_by(Page.updated_at.desc())
+                 .limit(PER_SECTION).all())
+        if pages:
+            def _page_state(pg):
+                st = "Published" if pg.is_published else "Unpublished"
+                if pg.is_private:
+                    st += " · Private"
+                return st
+            sections.append({
+                "type": "page",
+                "label": "Pages",
+                "icon": "file",
+                "items": [{
+                    "label": pg.title or pg.slug or "(untitled page)",
+                    "snippet": f"Page · {_page_state(pg)}"
+                               + (f" · /{pg.slug}" if pg.slug else ""),
+                    "url": url_for("main.frontend_page_edit", page_id=pg.id),
+                    "icon": "file",
+                } for pg in pages],
+            })
+
+    # === Navigation: jump straight to a settings tab or a Web Frontend
+    # section. Role-gated so a non-admin never sees an admin-only
+    # destination. These trail the content sections so search stays
+    # content-first; they turn the modal into a lightweight command
+    # palette ("settings data", "branding", …). ----------------------------
+    from werkzeug.routing import BuildError as _BuildError
+
+    def _nav_match(*texts):
+        hay = " ".join(t for t in texts if t).lower()
+        return all(tok.lower() in hay for tok in tokens)
+
+    def _safe_url(endpoint, **kw):
+        try:
+            return url_for(endpoint, **kw)
+        except _BuildError:
+            return None
+
+    _is_admin = current_user.is_admin()
+
+    # Settings modal tabs — appearance / your-access / about are visible to
+    # everyone; the rest are admin-only, mirroring the tab gating in base.html.
+    _settings_tabs = [
+        ("appearance",  "Appearance",     "theme branding colors login screen logo", True),
+        ("your-access", "Your Access",    "role permissions access what can i do", True),
+        ("users",       "Users",          "manage user accounts roles passwords disable", False),
+        ("locations",   "Global",         "global meeting locations defaults", False),
+        ("sidebar",     "Sidebar",        "sidebar layout order navigation modules", False),
+        ("modules",     "Modules",        "enable disable modules features toggles", False),
+        ("email",       "Domain / Email", "smtp email domain notifications relay sending", False),
+        ("timezone",    "Timezone",       "server timezone clock", False),
+        ("security",    "Security",       "login security sessions turnstile captcha lockout", False),
+        ("data",        "Data",           "export import backup restore frontend bundle staging sync snapshots", False),
+        ("about",       "About",          "version release notes changelog updates", True),
+    ]
+    settings_items = []
+    for key, label, kw, everyone in _settings_tabs:
+        if not everyone and not _is_admin:
+            continue
+        if _nav_match("settings", label, kw):
+            settings_items.append({
+                "label": "Settings · " + label,
+                "snippet": "Open Settings → " + label,
+                "settings_tab": key,
+                "icon": "settings",
+            })
+    if settings_items:
+        sections.append({"type": "settings", "label": "Settings",
+                         "icon": "settings", "items": settings_items[:PER_SECTION]})
+
+    # Web Frontend module sections — frontend editors only.
+    if current_user.can_edit_frontend():
+        _fe_sections = [
+            ("main.frontend_dashboard",          "Overview",           "web frontend dashboard status staging sync pull push"),
+            ("main.frontend_branding",           "Branding & SEO",     "logo brand name seo favicon og meta"),
+            ("main.frontend_fonts_icons",        "Fonts & Icons",      "custom fonts icons typography"),
+            ("main.frontend_design",             "Design",             "theme colors design palette"),
+            ("main.frontend_caching",            "Caching",            "cache performance speed"),
+            ("main.frontend_cookie_compliance",  "Cookie Compliance",  "cookie banner consent gdpr privacy"),
+            ("main.frontend_header",             "Header",             "header editor utility bar top"),
+            ("main.frontend_footer",             "Footer",             "footer editor bottom"),
+            ("main.frontend_navigation",         "Navigation",         "menu nav mega menu links"),
+            ("main.frontend_templates",          "Templates",          "page templates layouts"),
+            ("main.frontend_forms",              "Forms",              "submission contact forms public"),
+            ("main.frontend_redirects",          "Redirects",          "url redirects 301 moved"),
+            ("main.frontend_pages",              "Pages",              "page builder pages list"),
+            ("main.frontend_popups",             "Popups",             "popups modals"),
+        ]
+        fe_items = []
+        for endpoint, label, kw in _fe_sections:
+            if not _nav_match("web frontend", label, kw):
+                continue
+            u = _safe_url(endpoint)
+            if u:
+                fe_items.append({
+                    "label": "Web Frontend · " + label,
+                    "snippet": "Open Web Frontend → " + label,
+                    "url": u,
+                    "icon": "layout-grid",
+                })
+        if fe_items:
+            sections.append({"type": "frontend_section", "label": "Web Frontend",
+                            "icon": "layout-grid", "items": fe_items[:PER_SECTION]})
 
     total = sum(len(s["items"]) for s in sections)
     return jsonify(query=raw, total=total, sections=sections)
@@ -17116,11 +17286,13 @@ def posts():
     items = q.offset((page - 1) * per_page).limit(per_page).all()
     pending_count = (Post.query.filter(Post.is_pending_review.is_(True),
                                         Post.is_archived.is_(False)).count())
+    from .timezone import now_local_naive as _now_local
     resp = current_app.make_response(
         render_template("posts.html", posts=items, show=show, kind=kind,
                         sort=sort, page=page, per_page=per_page,
                         total=total, total_pages=total_pages,
-                        pending_count=pending_count))
+                        pending_count=pending_count,
+                        now_local=_now_local(_get_site_setting())))
     # Remember the user's chosen sort so the next visit lands on
     # the same order. Skip persistence on the pending tab — its
     # ``submitted_desc`` default is contextual to that view and
@@ -17185,19 +17357,27 @@ def post_save():
     if current_user.is_authenticated and current_user.can_edit_frontend():
         explicit_slug = _normalize_slug(request.form.get("slug"))
 
-    # Slug resolution. Two modes:
-    #   1. Title CHANGED on this save (or creating a new post) — re-
-    #      derive the slug from the new title and ignore whatever the
-    #      slug input carried (the input is pre-populated from the
-    #      database, so without this branch the stale slug would win
-    #      and the public URL would never track the new title). The
-    #      uniqueness sweep appends -2/-3/… on collision.
-    #   2. Title UNCHANGED — respect the editor's explicit slug input
-    #      so they can rename the URL without touching the title. When
-    #      the input is blank, fall back to the title-derived slug.
+    # Slug resolution:
+    #   • Editor gave an explicit slug AND the post has no public URL yet
+    #     (draft, pending-review, or being created) — honor it verbatim
+    #     (uniqueness-swept). The admin is crafting the final URL before it
+    #     goes live, so it publishes with exactly that URL and never needs
+    #     an after-the-fact rename/redirect. Also honored when the title
+    #     didn't change on a public post (a deliberate URL rename).
+    #   • Title CHANGED on an already-public post (no honored slug) — re-
+    #     derive from the new title so the public URL tracks it (the input
+    #     is pre-populated from the DB, so without this the stale slug would
+    #     win). Renaming a live post logs a redirect further down.
+    #   • Otherwise fall back to the title-derived slug.
     title_slug = _normalize_slug(post.title)
     title_changed = creating or (_prev_title != title)
-    if title_changed:
+    if explicit_slug and (not _was_public or not title_changed):
+        unique = _unique_post_slug(explicit_slug,
+                                   exclude_id=post.id if not creating else None)
+        post.slug = unique
+        if explicit_slug != unique:
+            flash(f"URL already taken — saved as “{unique}”.", "info")
+    elif title_changed:
         unique = _unique_post_slug(title_slug,
                                    exclude_id=post.id if not creating else None)
         post.slug = None if unique == title_slug else unique
@@ -17206,15 +17386,9 @@ def post_save():
         if unique and unique != title_slug:
             flash(f"URL auto-derived to “{unique}” to avoid collision with another post.", "info")
     else:
-        base = explicit_slug or title_slug
-        unique = _unique_post_slug(base,
+        unique = _unique_post_slug(title_slug,
                                    exclude_id=post.id if not creating else None)
-        if explicit_slug:
-            post.slug = unique
-            if explicit_slug != unique:
-                flash(f"URL already taken — saved as “{unique}”.", "info")
-        else:
-            post.slug = None if unique == title_slug else unique
+        post.slug = None if unique == title_slug else unique
     post.summary = (request.form.get("summary") or "").strip() or None
     post.body = (request.form.get("body") or "").strip() or None
 
@@ -17398,7 +17572,13 @@ def post_save():
     from .timezone import now_local_naive as _now_local
     _site = _get_site_setting()
     if _was_draft and action == "publish":
-        post.published_at = _now_local(_site)
+        # Normally publishing a draft resets "Published on" to now. But if the
+        # admin set a *future* date they're scheduling the post — keep their
+        # chosen moment; the public frontend hides it until then (see
+        # frontend._post_live_clause), and it appears automatically.
+        _nowl = _now_local(_site)
+        if post.published_at is None or post.published_at <= _nowl:
+            post.published_at = _nowl
 
     # Default published_at on first save when the admin didn't set
     # one — keeps every row sortable by posted date without forcing
