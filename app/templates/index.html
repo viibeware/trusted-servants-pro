@@ -237,66 +237,42 @@
   {% endif %}
 
   {# Trusted Servants Email List widget — always shown while the
-     module is on and the user has the dashboard toggle on. Renders
-     in two states based on whether a TrustedServantSubscriber row
-     already exists for this user:
-       • Not yet subscribed → "Join the list" form, fields pre-filled
-         from the User account (username / email / phone).
-       • Already subscribed → "Your contact info on the list" form,
-         fields pre-filled from the existing subscription row, with
-         an Update button + an Unsubscribe button. The subscribe
-         POST is an upsert so the same action URL works for both
-         states; the unsubscribe POST drops the row entirely. #}
+     module is on and the user has the dashboard toggle on. The portal
+     account may be shared by several people, so the widget always
+     renders as a blank "join the list" form: it never remembers a
+     prior submission, never pre-fills the account's details, and never
+     offers self-removal. Each submit creates a fresh admin-managed
+     entry; editing/removing is admin-only on /email-list. #}
   {% if widget_key == 'trusted-servants' and trusted_servants_enabled
         and current_user.dash_show_trusted_servants %}
-    {%- set _sub = trusted_servants_subscription -%}
     {% call dash_widget(key='trusted-servants',
-                         title=('Your Trusted Servants info' if _sub else 'Join the Trusted Servants list'),
+                         title='Join the Trusted Servants list',
                          head_icon='user-plus') %}
       <p class="muted small ts-widget-blurb">
-        {% if _sub %}
-          You're on the list. Edit any field and click <b>Save</b> to
-          update your details, or use <b>Remove me</b> to come off the
-          list entirely.
-        {% else %}
-          Add your name, phone, and preferred email so admins can reach you with quick fellowship-business updates.
-          We'll only contact you with announcements that go to the whole list.
-        {% endif %}
+        Add your name, phone, and preferred email so admins can reach you with quick fellowship-business updates.
+        We'll only contact you with announcements that go to the whole list.
       </p>
-      <form class="form ts-widget-form" method="post"
+      <form class="form ts-widget-form" method="post" autocomplete="off"
             action="{{ url_for('main.trusted_servants_subscribe') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label>Full name
           <input type="text" name="name" maxlength="120" required
-                 value="{{ _sub.name if _sub else current_user.username }}"
-                 placeholder="e.g. Jane D.">
+                 autocomplete="off" value="" placeholder="e.g. Jane D.">
         </label>
         <div class="ts-widget-row">
           <label>Email
             <input type="email" name="email" maxlength="255" required
-                   value="{{ (_sub.email if _sub else current_user.email) or '' }}">
+                   autocomplete="off" value="" placeholder="you@example.com">
           </label>
           <label>Phone <span class="muted smaller">(optional)</span>
             <input type="tel" name="phone" maxlength="64"
-                   value="{{ (_sub.phone if _sub else current_user.phone) or '' }}">
+                   autocomplete="off" value="" placeholder="(555) 123-4567">
           </label>
         </div>
         <div class="ts-widget-actions">
-          {% if _sub %}
-          <button type="submit" class="btn btn-primary btn-sm">{{ icon('check') }} Save changes</button>
-          {% else %}
           <button type="submit" class="btn btn-primary btn-sm">{{ icon('user-plus') }} Join the list</button>
-          {% endif %}
         </div>
       </form>
-      {% if _sub %}
-      <form class="form ts-widget-unsub" method="post"
-            action="{{ url_for('main.trusted_servants_unsubscribe') }}"
-            onsubmit="return confirm('Remove yourself from the Trusted Servants email list? Admins can still add you back manually.');">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-sm ts-widget-unsub-btn">Remove me from the list</button>
-      </form>
-      {% endif %}
     {% endcall %}
   {% endif %}
 

@@ -6,6 +6,28 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.12.6] — 2026-06-11
+
+### Changed
+
+- **Trusted Servants sign-up widget reworked for shared accounts.** The
+  dashboard widget (`index.html`) now always renders a single blank "Join the
+  list" form — no per-user subscription state, no pre-filled account details
+  (fields default to empty with `autocomplete="off"`), no "Save changes" /
+  "Remove me" variant. `main.trusted_servants_subscribe` no longer upserts on
+  `user_id`; it inserts a fresh `TrustedServantSubscriber` with `user_id = NULL`
+  on every submit, so multiple people sharing one login each get their own
+  admin-managed entry. `index()` stops looking up the per-user subscription.
+  Editing/removing entries remains admin-only on `/email-list`.
+- **Libraries dashboard widget excludes Intergroup libraries.** `index()` now
+  filters `Library.is_intergroup == False`, mirroring the `/libraries` page, so
+  the widget only lists general Libraries-module entries.
+
+### Removed
+
+- **`main.trusted_servants_unsubscribe` route** (`/email-list/unsubscribe`) and
+  its widget form — end users no longer self-remove from the list.
+
 ## [2.12.5] — 2026-06-10
 
 ### Added

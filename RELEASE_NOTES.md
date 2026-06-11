@@ -7,7 +7,12 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.12.5 — 2026-06-10 (latest) — Schedule posts, a smarter search, and Users/editor polish
+## 2.12.6 — 2026-06-11 (latest) — Shared-account sign-ups & a cleaner Libraries widget
+
+- **The Trusted Servants sign-up widget now works for shared accounts.** If several people share one portal login, each can add themselves to the email list: the dashboard form always starts blank, never pre-fills or "remembers" the last person, and never offers to remove anyone. Every submission creates its own new entry. Editing and removing entries stays admin-only on the Email List page.
+- **The Libraries dashboard widget no longer lists Intergroup libraries.** It now shows only the regular Libraries-module entries — matching the Libraries page itself. Intergroup-flagged libraries remain in their dedicated Intergroup sidebar section.
+
+## 2.12.5 — 2026-06-10 — Schedule posts, a smarter search, and Users/editor polish
 
 - **Schedule announcements & events for the future.** In the post editor, set the "Posted on / schedule for" field to a future date & time and Publish — the post stays hidden from the public site until then, then appears automatically. The admin list flags it with a teal "Scheduled · <date>" badge, and there's a one-click "Today" button on the date fields.
 - **Exhaustive backend search.** Search now finds every post type and state (announcements, events — including drafts, archived, and pending), plus Stories, Blog posts, and page-builder Pages. It also jumps to sections: type "data" or "security" to open that Settings tab, or "branding"/"navigation" to open the matching Web Frontend page — all role-gated so people only see what they're allowed to.

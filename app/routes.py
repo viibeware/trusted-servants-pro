@@ -780,7 +780,12 @@ def index():
         if not site.setup_complete:
             return redirect(url_for("main.setup_step", step=1))
     meetings = Meeting.query.filter(Meeting.archived_at.is_(None)).order_by(Meeting.name).all()
-    libraries = Library.query.order_by(Library.name).all()
+    # Mirror the /libraries page: exclude Intergroup-flagged libraries
+    # from the dashboard widget. They're surfaced through the dedicated
+    # Intergroup sidebar subsection, not the general Libraries module.
+    libraries = (Library.query
+                 .filter(Library.is_intergroup == False)  # noqa: E712
+                 .order_by(Library.name).all())
     recent_files = MediaItem.query.order_by(MediaItem.created_at.desc()).limit(6).all()
     access_requests = []
     online_count = 0
@@ -791,20 +796,15 @@ def index():
     visitor_sparkline = []
     backup_summary = None
     backup_recent_runs = []
-    # Trusted Servants widget state — visible to every signed-in user
-    # (admin or not) until they've added themselves to the list. The
-    # template hides the card entirely once a subscription row exists,
-    # so the widget self-retires after the user has joined.
+    # Trusted Servants widget — always renders as a blank "join the
+    # list" form for every signed-in user while the module is on. The
+    # portal account may be shared by several people, so the form never
+    # remembers a prior submission or offers a self-removal: each submit
+    # creates a fresh admin-managed entry. Editing/removing entries is
+    # admin-only on /email-list.
     site = _get_site_setting()
     trusted_servants_enabled = bool(site and getattr(site, "trusted_servants_enabled", False))
     trusted_servants_subscription = None
-    if trusted_servants_enabled:
-        try:
-            trusted_servants_subscription = (TrustedServantSubscriber.query
-                                             .filter_by(user_id=current_user.id)
-                                             .first())
-        except Exception:  # noqa: BLE001
-            trusted_servants_subscription = None
     if current_user.is_admin():
         access_requests = (AccessRequest.query
                            .filter_by(status="pending", is_archived=False)
@@ -3598,10 +3598,12 @@ def trusted_servants_blast_send():
 @bp.route("/email-list/subscribe", methods=["POST"])
 @login_required
 def trusted_servants_subscribe():
-    """Upsert the current user's subscription. Hit by the dashboard
-    widget's form; creates a new row if the user hasn't subscribed yet,
-    updates the existing row otherwise (one subscription per user is
-    enforced by the unique constraint on ``user_id``).
+    """Add a new entry to the Trusted Servants email list. Hit by the
+    dashboard widget's form. The portal account may be shared by several
+    people, so every submission creates a fresh row with ``user_id =
+    NULL`` (admin-managed, like the manual-add path) rather than upserting
+    a single per-account subscription. End users can only add themselves;
+    editing and removing entries is admin-only on /email-list.
     """
     s = _get_site_setting()
     if not s.trusted_servants_enabled:
@@ -3616,32 +3618,15 @@ def trusted_servants_subscribe():
         flash("An email address is required to join the list.", "danger")
         return redirect(_safe_referrer() or url_for("main.index"))
 
-    sub = TrustedServantSubscriber.query.filter_by(user_id=current_user.id).first()
-    if sub is None:
-        sub = TrustedServantSubscriber(user_id=current_user.id)
-        db.session.add(sub)
-        action = "joined"
-    else:
-        action = "updated"
-    sub.name = name
-    sub.phone = phone or None
-    sub.email = email
+    sub = TrustedServantSubscriber(
+        user_id=None,
+        name=name,
+        phone=phone or None,
+        email=email,
+    )
+    db.session.add(sub)
     db.session.commit()
-    flash("You've " + ("joined" if action == "joined" else "updated your details on")
-          + " the Trusted Servants Email List.", "success")
-    return redirect(_safe_referrer() or url_for("main.index"))
-
-
-@bp.route("/email-list/unsubscribe", methods=["POST"])
-@login_required
-def trusted_servants_unsubscribe():
-    """Remove the current user from the list. The admin keeps no
-    archived copy — once the user clicks unsubscribe, the row is gone."""
-    sub = TrustedServantSubscriber.query.filter_by(user_id=current_user.id).first()
-    if sub is not None:
-        db.session.delete(sub)
-        db.session.commit()
-    flash("You've been removed from the Trusted Servants Email List.", "info")
+    flash("You've been added to the Trusted Servants Email List.", "success")
     return redirect(_safe_referrer() or url_for("main.index"))
 
 
