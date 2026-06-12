@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Search{% if q %} · {{ q }}{% endif %} — Trusted Servants Pro{% endblock %}
+{% block heading %}Search{% endblock %}
+{% block heading_help %}Search across meetings, libraries, files, posts, locations and more — filter by type and sort the results.{% endblock %}
+{% block content %}
+<form class="search-page-form card" method="get" action="{{ url_for('main.search_page') }}" role="search">
+  <span class="search-page-form-icon" aria-hidden="true">{{ icon('search') }}</span>
+  <input type="search" name="q" value="{{ q }}" placeholder="Search everything…"
+         autocomplete="off" spellcheck="false" aria-label="Search" {% if not q %}autofocus{% endif %}>
+  {# Preserve sort across a fresh query; a new query resets the type filter to All. #}
+  <input type="hidden" name="sort" value="{{ sort }}">
+  {% if q %}<a class="btn btn-sm search-page-clear" href="{{ url_for('main.search_page') }}">Clear</a>{% endif %}
+  <button type="submit" class="btn btn-primary">Search</button>
+</form>
+
+{% if q and q|length >= 2 %}
+  <div class="search-page-toolbar">
+    <div class="search-page-filters" role="tablist" aria-label="Filter results by type">
+      <a class="chip{% if type_filter == 'all' %} active{% endif %}"
+         href="{{ url_for('main.search_page', q=q, sort=sort) }}">All
+        <span class="search-page-count">{{ total }}</span></a>
+      {% for t, label, ic, n in type_labels %}
+        <a class="chip{% if type_filter == t %} active{% endif %}"
+           href="{{ url_for('main.search_page', q=q, type=t, sort=sort) }}">{{ label }}
+          <span class="search-page-count">{{ n }}</span></a>
+      {% endfor %}
+    </div>
+    {% if total %}
+    <label class="sort-select">
+      <span class="muted smaller">Sort</span>
+      <select onchange="window.location=this.value">
+        <option value="{{ url_for('main.search_page', q=q, type=type_filter, sort='relevance') }}" {% if sort == 'relevance' %}selected{% endif %}>Relevance</option>
+        <option value="{{ url_for('main.search_page', q=q, type=type_filter, sort='name') }}" {% if sort == 'name' %}selected{% endif %}>Name (A–Z)</option>
+        <option value="{{ url_for('main.search_page', q=q, type=type_filter, sort='name_desc') }}" {% if sort == 'name_desc' %}selected{% endif %}>Name (Z–A)</option>
+        <option value="{{ url_for('main.search_page', q=q, type=type_filter, sort='recent') }}" {% if sort == 'recent' %}selected{% endif %}>Recently updated</option>
+      </select>
+    </label>
+    {% endif %}
+  </div>
+
+  {% if sections %}
+    {% for section in sections %}
+    <section class="card search-page-section">
+      <div class="search-page-section-head">
+        <span class="search-page-section-icon" aria-hidden="true">{{ icon(section.icon or 'search') }}</span>
+        <h2>{{ section.label }}</h2>
+        <span class="search-page-count">{{ section['items']|length }}</span>
+        {% if section['items']|length >= page_cap %}
+          <span class="muted smaller search-page-capped">showing first {{ page_cap }} — refine your search to narrow</span>
+        {% endif %}
+      </div>
+      <ul class="search-page-results">
+        {% for item in section['items'] %}
+        <li>
+          <a class="search-page-result{% if not item.url %} is-settings{% endif %}"
+             {% if item.url %}href="{{ item.url }}"{% else %}href="#" data-settings-tab="{{ item.settings_tab }}"{% endif %}>
+            <span class="search-page-result-icon" aria-hidden="true">{{ icon(item.icon or section.icon or 'search') }}</span>
+            <span class="search-page-result-text">
+              <span class="search-page-result-label">{{ item.label }}</span>
+              {% if item.snippet %}<span class="search-page-result-snippet muted smaller">{{ item.snippet }}</span>{% endif %}
+            </span>
+            {% if item.url %}<span class="search-page-result-go" aria-hidden="true">{{ icon('arrow-right') }}</span>{% endif %}
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endfor %}
+  {% else %}
+    <div class="card search-page-empty">
+      <span aria-hidden="true">{{ icon('x-circle') }}</span>
+      <p>No matches for <b>{{ q }}</b>{% if type_filter != 'all' %} in this type{% endif %}.</p>
+      {% if type_filter != 'all' %}
+        <a class="btn btn-sm" href="{{ url_for('main.search_page', q=q, sort=sort) }}">Search all types</a>
+      {% endif %}
+    </div>
+  {% endif %}
+{% else %}
+  <div class="card search-page-empty">
+    <span aria-hidden="true">{{ icon('search') }}</span>
+    <p class="muted">Type at least two characters to search across the portal.</p>
+  </div>
+{% endif %}
+
+{# Settings-tab results carry no URL — they open the shared Settings modal
+   (present on every page via base.html) to the named tab, mirroring the
+   palette's delegated handler. #}
+<script>
+(function(){
+  document.querySelectorAll('[data-settings-tab]').forEach(function(a){
+    a.addEventListener('click', function(e){
+      e.preventDefault();
+      var tab = a.getAttribute('data-settings-tab');
+      var sm = document.getElementById('settings-modal');
+      if (!sm) return;
+      sm.classList.add('open');
+      sm.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      var btn = sm.querySelector('.settings-tab[data-tab="' + tab + '"]');
+      if (btn) btn.click();
+    });
+  });
+})();
+</script>
+{% endblock %}

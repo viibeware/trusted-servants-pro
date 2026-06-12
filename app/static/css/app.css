@@ -3947,6 +3947,8 @@ button.chip { font-family: inherit; }
   max-height: 80vh;
   overflow: hidden;
   padding: 0;
+  display: flex;
+  flex-direction: column;
 }
 .search-modal-head {
   display: flex; align-items: center; gap: 12px;
@@ -3970,7 +3972,8 @@ button.chip { font-family: inherit; }
 }
 .search-modal-body {
   padding: 8px 8px 14px;
-  overflow-y: auto; max-height: calc(80vh - 64px);
+  overflow-y: auto;
+  flex: 1 1 auto; min-height: 0;
 }
 .search-modal-hint, .search-modal-empty {
   margin: 24px 14px; text-align: center; line-height: 1.5;
@@ -4000,6 +4003,117 @@ button.chip { font-family: inherit; }
   background: color-mix(in srgb, var(--brand) 25%, transparent);
   color: inherit; padding: 0 1px; border-radius: 3px;
 }
+
+/* Palette "Clear" button — appears only when the input holds text. */
+.search-modal-clear {
+  flex: 0 0 auto; cursor: pointer;
+  font-size: 0.75rem; font-weight: 600; color: var(--muted);
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 9px;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.search-modal-clear:hover { color: var(--brand); border-color: var(--brand); }
+
+/* Palette footer — a full-width button pinned to the bottom of the
+   palette (outside the scrolling body) that opens the full results page. */
+.search-modal-foot {
+  flex: 0 0 auto;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+.search-modal-all {
+  width: 100%;
+  font-size: 0.875rem;
+}
+.search-modal-all .icon { width: 16px; height: 16px; }
+
+/* ================================================================
+   Full search results page (templates/search_results.html). Reuses
+   the palette's grouped layout but full-width, with a real search
+   box, type-filter chips, and a sort control.
+   ================================================================ */
+.search-page-form {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; margin-bottom: 16px;
+}
+.search-page-form-icon { color: var(--muted); display: inline-flex; flex: 0 0 auto; }
+.search-page-form-icon .icon { width: 20px; height: 20px; }
+.search-page-form input[type="search"] {
+  flex: 1; min-width: 0;
+  padding: 8px 0; border: none; outline: none;
+  background: transparent; color: var(--text);
+  font-size: 1.0625rem; font-weight: 500;
+}
+.search-page-form input::placeholder { color: var(--muted); }
+.search-page-clear { flex: 0 0 auto; }
+
+.search-page-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.search-page-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.search-page-filters .chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  text-decoration: none; padding: 6px 12px; font-size: 0.8125rem;
+}
+.search-page-filters .chip.active,
+.search-page-filters .chip.active:hover {
+  background: var(--brand); border-color: var(--brand); color: var(--bg);
+}
+.search-page-count {
+  font-size: 0.6875rem; font-weight: 700;
+  background: var(--panel-2); color: var(--muted);
+  border-radius: 999px; padding: 1px 7px; min-width: 18px; text-align: center;
+}
+.search-page-filters .chip.active .search-page-count {
+  background: color-mix(in srgb, var(--bg) 25%, transparent); color: var(--bg);
+}
+
+.search-page-section { padding: 6px 8px 8px; margin-bottom: 16px; }
+.search-page-section-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px 10px; flex-wrap: wrap;
+}
+.search-page-section-icon { color: var(--brand); display: inline-flex; }
+.search-page-section-icon .icon { width: 18px; height: 18px; }
+.search-page-section-head h2 {
+  font-size: 0.9375rem; font-weight: 700; margin: 0;
+  letter-spacing: .02em;
+}
+.search-page-capped { margin-left: auto; }
+
+.search-page-results { list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 2px; }
+.search-page-result {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 12px; border-radius: 10px;
+  text-decoration: none; color: var(--text);
+  transition: background 120ms ease;
+}
+.search-page-result:hover,
+.search-page-result:focus { background: var(--panel-2); outline: none; }
+.search-page-result:focus { box-shadow: 0 0 0 2px var(--brand-soft); }
+.search-page-result-icon { color: var(--muted); display: inline-flex; flex: 0 0 auto; }
+.search-page-result-icon .icon { width: 18px; height: 18px; }
+.search-page-result-text {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;
+}
+.search-page-result-label { font-weight: 600; font-size: 0.9375rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-page-result-snippet { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-page-result-go { color: var(--muted); display: inline-flex; flex: 0 0 auto;
+  opacity: 0; transition: opacity 120ms ease; }
+.search-page-result-go .icon { width: 16px; height: 16px; }
+.search-page-result:hover .search-page-result-go,
+.search-page-result:focus .search-page-result-go { opacity: 1; }
+
+.search-page-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  text-align: center; padding: 48px 24px;
+}
+.search-page-empty .icon { width: 32px; height: 32px; color: var(--muted); }
+.search-page-empty p { margin: 0; }
 
 /* Web Frontend quick-jump cluster — two pinned buttons above the
    search bar (admin / view-site) so admins can hop into the public

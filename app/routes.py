@@ -1035,34 +1035,27 @@ def _endpoint_label(endpoint, path):
     return stub
 
 
-@bp.route("/api/search")
-@login_required
-def api_search():
-    """Backend-wide search. Returns grouped results across the
+def _search_sections(tokens, per_section):
+    """Backend-wide search. Returns grouped result sections across the
     content the user can already see in the sidebar — meetings,
     libraries + library items, meeting attachments, posts (when
     the module is enabled), media files, locations, and (admin-only)
     users.
 
-    The query is split into whitespace-separated tokens; every token
-    must match somewhere in the row (case-insensitive ``LIKE %tok%``
-    on each searchable column, AND'd across tokens, OR'd across
-    columns). Per-section cap of 8 keeps the modal compact; results
-    arrive grouped + ready-to-render.
+    ``tokens`` is the whitespace-split query; every token must match
+    somewhere in the row (case-insensitive ``LIKE %tok%`` on each
+    searchable column, AND'd across tokens, OR'd across columns).
+    ``per_section`` caps each section — the live palette passes a small
+    cap (8) to stay compact; the full results page passes a large one.
 
-    Each result carries a ``url`` (relative path the modal navigates
-    to on click), a ``label`` (the visible row), a ``snippet``
-    (small muted line), an ``icon`` (Lucide name), and a ``type``
-    label keyed by section."""
+    Each result carries a ``url`` (relative path navigated to on
+    click), a ``label`` (the visible row), a ``snippet`` (small muted
+    line), an ``icon`` (Lucide name), a ``_ts`` (epoch seconds of the
+    row's last-touched timestamp, 0 when none — used by the full page's
+    "Recently updated" sort), and the section carries a ``type``."""
     from sqlalchemy import or_, and_, func as _sa_func
-    raw = (request.args.get("q") or "").strip()
-    if len(raw) < 2:
-        return jsonify(query=raw, total=0, sections=[])
-    tokens = [t for t in raw.split() if t]
-    if not tokens:
-        return jsonify(query=raw, total=0, sections=[])
 
-    PER_SECTION = 8
+    PER_SECTION = per_section
 
     def _match(cols):
         """Build the AND-of-tokens / OR-of-columns predicate. ``cols``
@@ -1073,6 +1066,15 @@ def api_search():
             like = f"%{tok.lower()}%"
             clauses.append(or_(*[_sa_func.lower(c).like(like) for c in cols]))
         return and_(*clauses)
+
+    def _ts_of(obj):
+        """Epoch seconds of a row's last-touched time (updated_at then
+        created_at), or 0.0 when the model carries neither."""
+        dt = getattr(obj, "updated_at", None) or getattr(obj, "created_at", None)
+        try:
+            return dt.timestamp() if dt else 0.0
+        except Exception:  # noqa: BLE001
+            return 0.0
 
     sections = []
 
@@ -1092,6 +1094,7 @@ def api_search():
                 "snippet": (m.location or m.description or "").strip()[:140],
                 "url": url_for("main.meeting_detail", slug=m.public_slug),
                 "icon": "calendar",
+                "_ts": _ts_of(m),
             } for m in meetings],
         })
 
@@ -1112,6 +1115,7 @@ def api_search():
                         if l.is_intergroup
                         else url_for("main.library_detail", slug=l.public_slug)),
                 "icon": "book",
+                "_ts": _ts_of(l),
             } for l in libraries],
         })
 
@@ -1145,6 +1149,7 @@ def api_search():
                         if (it.library and it.library.is_intergroup)
                         else url_for("main.library_detail", slug=it.library.public_slug)) if it.library else "#",
                 "icon": "file-text",
+                "_ts": _ts_of(it),
             } for it in visible_items],
         })
 
@@ -1167,6 +1172,7 @@ def api_search():
                 "url": (url_for("main.meeting_detail", slug=f.meeting.public_slug)
                         + f"#{f.category}") if f.meeting else "#",
                 "icon": "file",
+                "_ts": _ts_of(f),
             } for f in mfiles],
         })
 
@@ -1209,6 +1215,7 @@ def api_search():
                                + (f" · {_trim(p.summary or p.body)}" if (p.summary or p.body) else ""),
                     "url": url_for("main.post_edit", pid=p.id),
                     "icon": "megaphone",
+                    "_ts": _ts_of(p),
                 } for p in posts],
             })
 
@@ -1230,6 +1237,7 @@ def api_search():
                                + (f" · {st.author_name}" if st.author_name else ""),
                     "url": url_for("main.story_edit", sid=st.id),
                     "icon": "book-open",
+                    "_ts": _ts_of(st),
                 } for st in stories],
             })
 
@@ -1251,6 +1259,7 @@ def api_search():
                                + (f" · {_trim(b.summary or b.body)}" if (b.summary or b.body) else ""),
                     "url": url_for("main.blog_edit", bid=b.id),
                     "icon": "rss",
+                    "_ts": _ts_of(b),
                 } for b in blogs],
             })
 
@@ -1279,6 +1288,7 @@ def api_search():
                 "snippet": (m.mime_type or "File"),
                 "url": url_for("main.media_list") + "?q=" + (m.original_filename or "")[:80],
                 "icon": "folder",
+                "_ts": _ts_of(m),
             } for m in media],
         })
 
@@ -1297,6 +1307,7 @@ def api_search():
                 "snippet": (l.address or "").strip()[:140] or "Meeting location",
                 "url": url_for("main.locations"),
                 "icon": "map-pin",
+                "_ts": _ts_of(l),
             } for l in locs],
         })
 
@@ -1316,6 +1327,7 @@ def api_search():
                     "snippet": (u.email or "") + " · " + u.role.replace("_", " "),
                     "url": url_for("main.watchtower_access") + "?user_id=" + str(u.id),
                     "icon": "user",
+                    "_ts": _ts_of(u),
                 } for u in users],
             })
 
@@ -1341,6 +1353,7 @@ def api_search():
                                + (f" · /{pg.slug}" if pg.slug else ""),
                     "url": url_for("main.frontend_page_edit", page_id=pg.id),
                     "icon": "file",
+                    "_ts": _ts_of(pg),
                 } for pg in pages],
             })
 
@@ -1388,6 +1401,7 @@ def api_search():
                 "snippet": "Open Settings → " + label,
                 "settings_tab": key,
                 "icon": "settings",
+                "_ts": 0.0,
             })
     if settings_items:
         sections.append({"type": "settings", "label": "Settings",
@@ -1422,13 +1436,123 @@ def api_search():
                     "snippet": "Open Web Frontend → " + label,
                     "url": u,
                     "icon": "layout-grid",
+                    "_ts": 0.0,
                 })
         if fe_items:
             sections.append({"type": "frontend_section", "label": "Web Frontend",
                             "icon": "layout-grid", "items": fe_items[:PER_SECTION]})
 
+    # Snippets are sliced from raw stored text, which for some rows
+    # (meeting/library descriptions, post bodies) carries inline HTML.
+    # Flatten to plain text so neither the palette nor the results page
+    # shows literal "<b><i>…" tags. A char-budget slice can also clip a
+    # tag mid-token, so drop any dangling "<…" tail too.
+    import re as _re
+    import html as _html
+    for sec in sections:
+        for it in sec["items"]:
+            snip = it.get("snippet")
+            if not snip:
+                continue
+            snip = _re.sub(r"<[^>]*>", " ", snip)   # whole tags
+            snip = _re.sub(r"<[^>]*$", "", snip)     # dangling truncated tag
+            snip = _html.unescape(snip)
+            it["snippet"] = _re.sub(r"\s+", " ", snip).strip()
+
+    return sections
+
+
+# How strongly the live palette and the full results page weight a row.
+# Sorting on the full page reuses these tiers; "relevance" is the default.
+_SEARCH_SCORE_LABEL_PREFIX = 5   # token starts the label ("zoom" → "Zoom tech")
+_SEARCH_SCORE_LABEL = 3          # token appears anywhere in the label
+_SEARCH_SCORE_SNIPPET = 1        # token only in the muted snippet line
+
+
+def _search_relevance(item, toks_lower):
+    """Cheap relevance score for one result against the lowercased query
+    tokens. Label hits outrank snippet hits; a token that *starts* the
+    label outranks one buried mid-string. Used to order the full results
+    page; the DB order is the stable tiebreak."""
+    label = (item.get("label") or "").lower()
+    snip = (item.get("snippet") or "").lower()
+    score = 0
+    for tok in toks_lower:
+        if tok in label:
+            score += _SEARCH_SCORE_LABEL_PREFIX if label.startswith(tok) else _SEARCH_SCORE_LABEL
+        elif tok in snip:
+            score += _SEARCH_SCORE_SNIPPET
+    return score
+
+
+@bp.route("/api/search")
+@login_required
+def api_search():
+    """Live search palette (⌘K). Thin wrapper over ``_search_sections``
+    with a small per-section cap so the popup stays compact; the full
+    results page (:func:`search_page`) shares the same backend."""
+    raw = (request.args.get("q") or "").strip()
+    if len(raw) < 2:
+        return jsonify(query=raw, total=0, sections=[])
+    tokens = [t for t in raw.split() if t]
+    if not tokens:
+        return jsonify(query=raw, total=0, sections=[])
+    sections = _search_sections(tokens, 8)
     total = sum(len(s["items"]) for s in sections)
     return jsonify(query=raw, total=total, sections=sections)
+
+
+@bp.route("/search")
+@login_required
+def search_page():
+    """Full-page search — everything the palette finds, uncapped, with
+    type filtering and sorting. ``q`` is the query; ``type`` narrows to a
+    single section type (default ``all``); ``sort`` is one of
+    ``relevance`` (default), ``name``, ``name_desc``, ``recent``."""
+    raw = (request.args.get("q") or "").strip()
+    type_filter = (request.args.get("type") or "all").strip()
+    sort = (request.args.get("sort") or "relevance").strip()
+    if sort not in ("relevance", "name", "name_desc", "recent"):
+        sort = "relevance"
+
+    tokens = [t for t in raw.split() if t] if len(raw) >= 2 else []
+    # Generous per-section cap — the page is meant to show "all" results
+    # without the palette's 8-row squeeze, while still bounding a runaway
+    # query. Sections at the cap surface a "showing first N" note.
+    PAGE_CAP = 100
+    sections = _search_sections(tokens, PAGE_CAP) if tokens else []
+
+    toks_lower = [t.lower() for t in tokens]
+    for sec in sections:
+        for it in sec["items"]:
+            it["_score"] = _search_relevance(it, toks_lower)
+
+    # Counts + chip metadata reflect the *unfiltered* result set so the
+    # type pills always show the full breakdown.
+    type_labels = [(s["type"], s["label"], s.get("icon", "search"), len(s["items"]))
+                   for s in sections]
+    total = sum(len(s["items"]) for s in sections)
+
+    if type_filter != "all":
+        sections = [s for s in sections if s["type"] == type_filter]
+
+    def _sort_items(items):
+        if sort == "name":
+            return sorted(items, key=lambda i: (i.get("label") or "").lower())
+        if sort == "name_desc":
+            return sorted(items, key=lambda i: (i.get("label") or "").lower(), reverse=True)
+        if sort == "recent":
+            return sorted(items, key=lambda i: i.get("_ts") or 0, reverse=True)
+        # relevance — stable sort keeps the DB order as the tiebreak
+        return sorted(items, key=lambda i: i.get("_score") or 0, reverse=True)
+
+    for s in sections:
+        s["items"] = _sort_items(s["items"])
+
+    return render_template("search_results.html", q=raw, sections=sections,
+                           type_filter=type_filter, sort=sort,
+                           type_labels=type_labels, total=total,
+                           page_cap=PAGE_CAP)
 
 
 @bp.route("/dashboard/order", methods=["POST"])

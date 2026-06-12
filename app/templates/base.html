@@ -275,10 +275,16 @@
       <span class="search-modal-icon" aria-hidden="true">{{ icon('search') }}</span>
       <input type="search" id="search-input" autocomplete="off" spellcheck="false"
              placeholder="Search meetings, libraries, files, posts…" aria-label="Search">
+      <button type="button" class="search-modal-clear" id="search-modal-clear" hidden>Clear</button>
       <kbd class="search-modal-esc" aria-hidden="true">Esc</kbd>
     </div>
     <div class="search-modal-body" id="search-modal-body">
       <p class="muted search-modal-hint">Start typing to search across meetings, libraries, files, posts, and more.</p>
+    </div>
+    <div class="search-modal-foot" id="search-modal-foot" hidden>
+      <a class="btn btn-primary search-modal-all" id="search-modal-all" href="#">
+        {{ icon('search') }} <span>See all results</span>
+      </a>
     </div>
   </div>
 </div>
@@ -2386,9 +2392,18 @@
   const modal = document.getElementById('search-modal');
   const input = document.getElementById('search-input');
   const body  = document.getElementById('search-modal-body');
+  const clearBtn = document.getElementById('search-modal-clear');
+  const foot = document.getElementById('search-modal-foot');
+  const allLink = document.getElementById('search-modal-all');
   if (!modal || !input || !body) return;
 
   const SEARCH_URL = "{{ url_for('main.api_search') }}";
+  const FULL_URL   = "{{ url_for('main.search_page') }}";
+  // Persist the palette's last query for the tab's lifetime so the user can
+  // open a result, come back, and pick up where they left off. sessionStorage
+  // survives navigation + reload but is wiped when the window/tab closes —
+  // exactly the lifecycle asked for. The Clear button removes it explicitly.
+  const SS_KEY = 'tsp.search.q';
   const HINT_HTML = '<p class="muted search-modal-hint">Start typing to search across meetings, libraries, files, posts, and more.</p>';
   const MOBILE_QUERY = window.matchMedia('(max-width: 880px)');
 
@@ -2425,20 +2440,56 @@
     modal.classList.add('open');
     modal.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
+    // Restore the last search when opening a fresh palette (e.g. after
+    // navigating to a result and coming back). If the input already holds
+    // text — a same-page reopen that we never cleared — leave it untouched.
+    if (!input.value) {
+      let saved = '';
+      try { saved = sessionStorage.getItem(SS_KEY) || ''; } catch (e) {}
+      if (saved) { input.value = saved; runSearch(saved); }
+    }
+    syncClearBtn();
     setTimeout(() => input.focus(), 30);
   }
 
+  // Closing the palette preserves its contents (query, results, scroll) so
+  // reopening is instant and stateful. State is only dropped by the Clear
+  // button or by the browser discarding sessionStorage on window close.
   function closeSearch(){
     modal.classList.remove('open');
     modal.setAttribute('aria-hidden', 'true');
     document.body.style.overflow = '';
+  }
+
+  // Wipe everything — input, results, persisted query — and reset to hint.
+  function clearSearch(){
     input.value = '';
     body.innerHTML = HINT_HTML;
     lastQ = '';
+    try { sessionStorage.removeItem(SS_KEY); } catch (e) {}
+    hideFooter();
+    syncClearBtn();
+    input.focus();
   }
+
+  function syncClearBtn(){
+    if (clearBtn) clearBtn.hidden = !input.value;
+  }
+
+  // The "See all results" footer button is pinned to the bottom of the
+  // palette. Show it (pointed at the full results page for the current
+  // query) only when there are results to expand on; hide it otherwise.
+  function showFooter(q){
+    if (!foot || !allLink) return;
+    allLink.href = FULL_URL + '?q=' + encodeURIComponent(q || '');
+    foot.hidden = false;
+  }
+  function hideFooter(){ if (foot) foot.hidden = true; }
 
   modal.querySelectorAll('[data-close]').forEach(el =>
     el.addEventListener('click', closeSearch));
+
+  if (clearBtn) clearBtn.addEventListener('click', clearSearch);
 
   // Settings-tab results open the Settings modal to a specific tab. Search
   // results are inserted dynamically, so app.js's static [data-open-modal]
@@ -2483,6 +2534,7 @@
     if (!data || !data.sections || !data.sections.length) {
       body.innerHTML = '<p class="muted search-modal-empty">No matches for <b>'
         + escapeHtml(data && data.query || '') + '</b>.</p>';
+      hideFooter();
       return;
     }
     let html = '';
@@ -2510,6 +2562,10 @@
       html += '</ul></div>';
     });
     body.innerHTML = html;
+    // The footer button lives outside the scrolling body (pinned to the
+    // bottom of the palette) and points at the full results page — the
+    // palette caps each section at 8, so there may be more to see.
+    showFooter(data.query);
   }
 
   async function runSearch(q){
@@ -2517,12 +2573,15 @@
     lastQ = q;
     if (q.length < 2) {
       body.innerHTML = HINT_HTML;
+      hideFooter();
       return;
     }
+    try { sessionStorage.setItem(SS_KEY, q); } catch (e) {}
     if (inflight) inflight.abort();
     const ctl = new AbortController();
     inflight = ctl;
     body.innerHTML = '<p class="muted search-modal-hint">Searching…</p>';
+    hideFooter();
     try {
       const r = await fetch(SEARCH_URL + '?q=' + encodeURIComponent(q), {
         credentials: 'same-origin', signal: ctl.signal,
@@ -2535,6 +2594,7 @@
     } catch (err) {
       if (err.name === 'AbortError') return;
       body.innerHTML = '<p class="muted search-modal-empty">Couldn’t reach the search service.</p>';
+      hideFooter();
     } finally {
       if (inflight === ctl) inflight = null;
     }
@@ -2542,6 +2602,7 @@
 
   input.addEventListener('input', () => {
     clearTimeout(debounce);
+    syncClearBtn();
     const q = input.value.trim();
     debounce = setTimeout(() => runSearch(q), 150);
   });
