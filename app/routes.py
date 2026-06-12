@@ -1549,10 +1549,13 @@ def search_page():
     for s in sections:
         s["items"] = _sort_items(s["items"])
 
-    return render_template("search_results.html", q=raw, sections=sections,
-                           type_filter=type_filter, sort=sort,
-                           type_labels=type_labels, total=total,
-                           page_cap=PAGE_CAP)
+    ctx = dict(q=raw, sections=sections, type_filter=type_filter, sort=sort,
+               type_labels=type_labels, total=total, page_cap=PAGE_CAP)
+    # AJAX filter/sort changes (X-Requested-With set by the page's fetch) only
+    # need the swappable results region, not the whole page chrome.
+    if request.headers.get("X-Requested-With") == "fetch":
+        return render_template("_search_results_region.html", **ctx)
+    return render_template("search_results.html", **ctx)
 
 
 @bp.route("/dashboard/order", methods=["POST"])

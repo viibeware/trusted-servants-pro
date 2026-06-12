@@ -6,6 +6,40 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.13.1] — 2026-06-12
+
+### Added
+
+- **Full-page search results at `/tspro/search`.** Surfaces everything the live
+  search palette (⌘K) finds, uncapped, with type-filter chips (per-type counts)
+  and sorting — Relevance (default), Name A–Z / Z–A, and Recently updated.
+  Covers every searchable type: meetings, libraries + library files, meeting
+  attachments, announcements/events, stories, blog posts, files, locations,
+  users, pages, and Settings / Web-Frontend jump targets. The palette and the
+  page share one backend helper (`_search_sections`) so matching and
+  role-gating stay identical; a lightweight relevance score (label-prefix >
+  label > snippet hits, DB order as the stable tiebreak) drives the default
+  sort.
+- **AJAX filtering & sorting on the results page.** Clicking a type chip or
+  changing the sort fetches only the swappable results region (a new
+  `_search_results_region.html` partial, returned when the request carries
+  `X-Requested-With: fetch`) and replaces it in place — no full-page reload.
+  The URL stays in sync via `history.pushState`, back/forward re-fetch via
+  `popstate`, and the swap preserves the current scroll position. Falls back to
+  a real navigation if the fetch fails; chips remain plain links for no-JS.
+
+### Changed
+
+- **Search palette is now stateful.** A full-width "See all results" button is
+  pinned as a sticky footer linking to the full page. The last query + results
+  are preserved in `sessionStorage`, so opening a result and coming back
+  restores where you left off; a Clear button (and closing the window) wipes
+  that state.
+- **Result snippets are flattened to plain text.** Inline HTML carried in some
+  descriptions/bodies (e.g. `<b><i>…`) is stripped — and any tag clipped by the
+  char-budget slice is dropped — so neither the palette nor the page shows
+  literal markup.
+
 ## [2.13.0] — 2026-06-12
 
 ### Changed

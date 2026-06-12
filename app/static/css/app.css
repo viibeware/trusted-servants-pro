@@ -4048,6 +4048,10 @@ button.chip { font-family: inherit; }
 .search-page-form input::placeholder { color: var(--muted); }
 .search-page-clear { flex: 0 0 auto; }
 
+/* AJAX results region — dim + lock while a filter/sort swap is in flight. */
+.search-ajax { transition: opacity 120ms ease; }
+.search-ajax.is-loading { opacity: 0.5; pointer-events: none; }
+
 .search-page-toolbar {
   display: flex; align-items: center; justify-content: space-between;
   gap: 16px; flex-wrap: wrap; margin-bottom: 16px;

@@ -7,7 +7,14 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.13.0 — 2026-06-12 (latest) — A cleaner post editor and a sticky, full-width header
+## 2.13.1 — 2026-06-12 (latest) — A full search results page and a smarter search palette
+
+- **There's now a full search results page.** When a search turns up more than the quick palette can show, click **"See all results"** to open a dedicated page listing everything — meetings, libraries and files, announcements and events, stories, blog posts, locations, users, pages, and more. Filter to a single type with one click and sort by Relevance, Name (A–Z / Z–A), or Recently updated.
+- **Filtering and sorting are instant.** Clicking a type or changing the sort updates the results in place — no full page reload, your scroll position stays put, and the browser's Back/Forward buttons work as expected.
+- **The search palette remembers your last search.** Open a result and come back, and the palette still shows what you searched for, so you can jump between results without retyping. A **Clear** button wipes it (and it clears on its own when you close the window). A new **"See all results"** button is pinned to the bottom of the palette.
+- **Cleaner result previews.** Search snippets no longer show stray formatting tags from descriptions — just clean, readable text.
+
+## 2.13.0 — 2026-06-12 — A cleaner post editor and a sticky, full-width header
 
 - **The announcement / event editor is reorganized and de-cluttered.** Fields now flow in a logical order — what the post is (type, title, URL, and when it publishes) → its content → event details → links → images — with Links moved above Images. The old separate "Publishing" card was folded into the top card, the cramped monospaced fields now use the regular Inter font, and the spacing between sections is tighter.
 - **Pick a featured image and see it right away.** Choosing an image now shows the thumbnail instantly, before you save. And clicking "Remove current image" hides the thumbnail on the spot so you can see the change before saving — the removal still only takes effect when you save.
