@@ -1477,6 +1477,49 @@
     };
     refresh();
   })();
+  // Featured image — instant local preview when a file is chosen via
+  // the upload input, so the admin sees their pick without saving
+  // first. Mirrors the preview swap the File Browser path already
+  // does below.
+  (function () {
+    var section = document.querySelector("[data-post-featured-image]");
+    if (!section) return;
+    var upload = section.querySelector("[data-featured-upload]");
+    var img = section.querySelector("[data-featured-preview-img]");
+    if (!upload || !img) return;
+    var lastUrl = null;
+    upload.addEventListener("change", function () {
+      var file = upload.files && upload.files[0];
+      if (!file) return;
+      if (lastUrl) URL.revokeObjectURL(lastUrl);
+      lastUrl = URL.createObjectURL(file);
+      img.src = lastUrl;
+      img.hidden = false;
+      var empty = section.querySelector("[data-featured-preview-empty]");
+      if (empty) empty.hidden = true;
+      // An upload beats a prior File-Browser pick at save time —
+      // drop the stale pick + label so the UI matches what will save.
+      var hidden = section.querySelector("[data-featured-media-id]");
+      if (hidden) hidden.value = "";
+      var label = section.querySelector("[data-featured-picked-label]");
+      if (label) { label.hidden = true; label.textContent = ""; }
+      // Uncheck "Remove current image" — choosing a new file means
+      // swap, not clear.
+      var clear = section.querySelector('input[name="clear_featured_image"]');
+      if (clear) clear.checked = false;
+      img.classList.remove("is-cleared");
+    });
+    // "Remove current image" — hide the thumbnail the moment the box
+    // is armed so the admin sees the removal before saving. Unchecking
+    // (or picking a new upload above) brings it back. The actual delete
+    // still happens server-side on save via clear_featured_image.
+    var clearBox = section.querySelector('input[name="clear_featured_image"]');
+    if (clearBox) {
+      clearBox.addEventListener("change", function () {
+        img.classList.toggle("is-cleared", clearBox.checked);
+      });
+    }
+  })();
   window.addEventListener("message", (e) => {
     if (e.origin !== window.location.origin) return;
     // Multi-select batch — the picker iframe sends one message

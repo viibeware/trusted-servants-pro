@@ -120,15 +120,18 @@
   </div>
 </section>
 {% endif %}
+{# Form flow, top to bottom: what the post IS (type + title + URL +
+   publish timing) → what it SAYS (summary + body) → event logistics
+   (only when tagged as an event) → imagery → call-to-action links. #}
 <form id="post-edit-form" class="form post-form" method="post" action="{{ url_for('main.post_save') }}" enctype="multipart/form-data">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% if _p %}<input type="hidden" name="post_id" value="{{ _p.id }}">{% endif %}
 
-  {# ── Type + headline ─────────────────────────────────────────── #}
-  <section class="card post-edit-headline-card">
+  {# ── 1 · Type + title ────────────────────────────────────────── #}
+  <section class="card">
     <div class="card-head">
-      <h2>Headline</h2>
-      <span class="muted smaller">Title shown wherever the post appears. Type tags drive how it's shown.</span>
+      <h2>Type &amp; title</h2>
+      <span class="muted smaller">Tag at least one type — it decides which feeds the post appears in.</span>
     </div>
 
     <div class="post-type-row">
@@ -157,9 +160,6 @@
     </label>
     {% if current_user.is_authenticated and current_user.can_edit_frontend() %}
     <label>Public URL
-      <span class="muted small" style="display:block; margin: 2px 0 4px;">
-        Only the slug is editable — the same slug serves <code>/event/&lt;slug&gt;</code>, <code>/announcement/&lt;slug&gt;</code>, and <code>/archive/&lt;slug&gt;</code> (auto-applied once the post is archived). Leave blank to derive from the title. Lowercase letters, numbers, and hyphens only. If another post already uses this slug we'll append <code>-2</code>, <code>-3</code>, etc. on save.
-      </span>
       <div class="slug-input-row">
         <span class="slug-input-prefix" aria-hidden="true">/event/ · /announcement/ · /archive/</span>
         <input type="text" name="slug" class="slug-input-field"
@@ -167,52 +167,54 @@
                placeholder="{{ _p.public_slug if _p else 'auto-derived from title' }}"
                pattern="[a-z0-9-]*" maxlength="200">
       </div>
+      <span class="muted small">
+        Leave blank to derive from the title. Lowercase letters, numbers, and hyphens; if the slug is taken we append -2, -3, … on save. One slug serves the event, announcement, and archive URLs.
+      </span>
     </label>
     {% if _p %}
     {% set post = _p %}
     {% include "_slug_history.html" %}
     {% endif %}
     {% endif %}
-    <label>GSR Summary <span class="muted small">(GSR summary — short blurb shown in lists, link previews, and the GSR summary frontend block)</span>
-      <textarea name="summary" rows="2"
-                placeholder="One or two sentences — what is this and why does it matter?">{{ (_p.summary if _p else '') or '' }}</textarea>
-    </label>
-    <label>Body <span class="muted small">(full content, Markdown supported)</span>
-      <textarea name="body" rows="8"
-                placeholder="The full body of the post. Markdown supported.">{{ (_p.body if _p else '') or '' }}</textarea>
-    </label>
+
     <label>Posted on / schedule for
-      <span class="muted small">(the timestamp shown wherever the post surfaces — defaults to now. <strong>Set a future date &amp; time and Publish to schedule it</strong>: the post stays hidden from the public site until then, then appears automatically.)</span>
+      <span class="dt-field">
+        <input type="datetime-local" name="published_at"
+               value="{% if _p and _p.display_posted %}{{ _p.display_posted.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+        <button type="button" class="btn btn-sm dt-today" data-dt-today="published" title="Jump to today">Today</button>
+      </span>
       {# Fall back to ``display_posted`` so legacy rows whose
          ``published_at`` is NULL still surface a value here — same
          logic the list table uses to render the "Posted on" column.
          Saving keeps writing to ``published_at`` so an explicit edit
          (or a brand-new post) still stores the admin's chosen value.
          A future value gates public visibility (frontend._post_live_clause). #}
-      <span class="dt-field">
-        <input type="datetime-local" name="published_at"
-               value="{% if _p and _p.display_posted %}{{ _p.display_posted.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
-        <button type="button" class="btn btn-sm dt-today" data-dt-today="published" title="Jump to today">Today</button>
+      <span class="muted small">
+        Shown wherever the post surfaces; defaults to now. <strong>Set a future date &amp; time and Publish to schedule it</strong> — the post stays hidden until then, then appears automatically.
       </span>
     </label>
 
-    {# Announcement-only auto-archive deadline. Hidden whenever the
-       Announcement checkbox is off — events already auto-archive via
-       ``event_ends_at`` so the toggle would be redundant for them.
-       The expiry block reveals only when the inner toggle is on; the
-       outer wrapper itself hides when no announcement is selected. JS
-       below this <section> drives both visibility rules. #}
+    {# Announcement-only auto-archive deadline — hidden whenever the
+       Announcement type is off (events already auto-archive via
+       ``event_ends_at``). Panel row styled like the Online-event
+       toggle so the two switches read as siblings; the datetime
+       field reveals inside the same panel when the toggle is on. #}
     {%- set _aa = _p.announcement_auto_archive_at if _p else none -%}
     <div class="post-announcement-expiry" data-announcement-expiry hidden>
-      <label class="mode-toggle post-announcement-expiry-toggle">
-        <input type="checkbox"
-               name="announcement_auto_archive_enabled"
-               value="1"
-               {% if _aa %}checked{% endif %}
-               data-announcement-expiry-toggle>
-        <span class="mode-track"><span class="mode-thumb"></span></span>
-        <span>Auto-archive this announcement after a date &amp; time</span>
-      </label>
+      <div class="post-toggle-row">
+        <div class="post-toggle-info">
+          <div class="post-toggle-title">Auto-archive this announcement</div>
+          <p class="muted small">After the chosen date &amp; time the announcement is hidden from the public site and moved to the archive — same place an admin-archived post lands.</p>
+        </div>
+        <label class="mode-toggle">
+          <input type="checkbox"
+                 name="announcement_auto_archive_enabled"
+                 value="1"
+                 {% if _aa %}checked{% endif %}
+                 data-announcement-expiry-toggle>
+          <span class="mode-track"><span class="mode-thumb"></span></span>
+        </label>
+      </div>
       <div class="post-announcement-expiry-field"
            data-announcement-expiry-field
            {% if not _aa %}hidden{% endif %}>
@@ -225,171 +227,134 @@
         </label>
         <p class="muted smaller post-announcement-expiry-help">
           Times are in the site timezone{% if site and site.timezone %} ({{ site.timezone }}){% endif %}.
-          After this moment the announcement is hidden from the public
-          site and moved to the archive automatically — same place an
-          admin-archived post lands.
         </p>
       </div>
     </div>
   </section>
 
-  {# Show/hide the announcement-auto-archive section based on the
-     Announcement checkbox state. Mirrors how the Event details section
-     stays present but inert when Event isn't checked; the auto-archive
-     section actually disappears because it has zero meaning without
-     the Announcement tag. #}
-  <script>
-  (function () {
-    var annCheck = document.querySelector('input[type="checkbox"][name="is_announcement"]');
-    var expiryWrap = document.querySelector('[data-announcement-expiry]');
-    if (!annCheck || !expiryWrap) return;
-    var expiryToggle = expiryWrap.querySelector('[data-announcement-expiry-toggle]');
-    var expiryField = expiryWrap.querySelector('[data-announcement-expiry-field]');
-    var expiryInput = expiryWrap.querySelector('[data-announcement-expiry-input]');
-    function syncWrap() {
-      expiryWrap.hidden = !annCheck.checked;
-    }
-    function syncField() {
-      if (!expiryField || !expiryToggle) return;
-      expiryField.hidden = !expiryToggle.checked;
-      if (expiryToggle.checked && expiryInput && !expiryInput.value) {
-        // Sensible default: 14 days out — typical "leave the
-        // announcement up for two weeks" cadence. Admin can change
-        // before saving.
-        var d = new Date();
-        d.setDate(d.getDate() + 14);
-        var pad = function (n) { return (n < 10 ? '0' : '') + n; };
-        expiryInput.value = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' +
-                            pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
-      }
-    }
-    annCheck.addEventListener('change', syncWrap);
-    if (expiryToggle) expiryToggle.addEventListener('change', syncField);
-    syncWrap();
-    syncField();
-  })();
-
-  // Event details card visibility — hidden unless the Event
-  // checkbox at the top is on. Pure announcements never use the
-  // date / location / zoom / event-contact fields, so the whole
-  // card collapses out of the form (and skips submission of empty
-  // event_starts_at / event_ends_at) when Event is unchecked.
-  // Deferred to DOMContentLoaded because this inline <script> lives
-  // BEFORE the event-details card in the DOM (the card was moved
-  // below Links so admins see CTAs first); without the defer, the
-  // querySelector returns null and the toggle silently no-ops.
-  (function () {
-    function wire() {
-      var eventCheck = document.querySelector('input[type="checkbox"][name="is_event"]');
-      var card = document.querySelector('[data-event-details-card]');
-      if (!eventCheck || !card) return;
-      function sync() { card.hidden = !eventCheck.checked; }
-      eventCheck.addEventListener('change', sync);
-      sync();
-    }
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', wire);
-    } else {
-      wire();
-    }
-  })();
-  </script>
-
-  {# ── Featured image ─────────────────────────────────────────── #}
-  <section class="card" data-post-featured-image>
+  {# ── 2 · Content ─────────────────────────────────────────────── #}
+  <section class="card">
     <div class="card-head">
-      <h2>Featured image</h2>
-      <span class="muted smaller">Displayed at the top of the post and in link-preview cards. PNG, JPG, or WebP.</span>
+      <h2>Content</h2>
+      <span class="muted smaller">The summary appears in lists and link previews; the body is the full post.</span>
     </div>
-    <div class="og-image-row">
-      <div class="og-image-preview" data-featured-preview>
-        {% if _p and _p.featured_image_filename %}
-        <img src="{{ url_for('public.post_featured_image', pid=_p.id) }}" alt="Featured image" data-featured-preview-img>
-        <label class="check fe-logo-clear-label">
-          <input type="checkbox" name="clear_featured_image" value="1"><span>Remove current image</span>
-        </label>
-        {% else %}
-        <img alt="Featured image" data-featured-preview-img hidden>
-        <div class="og-image-empty muted small" data-featured-preview-empty>No image uploaded yet.</div>
-        {% endif %}
-      </div>
-      <div class="og-image-fields">
-        <label>Upload new image
-          <input type="file" name="featured_image" accept="image/png,image/jpeg,image/webp" data-featured-upload>
-        </label>
-        <div class="og-image-actions">
-          <button type="button" class="btn btn-sm" data-post-featured-picker>{{ icon('folder') }} Choose from File Browser</button>
-        </div>
-        {# Hidden input set by the File Browser modal. Resolved to a
-           stored filename on the server side; cleared if the admin
-           picks a different upload after browsing. #}
-        <input type="hidden" name="featured_image_media_id" value="" data-featured-media-id>
-        <div class="og-image-picked muted small" data-featured-picked-label hidden></div>
-      </div>
-    </div>
+    <label>GSR Summary <span class="muted small">(one or two sentences)</span>
+      <textarea name="summary" rows="2"
+                placeholder="One or two sentences — what is this and why does it matter?">{{ (_p.summary if _p else '') or '' }}</textarea>
+    </label>
+    <label>Body <span class="muted small">(Markdown supported)</span>
+      <textarea name="body" rows="10"
+                placeholder="The full body of the post. Markdown supported.">{{ (_p.body if _p else '') or '' }}</textarea>
+    </label>
   </section>
 
-  {# ── Gallery ─────────────────────────────────────────────────
-     Up to 10 images shown as a grid below the description on the
-     public detail page (with a lightbox). Each card has a remove
-     button; the order in which they appear here matches the
-     public render order. Add images via the upload input or the
-     File Browser picker — picked items reference existing
-     MediaItem rows so the same asset can be shared across posts
-     without duplicating storage. #}
-  {%- set _gallery = (_p.gallery_filenames if _p else []) -%}
-  {%- set _gallery_count = _gallery|length -%}
-  <section class="card" data-post-gallery
-           data-gallery-max="6"
-           data-gallery-count="{{ _gallery_count }}">
+  {# ── 3 · Event details (date, location, zoom, contact) ───────────
+     Only rendered when the Event checkbox at the top is on — pure
+     announcements don't carry any of these fields, so showing the
+     card just adds noise. JS at the bottom of the page mirrors that
+     gate so toggling the checkbox shows/hides the card live. #}
+  <section class="card" data-event-details-card
+           {% if not (_p and _p.is_event) %}hidden{% endif %}>
     <div class="card-head">
-      <h2>Gallery <span class="muted smaller" data-gallery-count-label>({{ _gallery_count }} / 6)</span></h2>
-      <span class="muted smaller">Optional. Up to 6 images that render in a grid alongside the featured image on the public page, with a click-to-zoom lightbox. Order matches the list below.</span>
+      <h2>Event details</h2>
+      <span class="muted smaller">When and where the event happens. Only shown for posts tagged as an event.</span>
     </div>
-    <ul class="post-gallery-grid" data-gallery-list>
-      {% if _p %}
-        {% for fname in _gallery %}
-        {% set _idx = loop.index0 %}
-        <li class="post-gallery-tile" data-gallery-tile>
-          <img src="{{ url_for('public.post_gallery_image', pid=_p.id, idx=_idx, thumb=240) }}"
-               alt="Gallery image {{ _idx + 1 }}" loading="lazy">
-          <input type="hidden" name="gallery_existing" value="{{ fname }}">
-          <button type="button" class="btn btn-sm btn-danger post-gallery-remove"
-                  data-gallery-remove
-                  title="Remove from gallery">{{ icon('x') }}</button>
-        </li>
-        {% endfor %}
-      {% endif %}
-    </ul>
-    <div class="post-gallery-actions">
-      <label class="post-gallery-upload-label">
-        <span>Upload images</span>
-        <span class="muted smaller">— PNG, JPG, WebP, or GIF. Multi-select supported.</span>
-        <input type="file" name="gallery_upload" multiple
-               accept="image/png,image/jpeg,image/webp,image/gif"
-               data-gallery-upload>
+
+    <div class="form-row">
+      <label>Starts
+        <span class="dt-field">
+          <input type="datetime-local" name="event_starts_at" data-event-start
+                 value="{% if _p and _p.event_starts_at %}{{ _p.event_starts_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+          <button type="button" class="btn btn-sm dt-today" data-dt-today="start"
+                  title="Jump to today">Today</button>
+        </span>
       </label>
-      <button type="button" class="btn btn-sm" data-post-gallery-picker>
-        {{ icon('folder') }} Choose from File Browser
-      </button>
+      <label>Ends
+        <span class="dt-field">
+          <input type="datetime-local" name="event_ends_at" data-event-end
+                 value="{% if _p and _p.event_ends_at %}{{ _p.event_ends_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+          <button type="button" class="btn btn-sm dt-today" data-dt-today="end"
+                  title="Jump to today">Today</button>
+        </span>
+      </label>
     </div>
-    {# Media-ID hidden inputs populated by the File Browser picker —
-       the JS appends one per picked item below. #}
-    <div data-gallery-picks hidden></div>
+
+    <div class="post-toggle-row post-toggle-row--panel">
+      <div class="post-toggle-info">
+        <div class="post-toggle-title">Online event</div>
+        <p class="muted small">Location becomes optional and the Zoom fields below are shown publicly.</p>
+      </div>
+      <label class="mode-toggle">
+        <input type="checkbox" name="is_online" value="1"
+               {% if _p and _p.is_online %}checked{% endif %}>
+        <span class="mode-track"><span class="mode-thumb"></span></span>
+      </label>
+    </div>
+
+    <label>Venue / location name
+      <input type="text" name="location_name" maxlength="255"
+             value="{{ (_p.location_name if _p else '') or '' }}"
+             placeholder="Community Center · Hall B">
+    </label>
+    <label>Address
+      <textarea name="location_address" rows="2"
+                placeholder="123 Main St, Springfield, IL 62701">{{ (_p.location_address if _p else '') or '' }}</textarea>
+    </label>
+    <label>Google Maps link <span class="muted small">(optional — rendered as "Get directions")</span>
+      <input type="url" name="google_maps_url" maxlength="500"
+             value="{{ (_p.google_maps_url if _p else '') or '' }}"
+             placeholder="https://maps.google.com/?q=...">
+    </label>
+
+    <div class="post-zoom-block">
+      <h3 class="post-subhead">Zoom <span class="muted smaller">(for online events)</span></h3>
+      <div class="form-row">
+        <label>Meeting ID
+          <input type="text" name="zoom_meeting_id" maxlength="64"
+                 value="{{ (_p.zoom_meeting_id if _p else '') or '' }}"
+                 placeholder="123 456 7890">
+        </label>
+        <label>Passcode
+          <input type="text" name="zoom_passcode" maxlength="128"
+                 value="{{ (_p.zoom_passcode if _p else '') or '' }}">
+        </label>
+      </div>
+      <label>Zoom URL
+        <input type="url" name="zoom_url" maxlength="500"
+               value="{{ (_p.zoom_url if _p else '') or '' }}"
+               placeholder="https://zoom.us/j/...">
+      </label>
+    </div>
+
+    {# Event contact — shown publicly when set; admins can leave all
+       three fields blank when an event has no host contact info. #}
+    <h3 class="post-subhead">Event contact <span class="muted smaller">(optional)</span></h3>
+    <label>Name
+      <input type="text" name="contact_name" maxlength="120"
+             value="{{ (_p.contact_name if _p else '') or '' }}">
+    </label>
+    <div class="form-row">
+      <label>Phone
+        <input type="tel" name="contact_phone" maxlength="64"
+               value="{{ (_p.contact_phone if _p else '') or '' }}">
+      </label>
+      <label>Email
+        <input type="email" name="contact_email" maxlength="255"
+               value="{{ (_p.contact_email if _p else '') or '' }}">
+      </label>
+    </div>
   </section>
 
-  {# ── Links ────────────────────────────────────────────────────
-     Universal to both announcements and events — pulled out of the
-     Event details card so a pure announcement can still attach
-     call-to-action buttons. Each row carries a URL, a label that
-     becomes the visible button text on the public site, a button
-     style (primary / secondary), and a checkbox controlling whether
-     the link opens in a new tab. Rows with a blank URL are silently
-     dropped at save time. #}
+  {# ── 4 · Links ───────────────────────────────────────────────────
+     Universal to both announcements and events. Each row carries a
+     URL, a label that becomes the visible button text on the public
+     site, a button style (primary / secondary), and a checkbox
+     controlling whether the link opens in a new tab. Rows with a
+     blank URL are silently dropped at save time. #}
   <section class="card">
     <div class="card-head">
       <h2>Links</h2>
-      <span class="muted smaller">Optional call-to-action buttons rendered on the public page. Applies to announcements and events.</span>
+      <span class="muted smaller">Optional call-to-action buttons on the public page. Works for announcements and events.</span>
     </div>
     {%- set _existing_links = (_p.event_links if _p else []) -%}
     <div class="post-links-editor" data-links-editor>
@@ -508,109 +473,140 @@
         </li>
       </template>
     </div>
-
   </section>
 
-  {# ── Event details (date, location, zoom) ────────────────────────
-     Only rendered when the Event checkbox at the top is on — pure
-     announcements don't carry any of these fields, so showing the
-     card just adds noise. JS below the card mirrors that gate so
-     toggling the checkbox shows/hides the card live. #}
-  <section class="card" data-event-details-card
-           {% if not (_p and _p.is_event) %}hidden{% endif %}>
+  {# ── 5 · Images ──────────────────────────────────────────────────
+     Featured image + gallery share one card — they're both "imagery
+     on the public page" and the two pickers behave the same way. The
+     JS hooks ([data-post-featured-image] / [data-post-gallery]) are
+     attribute-based, so inner <div> wrappers keep them working. #}
+  {%- set _gallery = (_p.gallery_filenames if _p else []) -%}
+  {%- set _gallery_count = _gallery|length -%}
+  <section class="card">
     <div class="card-head">
-      <h2>Event details</h2>
-      <span class="muted smaller">Filled in when the post is tagged as an event. Posts tagged only as announcements can leave these blank.</span>
+      <h2>Images</h2>
+      <span class="muted smaller">Optional. The featured image leads the post and link previews; gallery images render in a grid with a lightbox.</span>
     </div>
 
-    <div class="form-row">
-      <label>Starts
-        <span class="dt-field">
-          <input type="datetime-local" name="event_starts_at" data-event-start
-                 value="{% if _p and _p.event_starts_at %}{{ _p.event_starts_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
-          <button type="button" class="btn btn-sm dt-today" data-dt-today="start"
-                  title="Jump to today">Today</button>
-        </span>
-      </label>
-      <label>Ends
-        <span class="dt-field">
-          <input type="datetime-local" name="event_ends_at" data-event-end
-                 value="{% if _p and _p.event_ends_at %}{{ _p.event_ends_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
-          <button type="button" class="btn btn-sm dt-today" data-dt-today="end"
-                  title="Jump to today">Today</button>
-        </span>
-      </label>
-    </div>
-
-    <li class="special-page-row" style="list-style:none; margin: 1rem 0;">
-      <div class="special-page-info">
-        <div class="u-name">Online event</div>
-        <p class="muted small">When on, the location address is optional and the Zoom block below is shown.</p>
+    <div data-post-featured-image>
+      <h3 class="post-subhead">Featured image</h3>
+      <div class="og-image-row">
+        <div class="og-image-preview" data-featured-preview>
+          {% if _p and _p.featured_image_filename %}
+          <img src="{{ url_for('public.post_featured_image', pid=_p.id) }}" alt="Featured image" data-featured-preview-img>
+          {# Pill-style toggle — still a real checkbox (post_save reads
+             ``clear_featured_image`` and the File-Browser JS unchecks
+             it), just rendered as a chip that fills in red when armed. #}
+          <label class="post-featured-clear">
+            <input type="checkbox" name="clear_featured_image" value="1">
+            <span>{{ icon('x') }} Remove current image</span>
+          </label>
+          {% else %}
+          <img alt="Featured image" data-featured-preview-img hidden>
+          <div class="og-image-empty muted small" data-featured-preview-empty>No image uploaded yet.</div>
+          {% endif %}
+        </div>
+        <div class="og-image-fields">
+          <label>Upload new image <span class="muted small">(PNG, JPG, or WebP)</span>
+            <input type="file" name="featured_image" accept="image/png,image/jpeg,image/webp" data-featured-upload>
+          </label>
+          <div class="og-image-actions">
+            <button type="button" class="btn btn-sm" data-post-featured-picker>{{ icon('folder') }} Choose from File Browser</button>
+          </div>
+          {# Hidden input set by the File Browser modal. Resolved to a
+             stored filename on the server side; cleared if the admin
+             picks a different upload after browsing. #}
+          <input type="hidden" name="featured_image_media_id" value="" data-featured-media-id>
+          <div class="og-image-picked muted small" data-featured-picked-label hidden></div>
+        </div>
       </div>
-      <label class="mode-toggle">
-        <input type="checkbox" name="is_online" value="1"
-               {% if _p and _p.is_online %}checked{% endif %}>
-        <span class="mode-track"><span class="mode-thumb"></span></span>
-      </label>
-    </li>
+    </div>
 
-    <label>Venue / location name
-      <input type="text" name="location_name" maxlength="255"
-             value="{{ (_p.location_name if _p else '') or '' }}"
-             placeholder="Community Center · Hall B">
-    </label>
-    <label>Address
-      <textarea name="location_address" rows="2"
-                placeholder="123 Main St, Springfield, IL 62701">{{ (_p.location_address if _p else '') or '' }}</textarea>
-    </label>
-    <label>Google Maps link <span class="muted small">(optional — direct link the front-end can render as "Get directions")</span>
-      <input type="url" name="google_maps_url" maxlength="500"
-             value="{{ (_p.google_maps_url if _p else '') or '' }}"
-             placeholder="https://maps.google.com/?q=...">
-    </label>
-
-    <div class="post-zoom-block">
-      <h3 class="post-subhead">Zoom <span class="muted smaller">(for online events)</span></h3>
-      <div class="form-row">
-        <label>Meeting ID
-          <input type="text" name="zoom_meeting_id" maxlength="64"
-                 value="{{ (_p.zoom_meeting_id if _p else '') or '' }}"
-                 placeholder="123 456 7890">
+    <div data-post-gallery data-gallery-max="6" data-gallery-count="{{ _gallery_count }}">
+      <h3 class="post-subhead">Gallery <span class="muted smaller" data-gallery-count-label>({{ _gallery_count }} / 6)</span></h3>
+      <ul class="post-gallery-grid" data-gallery-list>
+        {% if _p %}
+          {% for fname in _gallery %}
+          {% set _idx = loop.index0 %}
+          <li class="post-gallery-tile" data-gallery-tile>
+            <img src="{{ url_for('public.post_gallery_image', pid=_p.id, idx=_idx, thumb=240) }}"
+                 alt="Gallery image {{ _idx + 1 }}" loading="lazy">
+            <input type="hidden" name="gallery_existing" value="{{ fname }}">
+            <button type="button" class="btn btn-sm btn-danger post-gallery-remove"
+                    data-gallery-remove
+                    title="Remove from gallery">{{ icon('x') }}</button>
+          </li>
+          {% endfor %}
+        {% endif %}
+      </ul>
+      <div class="post-gallery-actions">
+        <label class="post-gallery-upload-label">
+          <span>Upload images</span>
+          <span class="muted smaller">— PNG, JPG, WebP, or GIF. Multi-select supported.</span>
+          <input type="file" name="gallery_upload" multiple
+                 accept="image/png,image/jpeg,image/webp,image/gif"
+                 data-gallery-upload>
         </label>
-        <label>Passcode
-          <input type="text" name="zoom_passcode" maxlength="128"
-                 value="{{ (_p.zoom_passcode if _p else '') or '' }}">
-        </label>
+        <button type="button" class="btn btn-sm" data-post-gallery-picker>
+          {{ icon('folder') }} Choose from File Browser
+        </button>
       </div>
-      <label>Zoom URL
-        <input type="url" name="zoom_url" maxlength="500"
-               value="{{ (_p.zoom_url if _p else '') or '' }}"
-               placeholder="https://zoom.us/j/...">
-      </label>
+      {# Media-ID hidden inputs populated by the File Browser picker —
+         the JS appends one per picked item below. #}
+      <div data-gallery-picks hidden></div>
     </div>
-
-    {# Event contact — folded in above Links. Shown publicly when
-       set; admins can leave all three fields blank when an event
-       has no host contact info to surface. #}
-    <h3 class="post-subhead">Event contact <span class="muted smaller">(optional)</span></h3>
-    <label>Name
-      <input type="text" name="contact_name" maxlength="120"
-             value="{{ (_p.contact_name if _p else '') or '' }}">
-    </label>
-    <div class="form-row">
-      <label>Phone
-        <input type="tel" name="contact_phone" maxlength="64"
-               value="{{ (_p.contact_phone if _p else '') or '' }}">
-      </label>
-      <label>Email
-        <input type="email" name="contact_email" maxlength="255"
-               value="{{ (_p.contact_email if _p else '') or '' }}">
-      </label>
-    </div>
-
   </section>
-
 </form>
+
+{# Type-checkbox visibility wiring — runs after the whole form is in
+   the DOM so plain querySelector finds everything:
+   · Event details card shows only while the Event type is checked.
+   · The announcement auto-archive block (in the Publishing card)
+     shows only while the Announcement type is checked; its datetime
+     field reveals when the inner toggle is on. #}
+<script>
+(function () {
+  var annCheck = document.querySelector('input[type="checkbox"][name="is_announcement"]');
+  var expiryWrap = document.querySelector('[data-announcement-expiry]');
+  if (annCheck && expiryWrap) {
+    var expiryToggle = expiryWrap.querySelector('[data-announcement-expiry-toggle]');
+    var expiryField = expiryWrap.querySelector('[data-announcement-expiry-field]');
+    var expiryInput = expiryWrap.querySelector('[data-announcement-expiry-input]');
+    var syncWrap = function () { expiryWrap.hidden = !annCheck.checked; };
+    var syncField = function () {
+      if (!expiryField || !expiryToggle) return;
+      expiryField.hidden = !expiryToggle.checked;
+      if (expiryToggle.checked && expiryInput && !expiryInput.value) {
+        // Sensible default: 14 days out — typical "leave the
+        // announcement up for two weeks" cadence. Admin can change
+        // before saving.
+        var d = new Date();
+        d.setDate(d.getDate() + 14);
+        var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+        expiryInput.value = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' +
+                            pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      }
+    };
+    annCheck.addEventListener('change', syncWrap);
+    if (expiryToggle) expiryToggle.addEventListener('change', syncField);
+    syncWrap();
+    syncField();
+  }
+
+  // Event details card — hidden unless the Event checkbox is on.
+  // Pure announcements never use the date / location / zoom /
+  // event-contact fields, so the whole card collapses out of the
+  // form (and skips submission of empty event_starts_at /
+  // event_ends_at) when Event is unchecked.
+  var eventCheck = document.querySelector('input[type="checkbox"][name="is_event"]');
+  var eventCard = document.querySelector('[data-event-details-card]');
+  if (eventCheck && eventCard) {
+    var syncEventCard = function () { eventCard.hidden = !eventCheck.checked; };
+    eventCheck.addEventListener('change', syncEventCard);
+    syncEventCard();
+  }
+})();
+</script>
 
 {# Live title → slug sync. Mirrors `_normalize_slug` in app/routes.py:
    lowercase, non-alphanumeric runs collapse to a single `-`, leading

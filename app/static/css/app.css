@@ -858,12 +858,12 @@ html[data-theme="dark"] .perm-badge-viewer { background: rgba(100, 116, 139, 0.2
 
 
 /* ===== 404 page (admin) =====
-   The card itself stays a centered ~720px column. The outer .content
-   wrapper is widened to the full viewport width via the :has() rule
-   below so the card auto-centers between the sidebar and the right
-   edge of the screen rather than the narrow normal content column. */
+   The card itself stays a centered ~720px column. The .page body is
+   widened to the full content width via the :has() rule below so the
+   card auto-centers between the sidebar and the right edge of the
+   screen rather than the narrow normal content column. */
 .admin-404 { text-align: center; padding: 3rem 2rem; max-width: 720px; margin: 2rem auto; }
-.content:has(.admin-404) { max-width: none; }
+.page:has(.admin-404) { max-width: none; }
 .admin-404-art { max-width: 320px; margin: 0 auto 1rem; }
 .admin-404-title {
   font-family: var(--fe-font-heading, inherit);
@@ -1461,7 +1461,10 @@ html[data-theme="dark"] .post-chip-private      { background: rgba(168, 85, 247,
 .post-gallery-actions {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  /* Bottom-align so "Choose from File Browser" lines up with the
+     file input at the foot of the upload-label column rather than
+     floating to the column's vertical center. */
+  align-items: flex-end;
   gap: .75rem;
 }
 .post-gallery-upload-label {
@@ -1568,23 +1571,22 @@ html[data-theme="dark"] .post-chip-private      { background: rgba(168, 85, 247,
   .schedule-change-form-row { grid-template-columns: 1fr; }
 }
 
-/* Announcement auto-archive toggle + datetime picker on the
-   announcement / event edit page. Hidden entirely until the
-   Announcement type is selected; the inner datetime input is
-   hidden until the toggle inside is flipped on. Visual treatment
-   mirrors .public-alert-expiry on the meeting modal so the two
-   "auto-clear after a date" controls read as siblings. */
-.post-announcement-expiry { margin-top: 1rem; }
-.post-announcement-expiry-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: .55rem;
-  margin: .25rem 0 .5rem;
+/* Announcement auto-archive panel on the announcement / event edit
+   page. Hidden entirely until the Announcement type is selected.
+   One bordered panel holds the toggle row (info left, switch right —
+   same shape as the Online-event row) and, when the toggle is on,
+   the datetime field reveals below a divider inside the same panel
+   so the control reads as a single cohesive setting. */
+.post-announcement-expiry {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2);
 }
 .post-announcement-expiry-field {
-  padding: .55rem .75rem;
-  border-left: 3px solid var(--border);
-  margin-left: .35rem;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 .post-announcement-expiry-input {
   display: flex;
@@ -1598,14 +1600,91 @@ html[data-theme="dark"] .post-chip-private      { background: rgba(168, 85, 247,
   line-height: 1.4;
 }
 
-/* Headline card on the announcement / event edit page — adds 1rem
-   of vertical breathing room between each grouping (card-head,
-   type pills, title, public URL, GSR summary, body, posted-on,
-   auto-archive). Uses adjacent-sibling so the first element keeps
-   the card's own top padding without doubling. */
-.post-edit-headline-card > * + * {
+/* Uniform vertical rhythm inside every card on the announcement /
+   event edit page — 1rem between each grouping (card-head, pills,
+   labels, sub-blocks). Adjacent-sibling so the first element keeps
+   the card's own top padding without doubling. Sub-section headers
+   (.post-subhead) get a little extra air above so the card visually
+   splits into its sub-groups. */
+.post-form > .card > * + * {
   margin-top: 1rem;
 }
+.post-form > .card > .post-subhead,
+.post-form > .card > .post-zoom-block {
+  margin-top: 1.5rem;
+}
+
+/* The whole post editor reads in the body face (Inter) — no
+   monospace anywhere on this page. Overrides the global
+   `.form textarea` and slug-input / slug-history monospace rules. */
+.form.post-form textarea { font-family: inherit; }
+.post-form .slug-input-prefix,
+.post-form .slug-input-row > .slug-input-field,
+.post-form .slug-history-old,
+.post-form .slug-history-new,
+.post-form code { font-family: inherit; }
+
+/* Shared setting-toggle row on the post editor — info (title +
+   description) on the left, switch on the right. The --panel variant
+   carries its own border/tint (Online event); the bare variant sits
+   inside an already-tinted panel (auto-archive). */
+.post-toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem;
+}
+.post-toggle-row--panel {
+  padding: 12px 16px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel-2);
+}
+.post-toggle-info { min-width: 0; flex: 1; }
+.post-toggle-title { font-weight: 600; }
+.post-toggle-info p { margin: 2px 0 0; }
+
+/* "Remove current image" — a real checkbox dressed as a pill chip
+   under the featured-image thumbnail. Neutral outline at rest;
+   fills in red once armed so "this will delete on save" is obvious. */
+.post-featured-clear {
+  display: inline-flex; cursor: pointer; margin-top: 8px;
+  /* don't stretch to the preview column's full width */
+  align-self: flex-start; justify-self: start;
+}
+.post-featured-clear input {
+  position: absolute; opacity: 0; width: 1px; height: 1px;
+  pointer-events: none;
+}
+.post-featured-clear span {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--panel); color: var(--muted);
+  font-size: 0.8125rem; font-weight: 600; line-height: 1.2;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+.post-featured-clear span .icon { width: 13px; height: 13px; }
+.post-featured-clear:hover span { border-color: #ef4444; color: #ef4444; }
+.post-featured-clear input:checked + span {
+  border-color: #ef4444; background: rgba(239, 68, 68, 0.12); color: #b91c1c;
+}
+.post-featured-clear input:focus-visible + span {
+  outline: none; box-shadow: 0 0 0 3px var(--brand-soft);
+}
+html[data-theme="dark"] .post-featured-clear input:checked + span {
+  color: #fca5a5;
+}
+/* Live "armed for removal" state — JS adds .is-cleared to the
+   preview <img> when the Remove checkbox is checked so the thumbnail
+   disappears before the save round-trip. */
+.og-image-preview img.is-cleared { display: none; }
+
+/* Tighter page rhythm — the global .form gap (2rem) plus each card's
+   own 16px bottom margin left oversized gaps between the editor's
+   cards. Collapse to a single 1.25rem gap. */
+.form.post-form { gap: 1.25rem; }
+.post-form > .card { margin-bottom: 0; }
+
+/* Datetime fields don't need to span the card — cap them so the
+   Today button hugs the input instead of drifting to the far edge. */
+.post-form .dt-field > input[type="datetime-local"] { max-width: 320px; }
 
 /* Multi-row Links editor on the announcement/event edit page.
    Each row is a card-ish stack: URL + label inputs side-by-side on
@@ -2557,10 +2636,35 @@ button.sidebar-section-toggle[aria-expanded="false"] .sidebar-section-chevron {
 [data-theme="neobrutal-dark"] .theme-icon-light,
 [data-theme="cyberpunk"] .theme-icon-light { display: inline; }
 
-.content { padding: 22px 28px 48px; min-width: 0; max-width: 1400px; }
-.content:has(.fe-admin-layout) { max-width: none; }
+.content {
+  --content-px: 28px; --content-pt: 22px;
+  padding: var(--content-pt) var(--content-px) 48px;
+  min-width: 0;
+}
+/* The readable-width cap lives on the inner .page body, NOT on .content
+   itself. That way .content (and the sticky .topbar that bleeds to its
+   padding edges) spans the full grid column out to the right edge of
+   the viewport, while the page content stays capped + left-aligned.
+   The calc keeps the body's usable width identical to the old
+   max-width:1400px-on-.content (which included the 2× side padding). */
+.page { max-width: calc(1400px - 2 * var(--content-px)); }
+/* Full-bleed page bodies (frontend admin builder) opt out of the cap. */
+.page:has(.fe-admin-layout) { max-width: none; }
+/* Sticky page header — pinned to the top of the main content column on
+   every backend page. Negative margins cancel the .content padding so
+   the bar bleeds edge-to-edge (its own padding restores inner
+   alignment); var(--panel) matches the sidebar and var(--border) keeps
+   it theme-aware, so it's dark/night-mode compatible out of the box.
+   z-index 20 sits above page content but below the mobile sidebar
+   overlay (30) and modals/toasts (1000). */
 .topbar {
-  display: flex; align-items: center; gap: 14px; margin-bottom: 14px;
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 14px;
+  margin: calc(var(--content-pt) * -1) calc(var(--content-px) * -1) 16px;
+  padding: 14px var(--content-px);
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 6px 16px -12px rgba(0, 0, 0, 0.35);
 }
 .topbar h1 { font-size: 1.375rem; font-weight: 700; flex: 1; display: flex; align-items: center; gap: 8px; }
 .heading-help { position: relative; display: inline-flex; font-size: 0.875rem; font-weight: 400; }
@@ -6839,19 +6943,38 @@ body.fe-admin-autohide .menu-btn { display: grid; place-items: center; }
   .media-tbl td.row-actions > .btn,
   .media-tbl td.row-actions > form { flex: 1 1 0; min-width: 0; }
   .media-tbl td.row-actions > form > .btn { width: 100%; }
-  .content { padding: 14px 14px 32px; }
+  .content { --content-px: 14px; --content-pt: 14px; padding: var(--content-pt) var(--content-px) 32px; }
   .card { padding: 16px; }
   .stat { padding: 16px; }
-  .topbar { flex-wrap: wrap; gap: 10px; }
+  /* Bar stays pinned; the heading takes the first line and the actions
+     drop to a second line that is a single, horizontally swipeable
+     strip. Buttons keep their natural width and overflow sideways
+     (swipe left/right) instead of wrapping to multiple rows. */
+  .topbar { flex-wrap: wrap; gap: 10px; padding-top: 12px; padding-bottom: 12px; }
   .topbar h1 { flex: 1 1 auto; min-width: 0; font-size: 1.125rem; }
-  .top-actions { flex: 0 0 100%; order: 2; flex-wrap: wrap; gap: 8px; justify-content: flex-start; }
+  .top-actions {
+    flex: 0 0 100%; order: 2;
+    flex-wrap: nowrap;
+    overflow-x: auto; overflow-y: hidden;
+    gap: 8px; justify-content: flex-start;
+    /* horizontal pan, momentum scroll, and a hidden scrollbar gutter
+       so the bar reads clean — same treatment as the sidebar nav */
+    touch-action: pan-x; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  .top-actions::-webkit-scrollbar { width: 0; height: 0; display: none; }
+  /* every action (button or inline <form>) keeps its intrinsic width
+     and never shrinks, so the row stays a swipe strip */
+  .top-actions > * { flex: 0 0 auto; }
   .top-actions > .btn,
-  .top-actions > .btn-primary { flex: 1 1 auto; min-width: 140px; justify-content: center; }
-  .view-controls { width: 100%; margin-right: 0; flex-wrap: wrap; gap: 8px; }
-  .view-controls > .view-toggle { flex: 1 1 auto; min-width: 0; }
-  .view-toggle .btn { flex: 1 1 0; min-width: 0; padding: 7px 10px; text-align: center; }
-  .sort-select { flex: 1 1 140px; min-width: 0; }
-  .sort-select select { flex: 1; min-width: 0; }
+  .top-actions > .btn-primary { min-width: 0; white-space: nowrap; justify-content: center; }
+  /* view-controls (toggles + sort) ride inside the same strip as one
+     non-wrapping inline group */
+  .view-controls { width: auto; flex: 0 0 auto; margin-right: 0; flex-wrap: nowrap; gap: 8px; }
+  .view-controls > .view-toggle { flex: 0 0 auto; min-width: 0; }
+  .view-toggle .btn { flex: 0 0 auto; min-width: 0; padding: 7px 10px; text-align: center; white-space: nowrap; }
+  .sort-select { flex: 0 0 auto; min-width: 0; }
+  .sort-select select { flex: 0 0 auto; min-width: 0; }
   .sort-dir { flex: 0 0 auto; }
   .heading-help { display: none; }
   .media-search { flex-wrap: wrap; }

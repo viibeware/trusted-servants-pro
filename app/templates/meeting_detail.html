@@ -152,7 +152,7 @@
       {% if meeting.meeting_type != 'in_person' and meeting.show_otp and otp_email and (otp_email.email or otp_email.login_url or otp_email.imap_host) %}
       <div class="zg-card otp-card">
       <div class="detail-label">Zoom One-Time-Passcodes (OTP)</div>
-      <p class="muted small" style="margin: 4px 0 6px;">Retrieve one-time-passcodes for the assigned Zoom account. Click retrieve and the system will keep checking — <strong>it may take up to a minute to retrieve a code</strong>.</p>
+      <p class="muted small" style="margin: 4px 0 6px;">Retrieve one-time-passcodes for the assigned Zoom account. After Zoom prompts for the code, click this retrieve button and the system will fetch it — <strong>it may take up to a minute to retrieve</strong>.</p>
       {% if otp_email.imap_host %}
       {# Inline auto-retrieval — same fetcher the guided wizard uses, so
          seasoned hosts can pull the latest code without opening the
@@ -275,7 +275,7 @@
         </div>
 
         <div class="zg-otp" data-otp-widget data-fetch-url="{{ url_for('main.otp_email_fetch_code') }}">
-          <p class="zg-otp-instruction">{{ icon('clock') }} Click retrieve and the system will keep checking — <strong>it may take up to a minute to retrieve a code</strong>.</p>
+          <p class="zg-otp-instruction">{{ icon('clock') }} After Zoom prompts for the code, click this retrieve button and the system will fetch it — <strong>it may take up to a minute to retrieve</strong>.</p>
           {% if _imap_ready %}
           <button type="button" class="btn btn-primary zg-otp-fetch" data-otp-fetch>
             {{ icon('mail') }}<span class="zg-otp-fetch-label">Retrieve code</span>

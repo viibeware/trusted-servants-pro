@@ -7,7 +7,15 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.12.6 — 2026-06-11 (latest) — Shared-account sign-ups & a cleaner Libraries widget
+## 2.13.0 — 2026-06-12 (latest) — A cleaner post editor and a sticky, full-width header
+
+- **The announcement / event editor is reorganized and de-cluttered.** Fields now flow in a logical order — what the post is (type, title, URL, and when it publishes) → its content → event details → links → images — with Links moved above Images. The old separate "Publishing" card was folded into the top card, the cramped monospaced fields now use the regular Inter font, and the spacing between sections is tighter.
+- **Pick a featured image and see it right away.** Choosing an image now shows the thumbnail instantly, before you save. And clicking "Remove current image" hides the thumbnail on the spot so you can see the change before saving — the removal still only takes effect when you save.
+- **The "Auto-archive this announcement" control looks like one tidy setting** — a single panel with the switch and the date picker together — matching the "Online event" toggle. "Remove current image" is now a clear red pill instead of a stray checkbox.
+- **The page header bar now stays pinned to the top as you scroll** on every admin page, uses the same background as the sidebar, and looks right in dark mode. It also now stretches the full width of the screen to the right edge.
+- **On phones, the header's buttons are swipeable.** Instead of wrapping onto several lines, the action buttons sit in a single row you can swipe left/right.
+
+## 2.12.6 — 2026-06-11 — Shared-account sign-ups & a cleaner Libraries widget
 
 - **The Trusted Servants sign-up widget now works for shared accounts.** If several people share one portal login, each can add themselves to the email list: the dashboard form always starts blank, never pre-fills or "remembers" the last person, and never offers to remove anyone. Every submission creates its own new entry. Editing and removing entries stays admin-only on the Email List page.
 - **The Libraries dashboard widget no longer lists Intergroup libraries.** It now shows only the regular Libraries-module entries — matching the Libraries page itself. Intergroup-flagged libraries remain in their dedicated Intergroup sidebar section.

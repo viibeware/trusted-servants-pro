@@ -6,6 +6,59 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.13.0] — 2026-06-12
+
+### Changed
+
+- **Announcement / event post editor relaid out.** `post_edit.html` is split
+  into a logical top-to-bottom card flow — **Type & title** (now also holding
+  "Posted on / schedule for" and the announcement auto-archive control, merged
+  in from the former standalone Publishing card) → **Content** → **Event
+  details** → **Links** → **Images**. Links moved above Images. All monospace
+  faces on the page (body/summary textareas, slug input + prefix, slug-history
+  chips, inline `code`) now inherit Inter via `.post-form` overrides. Inter-card
+  spacing tightened (`.form.post-form` gap 1.25rem; cards lose their own
+  bottom margin) and datetime inputs capped at 320px so the "Today" button
+  hugs the field.
+- **Auto-archive control restyled as a cohesive panel.** The "Auto-archive this
+  announcement" switch + datetime now share one bordered, panel-tinted block
+  matching the "Online event" toggle row (shared `.post-toggle-row` /
+  `.post-toggle-info` classes), with the date field revealing below a divider
+  inside the same panel.
+- **"Remove current image" restyled as a pill toggle.** The featured-image
+  clear checkbox renders as a chip (`.post-featured-clear`) — neutral outline
+  at rest, red fill + × icon when armed — instead of a bare checkbox.
+- **Topbar header is now sticky and full-width.** `.topbar` is pinned
+  (`position: sticky; top: 0`) across every backend page with the sidebar's
+  `var(--panel)` background, a `var(--border)` bottom border, and a soft
+  shadow — fully theme-aware (dark/night-mode compatible). The readable-width
+  cap moved off `.content` onto the inner `.page` body
+  (`max-width: calc(1400px - 2 * var(--content-px))`), so the bar bleeds the
+  full grid column out to the right edge of the viewport while page content
+  keeps its prior width and left alignment. Frontend-admin / 404 full-bleed
+  opt-outs moved to `.page:has(…)`.
+
+### Added
+
+- **Instant featured-image preview.** Choosing a file in "Upload new image"
+  swaps the thumbnail immediately via `URL.createObjectURL` (no save needed),
+  hiding the empty placeholder and clearing any stale File-Browser pick.
+- **Live "Remove current image".** Arming the clear pill hides the thumbnail
+  on the spot (`.is-cleared`); unchecking — or picking a new upload — restores
+  it. The actual delete still happens server-side on save.
+- **Swipeable mobile topbar actions.** On phones the top-actions row is a
+  single non-wrapping, horizontally swipeable strip (`overflow-x: auto`,
+  `flex-wrap: nowrap`, hidden scrollbar, `touch-action: pan-x`) instead of
+  wrapping to multiple rows; list-page view controls ride in the same strip.
+
+### Fixed
+
+- **Gallery "Choose from File Browser" alignment.** The button bottom-aligns
+  with the file input instead of floating to the upload-label column's center.
+- **Zoom OTP retrieve copy reworded** on the Meeting and Zoom Accounts pages:
+  "After Zoom prompts for the code, click this retrieve button and the system
+  will fetch it — it may take up to a minute to retrieve."
+
 ## [2.12.6] — 2026-06-11
 
 ### Changed

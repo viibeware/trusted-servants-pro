@@ -64,7 +64,7 @@
     <aside class="zoom-accounts-side">
       <div class="zoom-otp-widget">
         <h3 class="zoom-otp-title">Zoom One-Time-Passcodes (OTP)</h3>
-        <p class="muted small">Retrieve one-time-passcodes for the assigned Zoom account. Click retrieve and the system will keep checking — <strong>it may take up to a minute to retrieve a code</strong>.</p>
+        <p class="muted small">Retrieve one-time-passcodes for the assigned Zoom account. After Zoom prompts for the code, click this retrieve button and the system will fetch it — <strong>it may take up to a minute to retrieve</strong>.</p>
         {% if otp.imap_host %}
         {# Inline auto-retrieval — shares the wizard's fetcher (initOtpFetch). #}
         <div class="otp-inline" data-otp-widget data-fetch-url="{{ url_for('main.otp_email_fetch_code') }}">
