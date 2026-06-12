@@ -2660,7 +2660,10 @@ button.sidebar-section-toggle[aria-expanded="false"] .sidebar-section-chevron {
 .topbar {
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 14px;
-  margin: calc(var(--content-pt) * -1) calc(var(--content-px) * -1) 16px;
+  /* Bottom margin matches the container's left/right padding
+     (--content-px) so the gap below the bar reads congruent with the
+     side gutters. */
+  margin: calc(var(--content-pt) * -1) calc(var(--content-px) * -1) var(--content-px);
   padding: 14px var(--content-px);
   background: var(--panel);
   border-bottom: 1px solid var(--border);

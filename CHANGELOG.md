@@ -36,7 +36,9 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
   (`max-width: calc(1400px - 2 * var(--content-px))`), so the bar bleeds the
   full grid column out to the right edge of the viewport while page content
   keeps its prior width and left alignment. Frontend-admin / 404 full-bleed
-  opt-outs moved to `.page:has(…)`.
+  opt-outs moved to `.page:has(…)`. The bar's bottom margin uses
+  `var(--content-px)` so the gap below it matches the container's
+  left/right gutters at every breakpoint.
 
 ### Added
 
