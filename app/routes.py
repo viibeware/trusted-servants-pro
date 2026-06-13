@@ -7,7 +7,7 @@ import time
 import uuid
 from functools import wraps
 from flask import (Blueprint, render_template, redirect, url_for, request,
-                   flash, send_from_directory, abort, current_app, jsonify)
+                   flash, send_from_directory, abort, current_app, jsonify, session)
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
@@ -15936,6 +15936,110 @@ def turnstile_save():
     db.session.commit()
     flash("Login bot protection saved", "success")
     return redirect(_safe_referrer() or url_for("main.index"))
+
+
+# --- Multi-factor authentication (TOTP) -------------------------------------
+# Self-enrolment for the signed-in admin. Three steps:
+#   begin  → mint a provisional secret (held in the session, not the DB) and
+#            return the QR + manual key for the authenticator app.
+#   enable → confirm the app is producing valid codes, then persist the
+#            encrypted secret + freshly minted recovery codes.
+#   disable / regen-recovery → re-authenticate with the account password
+#            before mutating an already-active second factor.
+# All four are admin-only and operate strictly on current_user — an admin
+# can never read or change another account's MFA here.
+
+def _mfa_issuer():
+    s = SiteSetting.query.first()
+    name = ((s.smtp_from_name if s else None) or "Trusted Servants Pro").strip()
+    return name or "Trusted Servants Pro"
+
+
+@bp.route("/settings/mfa/begin", methods=["POST"])
+@admin_required
+def mfa_begin():
+    """Mint a provisional TOTP secret for enrolment and return its QR +
+    manual key. The secret lives in the session only until /mfa/enable
+    confirms it — abandoning setup never touches the stored credential."""
+    from . import totp
+    secret = totp.generate_secret()
+    session["mfa_setup_secret"] = secret
+    uri = totp.provisioning_uri(secret, current_user.username, _mfa_issuer())
+    return jsonify(ok=True, secret=secret, otpauth_uri=uri,
+                   qr=totp.qr_data_uri(uri))
+
+
+@bp.route("/settings/mfa/enable", methods=["POST"])
+@admin_required
+def mfa_enable():
+    """Confirm the provisional secret with a live code, then turn MFA on
+    and hand back one-time recovery codes (shown to the admin exactly
+    once — only their hashes are stored)."""
+    from . import totp
+    if current_user.mfa_enabled:
+        return jsonify(ok=False, error="Two-factor authentication is already enabled."), 400
+    secret = session.get("mfa_setup_secret")
+    if not secret:
+        return jsonify(ok=False, error="Setup expired — start again."), 400
+    code = (request.form.get("code") or "").strip()
+    if not totp.verify(secret, code):
+        return jsonify(ok=False, error="That code didn't match. Check the app and try again."), 400
+    recovery = totp.generate_recovery_codes()
+    user = db.session.get(User, current_user.id)
+    user.mfa_secret_enc = encrypt(secret)
+    user.mfa_recovery_codes_json = json.dumps(totp.hash_recovery_codes(recovery))
+    user.mfa_enabled = True
+    db.session.commit()
+    session.pop("mfa_setup_secret", None)
+    from . import activity
+    activity.log("mfa.enable", user=user,
+                 summary="Enabled two-factor authentication")
+    return jsonify(ok=True, recovery_codes=recovery)
+
+
+@bp.route("/settings/mfa/disable", methods=["POST"])
+@admin_required
+def mfa_disable():
+    """Turn MFA off. Re-authenticates with the account password first so a
+    walked-up-to, already-unlocked session can't silently strip the second
+    factor — and so it works even if the authenticator device is lost."""
+    from werkzeug.security import check_password_hash
+    user = db.session.get(User, current_user.id)
+    if not user.mfa_enabled:
+        return jsonify(ok=False, error="Two-factor authentication isn't enabled."), 400
+    password = request.form.get("password") or ""
+    if not check_password_hash(user.password_hash, password):
+        return jsonify(ok=False, error="Password incorrect."), 400
+    user.mfa_enabled = False
+    user.mfa_secret_enc = None
+    user.mfa_recovery_codes_json = None
+    db.session.commit()
+    from . import activity
+    activity.log("mfa.disable", user=user,
+                 summary="Disabled two-factor authentication")
+    return jsonify(ok=True)
+
+
+@bp.route("/settings/mfa/regenerate-recovery", methods=["POST"])
+@admin_required
+def mfa_regenerate_recovery():
+    """Issue a fresh set of recovery codes (invalidating the old set).
+    Password-gated, mirroring disable."""
+    from werkzeug.security import check_password_hash
+    from . import totp
+    user = db.session.get(User, current_user.id)
+    if not user.mfa_enabled:
+        return jsonify(ok=False, error="Two-factor authentication isn't enabled."), 400
+    password = request.form.get("password") or ""
+    if not check_password_hash(user.password_hash, password):
+        return jsonify(ok=False, error="Password incorrect."), 400
+    recovery = totp.generate_recovery_codes()
+    user.mfa_recovery_codes_json = json.dumps(totp.hash_recovery_codes(recovery))
+    db.session.commit()
+    from . import activity
+    activity.log("mfa.recovery.regenerate", user=user,
+                 summary="Regenerated MFA recovery codes")
+    return jsonify(ok=True, recovery_codes=recovery)
 
 
 # --- Email / SMTP settings ---

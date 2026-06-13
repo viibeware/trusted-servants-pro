@@ -7,7 +7,18 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.13.1 — 2026-06-12 (latest) — A full search results page and a smarter search palette
+## 2.14.0 — 2026-06-13 (latest) — Two-factor authentication for admins
+
+- **You can now turn on two-factor authentication (2FA) for your admin account.** Open **Settings → Security → Set up two-factor authentication**, scan the QR code with an authenticator app, and enter the 6-digit code to confirm. It works with any standard app — **2FAS**, Google Authenticator, Aegis, 1Password, and the rest.
+- **It's optional and admin-only.** Each admin chooses whether to switch it on; other roles never see this step. Once enabled, you'll be asked for a code from your app after entering your password each time you sign in.
+- **Recovery codes mean you can't get locked out.** When you enable 2FA you get ten one-time recovery codes — save them somewhere safe. If you ever lose your phone, any one of them gets you in. You can regenerate a fresh set anytime (you'll confirm your password first).
+- **Turning it off is protected too.** Disabling 2FA or generating new recovery codes asks for your account password first, so nobody can quietly remove the extra protection from a logged-in screen.
+
+## 2.13.2 — 2026-06-13 — Toasts no longer cover the topbar
+
+- **Pop-up "Saved" and error messages now appear just below the top bar** instead of on top of it, so they no longer hide the buttons in the header while you're working.
+
+## 2.13.1 — 2026-06-12 — A full search results page and a smarter search palette
 
 - **There's now a full search results page.** When a search turns up more than the quick palette can show, click **"See all results"** to open a dedicated page listing everything — meetings, libraries and files, announcements and events, stories, blog posts, locations, users, pages, and more. Filter to a single type with one click and sort by Relevance, Name (A–Z / Z–A), or Recently updated.
 - **Filtering and sorting are instant.** Clicking a type or changing the sort updates the results in place — no full page reload, your scroll position stays put, and the browser's Back/Forward buttons work as expected.

@@ -1289,6 +1289,97 @@
       </div>
       <div class="settings-pane" data-pane="security">
 
+        {# ── Two-Factor Authentication (TOTP) ────────────────────── #}
+        {% if current_user.is_admin() %}
+        <section class="card data-card mfa-card"
+                 data-mfa-enabled="{{ '1' if current_user.mfa_enabled else '0' }}"
+                 data-begin-url="{{ url_for('main.mfa_begin') }}"
+                 data-enable-url="{{ url_for('main.mfa_enable') }}"
+                 data-disable-url="{{ url_for('main.mfa_disable') }}"
+                 data-regen-url="{{ url_for('main.mfa_regenerate_recovery') }}">
+          <div class="data-card-head">
+            {{ icon('shield') }}
+            <span>Two-Factor Authentication</span>
+            <span class="mfa-status-pill {{ 'on' if current_user.mfa_enabled else 'off' }}">
+              {{ 'Enabled' if current_user.mfa_enabled else 'Off' }}
+            </span>
+          </div>
+          <p class="muted small data-card-lead">
+            Add a one-time code from an authenticator app (2FAS, Google
+            Authenticator, Aegis, 1Password…) on top of your password. This
+            protects <strong>your admin account only</strong> and is entirely
+            optional — other roles never see this step.
+          </p>
+
+          {# State: OFF — show the enrol entry point #}
+          <div class="mfa-off" {% if current_user.mfa_enabled %}hidden{% endif %}>
+            <button type="button" class="btn btn-primary mfa-begin-btn">Set up two-factor authentication</button>
+
+            {# Enrolment panel, revealed after /mfa/begin returns the QR #}
+            <div class="mfa-setup" hidden>
+              <div class="mfa-setup-grid">
+                <div class="mfa-qr-wrap"><img class="mfa-qr" alt="2FA setup QR code"></div>
+                <div class="mfa-setup-steps">
+                  <p class="mfa-step"><span class="mfa-step-n">1</span>
+                    Scan this QR code in your authenticator app — in 2FAS, tap
+                    <strong>＋ → Scan QR code</strong>.</p>
+                  <p class="muted smaller mfa-manual-lead">Can't scan? Enter this key manually (Time-based, SHA-1, 6 digits):</p>
+                  <code class="mfa-secret" tabindex="0"></code>
+                  <p class="mfa-step"><span class="mfa-step-n">2</span>
+                    Enter the 6-digit code the app shows to confirm:</p>
+                  <div class="mfa-confirm-row">
+                    <input type="text" class="mfa-code-input" inputmode="numeric"
+                           autocomplete="one-time-code" maxlength="6" placeholder="123456">
+                    <button type="button" class="btn btn-primary mfa-enable-btn">Verify &amp; enable</button>
+                    <button type="button" class="btn mfa-cancel-btn">Cancel</button>
+                  </div>
+                  <p class="mfa-error" role="alert" hidden></p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {# State: ON — status + manage actions #}
+          <div class="mfa-on" {% if not current_user.mfa_enabled %}hidden{% endif %}>
+            <p class="mfa-on-lead">
+              {{ icon('check') }}
+              Two-factor authentication is protecting this account. You'll be
+              asked for a code from your authenticator each time you sign in.
+            </p>
+            <div class="mfa-manage-actions">
+              <button type="button" class="btn mfa-regen-btn">Regenerate recovery codes</button>
+              <button type="button" class="btn btn-danger mfa-disable-btn">Disable two-factor</button>
+            </div>
+            {# Re-auth gate for the two manage actions above. JS sets
+               data-action to 'disable' or 'regen' before revealing it. #}
+            <div class="mfa-pw-confirm" hidden data-action="">
+              <label class="mfa-pw-label"><span class="mfa-pw-prompt"></span>
+                <input type="password" class="mfa-pw-input" autocomplete="current-password" placeholder="Your account password">
+              </label>
+              <div class="mfa-confirm-row">
+                <button type="button" class="btn btn-primary mfa-pw-go">Confirm</button>
+                <button type="button" class="btn mfa-pw-cancel">Cancel</button>
+              </div>
+              <p class="mfa-error" role="alert" hidden></p>
+            </div>
+          </div>
+
+          {# Recovery codes — shown once after enable / regenerate #}
+          <div class="mfa-recovery" hidden>
+            <div class="mfa-recovery-head">{{ icon('key') }} <strong>Save your recovery codes</strong></div>
+            <p class="muted small">
+              Each code works once if you lose access to your authenticator.
+              Store them somewhere safe — they won't be shown again.
+            </p>
+            <ul class="mfa-recovery-list"></ul>
+            <div class="mfa-recovery-actions">
+              <button type="button" class="btn mfa-recovery-copy">Copy codes</button>
+              <button type="button" class="btn btn-primary mfa-recovery-done">Done</button>
+            </div>
+          </div>
+        </section>
+        {% endif %}
+
         {# ── Zoom One-Time-Passcodes (OTP) ───────────────────────── #}
         <section class="card data-card">
           <div class="data-card-head">
@@ -2267,6 +2358,152 @@
     sync();
     if (window.ResizeObserver) new ResizeObserver(sync).observe(bar);
     else window.addEventListener('resize', sync);
+  })();
+
+  // ── Settings → Security: Two-Factor Authentication enrolment ──────
+  // Drives the self-enrolment card. All four endpoints are admin-only and
+  // act on the signed-in user; the CSRF header is attached automatically
+  // by the global fetch wrapper in app.js.
+  (function(){
+    const card = document.querySelector('.mfa-card');
+    if (!card) return;
+    const $ = sel => card.querySelector(sel);
+    const toast = (m, k) => (window.showSettingsToast || window.tspShowToast || (()=>{}))(m, k);
+
+    async function post(url, data){
+      const body = new URLSearchParams(data || {});
+      const resp = await fetch(url, { method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+      let json = {};
+      try { json = await resp.json(); } catch (_) {}
+      if (!resp.ok || json.ok === false) throw new Error(json.error || 'Request failed');
+      return json;
+    }
+    function showErr(el, msg){ el.textContent = msg; el.hidden = false; }
+    function clearErr(el){ el.hidden = true; el.textContent = ''; }
+
+    // Render the one-time recovery codes panel and hide whatever state
+    // the card was in.
+    function showRecovery(codes){
+      const list = $('.mfa-recovery-list');
+      list.innerHTML = '';
+      codes.forEach(c => { const li = document.createElement('li'); li.textContent = c; list.appendChild(li); });
+      $('.mfa-off').hidden = true;
+      $('.mfa-on').hidden = true;
+      $('.mfa-recovery').hidden = false;
+      card.dataset.recoveryCodes = codes.join('\n');
+    }
+    function flipToEnabled(){
+      const pill = $('.mfa-status-pill');
+      pill.textContent = 'Enabled'; pill.classList.remove('off'); pill.classList.add('on');
+      card.dataset.mfaEnabled = '1';
+    }
+
+    // — Begin enrolment: fetch QR + secret —
+    const beginBtn = $('.mfa-begin-btn');
+    if (beginBtn) beginBtn.addEventListener('click', async () => {
+      beginBtn.disabled = true;
+      try {
+        const r = await post(card.dataset.beginUrl);
+        $('.mfa-qr').src = r.qr;
+        $('.mfa-secret').textContent = r.secret;
+        $('.mfa-setup').hidden = false;
+        beginBtn.hidden = true;
+        $('.mfa-code-input').focus();
+      } catch (e) { toast(e.message, 'danger'); beginBtn.disabled = false; }
+    });
+
+    // — Confirm + enable —
+    const enableBtn = $('.mfa-enable-btn');
+    if (enableBtn) enableBtn.addEventListener('click', async () => {
+      const input = $('.mfa-code-input');
+      const err = $('.mfa-setup .mfa-error');
+      clearErr(err);
+      const code = (input.value || '').trim();
+      if (!/^\d{6}$/.test(code)) { showErr(err, 'Enter the 6-digit code.'); return; }
+      enableBtn.disabled = true;
+      try {
+        const r = await post(card.dataset.enableUrl, { code });
+        flipToEnabled();
+        showRecovery(r.recovery_codes);
+        toast('Two-factor authentication enabled', 'success');
+      } catch (e) { showErr(err, e.message); }
+      enableBtn.disabled = false;
+    });
+    const codeInput = $('.mfa-code-input');
+    if (codeInput) codeInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); enableBtn.click(); } });
+
+    // — Cancel enrolment —
+    const cancelBtn = $('.mfa-cancel-btn');
+    if (cancelBtn) cancelBtn.addEventListener('click', () => {
+      $('.mfa-setup').hidden = true;
+      $('.mfa-code-input').value = '';
+      clearErr($('.mfa-setup .mfa-error'));
+      beginBtn.hidden = false; beginBtn.disabled = false;
+    });
+
+    // — Password-gated manage actions (disable / regenerate) —
+    const pwPanel = $('.mfa-pw-confirm');
+    function openPw(action, promptText){
+      pwPanel.dataset.action = action;
+      $('.mfa-pw-prompt').textContent = promptText;
+      $('.mfa-pw-input').value = '';
+      clearErr($('.mfa-pw-confirm .mfa-error'));
+      pwPanel.hidden = false;
+      $('.mfa-manage-actions').hidden = true;
+      $('.mfa-pw-input').focus();
+    }
+    function closePw(){
+      pwPanel.hidden = true;
+      $('.mfa-manage-actions').hidden = false;
+    }
+    const disableBtn = $('.mfa-disable-btn');
+    if (disableBtn) disableBtn.addEventListener('click', () => openPw('disable', 'Confirm your password to turn two-factor off:'));
+    const regenBtn = $('.mfa-regen-btn');
+    if (regenBtn) regenBtn.addEventListener('click', () => openPw('regen', 'Confirm your password to generate new recovery codes:'));
+    $('.mfa-pw-cancel').addEventListener('click', closePw);
+    $('.mfa-pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('.mfa-pw-go').click(); } });
+    $('.mfa-pw-go').addEventListener('click', async () => {
+      const err = $('.mfa-pw-confirm .mfa-error');
+      clearErr(err);
+      const password = $('.mfa-pw-input').value;
+      if (!password) { showErr(err, 'Enter your password.'); return; }
+      const action = pwPanel.dataset.action;
+      try {
+        if (action === 'disable') {
+          await post(card.dataset.disableUrl, { password });
+          const pill = $('.mfa-status-pill');
+          pill.textContent = 'Off'; pill.classList.remove('on'); pill.classList.add('off');
+          card.dataset.mfaEnabled = '0';
+          closePw();
+          $('.mfa-on').hidden = true;
+          $('.mfa-off').hidden = false;
+          beginBtn.hidden = false; beginBtn.disabled = false;
+          $('.mfa-setup').hidden = true;
+          toast('Two-factor authentication disabled', 'success');
+        } else {
+          const r = await post(card.dataset.regenUrl, { password });
+          closePw();
+          showRecovery(r.recovery_codes);
+          toast('New recovery codes generated', 'success');
+        }
+      } catch (e) { showErr(err, e.message); }
+    });
+
+    // — Recovery panel: copy + done —
+    $('.mfa-recovery-copy').addEventListener('click', () => {
+      const text = card.dataset.recoveryCodes || '';
+      (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject())
+        .then(() => toast('Recovery codes copied', 'success'))
+        .catch(() => toast('Copy failed — select the codes manually', 'danger'));
+    });
+    $('.mfa-recovery-done').addEventListener('click', () => {
+      $('.mfa-recovery').hidden = true;
+      delete card.dataset.recoveryCodes;
+      // Land on whichever state the card is now in.
+      if (card.dataset.mfaEnabled === '1') $('.mfa-on').hidden = false;
+      else { $('.mfa-off').hidden = false; beginBtn.hidden = false; beginBtn.disabled = false; }
+    });
   })();
 </script>
 

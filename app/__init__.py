@@ -1844,7 +1844,11 @@ def _migrate_sqlite(app):
                          ("last_endpoint", "VARCHAR(128)"),
                          ("last_path", "VARCHAR(500)"),
                          ("password_reset_allowed", "BOOLEAN NOT NULL DEFAULT 1"),
-                         ("disabled", "BOOLEAN NOT NULL DEFAULT 0")):
+                         ("disabled", "BOOLEAN NOT NULL DEFAULT 0"),
+                         # Optional admin-only TOTP second factor.
+                         ("mfa_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("mfa_secret_enc", "BLOB"),
+                         ("mfa_recovery_codes_json", "TEXT")):
             add("user", col, ddl)
         for col, ddl in (("open_in_new_tab", "BOOLEAN NOT NULL DEFAULT 0"),
                          ("form_trigger", "VARCHAR(64)")):

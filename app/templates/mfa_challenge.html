@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Two-factor authentication · Trusted Servants Pro{% endblock %}
+{% block auth_content %}
+<div class="login-split" data-transition="0">
+  {% set _default_colors = '["#16c2ba", "#1883d5", "#5a1ce5"]' %}
+  {% set _bg = site.login_bg_color if site else None %}
+  {% set _bg_colors = (site.login_bg_colors if site else None) or (None if _bg else _default_colors) %}
+  {% set _effect = (site.login_particle_effect if site else None) or 'stars' %}
+  {% set _speed = (site.login_particle_speed if site else None) or 85 %}
+  {% set _size = (site.login_particle_size if site else None) or 185 %}
+  <aside class="login-hero"{% if _bg and not _bg_colors %} style="background: {{ _bg }};"{% endif %} data-effect="{{ _effect }}" data-speed="{{ _speed }}" data-size="{{ _size }}"{% if _bg_colors %} data-bg-colors='{{ _bg_colors }}'{% endif %}>
+    <canvas class="login-hero-bg" aria-hidden="true"></canvas>
+    <div class="login-hero-inner">
+      <img class="login-hero-logo" src="{{ url_for('static', filename='img/logo_tspro_white.svg') }}" alt="Trusted Servants Pro">
+      <div class="login-hero-title">Trusted Servants Pro</div>
+    </div>
+  </aside>
+
+  <section class="login-form-pane">
+    <form method="post" class="login-form mfa-form" action="{{ url_for('auth.mfa_challenge') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="flashes">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}<div class="flash flash-{{ cat }}">{{ msg }}</div>{% endfor %}
+      {% endwith %}
+      </div>
+      <h1 class="mfa-form-title">Two-step verification</h1>
+      <p class="muted small mfa-form-lead">
+        Enter the 6-digit code from your authenticator app to finish signing in.
+      </p>
+      <label>
+        <span>Authentication code <span class="req">*</span></span>
+        {# 6-digit TOTP or an 11-char XXXXX-XXXXX recovery code. #}
+        <input name="code" type="text" autocomplete="one-time-code"
+               maxlength="11" autofocus required placeholder="123456">
+      </label>
+      <button class="btn btn-primary login-submit" type="submit">Verify</button>
+      <p class="muted smaller mfa-form-recovery">
+        Lost your authenticator? Enter one of your recovery codes instead.
+      </p>
+      <div class="login-remember-row mfa-form-back">
+        <a class="login-forgot" href="{{ url_for('auth.login') }}">Cancel</a>
+      </div>
+    </form>
+  </section>
+</div>
+<script src="{{ url_for('static', filename='js/login_fx.js', v=app_build_id) }}"></script>
+{% endblock %}

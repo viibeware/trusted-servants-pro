@@ -15670,3 +15670,76 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
 .fe-theme-mode-opt input { margin-top: 4px; flex: 0 0 auto; }
 .fe-theme-mode-opt strong { display: block; margin-bottom: 2px; }
 .fe-theme-mode-opt .muted { display: block; }
+
+/* ===== Settings → Security: Two-Factor Authentication card ===== */
+/* Status pill in the card head — green when active, neutral when off. */
+.mfa-status-pill { margin-left: auto; font-size: 0.72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em; padding: 3px 10px;
+  border-radius: 999px; border: 1px solid var(--border); color: var(--muted);
+  background: var(--panel); }
+.mfa-status-pill.on { color: #14532d; background: #e7f8ee; border-color: #b5e5cd; }
+[data-theme="dark"] .mfa-status-pill.on { color: #b7f5cf; background: #15341f; border-color: #1c5a35; }
+
+/* Enrolment: QR on the left, numbered steps on the right. Wraps to a
+   single stacked column on narrow viewports. */
+.mfa-setup { margin-top: 16px; }
+.mfa-setup-grid { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
+.mfa-setup-steps { flex: 1 1 260px; min-width: 240px; }
+.mfa-step { display: flex; gap: 9px; align-items: flex-start; line-height: 1.5; margin: 0; }
+.mfa-step + .mfa-step { margin-top: 16px; }
+.mfa-step-n { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent, #1883d5); color: #fff; font-size: 0.78rem; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
+.mfa-manual-lead { margin: 4px 0 6px 31px; }
+
+/* QR + manual key */
+.mfa-qr-wrap { flex: 0 0 auto; padding: 10px;
+  background: #fff; border: 1px solid var(--border); border-radius: 10px; }
+.mfa-qr { display: block; width: 180px; height: 180px; image-rendering: pixelated; }
+.mfa-secret { display: inline-block; margin-left: 31px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95rem; letter-spacing: 0.12em; word-break: break-all;
+  padding: 7px 12px; background: var(--panel-2, rgba(127,127,127,0.08));
+  border: 1px solid var(--border); border-radius: 8px; user-select: all; }
+
+/* Confirm rows (enable + password gate) */
+.mfa-confirm-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  margin-top: 10px; }
+.mfa-code-input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.15rem; letter-spacing: 0.3em; width: 7.5em; text-align: center; }
+.mfa-error { color: var(--danger); font-size: 0.85rem; margin: 8px 0 0; }
+.mfa-setup-steps .mfa-confirm-row,
+.mfa-setup-steps > .mfa-error { margin-left: 31px; }
+
+/* Enabled-state lead + manage actions */
+.mfa-on-lead { display: flex; align-items: flex-start; gap: 8px; margin: 6px 0 14px;
+  color: var(--text); }
+.mfa-on-lead svg { flex: 0 0 auto; color: #16a34a; margin-top: 2px; }
+.mfa-manage-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* Re-auth gate */
+.mfa-pw-confirm { margin-top: 14px; padding: 14px; border: 1px solid var(--border);
+  border-radius: 10px; background: var(--panel-2, rgba(127,127,127,0.05)); }
+.mfa-pw-confirm .mfa-pw-label { display: block; }
+.mfa-pw-input { width: 100%; max-width: 320px; }
+
+/* One-time recovery codes panel */
+.mfa-recovery { margin-top: 16px; padding: 16px; border: 1px solid #fde4b3;
+  background: #fff6e1; border-radius: 10px; }
+[data-theme="dark"] .mfa-recovery { background: #2e2410; border-color: #5a4514; }
+.mfa-recovery-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.mfa-recovery-list { list-style: none; margin: 12px 0; padding: 0;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.95rem;
+  letter-spacing: 0.06em; }
+.mfa-recovery-list li { padding: 4px 8px; background: rgba(255,255,255,0.6);
+  border: 1px solid rgba(0,0,0,0.06); border-radius: 6px; text-align: center; user-select: all; }
+[data-theme="dark"] .mfa-recovery-list li { background: rgba(0,0,0,0.25); border-color: rgba(255,255,255,0.08); }
+.mfa-recovery-actions { display: flex; gap: 10px; }
+
+/* ===== MFA challenge page (login-split reuse) ===== */
+.mfa-form-title { font-size: 1.4rem; font-weight: 700; margin: 0 0 4px; }
+.mfa-form-lead { margin: 0 0 18px; }
+.mfa-form .mfa-form-recovery { margin-top: 12px; }
+.mfa-form-back { margin-top: 16px; }
+.mfa-form input[name="code"] { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.2rem; letter-spacing: 0.25em; text-align: center; }

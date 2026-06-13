@@ -146,6 +146,21 @@ class User(UserMixin, db.Model):
     # account or losing its history.
     disabled = db.Column(db.Boolean, nullable=False, default=False)
 
+    # ── Multi-factor authentication (TOTP) ───────────────────────────
+    # Optional per-admin second factor, compatible with standard
+    # authenticator apps (2FAS, Google Authenticator, Aegis, …). The
+    # base32 shared secret is stored Fernet-encrypted (never in clear);
+    # ``mfa_enabled`` gates whether the login flow challenges for a code.
+    # Recovery codes are a JSON list of single-use SHA-256 hashes — the
+    # plaintext is shown once at enrolment and never persisted. MFA is
+    # admin-only by policy: enrolment lives in the admin-only Security
+    # tab, and ``mfa_active()`` re-checks ``is_admin()`` so the challenge
+    # is never raised for a non-admin (e.g. an admin who enabled MFA and
+    # was later demoted) even though the flag still reads True.
+    mfa_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    mfa_secret_enc = db.Column(db.LargeBinary)
+    mfa_recovery_codes_json = db.Column(db.Text)
+
     @property
     def is_active(self):
         """Flask-Login hook: ``False`` causes ``login_user`` to refuse
@@ -294,6 +309,13 @@ class User(UserMixin, db.Model):
 
     def is_admin(self):
         return self.role == "admin"
+
+    def mfa_active(self):
+        """True when this account should be challenged for a TOTP code at
+        login. MFA is admin-only by policy, so the ``is_admin()`` re-check
+        means a demoted ex-admin (flag still set, secret still stored) is
+        never prompted — and is silently exempt rather than locked out."""
+        return bool(self.mfa_enabled and self.mfa_secret_enc and self.is_admin())
 
 
 class Meeting(db.Model):

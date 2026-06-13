@@ -6,6 +6,54 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.14.0] — 2026-06-13
+
+### Added
+
+- **Optional two-factor authentication (2FA) for admin accounts.** Admins can
+  enable a time-based one-time-password (TOTP) second factor from
+  **Settings → Security**. Enrolment shows a QR code plus a manually-typeable
+  key; the codes are standard RFC 6238 (HMAC-SHA1, 6 digits, 30 s), so any
+  authenticator works — 2FAS, Google Authenticator, Aegis, 1Password, etc. The
+  TOTP engine is stdlib-only (`hmac`/`hashlib`) and validated against the
+  RFC 6238 test vectors; the shared secret is stored Fernet-encrypted, never in
+  clear. 2FA is strictly admin-only and per-account — other roles never see the
+  step, and an admin who is later demoted is silently exempt rather than locked
+  out (`User.mfa_active()` re-checks `is_admin()`).
+- **Single-use recovery codes.** Ten one-time codes are generated at enrolment
+  and shown exactly once; only their SHA-256 hashes are stored. Either a TOTP
+  code or a recovery code completes the sign-in, so a lost authenticator doesn't
+  lock an admin out of the only admin account. Codes can be regenerated from the
+  Security card (password-gated).
+- **Two-step sign-in challenge.** After a correct password, an MFA-enabled admin
+  is routed to a dedicated `/tspro/auth/mfa` page to enter their code before the
+  session starts. The challenge is IP rate-limited (reusing the login limiter)
+  and the half-authenticated state expires after 10 minutes.
+
+### Changed
+
+- New dependency: `qrcode==7.4.2` (enrolment QR rendering; uses the already-
+  vendored Pillow backend). The verification path itself pulls in nothing new.
+- New `user` columns `mfa_enabled`, `mfa_secret_enc`, `mfa_recovery_codes_json`
+  (added by `_migrate_sqlite`; fresh installs via `create_all`).
+
+### Security
+
+- Disabling 2FA and regenerating recovery codes both require re-entering the
+  account password, so a walked-up-to, already-unlocked session can't silently
+  strip the second factor. Login failure buckets are cleared only after the
+  second factor verifies — a stolen password alone can't reset the lockout
+  budget on the MFA step.
+
+## [2.13.2] — 2026-06-13
+
+### Changed
+
+- **Backend flash/toast messages now appear below the topbar** instead of
+  floating over it, so transient "Saved" / error toasts no longer cover the
+  topbar's action buttons. The offset tracks the live topbar height (which can
+  wrap taller on narrow viewports) via a small `--topbar-h` measurement.
+
 ## [2.13.1] — 2026-06-12
 
 ### Added

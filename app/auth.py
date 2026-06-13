@@ -340,6 +340,112 @@ def _verify_turnstile(site, token, remote_ip):
     return False, "Security check failed — please try again"
 
 
+# How long a "password OK, awaiting second factor" state stays valid. Long
+# enough to fish a phone out of a pocket and read a code, short enough that a
+# walked-away-from session can't be completed by someone else much later.
+_MFA_PENDING_TTL = 600  # seconds
+
+
+def _finalize_login(user, ip, next_url):
+    """Start the real session once authentication is fully satisfied —
+    shared by the password-only path and the MFA-completed path so both
+    clear the lockout buckets, stamp presence, and log identically.
+
+    Returns the post-login redirect response.
+    """
+    _clear_login_failures(ip=ip, username=user.username)
+    session.permanent = True
+    login_user(user, remember=True)
+    # Stamp `last_seen_at` here (in addition to the throttled after_request
+    # hook in routes.py::_track_last_seen) so the user shows up in the
+    # Currently-Online widget on the very next 5-second poll — even when the
+    # post-login redirect's GET lands on a non-page response the request
+    # tracker skips, or the visitor closes the tab before it resolves.
+    user.last_seen_at = datetime.utcnow()
+    from . import activity
+    activity.open_session(user)
+    activity.log("login", user=user, summary=f"Signed in from {ip}")
+    if next_url and _is_safe_url(next_url):
+        return redirect(next_url)
+    return redirect(url_for("main.index"))
+
+
+def _consume_recovery_code(user, code):
+    """If ``code`` matches one of ``user``'s unused recovery codes, remove
+    it (single-use) and return True. The change is staged on the session;
+    the caller's commit (via _finalize_login) persists it. Returns False on
+    no match or no codes."""
+    import json
+    from . import totp
+    raw = user.mfa_recovery_codes_json
+    if not raw:
+        return False
+    try:
+        hashes = json.loads(raw)
+    except (ValueError, TypeError):
+        return False
+    h = totp.hash_recovery_code(code)
+    if h not in hashes:
+        return False
+    hashes.remove(h)
+    user.mfa_recovery_codes_json = json.dumps(hashes)
+    return True
+
+
+@bp.route("/mfa", methods=["GET", "POST"])
+def mfa_challenge():
+    """Second step of an MFA sign-in. Reachable only with a valid, unexpired
+    ``mfa_pending`` marker set by ``login()`` after a correct password —
+    accepts a 6-digit TOTP code or a single-use recovery code."""
+    if current_user.is_authenticated:
+        return redirect(url_for("main.index"))
+    ip = request.remote_addr or "unknown"
+    pending = session.get("mfa_pending")
+
+    def _expired():
+        session.pop("mfa_pending", None)
+        flash("Your sign-in attempt timed out. Please sign in again.", "danger")
+        return redirect(url_for("auth.login"))
+
+    if not pending or (datetime.utcnow().timestamp() - pending.get("ts", 0)) > _MFA_PENDING_TTL:
+        return _expired()
+    user = db.session.get(User, pending.get("uid"))
+    # Re-validate eligibility on every hit: the account could have been
+    # disabled, demoted, or had MFA turned off between the password step
+    # and now. Any of those drops us back to a clean login.
+    if not user or user.disabled or not user.mfa_active():
+        return _expired()
+
+    if request.method == "POST":
+        # MFA only applies to admins, who are exempt from the per-username
+        # lockout (see login()), so only the IP bucket guards this step.
+        blocked, retry = _login_rate_limit_hit(ip, None)
+        if blocked:
+            flash(f"Too many attempts. Try again in {max(retry, 1) // 60 + 1} minutes.",
+                  "danger")
+            return render_template("mfa_challenge.html"), 429
+        code = (request.form.get("code") or "").strip()
+        from . import totp
+        ok_totp = totp.verify(decrypt(user.mfa_secret_enc), code)
+        ok_recovery = _consume_recovery_code(user, code) if not ok_totp else False
+        if ok_totp or ok_recovery:
+            session.pop("mfa_pending", None)
+            from . import activity
+            activity.log("login.mfa.recovery" if ok_recovery else "login.mfa.ok",
+                         user=user,
+                         summary=("Signed in with a recovery code"
+                                  if ok_recovery else "MFA code verified")
+                                 + f" from {ip}")
+            return _finalize_login(user, ip, pending.get("next"))
+        _record_login_failure(ip, None)
+        from . import activity
+        activity.log("login.mfa.failed", user=user,
+                     summary=f"Incorrect MFA code from {ip}")
+        flash("Invalid authentication code.", "danger")
+
+    return render_template("mfa_challenge.html")
+
+
 @bp.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
@@ -377,26 +483,24 @@ def login():
                                       f"'{user.username}' from {ip}"))
                 flash("Invalid credentials", "danger")
                 return render_template("login.html")
-            _clear_login_failures(ip=ip, username=user.username)
-            session.permanent = True
-            login_user(user, remember=True)
-            # Stamp `last_seen_at` here (in addition to the throttled
-            # after_request hook in routes.py::_track_last_seen) so the
-            # user shows up in the Currently-Online widget on the very
-            # next 5-second poll — even when the post-login redirect's
-            # GET lands on a non-page response the request-tracker skips
-            # (it only counts 200 text/html pages), or the visitor closes
-            # the tab before the redirect resolves. Pure additive: the
-            # request tracker still owns ongoing freshness updates.
-            from datetime import datetime as _dt
-            user.last_seen_at = _dt.utcnow()
-            from . import activity
-            activity.open_session(user)
-            activity.log("login", user=user, summary=f"Signed in from {ip}")
             next_url = request.args.get("next") or request.form.get("next")
-            if next_url and _is_safe_url(next_url):
-                return redirect(next_url)
-            return redirect(url_for("main.index"))
+            # Second factor. If this (admin) account has TOTP enabled, the
+            # password alone isn't enough: stash a short-lived "password
+            # OK, awaiting code" marker and bounce to the MFA challenge.
+            # Crucially we do NOT clear the failure buckets yet — that only
+            # happens once the code verifies (see _finalize_login), so a
+            # stolen password can't reset the lockout budget by itself.
+            if user.mfa_active():
+                session["mfa_pending"] = {
+                    "uid": user.id,
+                    "ts": datetime.utcnow().timestamp(),
+                    "next": next_url if (next_url and _is_safe_url(next_url)) else None,
+                }
+                from . import activity
+                activity.log("login.mfa.challenge", user=user,
+                             summary=f"Password accepted; awaiting MFA code from {ip}")
+                return redirect(url_for("auth.mfa_challenge"))
+            return _finalize_login(user, ip, next_url)
         _record_login_failure(ip, lockout_username)
         from . import activity
         # Log the failed attempt against the matched user when one
