@@ -2254,6 +2254,20 @@
       setTimeout(function(){ if (window.tspTour) window.tspTour.start(); }, 150);
     });
   })();
+
+  // Expose the live topbar height as --topbar-h so the fixed flash/toast
+  // stack (.flashes) can sit just below the sticky topbar instead of over
+  // its action buttons. The bar wraps taller on narrow viewports, so track
+  // it with a ResizeObserver rather than hard-coding a height.
+  (function(){
+    var bar = document.querySelector('.content > .topbar');
+    if (!bar) return;
+    var root = document.documentElement;
+    function sync(){ root.style.setProperty('--topbar-h', bar.offsetHeight + 'px'); }
+    sync();
+    if (window.ResizeObserver) new ResizeObserver(sync).observe(bar);
+    else window.addEventListener('resize', sync);
+  })();
 </script>
 
 {# WordPress importer modal (shared). Iframe loads lazily — src is set

@@ -2699,6 +2699,12 @@ button.sidebar-section-toggle[aria-expanded="false"] .sidebar-section-chevron {
   display: flex; flex-direction: column; gap: 8px;
   margin: 0; pointer-events: none; max-width: calc(100vw - 32px);
 }
+/* In the chromed admin layout, drop the flash/toast stack below the
+   sticky topbar so transient messages never cover its action buttons.
+   --topbar-h is measured from the live topbar in base.html (handles the
+   bar wrapping taller on mobile); the fallback covers first paint before
+   the observer runs. Embed mode has no topbar, so it keeps top: 16px. */
+body:not(.embed) .flashes { top: calc(var(--topbar-h, 56px) + 12px); }
 .flash {
   pointer-events: auto;
   box-shadow: 0 6px 24px rgba(0,0,0,0.18);
