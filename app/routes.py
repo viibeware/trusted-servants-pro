@@ -15984,11 +15984,8 @@ def mfa_enable():
     code = (request.form.get("code") or "").strip()
     if not totp.verify(secret, code):
         return jsonify(ok=False, error="That code didn't match. Check the app and try again."), 400
-    recovery = totp.generate_recovery_codes()
     user = db.session.get(User, current_user.id)
-    user.mfa_secret_enc = encrypt(secret)
-    user.mfa_recovery_codes_json = json.dumps(totp.hash_recovery_codes(recovery))
-    user.mfa_enabled = True
+    recovery = user.enroll_mfa(secret)
     db.session.commit()
     session.pop("mfa_setup_secret", None)
     from . import activity
@@ -16005,14 +16002,12 @@ def mfa_disable():
     factor — and so it works even if the authenticator device is lost."""
     from werkzeug.security import check_password_hash
     user = db.session.get(User, current_user.id)
-    if not user.mfa_enabled:
+    if not (user.mfa_required or user.mfa_enabled):
         return jsonify(ok=False, error="Two-factor authentication isn't enabled."), 400
     password = request.form.get("password") or ""
     if not check_password_hash(user.password_hash, password):
         return jsonify(ok=False, error="Password incorrect."), 400
-    user.mfa_enabled = False
-    user.mfa_secret_enc = None
-    user.mfa_recovery_codes_json = None
+    user.clear_mfa()
     db.session.commit()
     from . import activity
     activity.log("mfa.disable", user=user,

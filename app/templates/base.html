@@ -718,6 +718,105 @@
           <span class="perm-badge {{ _badge_cls }}">{{ _role_label }}</span>
         </div>
 
+        {# ── Two-Factor Authentication (TOTP) — personal, any role ── #}
+        {% set _mfa_pending = current_user.mfa_required and not current_user.mfa_enabled %}
+        <section class="card data-card mfa-card"
+                 data-mfa-enabled="{{ '1' if current_user.mfa_enabled else '0' }}"
+                 data-mfa-required="{{ '1' if current_user.mfa_required else '0' }}"
+                 data-begin-url="{{ url_for('main.mfa_begin') }}"
+                 data-enable-url="{{ url_for('main.mfa_enable') }}"
+                 data-disable-url="{{ url_for('main.mfa_disable') }}"
+                 data-regen-url="{{ url_for('main.mfa_regenerate_recovery') }}">
+          <div class="data-card-head">
+            {{ icon('shield') }}
+            <span>Two-Factor Authentication</span>
+            <span class="mfa-status-pill {{ 'on' if current_user.mfa_enabled else ('warn' if _mfa_pending else 'off') }}">
+              {{ 'Enabled' if current_user.mfa_enabled else ('Setup required' if _mfa_pending else 'Off') }}
+            </span>
+          </div>
+          <p class="muted small data-card-lead">
+            Add a one-time code from an authenticator app (2FAS, Google
+            Authenticator, Aegis, 1Password…) on top of your password for this
+            account.
+          </p>
+
+          {# State: OFF / setup-pending — the enrol entry point #}
+          <div class="mfa-off" {% if current_user.mfa_enabled %}hidden{% endif %}>
+            <div class="mfa-required-note" {% if not _mfa_pending %}hidden{% endif %}>
+              {{ icon('shield') }}
+              <span>Two-factor authentication has been turned on for your account.
+              Set it up below, or turn it off if you'd rather not use it.</span>
+            </div>
+            <div class="mfa-off-actions">
+              <button type="button" class="btn btn-primary mfa-begin-btn">Set up two-factor authentication</button>
+              <button type="button" class="btn btn-danger mfa-disable-btn mfa-off-disable" {% if not _mfa_pending %}hidden{% endif %}>Turn off two-factor</button>
+            </div>
+
+            {# Enrolment panel, revealed after /mfa/begin returns the QR #}
+            <div class="mfa-setup" hidden>
+              <div class="mfa-setup-grid">
+                <div class="mfa-qr-wrap"><img class="mfa-qr" alt="2FA setup QR code"></div>
+                <div class="mfa-setup-steps">
+                  <p class="mfa-step"><span class="mfa-step-n">1</span>
+                    Scan this QR code in your authenticator app — in 2FAS, tap
+                    <strong>＋ → Scan QR code</strong>.</p>
+                  <p class="muted smaller mfa-manual-lead">Can't scan? Enter this key manually (Time-based, SHA-1, 6 digits):</p>
+                  <code class="mfa-secret" tabindex="0"></code>
+                  <p class="mfa-step"><span class="mfa-step-n">2</span>
+                    Enter the 6-digit code the app shows to confirm:</p>
+                  <div class="mfa-confirm-row">
+                    <input type="text" class="mfa-code-input" inputmode="numeric"
+                           autocomplete="one-time-code" maxlength="6" placeholder="123456">
+                    <button type="button" class="btn btn-primary mfa-enable-btn">Verify &amp; enable</button>
+                    <button type="button" class="btn mfa-cancel-btn">Cancel</button>
+                  </div>
+                  <p class="mfa-error" role="alert" hidden></p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {# State: ON — status + manage actions #}
+          <div class="mfa-on" {% if not current_user.mfa_enabled %}hidden{% endif %}>
+            <p class="mfa-on-lead">
+              {{ icon('check') }}
+              Two-factor authentication is protecting this account. You'll be
+              asked for a code from your authenticator each time you sign in.
+            </p>
+            <div class="mfa-manage-actions">
+              <button type="button" class="btn mfa-regen-btn">Regenerate recovery codes</button>
+              <button type="button" class="btn btn-danger mfa-disable-btn">Disable two-factor</button>
+            </div>
+          </div>
+
+          {# Shared re-auth gate. JS sets data-action to 'disable' or 'regen'
+             before revealing it; works from either the off or on state. #}
+          <div class="mfa-pw-confirm" hidden data-action="">
+            <label class="mfa-pw-label"><span class="mfa-pw-prompt"></span>
+              <input type="password" class="mfa-pw-input" autocomplete="current-password" placeholder="Your account password">
+            </label>
+            <div class="mfa-confirm-row">
+              <button type="button" class="btn btn-primary mfa-pw-go">Confirm</button>
+              <button type="button" class="btn mfa-pw-cancel">Cancel</button>
+            </div>
+            <p class="mfa-error" role="alert" hidden></p>
+          </div>
+
+          {# Recovery codes — shown once after enable / regenerate #}
+          <div class="mfa-recovery" hidden>
+            <div class="mfa-recovery-head">{{ icon('key') }} <strong>Save your recovery codes</strong></div>
+            <p class="muted small">
+              Each code works once if you lose access to your authenticator.
+              Store them somewhere safe — they won't be shown again.
+            </p>
+            <ul class="mfa-recovery-list"></ul>
+            <div class="mfa-recovery-actions">
+              <button type="button" class="btn mfa-recovery-copy">Copy codes</button>
+              <button type="button" class="btn btn-primary mfa-recovery-done">Done</button>
+            </div>
+          </div>
+        </section>
+
         {# Permission matrix — comparison table across every role. The
            Admin column is shown only to admins (non-admin viewers
            don't need the row aimed at people who outrank them). The
@@ -1288,97 +1387,6 @@
         </script>
       </div>
       <div class="settings-pane" data-pane="security">
-
-        {# ── Two-Factor Authentication (TOTP) ────────────────────── #}
-        {% if current_user.is_admin() %}
-        <section class="card data-card mfa-card"
-                 data-mfa-enabled="{{ '1' if current_user.mfa_enabled else '0' }}"
-                 data-begin-url="{{ url_for('main.mfa_begin') }}"
-                 data-enable-url="{{ url_for('main.mfa_enable') }}"
-                 data-disable-url="{{ url_for('main.mfa_disable') }}"
-                 data-regen-url="{{ url_for('main.mfa_regenerate_recovery') }}">
-          <div class="data-card-head">
-            {{ icon('shield') }}
-            <span>Two-Factor Authentication</span>
-            <span class="mfa-status-pill {{ 'on' if current_user.mfa_enabled else 'off' }}">
-              {{ 'Enabled' if current_user.mfa_enabled else 'Off' }}
-            </span>
-          </div>
-          <p class="muted small data-card-lead">
-            Add a one-time code from an authenticator app (2FAS, Google
-            Authenticator, Aegis, 1Password…) on top of your password. This
-            protects <strong>your admin account only</strong> and is entirely
-            optional — other roles never see this step.
-          </p>
-
-          {# State: OFF — show the enrol entry point #}
-          <div class="mfa-off" {% if current_user.mfa_enabled %}hidden{% endif %}>
-            <button type="button" class="btn btn-primary mfa-begin-btn">Set up two-factor authentication</button>
-
-            {# Enrolment panel, revealed after /mfa/begin returns the QR #}
-            <div class="mfa-setup" hidden>
-              <div class="mfa-setup-grid">
-                <div class="mfa-qr-wrap"><img class="mfa-qr" alt="2FA setup QR code"></div>
-                <div class="mfa-setup-steps">
-                  <p class="mfa-step"><span class="mfa-step-n">1</span>
-                    Scan this QR code in your authenticator app — in 2FAS, tap
-                    <strong>＋ → Scan QR code</strong>.</p>
-                  <p class="muted smaller mfa-manual-lead">Can't scan? Enter this key manually (Time-based, SHA-1, 6 digits):</p>
-                  <code class="mfa-secret" tabindex="0"></code>
-                  <p class="mfa-step"><span class="mfa-step-n">2</span>
-                    Enter the 6-digit code the app shows to confirm:</p>
-                  <div class="mfa-confirm-row">
-                    <input type="text" class="mfa-code-input" inputmode="numeric"
-                           autocomplete="one-time-code" maxlength="6" placeholder="123456">
-                    <button type="button" class="btn btn-primary mfa-enable-btn">Verify &amp; enable</button>
-                    <button type="button" class="btn mfa-cancel-btn">Cancel</button>
-                  </div>
-                  <p class="mfa-error" role="alert" hidden></p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {# State: ON — status + manage actions #}
-          <div class="mfa-on" {% if not current_user.mfa_enabled %}hidden{% endif %}>
-            <p class="mfa-on-lead">
-              {{ icon('check') }}
-              Two-factor authentication is protecting this account. You'll be
-              asked for a code from your authenticator each time you sign in.
-            </p>
-            <div class="mfa-manage-actions">
-              <button type="button" class="btn mfa-regen-btn">Regenerate recovery codes</button>
-              <button type="button" class="btn btn-danger mfa-disable-btn">Disable two-factor</button>
-            </div>
-            {# Re-auth gate for the two manage actions above. JS sets
-               data-action to 'disable' or 'regen' before revealing it. #}
-            <div class="mfa-pw-confirm" hidden data-action="">
-              <label class="mfa-pw-label"><span class="mfa-pw-prompt"></span>
-                <input type="password" class="mfa-pw-input" autocomplete="current-password" placeholder="Your account password">
-              </label>
-              <div class="mfa-confirm-row">
-                <button type="button" class="btn btn-primary mfa-pw-go">Confirm</button>
-                <button type="button" class="btn mfa-pw-cancel">Cancel</button>
-              </div>
-              <p class="mfa-error" role="alert" hidden></p>
-            </div>
-          </div>
-
-          {# Recovery codes — shown once after enable / regenerate #}
-          <div class="mfa-recovery" hidden>
-            <div class="mfa-recovery-head">{{ icon('key') }} <strong>Save your recovery codes</strong></div>
-            <p class="muted small">
-              Each code works once if you lose access to your authenticator.
-              Store them somewhere safe — they won't be shown again.
-            </p>
-            <ul class="mfa-recovery-list"></ul>
-            <div class="mfa-recovery-actions">
-              <button type="button" class="btn mfa-recovery-copy">Copy codes</button>
-              <button type="button" class="btn btn-primary mfa-recovery-done">Done</button>
-            </div>
-          </div>
-        </section>
-        {% endif %}
 
         {# ── Zoom One-Time-Passcodes (OTP) ───────────────────────── #}
         <section class="card data-card">
@@ -2395,8 +2403,11 @@
     }
     function flipToEnabled(){
       const pill = $('.mfa-status-pill');
-      pill.textContent = 'Enabled'; pill.classList.remove('off'); pill.classList.add('on');
+      pill.textContent = 'Enabled'; pill.classList.remove('off', 'warn'); pill.classList.add('on');
       card.dataset.mfaEnabled = '1';
+      card.dataset.mfaRequired = '1';
+      const note = $('.mfa-required-note'); if (note) note.hidden = true;
+      const offDisable = $('.mfa-off-disable'); if (offDisable) offDisable.hidden = true;
     }
 
     // — Begin enrolment: fetch QR + secret —
@@ -2444,21 +2455,30 @@
 
     // — Password-gated manage actions (disable / regenerate) —
     const pwPanel = $('.mfa-pw-confirm');
+    // The action buttons live in two places: .mfa-manage-actions (enrolled
+    // state) and .mfa-off-actions (setup-pending state). Hide whichever are
+    // present while the re-auth gate is open.
+    function setActionsHidden(h){
+      ['.mfa-manage-actions', '.mfa-off-actions'].forEach(sel => {
+        const el = $(sel); if (el) el.hidden = h;
+      });
+    }
     function openPw(action, promptText){
       pwPanel.dataset.action = action;
       $('.mfa-pw-prompt').textContent = promptText;
       $('.mfa-pw-input').value = '';
       clearErr($('.mfa-pw-confirm .mfa-error'));
       pwPanel.hidden = false;
-      $('.mfa-manage-actions').hidden = true;
+      setActionsHidden(true);
       $('.mfa-pw-input').focus();
     }
     function closePw(){
       pwPanel.hidden = true;
-      $('.mfa-manage-actions').hidden = false;
+      setActionsHidden(false);
     }
-    const disableBtn = $('.mfa-disable-btn');
-    if (disableBtn) disableBtn.addEventListener('click', () => openPw('disable', 'Confirm your password to turn two-factor off:'));
+    // Both the enrolled-state and setup-pending-state disable buttons.
+    card.querySelectorAll('.mfa-disable-btn').forEach(b =>
+      b.addEventListener('click', () => openPw('disable', 'Confirm your password to turn two-factor off:')));
     const regenBtn = $('.mfa-regen-btn');
     if (regenBtn) regenBtn.addEventListener('click', () => openPw('regen', 'Confirm your password to generate new recovery codes:'));
     $('.mfa-pw-cancel').addEventListener('click', closePw);
@@ -2473,11 +2493,16 @@
         if (action === 'disable') {
           await post(card.dataset.disableUrl, { password });
           const pill = $('.mfa-status-pill');
-          pill.textContent = 'Off'; pill.classList.remove('on'); pill.classList.add('off');
+          pill.textContent = 'Off'; pill.classList.remove('on', 'warn'); pill.classList.add('off');
           card.dataset.mfaEnabled = '0';
+          card.dataset.mfaRequired = '0';
           closePw();
           $('.mfa-on').hidden = true;
           $('.mfa-off').hidden = false;
+          // Drop the admin-required notice + its turn-off button now that
+          // 2FA is fully off for this account.
+          const note = $('.mfa-required-note'); if (note) note.hidden = true;
+          const offDisable = $('.mfa-off-disable'); if (offDisable) offDisable.hidden = true;
           beginBtn.hidden = false; beginBtn.disabled = false;
           $('.mfa-setup').hidden = true;
           toast('Two-factor authentication disabled', 'success');

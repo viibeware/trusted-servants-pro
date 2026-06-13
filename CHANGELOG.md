@@ -6,6 +6,37 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.14.1] — 2026-06-13
+
+### Added
+
+- **Per-account 2FA control in Settings → Users.** Each user row has a
+  **Two-factor** toggle (also in the Edit-user modal). Turning it on flags the
+  account as requiring 2FA; turning it off fully clears any requirement,
+  enrolment, secret, and recovery codes. New admin accounts default to
+  requiring 2FA at creation time (other roles default off).
+- **2FA is available to any role**, not just admins. The login challenge gate
+  dropped its `is_admin()` restriction; `mfa_required` is now the master "2FA
+  on for this account" switch (distinct from `mfa_enabled`, which means
+  enrolment is complete).
+- **One-time login setup wizard.** When an account is flagged to require 2FA
+  but hasn't enrolled, the next sign-in (after the correct password) routes to
+  `/tspro/auth/mfa-setup`: scan the QR / enter the key, confirm a code, and save
+  the recovery codes. The user may **Skip for now** to sign in without enrolling
+  — the wizard reappears at each login until they enrol or turn 2FA off.
+
+### Changed
+
+- **Personal 2FA self-management moved to Settings → Your Access** (visible to
+  every role) from the admin-only Security tab, since 2FA now applies to any
+  role. The card shows three states — Off, **Setup required** (with an admin
+  notice and a one-click turn-off), and Enabled. Disabling or regenerating
+  recovery codes remains password-gated. The Security tab keeps the
+  portal-wide settings (Turnstile, Zoom OTP).
+- New `user.mfa_required` column (added by `_migrate_sqlite`). On the boot that
+  adds it, any account already enrolled is backfilled to `mfa_required = 1` so
+  live 2FA keeps challenging under the new master-gate model.
+
 ## [2.14.0] — 2026-06-13
 
 ### Added

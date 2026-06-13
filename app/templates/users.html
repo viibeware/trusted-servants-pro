@@ -135,7 +135,9 @@
         data-phone="{{ u.phone or '' }}"
         data-role="{{ u.role }}"
         data-disabled="{{ '1' if u.disabled else '0' }}"
-        data-reset-allowed="{{ '1' if u.password_reset_allowed else '0' }}">
+        data-reset-allowed="{{ '1' if u.password_reset_allowed else '0' }}"
+        data-mfa-required="{{ '1' if u.mfa_required else '0' }}"
+        data-mfa-enabled="{{ '1' if u.mfa_enabled else '0' }}">
       <td class="users-td-check">
         {% if u.id != current_user.id %}
         <label class="users-check-wrap"><input type="checkbox" name="ids" value="{{ u.id }}" form="users-bulk-form" data-users-row-check aria-label="Select {{ u.username }}"></label>
@@ -185,6 +187,15 @@
           <span class="mode-track"><span class="mode-thumb"></span></span>
           <span class="users-reset-allow-label">Self-reset</span>
         </label>
+        <label class="mode-toggle users-reset-allow-toggle users-mfa-toggle"
+               title="Require two-factor authentication for {{ u.username }}. They set it up via a one-time wizard at next login (and may skip it). Turning it off clears any existing 2FA.">
+          <input type="checkbox"
+                 class="js-mfa-toggle"
+                 data-uid="{{ u.id }}"
+                 {% if u.mfa_required %}checked{% endif %}>
+          <span class="mode-track"><span class="mode-thumb"></span></span>
+          <span class="users-reset-allow-label">Two-factor{% if u.mfa_enabled %} <span class="users-mfa-enrolled" title="Enrolled">✓</span>{% elif u.mfa_required %} <span class="users-mfa-pending" title="Awaiting setup at next login">⏳</span>{% endif %}</span>
+        </label>
       </td>
       <td class="users-actions">
         <div class="users-actions-row">
@@ -231,6 +242,7 @@
       {% if embed %}<input type="hidden" name="embed" value="1">{% endif %}
       <input type="hidden" name="disabled_present" value="1">
       <input type="hidden" name="reset_allowed_present" value="1">
+      <input type="hidden" name="mfa_present" value="1">
       <div class="modal-body">
         <div class="form user-edit-form-grid">
           <label>Username
@@ -260,6 +272,16 @@
             <span class="user-edit-toggle-label">
               <b>Self-reset password</b>
               <span class="muted smaller">Account may use the public Forgot Password flow.</span>
+            </span>
+          </label>
+          <label class="mode-toggle user-edit-toggle"
+                 title="Require two-factor authentication. The user enrols via a one-time wizard at next login (and may skip it). Turning it off clears any existing 2FA.">
+            <input type="checkbox" id="user-edit-mfa">
+            <input type="hidden" name="mfa_required" id="user-edit-mfa-val" value="0">
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+            <span class="user-edit-toggle-label">
+              <b>Require two-factor (2FA)</b>
+              <span class="muted smaller">Sets up via a one-time wizard at next login.</span>
             </span>
           </label>
           <label class="mode-toggle user-edit-toggle user-edit-disabled-toggle"
@@ -338,6 +360,8 @@
   const resetVal = document.getElementById('user-edit-reset-allowed-val');
   const disabledIn = document.getElementById('user-edit-disabled');
   const disabledVal = document.getElementById('user-edit-disabled-val');
+  const mfaIn = document.getElementById('user-edit-mfa');
+  const mfaVal = document.getElementById('user-edit-mfa-val');
   const selfWarn = document.getElementById('user-edit-self-warn');
   const titleEl = document.getElementById('user-edit-title');
   const ACTION_TEMPLATE = "{{ url_for('auth.users_update', uid=0) }}";
@@ -349,9 +373,11 @@
   function syncHidden(){
     resetVal.value = resetIn.checked ? '1' : '0';
     disabledVal.value = disabledIn.checked ? '1' : '0';
+    mfaVal.value = mfaIn.checked ? '1' : '0';
   }
   resetIn.addEventListener('change', syncHidden);
   disabledIn.addEventListener('change', syncHidden);
+  mfaIn.addEventListener('change', syncHidden);
 
   function open(uid){
     const row = document.querySelector('[data-user-row="' + uid + '"]');
@@ -363,6 +389,7 @@
     phoneIn.value = row.dataset.phone || '';
     roleIn.value = row.dataset.role || 'viewer';
     resetIn.checked = row.dataset.resetAllowed === '1';
+    mfaIn.checked = row.dataset.mfaRequired === '1';
     const isSelf = String(uid) === String(CURRENT_UID);
     disabledIn.checked = row.dataset.disabled === '1';
     disabledIn.disabled = isSelf;
@@ -411,8 +438,10 @@
   // batch.
   const dirtyForms = new Set();
   const dirtyToggles = new Map();
+  const dirtyMfaToggles = new Map();
   const csrf = "{{ csrf_token() }}";
   const toggleBaseUrl = "{{ url_for('auth.users_set_reset_allowed', uid=0) }}";
+  const mfaToggleBaseUrl = "{{ url_for('auth.users_set_mfa', uid=0) }}";
 
   function rowEl(form){
     return form.closest('[data-user-row]') || form;
@@ -423,7 +452,7 @@
   }
 
   function dirtyCount(){
-    return dirtyForms.size + dirtyToggles.size;
+    return dirtyForms.size + dirtyToggles.size + dirtyMfaToggles.size;
   }
 
   function updateMsg(){
@@ -451,6 +480,7 @@
       bar.style.width = '';
       dirtyForms.clear();
       dirtyToggles.clear();
+      dirtyMfaToggles.clear();
       document.querySelectorAll('[data-user-row].is-dirty').forEach(el =>
         el.classList.remove('is-dirty'));
       document.querySelectorAll('form[data-savebar-row].is-dirty').forEach(el =>
@@ -498,6 +528,26 @@
     });
   });
 
+  // Two-factor toggle changes — queued, NOT auto-posted (same model as
+  // the self-reset toggle above).
+  document.querySelectorAll('.js-mfa-toggle').forEach(input => {
+    const initial = input.checked;
+    input.addEventListener('change', () => {
+      const uid = input.dataset.uid;
+      if (input.checked === initial) dirtyMfaToggles.delete(uid);
+      else dirtyMfaToggles.set(uid, input.checked);
+      const r = rowByUid(uid);
+      if (r) {
+        if (dirtyMfaToggles.has(uid)) r.classList.add('is-dirty');
+        else if (!dirtyToggles.has(uid) && ![...dirtyForms].some(fm => rowEl(fm) === r)) {
+          r.classList.remove('is-dirty');
+        }
+      }
+      if (dirtyCount()) show();
+      else { bar.hidden = true; bar.classList.remove('is-leaving'); }
+    });
+  });
+
   // Hide the lone leftover per-form Save button on the PIC form so
   // the bar is the only commit path. (Per-row Save buttons were
   // already removed in the template.)
@@ -531,6 +581,18 @@
     if (!r.ok) throw new Error('toggle failed: ' + r.status);
   }
 
+  async function submitMfaToggle(uid, required){
+    const url = mfaToggleBaseUrl.replace(/\/0\/mfa$/, '/' + uid + '/mfa');
+    const fd = new FormData();
+    fd.append('csrf_token', csrf);
+    fd.append('required', required ? '1' : '0');
+    const r = await fetch(url, {
+      method: 'POST', body: fd, credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'fetch' },
+    });
+    if (!r.ok) throw new Error('mfa toggle failed: ' + r.status);
+  }
+
   btn.addEventListener('click', async () => {
     if (!dirtyCount()) { bar.hidden = true; return; }
     bar.style.width = bar.offsetWidth + 'px';
@@ -539,12 +601,16 @@
     msg.textContent = 'Saving…';
     const forms = [...dirtyForms];
     const toggles = [...dirtyToggles.entries()];
+    const mfaToggles = [...dirtyMfaToggles.entries()];
     let failed = 0;
     for (const f of forms) {
       try { await submitForm(f); } catch (_) { failed += 1; }
     }
     for (const [uid, allowed] of toggles) {
       try { await submitToggle(uid, allowed); } catch (_) { failed += 1; }
+    }
+    for (const [uid, required] of mfaToggles) {
+      try { await submitMfaToggle(uid, required); } catch (_) { failed += 1; }
     }
     if (!failed) {
       hideAfterSave();
@@ -556,7 +622,7 @@
     } else {
       btn.disabled = false;
       btn.textContent = 'Save';
-      msg.textContent = failed === (forms.length + toggles.length)
+      msg.textContent = failed === (forms.length + toggles.length + mfaToggles.length)
         ? 'Save failed — try again'
         : 'Some changes failed — try again';
       bar.style.width = '';

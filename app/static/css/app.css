@@ -15743,3 +15743,31 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
 .mfa-form-back { margin-top: 16px; }
 .mfa-form input[name="code"] { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 1.2rem; letter-spacing: 0.25em; text-align: center; }
+
+/* ===== 2FA additions: required-pending state, Users toggle, wizard ===== */
+.mfa-status-pill.warn { color: #7c4a03; background: #fff6e1; border-color: #fde4b3; }
+[data-theme="dark"] .mfa-status-pill.warn { color: #f5d9a8; background: #2e2410; border-color: #5a4514; }
+
+/* "Your admin turned on 2FA" notice in the setup-pending state */
+.mfa-required-note { display: flex; align-items: flex-start; gap: 9px; margin: 0 0 14px;
+  padding: 11px 13px; border: 1px solid #fde4b3; background: #fff6e1; color: #7c4a03;
+  border-radius: 9px; font-size: 0.9rem; line-height: 1.45; }
+[data-theme="dark"] .mfa-required-note { background: #2e2410; border-color: #5a4514; color: #f5d9a8; }
+.mfa-required-note svg { flex: 0 0 auto; margin-top: 1px; }
+.mfa-off-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* Users tab: stack the Self-reset + Two-factor toggles in the cell */
+.users-mfa-toggle { margin-top: 8px; }
+.users-mfa-enrolled { color: #16a34a; font-weight: 700; }
+.users-mfa-pending { filter: grayscale(0.2); }
+
+/* Login-time setup wizard (reuses the login split) */
+.mfa-wizard-qr-wrap { display: inline-block; margin: 12px 0; padding: 10px;
+  background: #fff; border: 1px solid var(--border); border-radius: 10px; }
+.mfa-wizard-qr-wrap .mfa-qr { display: block; width: 168px; height: 168px; image-rendering: pixelated; }
+.mfa-wizard-secret { display: inline-block; margin: 0 0 16px; }
+.mfa-wizard-recovery { margin: 16px 0 20px; }
+.mfa-wizard-skip { margin-top: 16px; display: flex; flex-direction: column; gap: 2px; }
+.mfa-skip-btn { background: none; border: 0; padding: 0; color: var(--accent, #1883d5);
+  font: inherit; font-weight: 600; cursor: pointer; text-align: left; width: max-content; }
+.mfa-skip-btn:hover { text-decoration: underline; }

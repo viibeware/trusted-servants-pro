@@ -147,16 +147,18 @@ class User(UserMixin, db.Model):
     disabled = db.Column(db.Boolean, nullable=False, default=False)
 
     # ── Multi-factor authentication (TOTP) ───────────────────────────
-    # Optional per-admin second factor, compatible with standard
-    # authenticator apps (2FAS, Google Authenticator, Aegis, …). The
-    # base32 shared secret is stored Fernet-encrypted (never in clear);
-    # ``mfa_enabled`` gates whether the login flow challenges for a code.
-    # Recovery codes are a JSON list of single-use SHA-256 hashes — the
-    # plaintext is shown once at enrolment and never persisted. MFA is
-    # admin-only by policy: enrolment lives in the admin-only Security
-    # tab, and ``mfa_active()`` re-checks ``is_admin()`` so the challenge
-    # is never raised for a non-admin (e.g. an admin who enabled MFA and
-    # was later demoted) even though the flag still reads True.
+    # Second factor compatible with standard authenticator apps (2FAS,
+    # Google Authenticator, Aegis, …). Two distinct flags:
+    #   ``mfa_required`` — the master "2FA is on for this account" switch.
+    #     Set by an admin (Users tab) or by default on new admin accounts,
+    #     and by self-enrolment. Allowed on ANY role.
+    #   ``mfa_enabled``  — the account has actually completed enrolment
+    #     (a secret is stored). Required-but-not-enrolled means the user is
+    #     shown a one-time setup wizard at next login (which they may skip).
+    # The base32 secret is stored Fernet-encrypted (never in clear);
+    # recovery codes are a JSON list of single-use SHA-256 hashes — the
+    # plaintext is shown once at enrolment and never persisted.
+    mfa_required = db.Column(db.Boolean, nullable=False, default=False)
     mfa_enabled = db.Column(db.Boolean, nullable=False, default=False)
     mfa_secret_enc = db.Column(db.LargeBinary)
     mfa_recovery_codes_json = db.Column(db.Text)
@@ -312,10 +314,37 @@ class User(UserMixin, db.Model):
 
     def mfa_active(self):
         """True when this account should be challenged for a TOTP code at
-        login. MFA is admin-only by policy, so the ``is_admin()`` re-check
-        means a demoted ex-admin (flag still set, secret still stored) is
-        never prompted — and is silently exempt rather than locked out."""
-        return bool(self.mfa_enabled and self.mfa_secret_enc and self.is_admin())
+        login — 2FA is on AND enrolment is complete. Any role qualifies;
+        ``mfa_required`` is the master gate so an account whose requirement
+        was cleared never gets challenged even if a stale secret lingers."""
+        return bool(self.mfa_required and self.mfa_enabled and self.mfa_secret_enc)
+
+    def mfa_setup_pending(self):
+        """True when 2FA is required for this account but enrolment hasn't
+        happened yet — the trigger for the one-time login setup wizard."""
+        return bool(self.mfa_required and not (self.mfa_enabled and self.mfa_secret_enc))
+
+    def enroll_mfa(self, secret_b32):
+        """Store the encrypted TOTP secret + a fresh set of recovery codes,
+        mark the account enrolled and 2FA-required, and return the plaintext
+        recovery codes (shown to the user exactly once)."""
+        import json
+        from .crypto import encrypt
+        from . import totp
+        self.mfa_secret_enc = encrypt(secret_b32)
+        self.mfa_enabled = True
+        self.mfa_required = True
+        codes = totp.generate_recovery_codes()
+        self.mfa_recovery_codes_json = json.dumps(totp.hash_recovery_codes(codes))
+        return codes
+
+    def clear_mfa(self):
+        """Fully turn 2FA off for this account — requirement, enrolment,
+        secret, and recovery codes."""
+        self.mfa_required = False
+        self.mfa_enabled = False
+        self.mfa_secret_enc = None
+        self.mfa_recovery_codes_json = None
 
 
 class Meeting(db.Model):

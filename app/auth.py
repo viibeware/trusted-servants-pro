@@ -446,6 +446,87 @@ def mfa_challenge():
     return render_template("mfa_challenge.html")
 
 
+def _mfa_issuer():
+    site = SiteSetting.query.first()
+    name = ((site.smtp_from_name if site else None) or "Trusted Servants Pro").strip()
+    return name or "Trusted Servants Pro"
+
+
+@bp.route("/mfa-setup", methods=["GET", "POST"])
+def mfa_setup():
+    """One-time 2FA enrolment wizard shown at login when an account is
+    flagged ``mfa_required`` but hasn't enrolled yet. Runs on the same
+    half-authenticated ``mfa_setup`` session marker as the challenge.
+    The user can enrol or skip; skipping signs them in without 2FA (the
+    wizard reappears next login until they enrol or turn 2FA off in
+    Settings)."""
+    if current_user.is_authenticated:
+        return redirect(url_for("main.index"))
+    ip = request.remote_addr or "unknown"
+    pending = session.get("mfa_setup")
+
+    def _expired():
+        session.pop("mfa_setup", None)
+        session.pop("mfa_setup_wizard_secret", None)
+        flash("Your sign-in attempt timed out. Please sign in again.", "danger")
+        return redirect(url_for("auth.login"))
+
+    if not pending or (datetime.utcnow().timestamp() - pending.get("ts", 0)) > _MFA_PENDING_TTL:
+        return _expired()
+    user = db.session.get(User, pending.get("uid"))
+    if not user or user.disabled:
+        return _expired()
+
+    from . import totp, activity
+    if request.method == "POST":
+        action = request.form.get("action")
+        # ``skip`` (decline) and ``finish`` (Continue after the recovery-codes
+        # step) just complete the half-authenticated session — they must work
+        # regardless of whether enrolment has happened, so they're handled
+        # before the setup-pending check below.
+        if action in ("skip", "finish"):
+            session.pop("mfa_setup", None)
+            session.pop("mfa_setup_wizard_secret", None)
+            if action == "skip":
+                activity.log("login.mfa.setup.skip", user=user,
+                             summary=f"Skipped the 2FA setup wizard from {ip}")
+            return _finalize_login(user, ip, pending.get("next"))
+        if action == "enroll":
+            secret = session.get("mfa_setup_wizard_secret")
+            if not secret:
+                return _expired()
+            code = (request.form.get("code") or "").strip()
+            if not totp.verify(secret, code):
+                uri = totp.provisioning_uri(secret, user.username, _mfa_issuer())
+                return render_template("mfa_setup.html", qr=totp.qr_data_uri(uri),
+                                       secret=secret,
+                                       error="That code didn't match. Check the app and try again.")
+            codes = user.enroll_mfa(secret)
+            db.session.commit()
+            session.pop("mfa_setup_wizard_secret", None)
+            activity.log("login.mfa.setup.enrolled", user=user,
+                         summary="Enrolled in 2FA via the login setup wizard")
+            return render_template("mfa_setup.html", recovery_codes=codes)
+        # Unknown action — fall through and re-render the enrol step.
+
+    # If 2FA is no longer pending for this account (enrolment finished in
+    # another tab, or an admin cleared the requirement), there's nothing to
+    # set up — just complete the sign-in.
+    if not user.mfa_setup_pending():
+        session.pop("mfa_setup", None)
+        session.pop("mfa_setup_wizard_secret", None)
+        return _finalize_login(user, ip, pending.get("next"))
+
+    # GET (or fall-through): keep a stable provisional secret for this
+    # wizard session so a reload doesn't churn the QR.
+    secret = session.get("mfa_setup_wizard_secret")
+    if not secret:
+        secret = totp.generate_secret()
+        session["mfa_setup_wizard_secret"] = secret
+    uri = totp.provisioning_uri(secret, user.username, _mfa_issuer())
+    return render_template("mfa_setup.html", qr=totp.qr_data_uri(uri), secret=secret)
+
+
 @bp.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
@@ -490,16 +571,29 @@ def login():
             # Crucially we do NOT clear the failure buckets yet — that only
             # happens once the code verifies (see _finalize_login), so a
             # stolen password can't reset the lockout budget by itself.
+            safe_next = next_url if (next_url and _is_safe_url(next_url)) else None
             if user.mfa_active():
                 session["mfa_pending"] = {
                     "uid": user.id,
                     "ts": datetime.utcnow().timestamp(),
-                    "next": next_url if (next_url and _is_safe_url(next_url)) else None,
+                    "next": safe_next,
                 }
                 from . import activity
                 activity.log("login.mfa.challenge", user=user,
                              summary=f"Password accepted; awaiting MFA code from {ip}")
                 return redirect(url_for("auth.mfa_challenge"))
+            # 2FA required but not yet enrolled → the one-time setup wizard.
+            # Still half-authenticated until they finish or skip it.
+            if user.mfa_setup_pending():
+                session["mfa_setup"] = {
+                    "uid": user.id,
+                    "ts": datetime.utcnow().timestamp(),
+                    "next": safe_next,
+                }
+                from . import activity
+                activity.log("login.mfa.setup", user=user,
+                             summary=f"Password accepted; 2FA setup wizard shown to {user.username}")
+                return redirect(url_for("auth.mfa_setup"))
             return _finalize_login(user, ip, next_url)
         _record_login_failure(ip, lockout_username)
         from . import activity
@@ -795,6 +889,10 @@ def users_create():
         return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
     u = User(username=username, email=email, name=name, phone=phone,
              password_hash=generate_password_hash(password), role=role)
+    # New admin accounts default to requiring 2FA (set up via the one-time
+    # wizard at first login, which they may skip). Other roles default off;
+    # an admin can flip the per-row switch in the Users tab for anyone.
+    u.mfa_required = (role == "admin")
     db.session.add(u)
     db.session.commit()
     from . import activity
@@ -891,6 +989,14 @@ def users_update(uid):
                  .update({"ended_at": datetime.utcnow(),
                           "end_reason": "admin_reset"},
                          synchronize_session=False))
+    # 2FA toggle from the edit modal (marker key distinguishes "untouched"
+    # from "unticked", same pattern as the disabled / self-reset toggles).
+    if "mfa_present" in request.form:
+        want_mfa = request.form.get("mfa_required") == "1"
+        if want_mfa and not u.mfa_required:
+            u.mfa_required = True
+        elif not want_mfa and (u.mfa_required or u.mfa_enabled):
+            u.clear_mfa()
     if "reset_allowed_present" in request.form:
         new_allowed = request.form.get("password_reset_allowed") == "1"
         if new_allowed != u.password_reset_allowed:
@@ -1032,6 +1138,36 @@ def users_set_reset_allowed(uid):
                           f"password reset for {u.username}"))
     if request.headers.get("X-Requested-With") == "fetch":
         return jsonify(ok=True, allowed=allowed)
+    return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
+
+
+@bp.route("/users/<int:uid>/mfa", methods=["POST"])
+@login_required
+def users_set_mfa(uid):
+    """Admin toggle for whether an account uses two-factor authentication.
+    Turning it ON sets the requirement — the user enrols via the one-time
+    wizard at their next login. Turning it OFF fully clears 2FA (requirement,
+    enrolment, secret, recovery codes). Posted by the per-row switch in
+    Settings → Users; returns JSON for the AJAX caller."""
+    from flask import jsonify
+    if not current_user.is_admin():
+        return jsonify({"error": "forbidden"}), 403
+    u = db.session.get(User, uid)
+    if not u:
+        return jsonify({"error": "not found"}), 404
+    want = request.form.get("required") == "1"
+    if want:
+        u.mfa_required = True
+    else:
+        # Full off — clears any in-progress or completed enrolment too.
+        u.clear_mfa()
+    db.session.commit()
+    from . import activity
+    activity.log("user.mfa_gate", entity_type="user", entity_id=u.id,
+                 summary=(f"{'Enabled' if want else 'Disabled'} two-factor "
+                          f"authentication for {u.username}"))
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify(ok=True, required=want)
     return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
 
 

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Set up two-factor authentication · Trusted Servants Pro{% endblock %}
+{% block auth_content %}
+<div class="login-split" data-transition="0">
+  {% set _default_colors = '["#16c2ba", "#1883d5", "#5a1ce5"]' %}
+  {% set _bg = site.login_bg_color if site else None %}
+  {% set _bg_colors = (site.login_bg_colors if site else None) or (None if _bg else _default_colors) %}
+  {% set _effect = (site.login_particle_effect if site else None) or 'stars' %}
+  {% set _speed = (site.login_particle_speed if site else None) or 85 %}
+  {% set _size = (site.login_particle_size if site else None) or 185 %}
+  <aside class="login-hero"{% if _bg and not _bg_colors %} style="background: {{ _bg }};"{% endif %} data-effect="{{ _effect }}" data-speed="{{ _speed }}" data-size="{{ _size }}"{% if _bg_colors %} data-bg-colors='{{ _bg_colors }}'{% endif %}>
+    <canvas class="login-hero-bg" aria-hidden="true"></canvas>
+    <div class="login-hero-inner">
+      <img class="login-hero-logo" src="{{ url_for('static', filename='img/logo_tspro_white.svg') }}" alt="Trusted Servants Pro">
+      <div class="login-hero-title">Trusted Servants Pro</div>
+    </div>
+  </aside>
+
+  <section class="login-form-pane">
+    <div class="login-form mfa-wizard">
+      <div class="flashes">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}<div class="flash flash-{{ cat }}">{{ msg }}</div>{% endfor %}
+      {% endwith %}
+      </div>
+
+      {% if recovery_codes %}
+        {# Step 2 — enrolment succeeded; show the one-time recovery codes. #}
+        <h1 class="mfa-form-title">Save your recovery codes</h1>
+        <p class="muted small mfa-form-lead">
+          Two-factor authentication is now on for your account. Keep these
+          somewhere safe — each works once if you ever lose your authenticator.
+          They won't be shown again.
+        </p>
+        <ul class="mfa-recovery-list mfa-wizard-recovery">
+          {% for c in recovery_codes %}<li>{{ c }}</li>{% endfor %}
+        </ul>
+        <form method="post" action="{{ url_for('auth.mfa_setup') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="finish">
+          <button class="btn btn-primary login-submit" type="submit">Continue</button>
+        </form>
+      {% else %}
+        {# Step 1 — scan the QR / enter the manual key, confirm a code. #}
+        <h1 class="mfa-form-title">Set up two-factor authentication</h1>
+        <p class="muted small mfa-form-lead">
+          Two-factor authentication is required for your account. Scan the code
+          below with an authenticator app (2FAS, Google Authenticator, Aegis,
+          1Password…), then enter the 6-digit code to confirm.
+        </p>
+        <div class="mfa-wizard-qr-wrap"><img class="mfa-qr" src="{{ qr }}" alt="2FA setup QR code"></div>
+        <p class="muted smaller">Can't scan? Enter this key manually (Time-based, SHA-1, 6 digits):</p>
+        <code class="mfa-secret mfa-wizard-secret" tabindex="0">{{ secret }}</code>
+
+        <form method="post" action="{{ url_for('auth.mfa_setup') }}" class="mfa-wizard-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="enroll">
+          <label>
+            <span>Authentication code <span class="req">*</span></span>
+            <input name="code" type="text" inputmode="numeric" autocomplete="one-time-code"
+                   maxlength="6" autofocus required placeholder="123456">
+          </label>
+          {% if error %}<p class="flash flash-danger" role="alert">{{ error }}</p>{% endif %}
+          <button class="btn btn-primary login-submit" type="submit">Verify &amp; turn on</button>
+        </form>
+        <form method="post" action="{{ url_for('auth.mfa_setup') }}" class="mfa-wizard-skip">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="skip">
+          <button type="submit" class="btn-link mfa-skip-btn">Skip for now</button>
+          <span class="muted smaller">You can turn this off in Settings → Your Access.</span>
+        </form>
+      {% endif %}
+    </div>
+  </section>
+</div>
+<script src="{{ url_for('static', filename='js/login_fx.js', v=app_build_id) }}"></script>
+{% endblock %}

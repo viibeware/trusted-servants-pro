@@ -7,7 +7,14 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.14.0 — 2026-06-13 (latest) — Two-factor authentication for admins
+## 2.14.1 — 2026-06-13 (latest) — Turn two-factor on for any account, with a setup wizard
+
+- **Admins can switch two-factor on or off for any account** from **Settings → Users** — there's a new **Two-factor** toggle on each user row (and in the Edit-user dialog). New admin accounts now have it on by default.
+- **Two-factor works for every role now,** not just admins.
+- **A friendly setup wizard greets people at login.** When an account is set to use two-factor but hasn't set it up yet, the next sign-in walks the user through scanning the QR code and confirming a code — then shows their recovery codes. They can **Skip for now** and set it up later if they prefer.
+- **Anyone can manage their own two-factor under Settings → Your Access** — turn it on, see whether setup is still required, or turn it off (confirming their password first).
+
+## 2.14.0 — 2026-06-13 — Two-factor authentication for admins
 
 - **You can now turn on two-factor authentication (2FA) for your admin account.** Open **Settings → Security → Set up two-factor authentication**, scan the QR code with an authenticator app, and enter the 6-digit code to confirm. It works with any standard app — **2FAS**, Google Authenticator, Aegis, 1Password, and the rest.
 - **It's optional and admin-only.** Each admin chooses whether to switch it on; other roles never see this step. Once enabled, you'll be asked for a code from your app after entering your password each time you sign in.

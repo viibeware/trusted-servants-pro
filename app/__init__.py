@@ -1845,11 +1845,22 @@ def _migrate_sqlite(app):
                          ("last_path", "VARCHAR(500)"),
                          ("password_reset_allowed", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("disabled", "BOOLEAN NOT NULL DEFAULT 0"),
-                         # Optional admin-only TOTP second factor.
+                         # Optional TOTP second factor (any role).
                          ("mfa_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
                          ("mfa_secret_enc", "BLOB"),
-                         ("mfa_recovery_codes_json", "TEXT")):
+                         ("mfa_recovery_codes_json", "TEXT"),
+                         # Master "2FA on for this account" switch, distinct
+                         # from mfa_enabled (enrolment complete).
+                         ("mfa_required", "BOOLEAN NOT NULL DEFAULT 0")):
             add("user", col, ddl)
+        # 2.14.0 shipped before mfa_required existed and gated the login
+        # challenge on mfa_enabled alone. Under the new master-gate model
+        # (mfa_active = required AND enabled), anyone already enrolled must
+        # have the requirement turned on or their live 2FA would silently
+        # stop challenging. Run only on the boot that first adds the column.
+        if ("user", "mfa_required") in newly_added:
+            conn.execute(text(
+                "UPDATE user SET mfa_required = 1 WHERE mfa_enabled = 1"))
         for col, ddl in (("open_in_new_tab", "BOOLEAN NOT NULL DEFAULT 0"),
                          ("form_trigger", "VARCHAR(64)")):
             add("frontend_nav_item", col, ddl)
