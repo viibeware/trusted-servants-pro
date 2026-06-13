@@ -2390,6 +2390,16 @@
     function showErr(el, msg){ el.textContent = msg; el.hidden = false; }
     function clearErr(el){ el.hidden = true; el.textContent = ''; }
 
+    // When the user changes their own 2FA here, reload the admin Users tab
+    // iframe (if it's already loaded in this open modal) so its per-row
+    // Two-factor toggle reflects the new state — otherwise it stays stale
+    // until the modal is reopened. No-op for non-admins (no Users pane) or
+    // when the iframe hasn't been opened yet (it loads fresh on first open).
+    function refreshUsersTab(){
+      const f = document.querySelector('.settings-pane[data-pane="users"] iframe.settings-frame');
+      if (f && f.src && f.src !== 'about:blank' && f.dataset.src) f.src = f.dataset.src;
+    }
+
     // Render the one-time recovery codes panel and hide whatever state
     // the card was in.
     function showRecovery(codes){
@@ -2437,6 +2447,7 @@
         const r = await post(card.dataset.enableUrl, { code });
         flipToEnabled();
         showRecovery(r.recovery_codes);
+        refreshUsersTab();
         toast('Two-factor authentication enabled', 'success');
       } catch (e) { showErr(err, e.message); }
       enableBtn.disabled = false;
@@ -2505,6 +2516,7 @@
           const offDisable = $('.mfa-off-disable'); if (offDisable) offDisable.hidden = true;
           beginBtn.hidden = false; beginBtn.disabled = false;
           $('.mfa-setup').hidden = true;
+          refreshUsersTab();
           toast('Two-factor authentication disabled', 'success');
         } else {
           const r = await post(card.dataset.regenUrl, { password });

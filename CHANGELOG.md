@@ -6,6 +6,26 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.14.2] — 2026-06-13
+
+### Fixed
+
+- **Turning 2FA off in Settings → Your Access now fully reflects the off state.**
+  The yellow "2FA has been turned on for your account" notice and the red
+  "Turn off two-factor" button now disappear when you turn it off (a scoped
+  `.mfa-card [hidden]` CSS rule — the elements' `display: flex` / `inline-flex`
+  was beating the `[hidden]` attribute, so toggling them had no visible effect).
+- **The Users-tab Two-factor toggle stays in sync.** When a user enables or
+  disables their own 2FA from Your Access, the admin Users tab iframe (if open
+  in the same Settings modal) reloads so its per-row toggle reflects the new
+  state instead of going stale until the modal is reopened.
+
+### Changed
+
+- Reworded the login setup wizard from "Two-factor authentication is **required**
+  for your account" to "**available** for your account" — it's optional and
+  skippable, so "available" reads truer.
+
 ## [2.14.1] — 2026-06-13
 
 ### Added

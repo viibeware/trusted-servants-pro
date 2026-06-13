@@ -15745,6 +15745,12 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
   font-size: 1.2rem; letter-spacing: 0.25em; text-align: center; }
 
 /* ===== 2FA additions: required-pending state, Users toggle, wizard ===== */
+/* Bulletproof: the card's elements set display:flex/inline-flex (the note,
+   .btn buttons, the action rows), which would otherwise beat the UA
+   [hidden]{display:none} rule. Without this, toggling `.hidden` in JS — e.g.
+   hiding the yellow notice + "Turn off two-factor" button after a user turns
+   2FA off — has no visible effect. */
+.mfa-card [hidden] { display: none !important; }
 .mfa-status-pill.warn { color: #7c4a03; background: #fff6e1; border-color: #fde4b3; }
 [data-theme="dark"] .mfa-status-pill.warn { color: #f5d9a8; background: #2e2410; border-color: #5a4514; }
 
