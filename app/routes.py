@@ -819,8 +819,13 @@ def index():
         # *other* people on the portal.
         _active_count, _online_full = _online_users()
         active_cutoff = datetime.utcnow() - ONLINE_WINDOW
+        # Mirror the /api/online-users filter: only other people whose
+        # current page is a backend ("/tspro") page — public Web
+        # Frontend visits never appear in this admin widget.
         online_users = [u for u in _online_full
-                        if u.id != current_user.id and u.last_seen_at >= active_cutoff]
+                        if u.id != current_user.id
+                        and u.last_seen_at >= active_cutoff
+                        and (u.last_path or "").startswith("/tspro")]
         online_count = len(online_users)
         from sqlalchemy import func as _sa_func
         from .auth import currently_locked_usernames, user_lockout_expires_in
@@ -957,9 +962,16 @@ def api_online_users():
     _full_count, users = _online_users()
     # Drop the viewing admin from the list — they already know they're
     # signed in, and surfacing their own row inflates the count + adds
-    # noise. Recompute the active count AFTER the filter so the header
-    # tally matches what's visible.
-    users = [u for u in users if u.id != current_user.id]
+    # noise. Also drop anyone whose current location is a public Web
+    # Frontend page: this widget is a backend operational view, so only
+    # backend ("/tspro") pages should ever appear here. last_path holds
+    # the most recent rendered HTML page, so a user who just navigated
+    # out to the frontend falls off the list until they return.
+    # Recompute the active count AFTER the filter so the header tally
+    # matches what's visible.
+    users = [u for u in users
+             if u.id != current_user.id
+             and (u.last_path or "").startswith("/tspro")]
     active_cutoff = datetime.utcnow() - ONLINE_WINDOW
     count = sum(1 for u in users if u.last_seen_at >= active_cutoff)
     return jsonify(count=count, users=[
