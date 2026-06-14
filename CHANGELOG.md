@@ -6,6 +6,23 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.14.3] — 2026-06-14
+
+### Fixed
+
+- **Non-admin users can now manage their own 2FA.** The self-service endpoints
+  (`/settings/mfa/begin|enable|disable|regenerate-recovery`) were still gated
+  `@admin_required` from when 2FA was admin-only — so after the card moved to
+  Settings → Your Access (any role), a non-admin's "Turn off two-factor" (or
+  setup) silently failed, leaving `mfa_required` set and re-prompting the setup
+  wizard at every login. Changed them to `@login_required`; they only ever act
+  on `current_user`, so each user manages their own 2FA and no one else's.
+
+### Changed
+
+- 1rem gap between the authentication-code field and the Verify button on the
+  login 2FA setup wizard.
+
 ## [2.14.2] — 2026-06-13
 
 ### Fixed

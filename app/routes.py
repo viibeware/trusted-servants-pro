@@ -15956,7 +15956,7 @@ def _mfa_issuer():
 
 
 @bp.route("/settings/mfa/begin", methods=["POST"])
-@admin_required
+@login_required
 def mfa_begin():
     """Mint a provisional TOTP secret for enrolment and return its QR +
     manual key. The secret lives in the session only until /mfa/enable
@@ -15970,7 +15970,7 @@ def mfa_begin():
 
 
 @bp.route("/settings/mfa/enable", methods=["POST"])
-@admin_required
+@login_required
 def mfa_enable():
     """Confirm the provisional secret with a live code, then turn MFA on
     and hand back one-time recovery codes (shown to the admin exactly
@@ -15995,7 +15995,7 @@ def mfa_enable():
 
 
 @bp.route("/settings/mfa/disable", methods=["POST"])
-@admin_required
+@login_required
 def mfa_disable():
     """Turn MFA off. Re-authenticates with the account password first so a
     walked-up-to, already-unlocked session can't silently strip the second
@@ -16016,7 +16016,7 @@ def mfa_disable():
 
 
 @bp.route("/settings/mfa/regenerate-recovery", methods=["POST"])
-@admin_required
+@login_required
 def mfa_regenerate_recovery():
     """Issue a fresh set of recovery codes (invalidating the old set).
     Password-gated, mirroring disable."""

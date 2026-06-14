@@ -7,7 +7,12 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.14.2 — 2026-06-13 (latest) — Two-factor on/off polish
+## 2.14.3 — 2026-06-14 (latest) — Fix: non-admins can turn their own two-factor off
+
+- **Turning two-factor off now works for every role.** Previously, only admins could turn their own two-factor on or off — for other roles the "Turn off two-factor" button silently did nothing, so the setup wizard kept reappearing at each login. Now any user can fully manage two-factor for their own account under **Settings → Your Access**.
+- Small spacing fix on the two-factor setup screen.
+
+## 2.14.2 — 2026-06-13 — Two-factor on/off polish
 
 - **Turning two-factor off now clearly shows it's off.** The yellow notice and the red "Turn off two-factor" button disappear the moment you switch it off under **Settings → Your Access**.
 - **Admins see the change right away.** If you turn your own two-factor on or off, the **Settings → Users** list updates that account's Two-factor toggle to match.

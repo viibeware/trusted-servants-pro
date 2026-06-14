@@ -15773,6 +15773,10 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
 .mfa-wizard-qr-wrap .mfa-qr { display: block; width: 168px; height: 168px; image-rendering: pixelated; }
 .mfa-wizard-secret { display: inline-block; margin: 0 0 16px; }
 .mfa-wizard-recovery { margin: 16px 0 20px; }
+/* 1rem between the authentication-code field and the Verify button (and the
+   inline error, when present). The inner form is its own element, so it
+   doesn't inherit .login-form's flex gap. */
+.mfa-wizard-form { display: flex; flex-direction: column; gap: 1rem; }
 .mfa-wizard-skip { margin-top: 16px; display: flex; flex-direction: column; gap: 2px; }
 .mfa-skip-btn { background: none; border: 0; padding: 0; color: var(--accent, #1883d5);
   font: inherit; font-weight: 600; cursor: pointer; text-align: left; width: max-content; }
