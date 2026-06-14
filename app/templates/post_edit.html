@@ -100,7 +100,7 @@
     <dt>Phone</dt><dd>{{ _p.submitter_phone }}</dd>
     {% endif %}
     {% if _p.submitted_at %}
-    <dt>Submitted</dt><dd>{{ _p.submitted_at.strftime('%b %d, %Y · %-I:%M %p') }} UTC</dd>
+    <dt>Submitted</dt><dd>{{ _p.submitted_at|fmt_site_local('%b %d, %Y · %-I:%M %p %Z') }}</dd>
     {% endif %}
     {% if _p.submitter_notes %}
     <dt>Notes</dt><dd style="white-space: pre-line">{{ _p.submitter_notes }}</dd>
@@ -165,7 +165,7 @@
         <input type="text" name="slug" class="slug-input-field"
                value="{{ (_p.slug if (_p and _p.slug) else '') or '' }}"
                placeholder="{{ _p.public_slug if _p else 'auto-derived from title' }}"
-               pattern="[a-z0-9-]*" maxlength="200">
+               pattern="[a-z0-9\-]*" maxlength="200">
       </div>
       <span class="muted small">
         Leave blank to derive from the title. Lowercase letters, numbers, and hyphens; if the slug is taken we append -2, -3, … on save. One slug serves the event, announcement, and archive URLs.
@@ -509,6 +509,10 @@
         <div class="og-image-fields">
           <label>Upload new image <span class="muted small">(PNG, JPG, or WebP)</span>
             <input type="file" name="featured_image" accept="image/png,image/jpeg,image/webp" data-featured-upload>
+          </label>
+          <label class="check og-image-webp">
+            <input type="checkbox" name="convert_featured_to_webp" value="1">
+            <span>Auto convert to WebP <span class="muted small">— transcodes the upload to WebP on save</span></span>
           </label>
           <div class="og-image-actions">
             <button type="button" class="btn btn-sm" data-post-featured-picker>{{ icon('folder') }} Choose from File Browser</button>

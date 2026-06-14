@@ -158,6 +158,43 @@
     return max + 1;
   })();
 
+  // ----- Field editor modal plumbing ---------------------------------
+  // The editor body opens as a centered popup (CSS turns the
+  // ``.is-open`` body into a fixed, centered panel over a backdrop).
+  // One field open at a time; backdrop-click / Escape / ✕ close it.
+  var modalBackdrop = null;
+  function ensureBackdrop() {
+    if (modalBackdrop) return modalBackdrop;
+    modalBackdrop = document.createElement('div');
+    modalBackdrop.className = 'fe-form-field-modal-backdrop';
+    modalBackdrop.hidden = true;
+    modalBackdrop.addEventListener('click', closeOpenCard);
+    document.body.appendChild(modalBackdrop);
+    return modalBackdrop;
+  }
+  function openCardEl() { return builder.querySelector('[data-field-card].is-open'); }
+  function syncBackdrop() { ensureBackdrop().hidden = !openCardEl(); }
+  function closeOpenCard() {
+    var c = openCardEl();
+    if (c) c.classList.remove('is-open');
+    syncBackdrop();
+  }
+  function openCard(card) {
+    var cur = openCardEl();                 // one editor at a time
+    if (cur && cur !== card) cur.classList.remove('is-open');
+    card.classList.add('is-open');
+    syncBackdrop();
+    var lbl = card.querySelector('input[name$="_label"]');
+    if (lbl) { lbl.focus(); lbl.select(); }
+  }
+  function toggleCard(card) {
+    if (card.classList.contains('is-open')) closeOpenCard();
+    else openCard(card);
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && openCardEl()) { e.preventDefault(); closeOpenCard(); }
+  });
+
   function syncHead(card) {
     var labelIn = card.querySelector('input[name$="_label"]');
     var reqIn   = card.querySelector('input[name$="_required"]');
@@ -201,26 +238,43 @@
   }
 
   function wireCard(card) {
-    // Click anywhere on the card toggles the body open/closed.
-    // Bail when the click landed inside the body (so form
-    // controls keep working — labels, inputs, options textareas)
-    // OR on one of the head's interactive controls (drag handle,
-    // delete button). Everything else on the card surface — head
-    // padding, type pill, title, chevron, dead space in between —
-    // toggles the open state. The actual 200ms expand/collapse
-    // animation is CSS-driven via the ``is-open`` class; see
-    // app.css ``.fe-form-field-body``.
+    // Give the editor body a modal header (title + ✕) once. The body
+    // renders as a centered popup when the card has ``.is-open`` (see
+    // ``.fe-form-field-card.is-open > .fe-form-field-body`` in app.css);
+    // it stays inside the form so its inputs still submit.
+    var fbody = card.querySelector('.fe-form-field-body');
+    if (fbody && !fbody.querySelector('.fe-form-field-modal-head')) {
+      var mhead = document.createElement('div');
+      mhead.className = 'fe-form-field-modal-head';
+      var mtitle = document.createElement('span');
+      mtitle.className = 'fe-form-field-modal-title';
+      mtitle.textContent = 'Edit field';
+      var mclose = document.createElement('button');
+      mclose.type = 'button';
+      mclose.className = 'fe-form-field-modal-close';
+      mclose.setAttribute('aria-label', 'Close');
+      mclose.textContent = '✕';
+      mclose.addEventListener('click', closeOpenCard);
+      mhead.appendChild(mtitle);
+      mhead.appendChild(mclose);
+      fbody.insertBefore(mhead, fbody.firstChild);
+    }
+    // Click anywhere on the card (except the body, drag handle, or
+    // delete button) opens the editor modal. While it's open the body
+    // is a fixed popup over a backdrop, so closing happens via the
+    // backdrop / Escape / ✕ rather than this handler.
     card.addEventListener('click', function (e) {
       if (e.target.closest('.fe-form-field-body, .fe-form-field-drag, [data-field-delete]')) {
         return;
       }
-      card.classList.toggle('is-open');
+      toggleCard(card);
     });
     var delBtn = card.querySelector('[data-field-delete]');
     if (delBtn) {
       delBtn.addEventListener('click', function () {
         if (!confirm('Delete this field?')) return;
         card.remove();
+        syncBackdrop();
         syncOrder();
       });
     }
@@ -290,10 +344,16 @@
       // label right away. The animation runs naturally from the
       // collapsed default — keeping the same 200ms reveal as a
       // user-triggered expand.
-      card.classList.add('is-open');
       showOptionsIfNeeded(card);
-      var firstInput = card.querySelector('input[name$="_label"]');
-      if (firstInput) firstInput.focus();
+      // Pre-fill the label from the field type's name (e.g. "Email")
+      // so the card starts with a sensible title.
+      var labelInput = card.querySelector('input[name$="_label"]');
+      if (labelInput) {
+        labelInput.value = type.charAt(0).toUpperCase() + type.slice(1);
+        syncHead(card);
+      }
+      // Drop the new block into the list collapsed — the operator opens its
+      // editor modal by clicking the block, not automatically.
       syncOrder();
     });
   }

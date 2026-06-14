@@ -45,7 +45,7 @@
         </div>
         <label>Public URL slug
           <input type="text" name="submission_form_slug" maxlength="120"
-                 pattern="[a-z0-9-]*"
+                 pattern="[a-z0-9\-]*"
                  value="{{ site.submission_form_slug or 'submissionform' }}"
                  placeholder="submissionform">
           <span class="muted small">Lowercase letters, numbers, and hyphens only. The built-in URL (<code>/submissionform</code>) always works as a fallback; saving the default value here means no custom alias is added.</span>

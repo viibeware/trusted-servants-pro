@@ -9,8 +9,14 @@
   {% include "_frontend_subnav.html" %}
   <div class="fe-admin-main">
 
+    {# A freshly-created stub lands here with a placeholder "Untitled form"
+       title. Flag the form so the yellow save bar shows immediately — the
+       operator can save the new form straight away, even before touching a
+       field. data-fe-savebar-force is honoured by feSaveBar() in app.js. #}
+    {% set _is_placeholder = (form.title or '').startswith('Untitled form') %}
     <form class="form" method="post"
-          action="{{ url_for('main.frontend_custom_form_edit', form_id=form.id) }}">
+          action="{{ url_for('main.frontend_custom_form_edit', form_id=form.id) }}"
+          {% if _is_placeholder %}data-fe-savebar-force{% endif %}>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
       {# Visibility block — same shape the module forms use. Lives
@@ -48,8 +54,8 @@
            keystroke replaces the placeholder instead of appending to
            it. Existing forms (anyone editing a saved form) skip the
            autofocus so the cursor doesn't steal away from whatever
-           the operator scrolled down to. #}
-        {% set _is_placeholder = (form.title or '').startswith('Untitled form') %}
+           the operator scrolled down to. (``_is_placeholder`` is set at
+           the top of the content block, above the form.) #}
         <div class="form-row">
           <label>Title
             <input type="text" name="title" value="{{ form.title }}" required maxlength="200"
@@ -57,7 +63,7 @@
           </label>
           <label>URL slug
             <input type="text" name="slug" value="{{ form.slug }}"
-                   pattern="[a-z0-9-]*" maxlength="120" required>
+                   pattern="[a-z0-9\-]*" maxlength="120" required>
             <span class="muted smaller">Lowercase letters, numbers, and hyphens only.</span>
           </label>
         </div>
@@ -98,10 +104,6 @@
                       placeholder="Thanks for your submission — we'll be in touch.">{{ form.thank_you_message or '' }}</textarea>
           </label>
         </fieldset>
-
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary">Save settings</button>
-        </div>
       </section>
 
       <section class="card">
@@ -127,7 +129,7 @@
               <button type="button" class="btn btn-sm" data-field-edit>Edit</button>
               <button type="button" class="btn btn-sm btn-danger" data-field-delete title="Delete field">{{ icon('trash') }}</button>
             </div>
-            <div class="fe-form-field-body" hidden>
+            <div class="fe-form-field-body">
               <div class="form-row">
                 <label>Label
                   <input type="text" name="field_{{ idx }}_label" value="{{ f.label }}" maxlength="200" required>
@@ -137,7 +139,7 @@
                          pattern="[a-z0-9_]*" placeholder="auto-from-label">
                 </label>
               </div>
-              <label>Placeholder
+              <label data-field-placeholder-wrap {% if f.type == 'name' %}hidden{% endif %}>Placeholder
                 <input type="text" name="field_{{ idx }}_placeholder" value="{{ f.get('placeholder', '') }}" maxlength="200">
               </label>
               {% if f.type == 'checkboxes' %}
@@ -188,7 +190,7 @@
                          pattern="[a-z0-9_]*" placeholder="auto-from-label">
                 </label>
               </div>
-              <label>Placeholder
+              <label data-field-placeholder-wrap>Placeholder
                 <input type="text" name="field___IDX___placeholder" value="" maxlength="200">
               </label>
               <label data-field-help-wrap>Help text <span class="muted smaller">(shown below the input)</span>
@@ -238,6 +240,44 @@
         return max + 1;
       })();
 
+      // ----- Field editor modal plumbing -------------------------------
+      // The editor body opens as a centered popup (CSS turns the
+      // ``.is-open`` body into a fixed, centered panel over a backdrop).
+      // We keep a single shared backdrop, allow only one field open at a
+      // time, and wire backdrop-click / Escape / ✕ to close.
+      var modalBackdrop = null;
+      function ensureBackdrop() {
+        if (modalBackdrop) return modalBackdrop;
+        modalBackdrop = document.createElement('div');
+        modalBackdrop.className = 'fe-form-field-modal-backdrop';
+        modalBackdrop.hidden = true;
+        modalBackdrop.addEventListener('click', closeOpenCard);
+        document.body.appendChild(modalBackdrop);
+        return modalBackdrop;
+      }
+      function openCardEl() { return builder.querySelector('[data-field-card].is-open'); }
+      function syncBackdrop() { ensureBackdrop().hidden = !openCardEl(); }
+      function closeOpenCard() {
+        var c = openCardEl();
+        if (c) c.classList.remove('is-open');
+        syncBackdrop();
+      }
+      function openCard(card) {
+        var cur = openCardEl();              // one editor at a time
+        if (cur && cur !== card) cur.classList.remove('is-open');
+        card.classList.add('is-open');
+        syncBackdrop();
+        var lbl = card.querySelector('input[name$="_label"]');
+        if (lbl) { lbl.focus(); lbl.select(); }
+      }
+      function toggleCard(card) {
+        if (card.classList.contains('is-open')) closeOpenCard();
+        else openCard(card);
+      }
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && openCardEl()) { e.preventDefault(); closeOpenCard(); }
+      });
+
       // Update the visible label and required-pill from the live form
       // inputs inside the body. Called after every edit-input change so
       // collapsing the card back shows the latest values.
@@ -259,6 +299,10 @@
 
       function showOptionsIfNeeded(card) {
         var type = (card.querySelector('input[name$="_type"]') || {}).value;
+        // Placeholder is meaningless for the composite "name" field — it
+        // renders two fixed-labelled (First / Last) inputs — so hide it.
+        var phWrap = card.querySelector('[data-field-placeholder-wrap]');
+        if (phWrap) phWrap.hidden = (type === 'name');
         var wrap = card.querySelector('[data-field-options-wrap]');
         if (!wrap) return;
         wrap.hidden = !OPTION_TYPES[type];
@@ -290,11 +334,38 @@
       }
 
       function wireCard(card) {
-        // Toggle the body open/closed on Edit click.
-        var editBtn = card.querySelector('[data-field-edit]');
-        var body    = card.querySelector('.fe-form-field-body');
-        if (editBtn && body) {
-          editBtn.addEventListener('click', function () { body.hidden = !body.hidden; });
+        // Give the editor body a modal header (title + ✕) once. The body
+        // is rendered as a centered popup when the card has ``.is-open``
+        // (see the ``.fe-form-field-card.is-open > .fe-form-field-body``
+        // rule in app.css); it stays inside the form so its inputs still
+        // submit.
+        var fbody = card.querySelector('.fe-form-field-body');
+        if (fbody && !fbody.querySelector('.fe-form-field-modal-head')) {
+          var mhead = document.createElement('div');
+          mhead.className = 'fe-form-field-modal-head';
+          var mtitle = document.createElement('span');
+          mtitle.className = 'fe-form-field-modal-title';
+          mtitle.textContent = 'Edit field';
+          var mclose = document.createElement('button');
+          mclose.type = 'button';
+          mclose.className = 'fe-form-field-modal-close';
+          mclose.setAttribute('aria-label', 'Close');
+          mclose.textContent = '✕';
+          mclose.addEventListener('click', closeOpenCard);
+          mhead.appendChild(mtitle);
+          mhead.appendChild(mclose);
+          fbody.insertBefore(mhead, fbody.firstChild);
+        }
+        // Open the editor by clicking anywhere on the card head — the
+        // Edit button is just a visual affordance for the same action.
+        // Clicks on the delete control or drag handle are excluded so
+        // they keep their own behaviour.
+        var head = card.querySelector('.fe-form-field-head');
+        if (head) {
+          head.addEventListener('click', function (e) {
+            if (e.target.closest('[data-field-delete], .fe-form-field-drag')) return;
+            toggleCard(card);
+          });
         }
         // Delete card.
         var delBtn = card.querySelector('[data-field-delete]');
@@ -302,6 +373,7 @@
           delBtn.addEventListener('click', function () {
             if (!confirm('Delete this field?')) return;
             card.remove();
+            syncBackdrop();
             syncOrder();
           });
         }
@@ -383,12 +455,17 @@
           // element rather than the discarded input.
           swapHelpInputForCheckboxes(card);
           wireCard(card);
-          // Open the new card's body so the operator can type a label.
-          var body = card.querySelector('.fe-form-field-body');
-          if (body) body.hidden = false;
           showOptionsIfNeeded(card);
-          var firstInput = card.querySelector('input[name$="_label"]');
-          if (firstInput) firstInput.focus();
+          // Pre-fill the label from the field type's name (e.g. "Email",
+          // "Name") so the card starts with a sensible title — and keeps
+          // it off the empty-label drop path on save.
+          var labelInput = card.querySelector('input[name$="_label"]');
+          if (labelInput) {
+            labelInput.value = type.charAt(0).toUpperCase() + type.slice(1);
+            syncHead(card);
+          }
+          // Drop the new block into the list collapsed — the operator opens
+          // its editor modal by clicking the block, not automatically.
           syncOrder();
         });
       }
@@ -396,6 +473,30 @@
       // Sync the hidden order input one more time right before submit,
       // catching any reorder that happened after the last dragend.
       if (form) form.addEventListener('submit', syncOrder);
+    })();
+    </script>
+
+    <script>
+    // Live-slug: mirror the Title into the URL slug as the operator types,
+    // until they edit the slug themselves (then it's theirs to keep). We
+    // seed "already edited" when the existing slug doesn't match the title
+    // — i.e. a saved form with a custom URL — so editing its title never
+    // silently changes its public address.
+    (function () {
+      var title = document.querySelector('input[name="title"]');
+      var slug = document.querySelector('input[name="slug"]');
+      if (!title || !slug) return;
+      function slugify(s) {
+        return (s || '').toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .replace(/-{2,}/g, '-');
+      }
+      var edited = slug.value.trim() !== '' && slug.value.trim() !== slugify(title.value);
+      slug.addEventListener('input', function () { edited = true; });
+      title.addEventListener('input', function () {
+        if (!edited) slug.value = slugify(title.value);
+      });
     })();
     </script>
 

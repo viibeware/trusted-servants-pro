@@ -61,9 +61,25 @@
       </div>
 
       {% if custom_forms %}
-      <ul class="fe-forms-list">
+      {# Multi-select bulk delete. Revealed by JS (the bar is useless
+         without it); the per-row delete buttons stay as the no-JS path. #}
+      <div class="fe-forms-bulkbar" data-forms-bulkbar hidden>
+        <label class="fe-forms-bulk-all">
+          <input type="checkbox" data-forms-select-all aria-label="Select all forms">
+          <span>Select all</span>
+        </label>
+        <span class="muted smaller" data-forms-bulk-count>0 selected</span>
+        <button type="button" class="btn btn-sm btn-danger" data-forms-bulk-delete
+                data-bulk-url="{{ url_for('main.frontend_custom_forms_bulk_delete') }}" disabled hidden>
+          {{ icon('trash') }} Delete selected
+        </button>
+      </div>
+      <ul class="fe-forms-list" data-forms-list>
         {% for cf in custom_forms %}
         <li class="fe-forms-row">
+          <label class="fe-forms-row-check" aria-label="Select {{ cf.title }}">
+            <input type="checkbox" data-forms-select value="{{ cf.id }}">
+          </label>
           <span class="fe-forms-row-icon" aria-hidden="true">{{ icon('send') }}</span>
           <div class="fe-forms-row-text">
             <div class="fe-forms-row-name">{{ cf.title }}{% if not cf.enabled %} <span class="muted smaller">· disabled</span>{% endif %}</div>
@@ -106,6 +122,60 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-primary">{{ icon('plus') }} Add form</button>
       </form>
+
+      {% if custom_forms %}
+      <script>
+      (function () {
+        var bar = document.querySelector('[data-forms-bulkbar]');
+        var list = document.querySelector('[data-forms-list]');
+        if (!bar || !list) return;
+        var boxes = function () { return Array.prototype.slice.call(list.querySelectorAll('input[data-forms-select]')); };
+        if (!boxes().length) return;
+        bar.hidden = false;
+        var all = bar.querySelector('[data-forms-select-all]');
+        var count = bar.querySelector('[data-forms-bulk-count]');
+        var del = bar.querySelector('[data-forms-bulk-delete]');
+        function selected() { return boxes().filter(function (b) { return b.checked; }); }
+        function refresh() {
+          var sel = selected(), total = boxes();
+          count.textContent = sel.length + ' selected';
+          // The Delete button only shows once at least one form is ticked.
+          del.hidden = sel.length === 0;
+          del.disabled = sel.length === 0;
+          all.checked = sel.length > 0 && sel.length === total.length;
+          all.indeterminate = sel.length > 0 && sel.length < total.length;
+        }
+        list.addEventListener('change', function (e) {
+          if (e.target.matches('input[data-forms-select]')) refresh();
+        });
+        all.addEventListener('change', function () {
+          boxes().forEach(function (b) { b.checked = all.checked; });
+          refresh();
+        });
+        del.addEventListener('click', function () {
+          var ids = selected().map(function (b) { return b.value; });
+          if (!ids.length) return;
+          var word = ids.length === 1 ? 'form' : 'forms';
+          if (!confirm('Delete ' + ids.length + ' ' + word + '? Their submissions will also be removed. This cannot be undone.')) return;
+          var f = document.createElement('form');
+          f.method = 'POST'; f.action = del.dataset.bulkUrl;
+          var meta = document.querySelector('meta[name="csrf-token"]');
+          if (meta) {
+            var t = document.createElement('input');
+            t.type = 'hidden'; t.name = 'csrf_token'; t.value = meta.content;
+            f.appendChild(t);
+          }
+          ids.forEach(function (id) {
+            var i = document.createElement('input');
+            i.type = 'hidden'; i.name = 'form_ids'; i.value = id;
+            f.appendChild(i);
+          });
+          document.body.appendChild(f); f.submit();
+        });
+        refresh();
+      })();
+      </script>
+      {% endif %}
     </section>
 
     <section class="card">

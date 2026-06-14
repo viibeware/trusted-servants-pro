@@ -62,7 +62,11 @@
             it in sync without a reload. Widgets with no badge_key (meetings,
             files, …) render no chip at all, as before. -#}
         {%- if badge_key %} <span class="nav-badge nav-badge-warn" data-live-chip="{{ badge_key }}"{% if badge_title %} title="{{ badge_title }}"{% endif %}{% if not badge_count %} hidden{% endif %}>{{ badge_count or 0 }}</span>
-        {%- elif badge_count %} <span class="nav-badge nav-badge-warn"{% if badge_title %} title="{{ badge_title }}"{% endif %}>{{ badge_count }}</span>{% endif -%}
+        {#- Plain informational counts (no badge_key) render BLUE — the
+            brand-coloured base .nav-badge. Orange (nav-badge-warn) is
+            reserved for "needs attention" chips: the badge_key branch
+            above plus Watchtower / Notifications in base.html. -#}
+        {%- elif badge_count %} <span class="nav-badge"{% if badge_title %} title="{{ badge_title }}"{% endif %}>{{ badge_count }}</span>{% endif -%}
       </span>
       {% if view_all_url %}
       <a href="{{ view_all_url }}" class="link dash-widget-viewall">{{ view_all_label }} {{ icon('arrow-right') }}</a>

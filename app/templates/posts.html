@@ -152,8 +152,8 @@
         </td>
         <td class="hide-sm">
           {% if show == 'pending' and p.submitted_at %}
-            <div class="muted small">{{ p.submitted_at.strftime('%b %d, %Y') }}</div>
-            <div class="muted smaller">{{ p.submitted_at.strftime('%-I:%M %p') }} UTC</div>
+            <div class="muted small">{{ p.submitted_at|fmt_site_local('%b %d, %Y') }}</div>
+            <div class="muted smaller">{{ p.submitted_at|fmt_site_local('%-I:%M %p %Z') }}</div>
           {% elif p.event_starts_at %}
             <div class="muted small">{{ p.event_starts_at.strftime('%b %d, %Y') }}</div>
             <div class="muted smaller">{{ p.event_starts_at.strftime('%-I:%M %p') }}{% if p.event_ends_at %} – {{ p.event_ends_at.strftime('%-I:%M %p') }}{% endif %}</div>

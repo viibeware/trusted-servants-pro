@@ -7,7 +7,25 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.14.3 — 2026-06-14 (latest) — Fix: non-admins can turn their own two-factor off
+## 2.15.0 — 2026-06-14 (latest) — Custom form builder overhaul
+
+- **A new "Name" field for your forms.** When building a custom form, pick **Name** from the field list and the public form shows two boxes — **First name** and **Last name**. Submissions show the full name as one tidy entry.
+- **The field editor is now a clean pop-up.** Click a field block to open a centered editor window (instead of the old drop-down panel). Press **Esc**, click the ✕, or click outside to close. Only one editor is open at a time.
+- **Adding a field is calmer.** **Add field** now drops a labelled block into your form (named after the field type, like "Email"), and the editor opens only when you click that block — so adding several fields in a row doesn't keep popping windows open.
+- **The web address fills itself in.** As you type a form's name, its URL slug updates to match — until you edit the slug yourself, after which it's yours to keep. Renaming an existing form never changes its live address behind your back.
+- **Saving a new form is easier.** The yellow save bar now appears right away on a brand-new form, so you can save it immediately. The separate blue "Save settings" button is gone — saving always happens on the yellow bar.
+- **Delete several forms at once.** The Forms page now has checkboxes and a **Select all / Delete selected** bar; the Delete button only shows once you've ticked at least one form.
+- **Convert featured images to WebP.** On the Announcements/Events edit page there's an **Auto convert to WebP** checkbox — tick it and your uploaded image is converted to the lighter WebP format on save.
+- **Submission times now show in your timezone.** Announcement/event submission times are shown in the site's configured timezone (e.g. EDT) instead of UTC.
+- **Tidier dashboard chips.** The number badges on the Web Frontend dashboard (and the Notifications badge) are now blue. Orange is reserved for **Watchtower** so a real "needs attention" alert stands out.
+- **Steadier sidebars.** The Web Frontend section's side menu no longer slides under the top bar as you scroll, and the main app sidebar stays pinned to the side instead of bouncing when the page over-scrolls.
+- **Behind-the-scenes fix:** a form's web-address field could fail to validate in the latest browsers — now corrected everywhere it's used.
+
+## 2.14.4 — 2026-06-14 — "Currently online" shows backend activity only
+
+- **The "Currently online" dashboard widget now shows only people working in the admin area.** Someone signed in but browsing the public website no longer appears in the list, and you still won't see yourself there.
+
+## 2.14.3 — 2026-06-14 — Fix: non-admins can turn their own two-factor off
 
 - **Turning two-factor off now works for every role.** Previously, only admins could turn their own two-factor on or off — for other roles the "Turn off two-factor" button silently did nothing, so the setup wizard kept reappearing at each login. Now any user can fully manage two-factor for their own account under **Settings → Your Access**.
 - Small spacing fix on the two-factor setup screen.

@@ -227,7 +227,14 @@ p { margin: .25rem 0; }
   border-right: 1px solid var(--border);
   display: flex; flex-direction: column;
   padding: 18px 14px;
-  position: sticky; top: 0; height: 100vh;
+  /* Pinned to the viewport (not sticky) so an overscroll/rubber-band
+     bounce at the end of the page can't drag the sidebar with it — it
+     stays welded to the left edge. The grid still reserves its column
+     (``--sidebar-w`` is a fixed track), but a fixed element drops out of
+     grid auto-placement, so ``.content`` is explicitly pinned to column
+     2 below (and reset to column 1 in the single-column mobile / autohide
+     states where the sidebar goes off-canvas). */
+  position: fixed; top: 0; left: 0; width: var(--sidebar-w); height: 100vh; z-index: 25;
   /* Three-zone layout: brand stays pinned at top, the nav middle
      scrolls when its content overflows, and the footer is pinned at
      the bottom. flex-shrink: 0 on brand + footer keeps them out of
@@ -2359,7 +2366,13 @@ html[data-theme="dark"] .post-featured-clear input:checked + span {
 .fe-tbl-scroll .tbl td.trunc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fe-tbl-scroll .tbl .row-actions { flex-wrap: nowrap; justify-content: flex-end; }
 .fe-tbl-scroll .tbl .row-actions .btn { white-space: nowrap; }
-.fe-subnav { position: sticky; top: 22px; }
+/* Stick the subnav so it never moves a pixel as the main column
+   scrolls. Its natural flow position is exactly the sticky topbar's
+   height plus the topbar's bottom margin (``--content-px``) — so pinning
+   at that same offset means the sidebar is "stuck" from scroll 0 with
+   zero travel. (A smaller offset, e.g. the old 16px, let it slide up ~12px
+   before locking.) ``--topbar-h`` is measured live in base.html. */
+.fe-subnav { position: sticky; top: calc(var(--topbar-h, 56px) + var(--content-px, 28px)); }
 /* Save bar fixed to the viewport bottom-left, aligned with the frontend
    admin sidebar column (main app sidebar width + .content padding-left).
    Stays anchored to the viewport bottom regardless of scroll position. */
@@ -2640,6 +2653,11 @@ button.sidebar-section-toggle[aria-expanded="false"] .sidebar-section-chevron {
   --content-px: 28px; --content-pt: 22px;
   padding: var(--content-pt) var(--content-px) 48px;
   min-width: 0;
+  /* The sidebar is position:fixed (out of grid flow), so anchor the
+     content to the second column explicitly — otherwise grid
+     auto-placement would slide it under the sidebar into column 1.
+     Reset to column 1 in the single-column mobile / autohide states. */
+  grid-column: 2;
 }
 /* The readable-width cap lives on the inner .page body, NOT on .content
    itself. That way .content (and the sticky .topbar that bleeds to its
@@ -6934,6 +6952,9 @@ h5.block-heading { font-size: 0.875rem; font-weight: 600; margin: 12px 0 4px; }
 
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
+  /* Single-column grid: the off-canvas fixed sidebar reserves no track,
+     so the content owns the only column. */
+  .content { grid-column: 1; }
   .sidebar {
     position: fixed; left: 0; top: 0; width: 260px;
     height: 100dvh;
@@ -6958,6 +6979,7 @@ h5.block-heading { font-size: 0.875rem; font-weight: 600; margin: 12px 0 4px; }
    above; the existing menu-toggle JS handler already drives .sidebar
    .open and works unchanged when this class is on at desktop widths. */
 body.fe-admin-autohide .layout { grid-template-columns: 1fr; }
+body.fe-admin-autohide .content { grid-column: 1; }
 body.fe-admin-autohide .sidebar {
   position: fixed; left: 0; top: 0; width: 260px;
   height: 100dvh;
@@ -10445,6 +10467,27 @@ html[data-theme="dark"] #page-hero-edit-modal .hero-unified-actions {
   border: 1px solid var(--border);
   border-radius: 10px;
 }
+/* Custom-forms list rows carry a leading select checkbox, so they get an
+   extra column. The "Available forms" list above shares .fe-forms-row but
+   has no checkbox — it keeps the 3-column layout. */
+[data-forms-list] .fe-forms-row { grid-template-columns: auto 44px 1fr auto; }
+.fe-forms-row-check { display: grid; place-items: center; margin: 0; cursor: pointer; }
+.fe-forms-row-check input { width: 16px; height: 16px; cursor: pointer; }
+/* Multi-select bulk-delete bar above the custom forms list. */
+.fe-forms-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.fe-forms-bulk-all { display: flex; align-items: center; gap: 7px; margin: 0; font-weight: 600; cursor: pointer; }
+.fe-forms-bulkbar [data-forms-bulk-delete] { margin-left: auto; }
+/* Breathing room above the "Add form" button below the custom forms list. */
+.fe-new-form-row { margin-top: 1rem; }
 .fe-forms-row-icon {
   display: grid; place-items: center;
   width: 44px; height: 44px;
@@ -15466,6 +15509,11 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
   gap: .5rem;
   padding: .55rem .65rem;
   user-select: none;
+  /* The whole head toggles the field's edit body (see wireCard in
+     frontend_custom_form_edit.html / _form_field_builder.html), so cue
+     it as clickable. The drag handle and the Edit/Delete buttons set
+     their own cursors locally. */
+  cursor: pointer;
 }
 .fe-form-field-chev {
   margin-left: auto;
@@ -15478,26 +15526,67 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
 .fe-form-field-card.is-open > .fe-form-field-head .fe-form-field-chev {
   transform: rotate(180deg);
 }
-/* Collapsed by default; opens with a 200ms max-height + opacity
-   transition driven by the ``is-open`` class on the parent card.
-   ``max-height: 1500px`` is generously above the natural height of
-   any field card we render, so the animation reaches the natural
-   bottom without clipping while still being short enough that
-   close transitions complete in the 200ms window. */
-.fe-form-field-body {
-  max-height: 0;
-  overflow: hidden;
-  opacity: 0;
-  padding: 0 .75rem;
-  border-top-width: 0;
-  transition: max-height 200ms ease, opacity 200ms ease,
-              padding 200ms ease, border-top-width 200ms ease;
-}
+/* The field editor opens as a centered popup MODAL (not an inline
+   accordion). The body stays inside the builder <form> so its inputs
+   still submit with everything else; it's just lifted out of document
+   flow and centered over a shared backdrop when the card is open. No
+   ancestor of the body sets transform/filter/contain, so
+   ``position: fixed`` anchors to the viewport as intended. */
+.fe-form-field-body { display: none; }
+/* The builder JS toggles the ``hidden`` attribute on the placeholder /
+   options / accept sub-fields by field type. ``.form label`` sets
+   ``display: flex`` and outranks the UA ``[hidden]`` rule, so without
+   this those wraps stay visible on freshly-added cards (e.g. an empty
+   Options box on a text field, a Placeholder on a name field). Re-assert
+   the hide at higher specificity. */
+.fe-form-field-body label[hidden] { display: none; }
 .fe-form-field-card.is-open > .fe-form-field-body {
-  max-height: 1500px;
-  opacity: 1;
-  padding: .5rem .75rem .75rem;
-  border-top-width: 1px;
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  position: fixed;
+  z-index: 1001;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 32px));
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 1rem 1.15rem 1.15rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(0,0,0,.35);
+}
+/* Injected modal header (title + close ✕) — built in wireCard(). */
+.fe-form-field-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  margin-bottom: .15rem;
+}
+.fe-form-field-modal-title { font-weight: 700; font-size: 1.05rem; }
+.fe-form-field-modal-close {
+  flex: 0 0 auto;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 4px 7px;
+  border-radius: 6px;
+}
+.fe-form-field-modal-close:hover { background: var(--panel-2); color: var(--text); }
+/* Shared full-screen backdrop, created + toggled by the builder JS. */
+.fe-form-field-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(17, 24, 39, 0.45);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
 }
 .fe-form-field-drag {
   cursor: grab;
@@ -15526,19 +15615,8 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Body's static layout (border + flex column gap) lives here.
-   Sizing / animation is set in the collapsible-body rule above
-   (max-height + opacity transition driven by ``.is-open``). The
-   padding has to live in the animated rule too so it can ease to
-   zero on collapse — duplicating it here would break the
-   transition by setting a non-zero floor that overrides the
-   closed state's zero padding. */
-.fe-form-field-body {
-  border-top: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: .5rem;
-}
+/* Body layout (flex column gap) now lives in the ``.is-open`` modal
+   rule above — the collapsed body is simply ``display: none``. */
 .fe-form-builder-toolbar {
   display: flex;
   align-items: center;

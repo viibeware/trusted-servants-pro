@@ -9021,9 +9021,19 @@ _RESERVED_FORM_SLUGS = {
 # Field types the form builder allows. Anything else in incoming blocks
 # JSON gets coerced to "text" so a poked-with-curl payload can't store
 # a renderer the public template doesn't know about.
-_FORM_FIELD_TYPES = {"text", "email", "phone", "textarea",
+_FORM_FIELD_TYPES = {"name", "text", "email", "phone", "textarea",
                      "select", "radio", "checkboxes", "file"}
 _FORM_FIELD_TYPES_WITH_OPTIONS = {"select", "radio", "checkboxes"}
+# Dropdown order for the Custom Form builder. "name" is a composite
+# first+last name field, offered first; the rest follow in a natural
+# data-entry order. The Contact / Story / Events module forms reuse the
+# same builder + parser but DON'T expose the composite name field (their
+# public render + submit handlers are bespoke and only know the
+# primitives), so they get _MODULE_FORM_FIELD_TYPES instead.
+_CUSTOM_FORM_FIELD_TYPE_ORDER = ("name", "text", "email", "phone",
+                                 "textarea", "select", "radio",
+                                 "checkboxes", "file")
+_MODULE_FORM_FIELD_TYPES = sorted(_FORM_FIELD_TYPES - {"name"})
 
 
 def _name_from_label(label, existing_names=()):
@@ -9412,7 +9422,7 @@ def frontend_custom_form_edit(form_id):
     return render_template("frontend_custom_form_edit.html",
                            form=cf,
                            fields=_load_form_fields(cf),
-                           field_types=sorted(_FORM_FIELD_TYPES))
+                           field_types=_CUSTOM_FORM_FIELD_TYPE_ORDER)
 
 
 def _summarise_form_submission(sub):
@@ -9482,10 +9492,14 @@ def _summarise_form_submission(sub):
         return None, None
 
     # display_name resolution order:
-    # 1. text field with "name" in the slug
-    # 2. local part of any email field
-    # 3. "Anonymous"
-    _, name_val = _first_by(types={"text"}, name_hints=NAME_HINTS)
+    # 1. a composite "name" field (first+last, stored joined) — the most
+    #    authoritative submitter name when the operator added one
+    # 2. text field with "name" in the slug
+    # 3. local part of any email field
+    # 4. "Anonymous"
+    _, name_val = _first_by(types={"name"})
+    if not name_val:
+        _, name_val = _first_by(types={"text"}, name_hints=NAME_HINTS)
     _, email_val = _first_by(types={"email"})
     _, phone_val = _first_by(types={"text", "phone"}, name_hints=PHONE_HINTS)
 
@@ -9777,6 +9791,30 @@ def frontend_custom_form_delete(form_id):
     return redirect(url_for("main.frontend_forms"))
 
 
+@bp.route("/frontend/forms/custom/bulk-delete", methods=["POST"])
+@admin_required
+def frontend_custom_forms_bulk_delete():
+    """Delete several custom forms at once (the multi-select on the Forms
+    page). Each form's submissions cascade away via the CustomForm →
+    FormSubmission ``delete-orphan`` relationship, same as the single
+    delete. Ids that no longer exist are simply skipped."""
+    ids = set(request.form.getlist("form_ids", type=int))
+    if not ids:
+        flash("Pick at least one form to delete.", "danger")
+        return redirect(url_for("main.frontend_forms"))
+    forms = CustomForm.query.filter(CustomForm.id.in_(ids)).all()
+    deleted = 0
+    for cf in forms:
+        db.session.delete(cf)
+        deleted += 1
+    db.session.commit()
+    if deleted:
+        flash(f"Deleted {deleted} form{'' if deleted == 1 else 's'}.", "success")
+    else:
+        flash("No matching forms found.", "warning")
+    return redirect(url_for("main.frontend_forms"))
+
+
 @bp.route("/frontend/forms/<key>/toggle", methods=["POST"])
 @admin_required
 def frontend_form_toggle(key):
@@ -9833,7 +9871,7 @@ def frontend_form_submission():
                            form_fields=_resolve_module_form_fields(
                                s.submission_form_blocks_json,
                                _default_submission_form_blocks),
-                           field_types=sorted(_FORM_FIELD_TYPES))
+                           field_types=_MODULE_FORM_FIELD_TYPES)
 
 
 @bp.route("/frontend/forms/story", methods=["GET", "POST"])
@@ -9876,7 +9914,7 @@ def frontend_form_story():
                            form_fields=_resolve_module_form_fields(
                                s.story_form_blocks_json,
                                _default_story_form_blocks),
-                           field_types=sorted(_FORM_FIELD_TYPES))
+                           field_types=_MODULE_FORM_FIELD_TYPES)
 
 
 @bp.route("/frontend/forms/contact", methods=["GET", "POST"])
@@ -9908,7 +9946,7 @@ def frontend_form_contact():
                            form_fields=_resolve_module_form_fields(
                                s.contact_form_blocks_json,
                                _default_contact_form_blocks),
-                           field_types=sorted(_FORM_FIELD_TYPES))
+                           field_types=_MODULE_FORM_FIELD_TYPES)
 
 
 @bp.route("/frontend/forms/recovery-contacts", methods=["GET", "POST"])
@@ -15433,6 +15471,45 @@ BLOCKED_UPLOAD_EXTENSIONS = {
 ADMIN_ONLY_UPLOAD_EXTENSIONS = {".svg"}
 
 
+def _to_webp_upload(uploaded):
+    """Transcode an uploaded raster image to WebP, returning a fresh
+    FileStorage the caller can hand straight to ``_save_upload``.
+
+    Honours EXIF orientation and preserves alpha (RGBA/LA/palette).
+    Anything that isn't a Pillow-decodable raster — SVG, an already-WebP
+    file, or a decode failure — is returned UNCHANGED with its stream
+    rewound, so the caller's save path proceeds with the original."""
+    from io import BytesIO
+    from werkzeug.datastructures import FileStorage
+    ext = os.path.splitext(secure_filename(uploaded.filename or ""))[1].lower()
+    if ext in (".webp", ".svg"):
+        return uploaded
+    try:
+        from PIL import Image, ImageOps
+        raw = uploaded.read()
+        im = ImageOps.exif_transpose(Image.open(BytesIO(raw)))
+        if im.mode in ("RGBA", "LA", "P"):
+            im = im.convert("RGBA")
+        elif im.mode != "RGB":
+            im = im.convert("RGB")
+        out = BytesIO()
+        # quality 82 matches thumbnails.py; method 6 = best compression
+        # (a one-time cost on upload that shrinks every later download).
+        im.save(out, format="WEBP", quality=82, method=6)
+        out.seek(0)
+        base = os.path.splitext(uploaded.filename or "image")[0]
+        return FileStorage(stream=out, filename=base + ".webp",
+                           content_type="image/webp")
+    except Exception:
+        # Not a convertible image (or Pillow choked) — fall back to the
+        # original bytes. Rewind so _save_upload's read() sees the file.
+        try:
+            uploaded.stream.seek(0)
+        except Exception:
+            pass
+        return uploaded
+
+
 def _save_upload(uploaded):
     """Save a Werkzeug FileStorage to uploads; also create/reuse a MediaItem. Returns (stored, original)."""
     original = secure_filename(uploaded.filename) or "upload"
@@ -17701,6 +17778,11 @@ def post_save():
         _cleanup_retired_asset(old)
     uploaded = request.files.get("featured_image")
     if uploaded and uploaded.filename:
+        # Optional "Auto convert to WebP" — transcode the upload before
+        # storing so the featured image lands as .webp regardless of the
+        # source format. No-op for SVG / already-webp / decode failures.
+        if request.form.get("convert_featured_to_webp") == "1":
+            uploaded = _to_webp_upload(uploaded)
         old = post.featured_image_filename
         stored, _original = _save_upload(uploaded)
         post.featured_image_filename = stored

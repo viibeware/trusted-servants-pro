@@ -47,7 +47,7 @@
             <input name="slug" type="text" class="slug-input-field"
                    value="{{ meeting.slug if (meeting and meeting.slug) else '' }}"
                    placeholder="{{ meeting.public_slug if meeting else 'auto-derived from name' }}"
-                   pattern="[a-z0-9-]*" maxlength="200">
+                   pattern="[a-z0-9\-]*" maxlength="200">
           </div>
         </label>
 

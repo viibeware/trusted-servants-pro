@@ -4087,6 +4087,14 @@
   }
   main.querySelectorAll('form').forEach(f => { if (trackable(f)) instrument(f); });
 
+  // Opt-in: a form marked [data-fe-savebar-force] surfaces the save bar on
+  // load, before any edit — e.g. a freshly-created form stub the operator
+  // should be able to save straight away. We seed it into the dirty set so
+  // the Save click actually POSTs it (an empty dirty set would just hide).
+  main.querySelectorAll('form[data-fe-savebar-force]').forEach(f => {
+    if (trackable(f)) { dirty.add(f); show(); }
+  });
+
   // Some forms are spliced in later (e.g. mega menu blocks via fetch); pick
   // them up via a MutationObserver so they participate too.
   const mo = new MutationObserver(records => {

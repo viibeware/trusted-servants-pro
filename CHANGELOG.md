@@ -6,6 +6,78 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.15.0] — 2026-06-14
+
+### Added
+
+- **New "Name" field for custom forms.** The custom-form field-type dropdown now
+  leads with a **Name** type that renders two inputs on the public form — *First
+  name* and *Last name* — and stores the joined full name under the field's key,
+  so it reads as a single value in the submissions list, the detail view, and the
+  notification email. A composite Name field is also picked first as the
+  submitter's display name in the submissions list. Scoped to custom forms; the
+  built-in Contact/Story/Events builders keep the primitive set.
+- **"Auto convert to WebP" for featured images.** The Announcements/Events edit
+  page has a checkbox that transcodes an uploaded featured image to WebP on save
+  (quality 82, EXIF-orientation honoured, alpha preserved). SVGs, already-WebP
+  files, and undecodable uploads pass through unchanged.
+- **Multi-select bulk delete for custom forms.** The Forms page lists each custom
+  form with a checkbox plus a "Select all / N selected / Delete selected" bar.
+  The Delete button only appears once at least one form is ticked; submissions
+  cascade away with their form. Per-row delete stays as the no-JS path.
+
+### Changed
+
+- **Custom-form field editor is now a popup modal** instead of an inline
+  accordion. Clicking a field block opens a centered modal (backdrop, ✕, Escape,
+  one-open-at-a-time); the inputs stay inside the form so saves are unaffected.
+- **Add field drops a collapsed block** with its label pre-filled from the field
+  type (e.g. "Email", "Name") — the editor modal opens when you click the block,
+  not automatically. Clicking anywhere on a field block's head opens its editor.
+- **The URL slug follows the form name as you type** and stops once you edit the
+  slug yourself; existing forms whose slug already differs from their title are
+  treated as already-edited, so renaming never silently changes a live URL.
+- **The yellow save bar appears immediately on a brand-new form** so it can be
+  saved without touching a field, and the separate "Save settings" button was
+  removed — saves happen only via the save bar.
+- **Submission timestamps for Announcements/Events render in the site timezone**
+  (with a `%Z` abbreviation) instead of a hard-coded "UTC", matching how Stories
+  already display. Storage is unchanged (UTC-naive); only the display was fixed.
+- **Web Frontend dashboard count chips are now blue.** Orange "needs attention"
+  chips are reserved for Watchtower and the dashboard alert badges; the
+  Notifications sidebar chip is also blue now — only Watchtower stays orange.
+
+### Fixed
+
+- **The custom-form field editor wouldn't open.** The JS toggled the body's
+  `hidden` attribute, but visibility is CSS-driven by an `.is-open` class on the
+  card — and `.fe-form-field-body { display:flex }` outranked the UA `[hidden]`
+  rule, so clicking *Edit* did nothing and new fields couldn't get a label
+  (then vanished on save, since blank-label fields are dropped). The toggle now
+  drives `.is-open`.
+- **Form slug fields failed validation in current browsers.** `pattern="[a-z0-9-]*"`
+  is an invalid regex under Chrome's new `v`-flag pattern compilation (dangling
+  hyphen), throwing during `checkValidity()`. Escaped the hyphen
+  (`[a-z0-9\-]*`) across every affected template.
+- **The Web Frontend admin subnav drifted under the topbar while scrolling.** Its
+  sticky offset now equals its natural position (`--topbar-h + --content-px`),
+  so it stays put with zero travel.
+- **The main app sidebar bounced on overscroll.** It was `position: sticky`, so
+  the page's rubber-band dragged it; it's now `position: fixed` (pinned to the
+  viewport), with `.content` explicitly anchored to its grid column so the
+  layout is unchanged at desktop and mobile widths.
+- **The Forms page "Available forms" rows were squished** after the bulk-select
+  column was added (the checkbox grid column leaked onto the checkbox-less
+  built-in rows). The extra column is now scoped to the custom-forms list.
+
+## [2.14.4] — 2026-06-14
+
+### Changed
+
+- The dashboard's **"Currently online"** widget now lists only backend (`/tspro`)
+  activity — a signed-in user sitting on a public Web Frontend page no longer
+  appears — and continues to exclude the viewing admin from their own list.
+
 ## [2.14.3] — 2026-06-14
 
 ### Fixed

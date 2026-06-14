@@ -96,7 +96,7 @@
         <input type="text" name="slug" class="slug-input-field"
                value="{{ (_s.slug if (_s and _s.slug) else '') or '' }}"
                placeholder="{{ _s.public_slug if _s else 'auto-derived from title' }}"
-               pattern="[a-z0-9-]*" maxlength="200">
+               pattern="[a-z0-9\-]*" maxlength="200">
       </div>
     </label>
     {% endif %}

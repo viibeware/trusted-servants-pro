@@ -143,13 +143,13 @@
               <span class="redirect-history-prefix muted">{{ _prefix }}</span>
               <input type="text" name="old_slug" value="{{ h.old_slug }}"
                      class="redirect-history-slug-input" maxlength="255"
-                     pattern="[a-z0-9-]+" required
+                     pattern="[a-z0-9\-]+" required
                      title="Lowercase letters, digits, hyphens">
               <span class="redirect-history-arrow muted">→</span>
               <span class="redirect-history-prefix muted">{{ _prefix }}</span>
               <input type="text" name="new_slug" value="{{ h.new_slug }}"
                      class="redirect-history-slug-input" maxlength="255"
-                     pattern="[a-z0-9-]+" required
+                     pattern="[a-z0-9\-]+" required
                      title="Lowercase letters, digits, hyphens">
               <button type="submit" class="btn btn-sm btn-primary">Save</button>
             </form>

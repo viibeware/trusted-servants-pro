@@ -47,6 +47,28 @@
         <input type="text" name="{{ block.name }}" value="{{ val }}"
                placeholder="{{ block.get('placeholder', '') }}"
                {% if block.required %}required{% endif %}>
+      {% elif block.type == 'name' %}
+        {# Composite name: two inputs, posted as <name>_first / <name>_last
+           and stored joined server-side. Echo each part back from
+           cform_values on a failed re-render. #}
+        <span class="fe-custom-form-name">
+          <span class="fe-custom-form-name-part">
+            <input type="text" name="{{ block.name }}_first"
+                   value="{{ cform_values.get(block.name ~ '_first', '') }}"
+                   placeholder="First" autocomplete="given-name"
+                   aria-label="{{ block.label }} — first name"
+                   {% if block.required %}required{% endif %}>
+            <span class="fe-custom-form-name-sub muted smaller">First name</span>
+          </span>
+          <span class="fe-custom-form-name-part">
+            <input type="text" name="{{ block.name }}_last"
+                   value="{{ cform_values.get(block.name ~ '_last', '') }}"
+                   placeholder="Last" autocomplete="family-name"
+                   aria-label="{{ block.label }} — last name"
+                   {% if block.required %}required{% endif %}>
+            <span class="fe-custom-form-name-sub muted smaller">Last name</span>
+          </span>
+        </span>
       {% elif block.type == 'email' %}
         <input type="email" name="{{ block.name }}" value="{{ val }}"
                placeholder="{{ block.get('placeholder', '') }}"
