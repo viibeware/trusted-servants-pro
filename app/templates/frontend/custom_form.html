@@ -28,6 +28,9 @@
           action="{{ url_for('frontend.custom_form_submit', slug=cform.slug) }}"
           enctype="multipart/form-data" novalidate>
       {% for block in cform_blocks %}
+        {% if block.type in ('select', 'radio', 'checkboxes') and not block.get('options') %}
+        {# Option-type field with no options configured — skip it. #}
+        {% else %}
         {% set err = cform_errors.get(block.name) %}
         {% set val = cform_values.get(block.name, '') %}
         <label class="fe-custom-form-field fe-custom-form-field--{{ block.type }}
@@ -111,6 +114,7 @@
           <span class="fe-custom-form-help muted small">{{ block.help }}</span>
           {% endif %}
         </label>
+        {% endif %}
       {% else %}
       <p class="muted">This form has no fields configured yet.</p>
       {% endfor %}

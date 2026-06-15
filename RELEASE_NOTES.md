@@ -7,7 +7,13 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.15.1 — 2026-06-15 (latest) — Submissions archive + CSV export, and form-list switches
+## 2.15.2 — 2026-06-15 (latest) — Public form cleanup + "View on frontend" buttons
+
+- **"View on frontend" button.** The form editor and each row on the Forms list now have a quick button to open the form's live public page in a new tab — it appears whenever the form is switched on.
+- **The public form page looks right again.** A recent change had pushed the form's description off to the side and squeezed the fields; the layout is back to a clean, single-column form (description on top, full-width fields).
+- **Tidier public forms.** Dropdown/radio/checkbox fields that don't have any options set are now hidden on the public page (instead of showing an empty label), and the Submit button sits at the bottom-right.
+
+## 2.15.1 — 2026-06-15 — Submissions archive + CSV export, and form-list switches
 
 - **Archive and bulk-manage form submissions.** The Custom Form Submissions page now has **Active** and **Archived** tabs, a checkbox on every row, and a bar to **Archive**, **Restore**, or **Delete** the ones you've ticked. Archiving clears handled entries out of your inbox without deleting them.
 - **Download a form's entries as a spreadsheet.** Pick a form from the dropdown and click **Download CSV** to get all its submissions as a CSV — one column per field, with times shown in your timezone.

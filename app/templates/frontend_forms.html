@@ -100,6 +100,10 @@
               <span class="mode-track"><span class="mode-thumb"></span></span>
               <span class="mode-toggle-label muted smaller" data-form-toggle-label>{{ 'On' if cf.enabled else 'Off' }}</span>
             </label>
+            <a class="btn btn-sm" data-form-view target="_blank" rel="noopener"
+               title="View on frontend"
+               href="{{ url_for('frontend.page_detail', slug=cf.slug) }}"
+               {% if not cf.enabled %}hidden{% endif %}>View ↗</a>
             <a class="btn btn-sm" href="{{ url_for('main.frontend_custom_form_edit', form_id=cf.id) }}">Edit</a>
             <form method="post" action="{{ url_for('main.frontend_custom_form_delete', form_id=cf.id) }}"
                   style="display:inline" onsubmit="return confirm('Delete this form? Existing submissions will also be removed.');">
@@ -210,6 +214,14 @@
       var url = cb.getAttribute('data-toggle-url');
       var want = cb.checked;
       var label = cb.parentElement.querySelector('[data-form-toggle-label]');
+      // Custom-form rows carry a "View ↗" button that only makes sense while
+      // the form is live — mirror the toggle state onto it. (No-op for the
+      // built-in "Available forms" rows, which have no [data-form-view].)
+      function syncView() {
+        var row = cb.closest('.fe-forms-row');
+        var view = row && row.querySelector('[data-form-view]');
+        if (view) view.hidden = !cb.checked;
+      }
       cb.disabled = true;
       if (label) label.textContent = want ? 'On' : 'Off';
       fetch(url, {
@@ -225,10 +237,12 @@
         .then(function (data) {
           cb.checked = !!data.enabled;
           if (label) label.textContent = data.enabled ? 'On' : 'Off';
+          syncView();
         })
         .catch(function () {
           cb.checked = !want;
           if (label) label.textContent = !want ? 'On' : 'Off';
+          syncView();
           alert('Could not update form. Try again or refresh the page.');
         })
         .finally(function () { cb.disabled = false; });

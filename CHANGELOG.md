@@ -6,6 +6,33 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.15.2] — 2026-06-15
+
+### Added
+
+- **"View on frontend" button for custom forms.** Appears on the form edit page
+  (top bar) when the form is enabled, and on each row of the Forms list when the
+  form is toggled on — the list button shows/hides live as you flip the enable
+  switch (no reload). Both open the form's public URL
+  (`url_for('frontend.page_detail', slug=…)`) in a new tab.
+
+### Fixed
+
+- **The public custom-form page rendered its description and fields
+  side-by-side.** A CSS class-name collision: the admin "Custom Form
+  Submissions" list rows and the public form page both use
+  `.fe-submission-card`, so the `display: flex; align-items: center` added to it
+  for the list checkboxes in 2.15.1 leaked onto the public form — floating the
+  intro into a left column and cramping the fields on the right. Scoped the admin
+  rule to `.fe-submissions-list .fe-submission-card`, so the public form returns
+  to its proper stacked layout (description on top, full-width fields).
+
+### Changed
+
+- **Public form polish.** Option-type fields (select / radio / checkboxes) with
+  no options configured are now skipped on the public page instead of rendering
+  an empty, unusable label, and the Submit button is right-aligned.
+
 ## [2.15.1] — 2026-06-15
 
 ### Added

@@ -3,6 +3,9 @@
 {% block heading_help %}Configure this custom form. Phase 2 adds a drag-and-drop field builder below the settings card — for now you can set title, URL, recipients, and what happens after submit.{% endblock %}
 {% block top_actions %}
 <a class="btn" href="{{ url_for('main.frontend_forms') }}">← Back to forms</a>
+{% if form.enabled %}
+<a class="btn" href="{{ url_for('frontend.page_detail', slug=form.slug) }}" target="_blank" rel="noopener">View on frontend ↗</a>
+{% endif %}
 {% endblock %}
 {% block content %}
 <div class="fe-admin-layout">

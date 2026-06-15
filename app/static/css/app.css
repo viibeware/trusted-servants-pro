@@ -15369,10 +15369,13 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
   background: var(--panel);
   transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
   overflow: hidden;
-  display: flex;
-  align-items: center;
 }
-.fe-submission-card .fe-submission-card-main { flex: 1 1 auto; min-width: 0; }
+/* Row = checkbox + clickable card. SCOPED to the admin submissions list:
+   ``.fe-submission-card`` is ALSO the class the public form page uses
+   (frontend.css), so an unscoped ``display:flex`` here leaked onto the
+   public form and laid its intro + fields out side-by-side. */
+.fe-submissions-list .fe-submission-card { display: flex; align-items: center; }
+.fe-submissions-list .fe-submission-card .fe-submission-card-main { flex: 1 1 auto; min-width: 0; }
 .fe-submission-card:hover {
   border-color: var(--brand, #0B5CFF);
   box-shadow: 0 2px 8px rgba(11, 92, 255, .08);
