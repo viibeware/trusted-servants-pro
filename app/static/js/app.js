@@ -119,6 +119,12 @@
       const items = document.getElementById(btn.getAttribute("aria-controls"));
       if (items) items.hidden = collapsed;
     });
+    // The pre-paint preload <style> (injected in <head> to stop collapsed
+    // sections flashing open on load) has done its job now that the
+    // `hidden` attributes carry the same state — drop it so toggling a
+    // section open isn't blocked by a lingering `display:none` rule.
+    const preload = document.getElementById("tsp-sidebar-collapse-preload");
+    if (preload) preload.remove();
   }
   document.addEventListener("click", e => {
     const btn = e.target.closest(".sidebar-section-toggle");

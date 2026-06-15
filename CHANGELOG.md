@@ -6,6 +6,21 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.15.8] — 2026-06-15
+
+### Added
+
+- **"View on frontend" link on the form backend page.** A form's submissions inbox
+  now has a button that opens that form's live public page in a new tab (shown when
+  the form is enabled), available to admins and granted non-admin managers alike.
+
+### Fixed
+
+- **Collapsed sidebar sections no longer flash open on navigation.** Their collapsed
+  state is now applied before the sidebar paints (via the same pre-paint head script
+  that sets the theme), so a section you collapsed stays collapsed across page loads
+  instead of briefly expanding and snapping shut.
+
 ## [2.15.7] — 2026-06-15
 
 ### Added

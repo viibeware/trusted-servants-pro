@@ -46,6 +46,30 @@
         document.documentElement.classList.add('login-fade-in');
       }
     } catch(e){}
+    // Collapsed sidebar sections — hide them via an injected stylesheet
+    // BEFORE the sidebar paints, so a section the user collapsed doesn't
+    // flash open then snap shut on every page load. app.js removes this
+    // preload <style> once it takes over (so toggling stays live).
+    try {
+      var sc = localStorage.getItem('tsp-sidebar-collapsed');
+      if (sc) {
+        var scMap = JSON.parse(sc);
+        if (scMap && typeof scMap === 'object') {
+          var scCss = '';
+          for (var scKey in scMap) {
+            if (scMap[scKey] && Object.prototype.hasOwnProperty.call(scMap, scKey)) {
+              scCss += '#sidebar-section-' + scKey.replace(/[^a-zA-Z0-9_-]/g, '') + '{display:none}';
+            }
+          }
+          if (scCss) {
+            var scStyle = document.createElement('style');
+            scStyle.id = 'tsp-sidebar-collapse-preload';
+            scStyle.textContent = scCss;
+            (document.head || document.documentElement).appendChild(scStyle);
+          }
+        }
+      }
+    } catch(e){}
   })();
 </script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=app_build_id) }}">

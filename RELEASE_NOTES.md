@@ -7,7 +7,12 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.15.7 — 2026-06-15 (latest) — Smarter "new" counts and clearer access
+## 2.15.8 — 2026-06-15 (latest) — Quick frontend link + steadier sidebar
+
+- **Jump to the live form.** A form's submissions page now has a **View on frontend** button that opens the form's public page in a new tab.
+- **No more sidebar jump.** Collapsed sidebar sections used to briefly pop open and snap shut every time you changed pages — they now stay put.
+
+## 2.15.7 — 2026-06-15 — Smarter "new" counts and clearer access
 
 - **Submission counts now behave like an unread inbox.** Opening a submission marks it as seen, so it disappears from the form's "new" number chip (in the sidebar and on the dashboard Forms widget) and from the Notifications Center. A submission counts as "new" until you either open it or archive it.
 - **Click a notification to clear it.** Clicking an item in the Notifications panel now clears it and drops the sidebar count, then takes you where it points. (Cmd/Ctrl-click to open in a new tab still clears it without the jump.)

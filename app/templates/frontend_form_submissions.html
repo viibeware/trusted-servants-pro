@@ -8,6 +8,9 @@
   <span class="fe-vis-role">Admins</span>
   {% for r in selected_form.submission_role_set() %}<span class="fe-vis-role">{{ _rl.get(r, r) }}</span>{% endfor %}
 </span>
+{% if selected_form.enabled %}
+<a class="btn" href="{{ url_for('frontend.page_detail', slug=selected_form.slug) }}" target="_blank" rel="noopener">{{ icon('external-link') }} View on frontend ↗</a>
+{% endif %}
 {% if can_edit_form %}
 <a class="btn" href="{{ url_for('main.frontend_custom_form_edit', form_id=selected_form.id) }}">{{ icon('settings') }} Edit form</a>
 {% endif %}
