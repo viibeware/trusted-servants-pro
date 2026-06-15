@@ -1919,7 +1919,9 @@ def _migrate_sqlite(app):
                          ("archived_at", "DATETIME")):
             add("access_request", col, ddl)
         for col, ddl in (("is_archived", "BOOLEAN NOT NULL DEFAULT 0"),
-                         ("archived_at", "DATETIME")):
+                         ("archived_at", "DATETIME"),
+                         ("is_seen", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("seen_at", "DATETIME")):
             add("form_submission", col, ddl)
         for col, ddl in (("submission_roles_csv", "VARCHAR(200)"),
                          ("bg_dynamic_key", "VARCHAR(64)"),

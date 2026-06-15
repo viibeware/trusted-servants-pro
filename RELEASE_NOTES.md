@@ -7,7 +7,14 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.15.6 — 2026-06-15 (latest) — Every email now looks the part
+## 2.15.7 — 2026-06-15 (latest) — Smarter "new" counts and clearer access
+
+- **Submission counts now behave like an unread inbox.** Opening a submission marks it as seen, so it disappears from the form's "new" number chip (in the sidebar and on the dashboard Forms widget) and from the Notifications Center. A submission counts as "new" until you either open it or archive it.
+- **Click a notification to clear it.** Clicking an item in the Notifications panel now clears it and drops the sidebar count, then takes you where it points. (Cmd/Ctrl-click to open in a new tab still clears it without the jump.)
+- **Your Access now explains form access.** The Settings → Your Access screen shows the new per-form submission access — Editors, Intergroup Members, and Viewers see a "granted per-form" marker, with a note explaining that an admin can give their role a specific form's inbox.
+- **Fixed:** opening a form's entries no longer collapses the main sidebar. The form pages were being treated like the Web Frontend editor (which hides the sidebar); they now keep the normal sidebar — especially important for non-admins who manage a form but have no Web Frontend access.
+
+## 2.15.6 — 2026-06-15 — Every email now looks the part
 
 - **All of your site's emails are now beautifully branded.** The polished, mobile-friendly email design we built for form submissions now applies to *every* email Trusted Servants Pro sends — your contact form, story and event/announcement submissions, access requests, Recovery Contacts notifications and the "confirm your listing" verification email, the message visitors send to a listing, account welcome emails, and password-reset emails. Each shows your logo, the details in clean labelled sections, tappable email/phone links, and a clear action button where it helps. (Every email still includes a plain-text version for any client that needs it.)
 - **The "confirm your listing" email** now has two clear buttons — **Confirm** and **I didn't request this** — instead of plain links.

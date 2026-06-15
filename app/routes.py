@@ -373,6 +373,7 @@ def _attention_counts(*, include_dashboard=False):
         if _allowed_ids:
             for fid, n in (db.session.query(FormSubmission.form_id, _func.count())
                            .filter(FormSubmission.is_archived.is_(False),
+                                   FormSubmission.is_seen.is_(False),
                                    FormSubmission.form_id.in_(_allowed_ids))
                            .group_by(FormSubmission.form_id).all()):
                 counts[f"form_submissions_{fid}"] = n
@@ -742,13 +743,14 @@ def _forms_widget_data():
     for cf in custom_forms:
         total = (FormSubmission.query
                  .filter_by(form_id=cf.id).count())
-        # FormSubmission has no read/unread state, so "attention" for
-        # custom forms means submissions in the last 7 days — a soft
-        # cue that there's recent traffic the operator may not have
-        # looked at yet. Lifetime total still shows alongside.
-        recent = (FormSubmission.query
-                  .filter(FormSubmission.form_id == cf.id,
-                          FormSubmission.created_at >= week_cutoff).count())
+        # "Attention" = un-archived, un-seen submissions (the same "new"
+        # count the sidebar chip uses). Opening a submission's detail view
+        # marks it seen and drops it from this count; archiving also clears
+        # it. Lifetime total still shows alongside.
+        new_count = (FormSubmission.query
+                     .filter(FormSubmission.form_id == cf.id,
+                             FormSubmission.is_archived.is_(False),
+                             FormSubmission.is_seen.is_(False)).count())
         last = (FormSubmission.query
                 .filter_by(form_id=cf.id)
                 .order_by(FormSubmission.created_at.desc()).first())
@@ -758,8 +760,8 @@ def _forms_widget_data():
             "subtitle": "Custom form",
             "icon": "file-text",
             "url": url_for("main.frontend_form_submissions", form=cf.id),
-            "attention": recent,
-            "attention_label": "new this week",
+            "attention": new_count,
+            "attention_label": "new",
             "total": total,
             "last_at": last.created_at if last else None,
             "enabled": bool(cf.enabled),
@@ -9671,6 +9673,12 @@ def frontend_form_submission_detail(sub_id):
     sub = db.session.get(FormSubmission, sub_id) or abort(404)
     cf = sub.form
     _form_access_or_403(cf)
+    # Mark seen on first view — clears this submission from the form's
+    # "new" count chip (sidebar + dashboard widget) and its notification.
+    if not sub.is_seen:
+        sub.is_seen = True
+        sub.seen_at = datetime.utcnow()
+        db.session.commit()
     fields = _load_form_fields(cf) if cf else []
     label_for = {f["name"]: f["label"] for f in fields if isinstance(f, dict) and "name" in f}
     try:

@@ -61,7 +61,16 @@
    chromeless instead of leaking the sidebar + header back in. #}
 {% set embed = request.args.get('embed') == '1'
                or (request.method == 'POST' and request.form.get('embed') == '1') %}
-{%- set _fe_admin = (request.endpoint or '').startswith('main.frontend_')
+{# The form-submission / custom-form pages share the ``main.frontend_``
+   endpoint prefix but are NOT part of the Web Frontend editor — they're
+   the Forms inbox, reachable by non-admins who were granted a form and
+   who have no web-frontend access at all. Excluding them keeps the
+   normal app sidebar in place there instead of auto-hiding it. #}
+{%- set _ep = request.endpoint or '' -%}
+{%- set _is_forms_page = _ep.startswith('main.frontend_form')
+                         or _ep.startswith('main.frontend_custom_form') -%}
+{%- set _fe_admin = _ep.startswith('main.frontend_')
+                    and not _is_forms_page
                     and current_user.is_authenticated
                     and current_user.fe_admin_autohide_sidebar -%}
 <body class="{% if embed %}embed{% endif %}{% if _fe_admin %} fe-admin-autohide{% endif %}">
@@ -856,6 +865,10 @@
              {'admin':'yes','editor':'no','intergroup_member':'yes','viewer':'no'}),
             ('Edit the Intergroup Email Accounts list',
              {'admin':'yes','editor':'no','intergroup_member':'no','viewer':'no'}),
+            ('Manage submissions for a form an admin grants your role (inbox, archive, delete, CSV export)',
+             {'admin':'yes','editor':'grant','intergroup_member':'grant','viewer':'grant'}),
+            ('Create, edit, or delete the forms themselves',
+             {'admin':'yes','editor':'no','intergroup_member':'no','viewer':'no'}),
             ('Edit the Web Frontend (theme, header, nav, footer)',
              {'admin':'yes','editor':'no','intergroup_member':'no','viewer':'no'}),
             ('Manage users, modules, email, security, data',
@@ -891,9 +904,10 @@
                 {% for r in _matrix_roles %}
                 {% set v = cells[r] %}
                 <td class="access-matrix-cell access-cell-{{ v }} {% if r == _role %}is-current{% endif %}"
-                    aria-label="{% if v == 'yes' %}Yes{% elif v == 'partial' %}Partial — own uploads only{% else %}No{% endif %}">
+                    aria-label="{% if v == 'yes' %}Yes{% elif v == 'partial' %}Partial — own uploads only{% elif v == 'grant' %}When an admin grants it per-form{% else %}No{% endif %}">
                   {% if v == 'yes' %}<span class="access-mark">✓</span>
                   {% elif v == 'partial' %}<span class="access-mark">✓</span><sup class="access-foot-mark">*</sup>
+                  {% elif v == 'grant' %}<span class="access-mark">✓</span><sup class="access-foot-mark">†</sup>
                   {% else %}<span class="access-mark access-mark-no">—</span>{% endif %}
                 </td>
                 {% endfor %}
@@ -908,6 +922,12 @@
           Admin-, Intergroup-Member-, and legacy items are protected — an admin or
           Intergroup Member must change them. Files attached to meetings are unaffected
           and editable by every editor-tier role regardless of uploader.
+        </p>
+        <p class="access-matrix-footnote muted smaller">
+          <sup>†</sup> Granted per-form by an admin. When your role is given access to a
+          specific form, that form appears in the sidebar's <b>Forms</b> section with its
+          own inbox and archive — you can view, archive, delete, and export its entries,
+          but not edit the form itself.
         </p>
 
         <hr class="settings-sep">

@@ -3517,3 +3517,9 @@ class FormSubmission(db.Model):
     # operator can clear the inbox without losing the record.
     is_archived = db.Column(db.Boolean, nullable=False, default=False)
     archived_at = db.Column(db.DateTime)
+    # "Seen" flag — set the first time an operator opens the submission's
+    # detail view. Drives the per-form sidebar/widget "new" count chips:
+    # an un-archived, un-seen submission counts as new; viewing it clears
+    # the chip. Distinct from archiving (a deliberate filing action).
+    is_seen = db.Column(db.Boolean, nullable=False, default=False)
+    seen_at = db.Column(db.DateTime)

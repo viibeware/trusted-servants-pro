@@ -212,6 +212,7 @@ def _items(user):
             subs = (FormSubmission.query
                     .filter(FormSubmission.form_id.in_(list(titles.keys())),
                             FormSubmission.is_archived.is_(False),
+                            FormSubmission.is_seen.is_(False),
                             FormSubmission.created_at >= cutoff)
                     .order_by(FormSubmission.created_at.desc())
                     .limit(100).all())

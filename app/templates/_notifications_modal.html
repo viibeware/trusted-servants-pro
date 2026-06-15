@@ -59,6 +59,33 @@
     // generic data-open-modal handler opens the modal in parallel.
     if (e.target.closest('[data-notifications-trigger]')) { load(); return; }
 
+    // Follow a notification: dismiss it first (so the sidebar chip drops),
+    // then navigate to its target. Cmd/Ctrl/Shift-click opens a background
+    // tab — fire the dismiss without hijacking the navigation.
+    var link = e.target.closest('.notif-link');
+    if (link) {
+      var item = link.closest('.notif-item');
+      var key = item && item.getAttribute('data-notif-key');
+      if (key) {
+        if (e.metaKey || e.ctrlKey || e.shiftKey) {
+          fetch(clearUrl, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin', keepalive: true,
+            body: JSON.stringify({ key: key })
+          });
+          return; // let the browser open the new tab
+        }
+        e.preventDefault();
+        var href = link.getAttribute('href');
+        var go = function () { window.location.href = href; };
+        fetch(clearUrl, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin', body: JSON.stringify({ key: key })
+        }).then(go, go);
+      }
+      return;
+    }
+
     // Clear one.
     var one = e.target.closest('[data-notif-clear]');
     if (one) {

@@ -6,6 +6,32 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.15.7] — 2026-06-15
+
+### Added
+
+- **Submissions now have a "seen" state.** Opening a submission's detail view marks
+  it seen, which clears it from the form's "new" count chip (sidebar **and** the
+  dashboard Forms widget) and removes its entry from the Notifications Center. "New"
+  now means un-archived **and** un-seen, so the count reads like an unread inbox.
+- **Click a notification to clear it.** Clicking a notification in the Notifications
+  Center now dismisses it (dropping the sidebar bell count) before navigating to its
+  target. Cmd/Ctrl/Shift-click (open in a new tab) clears it without hijacking the
+  navigation.
+- **"Your Access" documents per-form submission access.** The Settings → Your Access
+  permission matrix has a new row — *Manage submissions for a form an admin grants
+  your role* — shown as a "granted per-form" marker for Editor / Intergroup Member /
+  Viewer, with a footnote. The role-capability bullets (dashboard card + welcome
+  email) gained matching lines.
+
+### Fixed
+
+- **The form pages no longer collapse the main sidebar.** The submission-inbox and
+  custom-form pages share the Web Frontend's ``main.frontend_*`` endpoint prefix,
+  which had triggered the editor's auto-hide-sidebar behaviour — wrong for non-admins
+  who manage a granted form but have no Web Frontend access. Those pages now always
+  render the normal app sidebar.
+
 ## [2.15.6] — 2026-06-15
 
 ### Added

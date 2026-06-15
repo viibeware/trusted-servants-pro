@@ -31,6 +31,7 @@ _VIEWER_BASE = [
     "View meetings, libraries, readings, and uploaded files.",
     "View Zoom accounts and the calendar.",
     "Customize your own dashboard widgets and order.",
+    "Manage submissions for any form an admin grants your role access to — the form appears in the sidebar's Forms section with its own inbox and archive, where you can view, archive, delete, and export entries (you cannot edit the form itself).",
 ]
 
 _EDITOR_BASE = _VIEWER_BASE + [
@@ -52,6 +53,7 @@ ROLE_PERMISSIONS = {
         "Edit the Intergroup Documents and Intergroup Minutes libraries.",
         "Read and edit the Intergroup Email Accounts page.",
         "Manage users, access requests, modules, site settings, and security.",
+        "Manage submissions for every form, and grant other roles per-form access to specific form inboxes.",
         "Import and export the full data archive (database + uploads).",
         "Customize your own dashboard widgets and order.",
     ],

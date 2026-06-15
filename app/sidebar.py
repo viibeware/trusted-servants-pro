@@ -345,16 +345,17 @@ def _build_forms_items(site, user, current_endpoint, url_for):
     except RuntimeError:
         current_form_id = None
     on_submissions = (current_endpoint or "").startswith("main.frontend_form_submission")
-    # Per-form "new" (un-archived) submission counts, one grouped query so
-    # the section can carry an inbox-style number chip on each custom form
-    # without an N+1. Mirrors the notifications/inbox definition of "new":
-    # a submission counts until it's archived. Keyed by form id.
+    # Per-form "new" submission counts, one grouped query so the section can
+    # carry an inbox-style number chip on each custom form without an N+1.
+    # "New" = un-archived AND un-seen: a submission counts until it's either
+    # archived or opened in its detail view. Keyed by form id.
     sub_counts = {}
     try:
         from .models import FormSubmission, db as _db
         from sqlalchemy import func as _func
         for fid, n in (_db.session.query(FormSubmission.form_id, _func.count())
-                       .filter(FormSubmission.is_archived.is_(False))
+                       .filter(FormSubmission.is_archived.is_(False),
+                               FormSubmission.is_seen.is_(False))
                        .group_by(FormSubmission.form_id).all()):
             sub_counts[fid] = n
     except Exception:  # noqa: BLE001
