@@ -26,7 +26,7 @@
        operator can save the new form straight away, even before touching a
        field. data-fe-savebar-force is honoured by feSaveBar() in app.js. #}
     {% set _is_placeholder = (form.title or '').startswith('Untitled form') %}
-    <form class="form" method="post"
+    <form class="form" method="post" enctype="multipart/form-data"
           action="{{ url_for('main.frontend_custom_form_edit', form_id=form.id) }}"
           {% if _is_placeholder %}data-fe-savebar-force{% endif %}>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -78,6 +78,51 @@
                            config=form.bg_dynbg_config_json,
                            label='Choose a dynamic background…') }}
         </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Link preview (Open Graph)</h2>
+          <span class="muted smaller">The image shown when this form's link is shared on Slack, iMessage, Facebook, Twitter/X, etc. The title and description come from this form's title and description above. When no image is set, the site-wide frontend OG image is used.</span>
+        </div>
+        <div class="form-grid" style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:18px; padding:1rem;">
+          <div>
+            <label>Preview image
+              <input type="file" name="og_image" id="form-og-image-input"
+                     accept="image/png,image/jpeg,image/webp">
+            </label>
+            {% if form.og_image_filename %}
+            <label class="check" style="margin-top:.6rem;">
+              <input type="checkbox" name="clear_og_image" value="1">
+              <span>Remove current image</span>
+            </label>
+            {% endif %}
+            <p class="muted smaller" style="margin-top:6px;">Recommended: 1200×630 px, JPG or PNG, under 5 MB.</p>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <div class="muted smaller">Preview</div>
+            {% set _has_og = form.og_image_filename %}
+            <div style="border:1px solid var(--border); border-radius:8px; padding:10px; min-height:130px; display:flex; align-items:center; justify-content:center; background:var(--panel-2);">
+              <img id="form-og-preview-img"
+                   src="{{ url_for('public.custom_form_og_image', form_id=form.id) if _has_og else '' }}"
+                   alt="" style="max-width:100%; max-height:160px; border-radius:6px;{% if not _has_og %} display:none;{% endif %}">
+              <div class="muted smaller" id="form-og-preview-empty"{% if _has_og %} hidden{% endif %}>Falls back to the frontend OG image.</div>
+            </div>
+          </div>
+        </div>
+        <script>
+        (function(){
+          var input=document.getElementById('form-og-image-input');
+          var img=document.getElementById('form-og-preview-img');
+          var empty=document.getElementById('form-og-preview-empty');
+          if(!input||!img) return;
+          input.addEventListener('change', function(){
+            var f=input.files && input.files[0];
+            if(!f) return;
+            img.src=URL.createObjectURL(f); img.style.display=''; if(empty) empty.hidden=true;
+          });
+        })();
+        </script>
       </section>
 
       <section class="card">

@@ -7774,6 +7774,22 @@ def public_page_bg(page_id):
                                page.bg_image_filename)
 
 
+@public_bp.route("/pub/form-og-image/<int:form_id>")
+def custom_form_og_image(form_id):
+    """Serve a CustomForm's Open Graph preview image. Crawlers (Slack /
+    iMessage / Facebook) fetch it anonymously so a shared form link gets a
+    per-form preview. 404s when the form is disabled or has no OG image —
+    the public form route then advertises the site-wide frontend OG image
+    instead."""
+    cf = CustomForm.query.get(form_id)
+    if not cf or not cf.og_image_filename or not cf.enabled:
+        abort(404)
+    response = send_from_directory(current_app.config["UPLOAD_FOLDER"],
+                                   cf.og_image_filename)
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
+
+
 @public_bp.route("/pub/page-og-image/<int:page_id>")
 def public_page_og_image(page_id):
     """Serve a Page's per-page Open Graph preview image. The page edit
@@ -9467,6 +9483,20 @@ def frontend_custom_form_edit(form_id):
         from . import dynbg as _dynbg
         cf.bg_dynamic_key = _dynbg.normalize(request.form.get("bg_dynamic_key")) or None
         cf.bg_dynbg_config_json = _dynbg_config_from_form(request.form, "bg_dynbg_config_json")
+        # Open Graph / link-preview image. Clear or replace the per-form
+        # image; when unset the public page falls back to the frontend OG
+        # image. Same upload + retired-asset cleanup the page editor uses.
+        if request.form.get("clear_og_image") == "1":
+            _old_og = cf.og_image_filename
+            cf.og_image_filename = None
+            _cleanup_retired_asset(_old_og)
+        _og_upload = request.files.get("og_image")
+        if _og_upload and _og_upload.filename:
+            _old_og = cf.og_image_filename
+            _stored_og, _ = _save_upload(_og_upload)
+            cf.og_image_filename = _stored_og
+            if _old_og and _old_og != _stored_og:
+                _cleanup_retired_asset(_old_og)
         # Field builder payload — the page's JS serialises into
         # ``field_<idx>_<attr>`` inputs + a ``field_order`` index list.
         # We always rebuild blocks_json from the incoming form so an

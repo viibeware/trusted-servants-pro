@@ -3482,6 +3482,11 @@ class CustomForm(db.Model):
     # the form falls through to the site-wide submission-form background.
     bg_dynamic_key = db.Column(db.String(64))
     bg_dynbg_config_json = db.Column(db.Text)
+    # Open Graph / link-preview image for the public form page (UUID-
+    # prefixed filename in UPLOAD_FOLDER). None = fall back to the site
+    # frontend OG image. og:title / og:description derive from the form's
+    # title + description, so no separate columns are needed.
+    og_image_filename = db.Column(db.String(500))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -6,6 +6,21 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.15.10] — 2026-06-15
+
+### Added
+
+- **Open Graph / link previews for custom form pages.** A custom form's public page
+  now emits OG + Twitter tags — `og:title` from the form title, `og:description` from
+  the form description, and `og:image` from a per-form preview image (a new upload in
+  the form editor's **Link preview (Open Graph)** card). When no per-form image is
+  set, it falls back to the site-wide frontend OG image.
+
+### Changed
+
+- **Submission rows expand/collapse with a smooth animation** instead of snapping
+  open, using a CSS grid-rows height transition (respects reduced-motion).
+
 ## [2.15.9] — 2026-06-15
 
 ### Added

@@ -5019,6 +5019,13 @@ def _render_custom_form(cf, ctx, errors=None, values=None, success_message=None)
         # through to the site-wide submission-form dynbg above.
         cform_dynbg_key=(dynbg.normalize(cf.bg_dynamic_key) if cf.bg_dynamic_key else None),
         cform_dynbg_config=cf.bg_dynbg_config_json,
+        # Open Graph for the public form page: title/description from the
+        # form, image from the form's own OG image when set — otherwise None,
+        # which lets frontend/base.html fall back to the site frontend OG
+        # image. Keys (page_og_*) are read by frontend/base.html.
+        **_page_og(site, title=cf.title, description=cf.description,
+                   image_url=(url_for("public.custom_form_og_image", form_id=cf.id, _external=True)
+                              if cf.og_image_filename else None)),
         # Body-partial context.
         cform=cf,
         cform_blocks=blocks,

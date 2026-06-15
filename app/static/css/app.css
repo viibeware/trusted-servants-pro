@@ -15536,8 +15536,19 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
 }
 .fe-submission-cta .icon { width: 18px; height: 18px; }
 
-/* Inline detail panel — the full record in the email/detail style. */
+/* Inline detail panel — the full record in the email/detail style, with
+   a smooth open/close. The panel is a CSS grid whose single row animates
+   0fr→1fr; the clip hides the overflow during the transition; the inner
+   carries the visible chrome (border / padding / fill) so nothing shows
+   while collapsed. */
 .fe-submission-detail-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 240ms ease;
+}
+.fe-submission-card.is-expanded .fe-submission-detail-panel { grid-template-rows: 1fr; }
+.fe-submission-detail-clip { overflow: hidden; min-height: 0; }
+.fe-submission-detail-inner {
   border-top: 1px solid var(--border);
   padding: 2px 18px 16px;
   background: var(--panel-2);
@@ -15551,10 +15562,13 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
   margin-top: 4px;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .fe-submission-detail-panel { transition: none; }
+}
 @media (max-width: 640px) {
   .fe-submission-card-main { gap: 12px; padding: 12px; }
   .fe-submission-when { margin-left: 0; width: 100%; }
-  .fe-submission-detail-panel { padding: 2px 12px 14px; }
+  .fe-submission-detail-inner { padding: 2px 12px 14px; }
 }
 
 [data-theme="dark"] .fe-submission-card:hover {

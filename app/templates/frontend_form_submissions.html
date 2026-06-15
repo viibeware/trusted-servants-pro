@@ -126,15 +126,22 @@
         </button>
       </div>
       {# Inline expand — the full record in the same email style as the
-         detail page, plus a button through to that detail page. #}
-      <div class="fe-submission-detail-panel" id="sub-panel-{{ sub.id }}" hidden>
-        <div class="fe-sub-detail-fields fe-sub-detail-fields--inline">
-          {% with fields=form_fields, fvals=payloads[sub.id].fields, files=payloads[sub.id].files %}
-          {% include "_submission_fields.html" %}
-          {% endwith %}
-        </div>
-        <div class="fe-submission-panel-actions">
-          <a class="btn btn-sm btn-primary" href="{{ url_for('main.frontend_form_submission_detail', sub_id=sub.id) }}">{{ icon('external-link') }} View Submission</a>
+         detail page, plus a button through to that detail page. Three
+         nesting levels drive a smooth height animation: the panel is a
+         grid that transitions 0fr→1fr, the clip hides overflow, and the
+         inner carries the visible chrome so nothing shows while collapsed. #}
+      <div class="fe-submission-detail-panel" id="sub-panel-{{ sub.id }}">
+        <div class="fe-submission-detail-clip">
+          <div class="fe-submission-detail-inner">
+            <div class="fe-sub-detail-fields fe-sub-detail-fields--inline">
+              {% with fields=form_fields, fvals=payloads[sub.id].fields, files=payloads[sub.id].files %}
+              {% include "_submission_fields.html" %}
+              {% endwith %}
+            </div>
+            <div class="fe-submission-panel-actions">
+              <a class="btn btn-sm btn-primary" href="{{ url_for('main.frontend_form_submission_detail', sub_id=sub.id) }}">{{ icon('external-link') }} View Submission</a>
+            </div>
+          </div>
         </div>
       </div>
     </li>
@@ -150,11 +157,11 @@
       list.addEventListener('click', function (e) {
         var btn = e.target.closest('[data-subs-toggle]');
         if (!btn) return;
-        var panel = document.getElementById(btn.getAttribute('aria-controls'));
-        if (!panel) return;
         var open = btn.getAttribute('aria-expanded') === 'true';
         btn.setAttribute('aria-expanded', open ? 'false' : 'true');
-        panel.hidden = open;
+        // The grid 0fr→1fr transition (CSS) animates the open/close; we
+        // just flip the class. No `hidden` toggle — display:none would
+        // kill the transition.
         btn.closest('.fe-submission-card').classList.toggle('is-expanded', !open);
       });
     }
