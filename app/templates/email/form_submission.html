@@ -40,6 +40,15 @@
             </td>
           </tr>
 
+          {#- CTA: open this submission in the app backend -#}
+          {% if detail_url %}
+          <tr>
+            <td align="center" style="padding:2px 36px 20px;">
+              <a href="{{ detail_url }}" style="display:inline-block; background:#0b5cff; color:#ffffff; text-decoration:none; font-size:15px; font-weight:700; line-height:1; padding:13px 28px; border-radius:10px;">View submission in app &rarr;</a>
+            </td>
+          </tr>
+          {% endif %}
+
           {#- Fields -#}
           <tr>
             <td style="padding:6px 36px 8px;">

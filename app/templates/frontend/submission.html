@@ -26,8 +26,17 @@
    (SiteSetting.frontend_submission_form_template). #}
 {% block content %}
 {%- set _tpl = template_settings(site, 'submission_form', submission_template_key) if site else {} -%}
+{# A CustomForm can carry its own dynbg (cform_dynbg_key / config). When
+   either is set it overrides the shared submission-form background; when
+   both are falsy the form falls through to the site/template settings
+   below, so existing forms render unchanged. #}
+{%- if (cform_dynbg_key is defined and cform_dynbg_key) or (cform_dynbg_config is defined and cform_dynbg_config) -%}
+{%- set _dynbg = cform_dynbg_key -%}
+{%- set _dynbg_cfg_raw = cform_dynbg_config -%}
+{%- else -%}
 {%- set _dynbg = _tpl.get('bg_dynamic_key') or (site.frontend_submission_form_bg_dynamic_key if site else None) -%}
 {%- set _dynbg_cfg_raw = {'overlay': _tpl.get('bg_dynbg_overlay'), 'colors': _tpl.get('bg_dynbg_colors') or [], 'overlay_scope': _tpl.get('bg_dynbg_overlay_scope'), 'overlay_size': _tpl.get('bg_dynbg_overlay_size'), 'overlay_intensity': _tpl.get('bg_dynbg_overlay_intensity'), 'randomize_colors': _tpl.get('bg_dynbg_randomize_colors'), 'randomize_positions': _tpl.get('bg_dynbg_randomize_positions'), 'animate': _tpl.get('bg_dynbg_animate', True), 'pastel_light': _tpl.get('bg_dynbg_pastel_light', False), 'knobs': _tpl.get('bg_dynbg_knobs', {})} if _tpl.get('bg_dynamic_key') or _tpl.get('bg_dynbg_overlay') else (site.frontend_submission_form_bg_dynbg_config_json if site else None) -%}
+{%- endif -%}
 {%- set _dynbg_cfg = dynbg_decode(_dynbg_cfg_raw) -%}
 {%- set _dynbg_color_vars = dynbg_colors_css(dynbg_resolve_colors(_dynbg_cfg), _dynbg_cfg) -%}
 {%- set _dynbg_pos_vars = dynbg_resolve_positions(_dynbg_cfg, _dynbg) -%}

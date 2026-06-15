@@ -1,7 +1,14 @@
 {% extends "base.html" %}
+{% from "_dynbg_picker.html" import dynbg_trigger with context %}
 {% block heading %}{{ form.title }}{% endblock %}
 {% block heading_help %}Configure this custom form. Phase 2 adds a drag-and-drop field builder below the settings card — for now you can set title, URL, recipients, and what happens after submit.{% endblock %}
 {% block top_actions %}
+{% set _rl = {'editor': 'Editors', 'intergroup_member': 'Intergroup Members', 'viewer': 'Viewers'} %}
+<span class="fe-vis-roles" title="Who can manage this form's submissions">
+  <span class="fe-vis-roles-label">Visible to</span>
+  <span class="fe-vis-role">Admins</span>
+  {% for r in form.submission_role_set() %}<span class="fe-vis-role">{{ _rl.get(r, r) }}</span>{% endfor %}
+</span>
 <a class="btn" href="{{ url_for('main.frontend_forms') }}">← Back to forms</a>
 {% if form.enabled %}
 <a class="btn" href="{{ url_for('frontend.page_detail', slug=form.slug) }}" target="_blank" rel="noopener">View on frontend ↗</a>
@@ -44,6 +51,33 @@
             <span class="mode-track"><span class="mode-thumb"></span></span>
           </label>
         </li>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Submission access</h2>
+          <span class="muted smaller">Admins always manage this form's submissions. Grant extra roles below — each granted role gets this form in their sidebar's <b>Forms</b> section, with its own inbox + archive, and can view, archive, delete, and export its entries (they can't edit the form itself).</span>
+        </div>
+        {% set _roles = form.submission_role_set() %}
+        <div class="fe-form-access-roles">
+          <label class="check"><input type="checkbox" name="submission_roles" value="editor" {% if 'editor' in _roles %}checked{% endif %}><span>Editors</span></label>
+          <label class="check"><input type="checkbox" name="submission_roles" value="intergroup_member" {% if 'intergroup_member' in _roles %}checked{% endif %}><span>Intergroup Members</span></label>
+          <label class="check"><input type="checkbox" name="submission_roles" value="viewer" {% if 'viewer' in _roles %}checked{% endif %}><span>Viewers</span></label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Background</h2>
+          <span class="muted smaller">Optional animated/dynamic backdrop for this form's public page. Leave unset to inherit the site-wide Forms background from the Templates page.</span>
+        </div>
+        <div class="fe-form-bg-picker" style="padding: 1rem;">
+          {{ dynbg_trigger(field_name='bg_dynamic_key',
+                           current=form.bg_dynamic_key,
+                           config_field='bg_dynbg_config_json',
+                           config=form.bg_dynbg_config_json,
+                           label='Choose a dynamic background…') }}
+        </div>
       </section>
 
       <section class="card">

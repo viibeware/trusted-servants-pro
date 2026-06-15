@@ -25,7 +25,7 @@
           {% endif %}
         {% endwith %}
       </header>
-      {% if _intro %}
+      {% if _intro and not cform_success %}
       <div class="fe-submission-minimal-intro">{{ _intro|markdown_block }}</div>
       {% endif %}
       <div class="fe-submission-minimal-body">

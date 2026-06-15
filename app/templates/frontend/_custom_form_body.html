@@ -16,6 +16,11 @@
 <div class="fe-custom-form-success">
   {{ cform_success|safe }}
 </div>
+{# Re-open the empty form for another submission. A plain GET to the form's
+   own public URL re-renders it blank — no JS needed. #}
+<div class="fe-custom-form-success-actions">
+  <a class="fe-btn fe-btn-primary" href="{{ url_for('frontend.page_detail', slug=cform.slug) }}">Submit another response</a>
+</div>
 {% else %}
 <form class="form fe-custom-form" method="post"
       action="{{ url_for('frontend.custom_form_submit', slug=cform.slug) }}"
@@ -140,8 +145,53 @@
 
   {% if cform_blocks %}
   <div class="fe-custom-form-actions">
-    <button type="submit" class="fe-btn fe-btn-primary">Submit</button>
+    <button type="submit" class="fe-btn fe-btn-primary" data-fe-submit-btn>
+      <span class="fe-btn-spinner" aria-hidden="true"></span>
+      <span class="fe-btn-label">Submit</span>
+    </button>
   </div>
   {% endif %}
+
+  {# Submitting overlay — revealed by the JS below the moment the form is
+     handed to the browser, so the visitor sees clear progress (and a
+     "don't leave" cue) during a slow upload instead of a dead button. #}
+  <div class="fe-form-submitting-overlay" data-fe-submitting-overlay aria-hidden="true">
+    <div class="fe-form-submitting-card">
+      <span class="fe-form-submitting-spinner" aria-hidden="true"></span>
+      <span class="fe-form-submitting-text">Submitting…</span>
+      <span class="fe-form-submitting-hint">Please keep this page open.</span>
+    </div>
+  </div>
 </form>
+
+{# Progress UX: on submit, lock the form, swap the button into a spinner
+   state, and reveal the overlay so the visitor sees clear progress during
+   a slow upload. Guards against double-submit. No beforeunload guard — it
+   would fire on the form's own POST navigation and wrongly prompt
+   "Leave site?" on every legitimate submit. Scoped to this form instance
+   so multiple forms on a page don't cross-fire. #}
+<script>
+(function () {
+  var form = document.currentScript.previousElementSibling;
+  if (!form || form.tagName !== 'FORM') {
+    form = document.querySelector('form.fe-custom-form');
+  }
+  if (!form || form.__feSpinnerBound) return;
+  form.__feSpinnerBound = true;
+  var btn = form.querySelector('[data-fe-submit-btn]');
+  var label = btn && btn.querySelector('.fe-btn-label');
+  var submitting = false;
+  form.addEventListener('submit', function () {
+    // Honour native required-field validation: a blocked submit never
+    // reaches here, so the spinner only fires on a genuine send.
+    if (submitting) return;
+    submitting = true;
+    form.classList.add('is-submitting');
+    if (label) label.textContent = 'Submitting…';
+    // Defer the busy flag so the button's value still posts and the
+    // submit navigation proceeds uninterrupted.
+    setTimeout(function () { if (btn) btn.setAttribute('aria-busy', 'true'); }, 0);
+  });
+})();
+</script>
 {% endif %}

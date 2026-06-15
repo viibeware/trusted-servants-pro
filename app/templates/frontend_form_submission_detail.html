@@ -1,63 +1,105 @@
 {% extends "base.html" %}
 {% block heading %}Submission #{{ sub.id }}{% endblock %}
-{% block heading_help %}{% if cf %}From the <strong>{{ cf.title }}</strong> form. Submitted {{ sub.created_at.strftime('%Y-%m-%d %H:%M') }} UTC from <code>{{ sub.ip or 'unknown' }}</code>.{% else %}The form behind this submission has been deleted.{% endif %}{% endblock %}
+{% block heading_help %}{% if cf %}From the <strong>{{ cf.title }}</strong> form.{% else %}The form behind this submission has been deleted.{% endif %}{% endblock %}
 {% block top_actions %}
 <a class="btn" href="{{ url_for('main.frontend_form_submissions', form=cf.id if cf else None) }}">← Back to submissions</a>
 {% endblock %}
 {% block content %}
-<section class="card">
-  <div class="card-head"><h2>Submitted values</h2></div>
-  {% set _fvals = payload.get('fields') or {} %}
-  {% set _files = payload.get('files') or {} %}
-  {% if _fvals or _files %}
-  <dl class="fe-submission-dl">
-    {% for f in fields %}
-      {% set name = f.name %}
-      {% set v = _fvals.get(name) %}
-      {% if v is not none and v != '' %}
-      <dt>{{ f.label }}</dt>
-      <dd>
-        {% if f.type == 'checkboxes' and v is iterable and v is not string %}
-          {{ v|join(', ') }}
-        {% elif f.type == 'file' %}
-          {% set info = _files.get(name) %}
-          {% if info %}
-            <a href="{{ url_for('public.public_file', filename=info.stored) }}" target="_blank" rel="noopener">
-              {{ info.original }}
-            </a>
-            <span class="muted smaller">· stored as <code>{{ info.stored }}</code></span>
-          {% else %}<span class="muted">{{ v }}</span>{% endif %}
-        {% else %}
-          {{ v }}
-        {% endif %}
-      </dd>
-      {% endif %}
-    {% endfor %}
-    {% if fields|length == 0 %}
-    <p class="muted">The form behind this submission has been deleted — raw payload below.</p>
-    <pre class="fe-submission-raw"><code>{{ payload|tojson(indent=2) }}</code></pre>
-    {% endif %}
-  </dl>
-  {% else %}
-  <p class="muted">Submission contains no field values.</p>
-  {% endif %}
+{% set _fvals = payload.get('fields') or {} %}
+{% set _files = payload.get('files') or {} %}
+{% set _name = (summary.display_name if summary else None) or 'Anonymous' %}
 
-  <div class="fe-submission-actions" style="margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: .75rem;">
-    <form method="post" action="{{ url_for('main.frontend_form_submission_archive', sub_id=sub.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      {% if sub.is_archived %}
-      <input type="hidden" name="target" value="0">
-      <button type="submit" class="btn btn-sm">{{ icon('rotate-ccw') }} Restore submission</button>
-      {% else %}
-      <input type="hidden" name="target" value="1">
-      <button type="submit" class="btn btn-sm">{{ icon('box') }} Archive submission</button>
+<div class="fe-sub-detail">
+  <article class="fe-sub-detail-card">
+    {# Brand accent bar — mirrors the submission email's gradient header. #}
+    <div class="fe-sub-detail-accent" aria-hidden="true"></div>
+
+    {# Hero: submitter identity + form + when/where, with quick contact links. #}
+    <header class="fe-sub-detail-hero">
+      <div class="fe-sub-detail-avatar" aria-hidden="true">{{ _name[:1]|upper }}</div>
+      <div class="fe-sub-detail-hero-main">
+        <div class="fe-sub-detail-eyebrow">{% if cf %}{{ cf.title }}{% else %}Form submission{% endif %}{% if sub.is_archived %} · <span class="fe-sub-detail-archived">Archived</span>{% endif %}</div>
+        <h2 class="fe-sub-detail-name">{{ _name }}</h2>
+        <div class="fe-sub-detail-metarow">
+          <span title="{{ sub.created_at.strftime('%Y-%m-%d %H:%M') }} UTC">{{ icon('clock') }} Submitted {{ sub.created_at.strftime('%b %-d, %Y · %-I:%M %p') }} UTC</span>
+          <span title="Submitter IP address">{{ icon('map-pin') }} {{ sub.ip or 'unknown' }}</span>
+          {% if summary and summary.field_count %}<span>{{ icon('list') }} {{ summary.field_count }} field{{ '' if summary.field_count == 1 else 's' }} answered</span>{% endif %}
+        </div>
+        {% if summary and (summary.email or summary.phone) %}
+        <div class="fe-sub-detail-contact">
+          {% if summary.email %}<a href="mailto:{{ summary.email }}" class="fe-sub-detail-chip">{{ icon('mail') }} {{ summary.email }}</a>{% endif %}
+          {% if summary.phone %}<a href="tel:{{ summary.phone }}" class="fe-sub-detail-chip">{{ icon('phone') }} {{ summary.phone }}</a>{% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </header>
+
+    {# Field values — one labelled row each, options as check pills, links live. #}
+    {% if _fvals or _files %}
+    <div class="fe-sub-detail-fields">
+      {% set _ns = namespace(shown=0) %}
+      {% for f in fields %}
+        {% set name = f.name %}
+        {% set v = _fvals.get(name) %}
+        {% if v is not none and v != '' and not (v is iterable and v is not string and v|length == 0) %}
+        {% set _ns.shown = _ns.shown + 1 %}
+        <div class="fe-sub-detail-field">
+          <div class="fe-sub-detail-label">{{ f.label }}</div>
+          <div class="fe-sub-detail-value">{% if f.type in ('checkboxes', 'radio', 'select') -%}
+              {% set _opts = v if (v is iterable and v is not string) else [v] %}
+              <div class="fe-sub-detail-opts">
+                {% for opt in _opts %}
+                <span class="fe-sub-detail-opt"><span class="fe-sub-detail-opt-tick {% if f.type == 'checkboxes' %}is-square{% endif %}" aria-hidden="true">{{ icon('check') }}</span>{{ opt }}</span>
+                {% endfor %}
+              </div>
+            {%- elif f.type == 'file' -%}
+              {% set info = _files.get(name) %}
+              {% if info %}<a class="fe-sub-detail-file" href="{{ url_for('public.public_file', filename=info.stored) }}" target="_blank" rel="noopener"><span class="fe-sub-detail-file-icon" aria-hidden="true">{{ icon('file') }}</span><span class="fe-sub-detail-file-name">{{ info.original }}</span><span class="fe-sub-detail-file-go" aria-hidden="true">{{ icon('external-link') }}</span></a>{% else %}<span class="muted">{{ v }}</span>{% endif %}
+            {%- elif f.type == 'email' -%}
+              <a href="mailto:{{ v }}" class="fe-sub-detail-link">{{ v }}</a>
+            {%- elif f.type == 'phone' -%}
+              <a href="tel:{{ v }}" class="fe-sub-detail-link">{{ v }}</a>
+            {%- else -%}
+              {{- v -}}
+            {%- endif %}</div>
+        </div>
+        {% endif %}
+      {% endfor %}
+      {% if _ns.shown == 0 %}
+      <p class="muted" style="padding: 16px 0;">This submission contains no field values.</p>
       {% endif %}
-    </form>
-    <form method="post" action="{{ url_for('main.frontend_form_submission_delete', sub_id=sub.id) }}"
-          onsubmit="return confirm('Delete this submission permanently?');">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-sm btn-danger">{{ icon('trash') }} Delete this submission</button>
-    </form>
-  </div>
-</section>
+    </div>
+    {% else %}
+    <div class="fe-sub-detail-fields"><p class="muted" style="padding: 16px 0;">Submission contains no field values.</p></div>
+    {% endif %}
+
+    {% if fields|length == 0 and payload %}
+    {# Orphaned submission (form deleted) — fall back to the raw payload so
+       nothing is lost, presented in a quiet code block. #}
+    <div class="fe-sub-detail-fields">
+      <div class="fe-sub-detail-label" style="margin-bottom: 8px;">Raw payload</div>
+      <pre class="fe-submission-raw"><code>{{ payload|tojson(indent=2) }}</code></pre>
+    </div>
+    {% endif %}
+
+    {# Actions footer — archive/restore + delete, on a quiet panel. #}
+    <footer class="fe-sub-detail-foot">
+      <form method="post" action="{{ url_for('main.frontend_form_submission_archive', sub_id=sub.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if sub.is_archived %}
+        <input type="hidden" name="target" value="0">
+        <button type="submit" class="btn btn-sm">{{ icon('rotate-ccw') }} Restore submission</button>
+        {% else %}
+        <input type="hidden" name="target" value="1">
+        <button type="submit" class="btn btn-sm">{{ icon('box') }} Archive submission</button>
+        {% endif %}
+      </form>
+      <form method="post" action="{{ url_for('main.frontend_form_submission_delete', sub_id=sub.id) }}"
+            onsubmit="return confirm('Delete this submission permanently?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-danger">{{ icon('trash') }} Delete</button>
+      </form>
+    </footer>
+  </article>
+</div>
 {% endblock %}

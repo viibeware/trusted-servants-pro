@@ -17,7 +17,7 @@
       <aside class="fe-submission-split-rail">
         <h1 class="fe-submission-split-title">{{ _heading }}</h1>
         {% if _subheading %}<p class="fe-submission-split-blurb">{{ _subheading }}</p>{% endif %}
-        {% if _intro %}
+        {% if _intro and not cform_success %}
         <div class="fe-submission-split-intro">{{ _intro|markdown_block }}</div>
         {% endif %}
       </aside>

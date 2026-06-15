@@ -11512,7 +11512,74 @@ body.fe-footer-force-dark .fe-footer-admin-login--logout:focus-visible {
 }
 .fe-custom-form-head h1 { margin: 0 0 .5rem; }
 .fe-custom-form-desc { margin: 0 0 1.25rem; color: var(--fe-color-text-soft, #475569); }
-.fe-custom-form { display: flex; flex-direction: column; gap: 1rem; }
+.fe-custom-form { display: flex; flex-direction: column; gap: 1rem; position: relative; }
+
+/* ── Submit progress UX ─────────────────────────────────────────────
+   Inline button spinner + a soft full-form overlay shown while the
+   submission is in flight, so the visitor sees clear progress (and a
+   "keep this page open" cue) during a slow upload. */
+.fe-btn-spinner {
+  display: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-top-color: currentColor;
+  animation: fe-form-spin .6s linear infinite;
+  vertical-align: -3px;
+  margin-right: 8px;
+}
+.fe-custom-form.is-submitting [data-fe-submit-btn] {
+  pointer-events: none;
+  opacity: .9;
+}
+.fe-custom-form.is-submitting .fe-btn-spinner { display: inline-block; }
+
+.fe-form-submitting-overlay {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--fe-color-bg, #fff) 72%, transparent);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: fe-form-overlay-in .2s ease both;
+}
+.fe-custom-form.is-submitting .fe-form-submitting-overlay { display: flex; }
+.fe-form-submitting-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 26px 34px;
+  text-align: center;
+}
+.fe-form-submitting-spinner {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--fe-accent, #0b5cff) 22%, transparent);
+  border-top-color: var(--fe-accent, #0b5cff);
+  animation: fe-form-spin .7s linear infinite;
+}
+.fe-form-submitting-text {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--fe-color-text, #0f172a);
+}
+.fe-form-submitting-hint {
+  font-size: .85rem;
+  color: var(--fe-color-muted, #64748b);
+}
+@keyframes fe-form-spin { to { transform: rotate(360deg); } }
+@keyframes fe-form-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .fe-btn-spinner, .fe-form-submitting-spinner { animation-duration: 1.2s; }
+  .fe-form-submitting-overlay { animation: none; }
+}
 /* Extra breathing room between the form's description (rendered through the
    submission chrome's intro slot) and its first field. Scoped to the custom
    form so the events/announcements submission form is unaffected. */
@@ -11556,6 +11623,11 @@ body.fe-footer-force-dark .fe-footer-admin-login--logout:focus-visible {
   color: #14532d;
   border-radius: 12px;
   font-size: 1.05rem;
+}
+.fe-custom-form-success-actions {
+  margin-top: 1.25rem;
+  display: flex;
+  justify-content: center;
 }
 .fe-custom-form-banner {
   padding: .75rem 1rem;

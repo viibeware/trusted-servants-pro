@@ -7,7 +7,18 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.15.4 — 2026-06-15 (latest) — Beautiful submission emails + archive from the detail view
+## 2.15.5 — 2026-06-15 (latest) — Per-form access, a redesigned submission view, and a smoother submit
+
+- **Let the right people see the right forms.** Each custom form can now be opened up to specific roles (Editors, Intergroup Members, Viewers) for *its submissions only*. Anyone you grant access to gets that form in a new **Forms** area of the sidebar — with its own inbox and archive — where they can read, archive, delete, and download entries as CSV. Editing the form itself stays admin-only. Admins see this same per-form list, and the Contact Form plus the Announcements/Events, Story, and Recovery Contacts forms now live there too.
+- **See new submissions at a glance.** Every form in the Forms list shows an orange number chip with its unread (un-archived) submission count, and new submissions now appear in the **Notifications Center** as well.
+- **A beautiful submission view.** Opening a submission now shows an elegant, email-style page: a header with the submitter's name and contact details, every answer in its own tidy section, multiple-choice answers shown as check pills, and tappable email / phone / file links.
+- **A reassuring submit experience.** When someone submits a form, they now see a clean "Submitting…" spinner so they know it's working and to keep the page open — and a double-tap can't fire off two submissions.
+- **A tidier thank-you page.** After a successful submission, the form's description is hidden so only the green confirmation shows, plus a new **Submit another response** button to send another entry.
+- **Give each form its own look.** Custom forms can now have their own animated/dynamic background, picked right from the form editor.
+- **Right address in the records.** Submissions now capture the visitor's IPv4 address where one exists (instead of an IPv6 form of it).
+- **A jump-straight-to-it link** in submission notification emails opens that submission in the app, and the notification sidebar chip is now orange.
+
+## 2.15.4 — 2026-06-15 — Beautiful submission emails + archive from the detail view
 
 - **Form-submission notification emails are now beautifully designed.** Instead of a plain-text list, each submission arrives as a clean, branded email — your site logo up top, the form title and submission time, every answer in its own tidy section, selected checkbox/radio options shown with check marks, attachments listed, and a "Powered by Trusted Servants Pro" footer. Email and phone fields become tappable links. Looks great on phones and the major email apps.
 - **Only the chosen options are shown.** For checkbox and multiple-choice questions, the email lists just what the person selected — not the options they left blank.

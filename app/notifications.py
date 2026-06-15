@@ -45,6 +45,26 @@ def _locked_usernames():
         return set()
 
 
+def _submission_preview(fs):
+    """Short 'value · value' snippet from a FormSubmission payload for the
+    notification body — the first couple of non-empty answers."""
+    import json as _json
+    try:
+        fields = (_json.loads(fs.payload_json or "{}").get("fields")) or {}
+    except (ValueError, TypeError):
+        return ""
+    parts = []
+    for v in fields.values():
+        if isinstance(v, (list, tuple)):
+            v = ", ".join(str(x) for x in v)
+        v = str(v).strip()
+        if v:
+            parts.append(v)
+        if len(parts) >= 2:
+            break
+    return " · ".join(parts)[:140]
+
+
 def _items(user):
     """Every notification the user can currently see, before dismissal
     filtering. Returns a list of dicts: ``{key, category, icon, title,
@@ -175,6 +195,38 @@ def _items(user):
                     "url": url_for("main.recovery_contacts"),
                     "ts": rc.created_at,
                 })
+    # New custom-form submissions — role-gated per form exactly like the
+    # sidebar "Forms" section + the inbox access gate: admins see every
+    # form; other roles only forms whose ``submission_roles_csv`` grants
+    # them. Recent + non-archived counts as "new"; archiving the
+    # submission (or dismissing the notification) clears it. Each links
+    # straight to that submission's detail page.
+    try:
+        from .models import FormSubmission, CustomForm
+        import datetime as _dt
+        forms = CustomForm.query.all()
+        titles = {cf.id: (cf.title or cf.slug) for cf in forms
+                  if is_admin or (user.role in cf.submission_role_set())}
+        if titles:
+            cutoff = _dt.datetime.utcnow() - _dt.timedelta(days=14)
+            subs = (FormSubmission.query
+                    .filter(FormSubmission.form_id.in_(list(titles.keys())),
+                            FormSubmission.is_archived.is_(False),
+                            FormSubmission.created_at >= cutoff)
+                    .order_by(FormSubmission.created_at.desc())
+                    .limit(100).all())
+            for fs in subs:
+                out.append({
+                    "key": f"form_submission:{fs.id}",
+                    "category": "Form submissions",
+                    "icon": "inbox",
+                    "title": f"New submission to {titles.get(fs.form_id, 'a form')}",
+                    "body": _submission_preview(fs),
+                    "url": url_for("main.frontend_form_submission_detail", sub_id=fs.id),
+                    "ts": fs.created_at,
+                })
+    except Exception:  # noqa: BLE001 — never let the feed break on a query error
+        pass
     return out
 
 

@@ -228,6 +228,16 @@ class User(UserMixin, db.Model):
         role that has editor tools also passes the broad editor gate."""
         return self.can_edit()
 
+    def can_access_form_submissions(self, form):
+        """Manage a single CustomForm's submissions — view the inbox /
+        archive, archive/restore, delete, and CSV export. Admins always
+        qualify; other roles only when the form explicitly grants their
+        role (per-form ``submission_roles_csv``). Editing the form itself
+        (the builder) stays admin-only and is gated separately."""
+        if self.is_admin():
+            return True
+        return bool(form) and self.role in form.submission_role_set()
+
     def can_create_meetings(self):
         """Authorized to provision new meetings or delete existing ones.
         Admins and Intergroup Members only — Editors keep their
@@ -3458,8 +3468,27 @@ class CustomForm(db.Model):
     redirect_url = db.Column(db.String(500))
     thank_you_message = db.Column(db.Text)
     enabled = db.Column(db.Boolean, nullable=False, default=True)
+    # Non-admin roles (CSV, e.g. "editor,viewer") allowed to MANAGE this
+    # form's submissions — view the inbox/archive, archive/restore, delete,
+    # and CSV export. Admins always qualify; empty/NULL = admins only. Drives
+    # the per-form "Forms" sidebar list + submission-route gating. Editing
+    # the form itself stays admin-only.
+    submission_roles_csv = db.Column(db.String(200))
+    # Optional dynamic background for the public form page. Same dynbg
+    # system as Page/SiteSetting surfaces: ``bg_dynamic_key`` is a
+    # catalog key from ``app/dynbg.py`` (None = no dynbg), and
+    # ``bg_dynbg_config_json`` holds the sibling overlay + custom-colour
+    # config (same shape as ``Page.bg_dynbg_config_json``). When unset
+    # the form falls through to the site-wide submission-form background.
+    bg_dynamic_key = db.Column(db.String(64))
+    bg_dynbg_config_json = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def submission_role_set(self):
+        """Set of non-admin role names granted submission access."""
+        return {r.strip() for r in (self.submission_roles_csv or "").split(",")
+                if r.strip()}
 
     submissions = db.relationship(
         "FormSubmission",

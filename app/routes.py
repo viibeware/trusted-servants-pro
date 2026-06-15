@@ -359,6 +359,28 @@ def _attention_counts(*, include_dashboard=False):
         counts["notifications"] = _notif.unread_count(current_user)
     except Exception:
         counts["notifications"] = 0
+    # Per-form inbox counts (un-archived submissions) for the Forms-section
+    # number chips, keyed ``form_submissions_<id>``. Role-gated exactly like
+    # the sidebar items: admins see every form; other roles only forms whose
+    # ``submission_roles_csv`` grants them. Always computed (not dashboard-
+    # gated) so the chips poll-update on every page.
+    try:
+        from .models import CustomForm, FormSubmission
+        from sqlalchemy import func as _func
+        _forms = CustomForm.query.all()
+        _allowed_ids = {cf.id for cf in _forms
+                        if is_admin() or (current_user.role in cf.submission_role_set())}
+        if _allowed_ids:
+            for fid, n in (db.session.query(FormSubmission.form_id, _func.count())
+                           .filter(FormSubmission.is_archived.is_(False),
+                                   FormSubmission.form_id.in_(_allowed_ids))
+                           .group_by(FormSubmission.form_id).all()):
+                counts[f"form_submissions_{fid}"] = n
+        # Seed the rest to 0 so the poller can re-hide an emptied inbox.
+        for fid in _allowed_ids:
+            counts.setdefault(f"form_submissions_{fid}", 0)
+    except Exception:
+        pass
     if include_dashboard and is_admin():
         try:
             counts["backups_failed"] = sum(
@@ -9430,6 +9452,19 @@ def frontend_custom_form_edit(form_id):
         cf.redirect_url = (request.form.get("redirect_url") or "").strip() or None
         cf.thank_you_message = (request.form.get("thank_you_message") or "").strip() or None
         cf.enabled = request.form.get("enabled") == "1"
+        # Per-form submission access for non-admin roles. Admins always
+        # qualify, so they're not a checkbox option; only valid non-admin
+        # roles are stored.
+        _picked = set(request.form.getlist("submission_roles"))
+        _allowed = [r for r in ("editor", "intergroup_member", "viewer") if r in _picked]
+        cf.submission_roles_csv = ",".join(_allowed) or None
+        # Optional per-form dynamic background. Same picker macro + save
+        # path the page / site surfaces use: a normalised base key plus
+        # the bundled overlay/colour/knob config JSON. Tampered values
+        # collapse to None via the dynbg normalisers.
+        from . import dynbg as _dynbg
+        cf.bg_dynamic_key = _dynbg.normalize(request.form.get("bg_dynamic_key")) or None
+        cf.bg_dynbg_config_json = _dynbg_config_from_form(request.form, "bg_dynbg_config_json")
         # Field builder payload — the page's JS serialises into
         # ``field_<idx>_<attr>`` inputs + a ``field_order`` index list.
         # We always rebuild blocks_json from the incoming form so an
@@ -9564,50 +9599,69 @@ def _summarise_form_submission(sub):
     }
 
 
+def _accessible_forms(user):
+    """CustomForms whose submissions ``user`` may manage, by title. Admins
+    → every form; other roles → only forms whose ``submission_roles_csv``
+    grants their role. Mirrors the sidebar "Forms" list."""
+    forms = CustomForm.query.order_by(CustomForm.title).all()
+    if user.is_admin():
+        return forms
+    return [f for f in forms if user.role in f.submission_role_set()]
+
+
+def _form_access_or_403(form):
+    """Abort 403 unless the current user may manage ``form``'s submissions."""
+    if not form or not current_user.can_access_form_submissions(form):
+        abort(403)
+
+
 @bp.route("/frontend/forms/submissions")
-@admin_required
+@login_required
 def frontend_form_submissions():
-    """List of every FormSubmission across every CustomForm, newest
-    first. Filterable by form via ``?form=<id>``. Per-submission row
-    surfaces the submitter's name (or email local-part / "Anonymous"
-    when no name field exists), inline contact links, a short
-    headline from the first subject/textarea field, and badges for
-    field count + file-attachment count."""
+    """A single form's submission inbox — its Active / Archived tabs, bulk
+    actions, and CSV export. Access is per-form: admins see every form,
+    other roles only the forms whose ``submission_roles_csv`` grants their
+    role (the sidebar "Forms" list mirrors this). The view is always scoped
+    to one form (``?form=<id>``); a missing/inaccessible id lands on the
+    first form the user can reach."""
+    accessible = _accessible_forms(current_user)
+    if not accessible:
+        abort(403)
+    show_archived = request.args.get("archived") == "1"
     form_id_raw = (request.args.get("form") or "").strip()
     form_id = int(form_id_raw) if form_id_raw.isdigit() else None
-    show_archived = request.args.get("archived") == "1"
-    q = FormSubmission.query.filter_by(is_archived=show_archived)
-    if form_id is not None:
-        q = q.filter_by(form_id=form_id)
-    submissions = q.order_by(FormSubmission.created_at.desc()).limit(200).all()
-    forms = CustomForm.query.order_by(CustomForm.title).all()
+    cf = next((f for f in accessible if f.id == form_id), None)
+    if cf is None:
+        kwargs = {"form": accessible[0].id}
+        if show_archived:
+            kwargs["archived"] = 1
+        return redirect(url_for("main.frontend_form_submissions", **kwargs))
 
-    # Active / Archived tab counts, scoped to the form filter when one is
-    # picked so the numbers match what each tab would show.
+    submissions = (FormSubmission.query
+                   .filter_by(form_id=cf.id, is_archived=show_archived)
+                   .order_by(FormSubmission.created_at.desc())
+                   .limit(200).all())
+
     def _count(archived):
-        cq = FormSubmission.query.filter_by(is_archived=archived)
-        if form_id is not None:
-            cq = cq.filter_by(form_id=form_id)
-        return cq.count()
+        return FormSubmission.query.filter_by(form_id=cf.id, is_archived=archived).count()
     active_count = _count(False)
     archived_count = _count(True)
 
-    # Pre-compute per-row preview dicts so the template stays declarative
-    # (no payload JSON parsing in Jinja). Mapping by id keeps the lookup
-    # cheap inside the loop.
     previews = {sub.id: _summarise_form_submission(sub) for sub in submissions}
     return render_template("frontend_form_submissions.html",
                            submissions=submissions,
                            previews=previews,
-                           forms=forms,
-                           selected_form_id=form_id,
+                           forms=accessible,
+                           selected_form=cf,
+                           selected_form_id=cf.id,
                            show_archived=show_archived,
                            active_count=active_count,
-                           archived_count=archived_count)
+                           archived_count=archived_count,
+                           can_edit_form=current_user.is_admin())
 
 
 @bp.route("/frontend/forms/submissions/<int:sub_id>")
-@admin_required
+@login_required
 def frontend_form_submission_detail(sub_id):
     """Per-submission detail view. Pairs each value in the submission's
     payload with the field label from the form's blocks_json (since
@@ -9616,21 +9670,27 @@ def frontend_form_submission_detail(sub_id):
     import json as _json
     sub = db.session.get(FormSubmission, sub_id) or abort(404)
     cf = sub.form
+    _form_access_or_403(cf)
     fields = _load_form_fields(cf) if cf else []
     label_for = {f["name"]: f["label"] for f in fields if isinstance(f, dict) and "name" in f}
     try:
         payload = _json.loads(sub.payload_json or "{}")
     except (ValueError, TypeError):
         payload = {}
+    # Reuse the list-view summariser for the hero (submitter name + the
+    # primary email/phone), so the detail page leads with who submitted it.
+    summary = _summarise_form_submission(sub) if cf else None
     return render_template("frontend_form_submission_detail.html",
                            sub=sub, cf=cf, fields=fields,
-                           payload=payload, label_for=label_for)
+                           payload=payload, label_for=label_for,
+                           summary=summary)
 
 
 @bp.route("/frontend/forms/submissions/<int:sub_id>/delete", methods=["POST"])
-@admin_required
+@login_required
 def frontend_form_submission_delete(sub_id):
     sub = db.session.get(FormSubmission, sub_id) or abort(404)
+    _form_access_or_403(sub.form)
     form_id = sub.form_id
     db.session.delete(sub)
     db.session.commit()
@@ -9639,13 +9699,14 @@ def frontend_form_submission_delete(sub_id):
 
 
 @bp.route("/frontend/forms/submissions/<int:sub_id>/archive", methods=["POST"])
-@admin_required
+@login_required
 def frontend_form_submission_archive(sub_id):
     """Archive (or, with ``target=0``, restore) a single submission from
     its detail view, then return to the submissions list — the active
     list after archiving, the archived list after restoring (i.e. the
     tab the row now lives on)."""
     sub = db.session.get(FormSubmission, sub_id) or abort(404)
+    _form_access_or_403(sub.form)
     form_id = sub.form_id
     restore = request.form.get("target") == "0"
     sub.is_archived = not restore
@@ -9673,14 +9734,17 @@ def _submissions_redirect():
 
 
 @bp.route("/frontend/forms/submissions/bulk-delete", methods=["POST"])
-@admin_required
+@login_required
 def frontend_form_submissions_bulk_delete():
-    """Permanently delete a multi-select set of submissions."""
+    """Permanently delete a multi-select set of submissions. Rows belonging
+    to a form the user can't manage are silently skipped, so a crafted POST
+    can't reach another form's submissions."""
     ids = set(request.form.getlist("submission_ids", type=int))
     if not ids:
         flash("Pick at least one submission to delete.", "danger")
         return _submissions_redirect()
-    subs = FormSubmission.query.filter(FormSubmission.id.in_(ids)).all()
+    subs = [s for s in FormSubmission.query.filter(FormSubmission.id.in_(ids)).all()
+            if current_user.can_access_form_submissions(s.form)]
     n = 0
     for s in subs:
         db.session.delete(s)
@@ -9692,16 +9756,18 @@ def frontend_form_submissions_bulk_delete():
 
 
 @bp.route("/frontend/forms/submissions/bulk-archive", methods=["POST"])
-@admin_required
+@login_required
 def frontend_form_submissions_bulk_archive():
     """Archive (or, with ``archived=0``, restore) a multi-select set of
-    submissions. Archived rows leave the default list but are kept."""
+    submissions. Archived rows leave the default list but are kept. Rows on
+    a form the user can't manage are silently skipped."""
     ids = set(request.form.getlist("submission_ids", type=int))
     target = request.form.get("target") != "0"  # default: archive; "0" restores
     if not ids:
         flash("Pick at least one submission first.", "danger")
         return _submissions_redirect()
-    subs = FormSubmission.query.filter(FormSubmission.id.in_(ids)).all()
+    subs = [s for s in FormSubmission.query.filter(FormSubmission.id.in_(ids)).all()
+            if current_user.can_access_form_submissions(s.form)]
     n = 0
     for s in subs:
         s.is_archived = target
@@ -9715,11 +9781,12 @@ def frontend_form_submissions_bulk_archive():
 
 
 @bp.route("/frontend/forms/submissions/export.csv")
-@admin_required
+@login_required
 def frontend_form_submissions_csv():
     """Download one form's submissions as CSV. Columns are the form's
     fields (by label), in builder order, preceded by Submitted + IP.
-    Respects the active/archived tab so the export matches the view."""
+    Respects the active/archived tab so the export matches the view.
+    Available to any role that may manage the form's submissions."""
     import csv as _csv
     import json as _json
     from io import StringIO
@@ -9731,6 +9798,7 @@ def frontend_form_submissions_csv():
         flash("Pick a form from the dropdown before exporting to CSV.", "danger")
         return redirect(url_for("main.frontend_form_submissions"))
     cf = db.session.get(CustomForm, int(form_id_raw)) or abort(404)
+    _form_access_or_403(cf)
     show_archived = request.args.get("archived") == "1"
     subs = (FormSubmission.query
             .filter_by(form_id=cf.id, is_archived=show_archived)

@@ -49,9 +49,11 @@ _ADMIN_CATALOG = [
     # external bookmarks keep working — the sidebar only shows
     # Watchtower as the canonical entry point.
     {"key": "watchtower",      "label": "Watchtower",             "endpoint": "main.watchtower",       "active_kind": "contains:watchtower"},
-    {"key": "contact_form",    "label": "Contact Form",           "endpoint": "main.contact_form",     "active_kind": "contains:contact_form"},
-    {"key": "form_submissions", "label": "Custom Form Submissions",      "endpoint": "main.frontend_form_submissions",
-     "active_kind": "prefix:main.frontend_form_submission"},
+    # NOTE: "Contact Form" and the monolithic "Custom Form Submissions"
+    # link were moved out of the Admin section into the dynamic per-form
+    # "Forms" section (see _build_forms_items / build_sidebar) — the
+    # built-in Contact Form inbox pins to the top (admin-only), then each
+    # accessible custom form gets its own inbox.
 ]
 
 # Static (non-library) items that live inside the "Intergroup" sidebar
@@ -142,20 +144,6 @@ def _is_visible(key, site, user):
     # requests + locked accounts so they don't have to open the page
     # to see counts.
     if key == "watchtower":      return False
-    if key == "contact_form":    return bool(user.is_admin())
-    if key == "form_submissions":
-        # Only surface "Custom Forms" when at least one CustomForm
-        # row exists — the page itself is custom-form-only and the
-        # sidebar entry would 404-feel for a fresh install with no
-        # custom forms yet. Wrap the query in try/except so the
-        # sidebar doesn't crash if the table isn't migrated yet.
-        if not user.is_admin():
-            return False
-        try:
-            from .models import CustomForm
-            return CustomForm.query.limit(1).count() > 0
-        except Exception:  # noqa: BLE001
-            return False
     if key == "web_frontend":    return False
     return False
 
@@ -332,6 +320,143 @@ def _build_intergroup_items(site, user, current_endpoint, url_for):
     return items
 
 
+def _build_forms_items(site, user, current_endpoint, url_for):
+    """Items for the dynamic "Forms" subsection — one per CustomForm whose
+    submissions the user may manage. Admins see every form; other roles see
+    only the forms whose ``submission_roles_csv`` grants their role. Empty
+    when none apply (then the section doesn't render). Each item links to
+    that form's submission inbox (``?form=<id>``) and lights up when the
+    current page is that form's inbox."""
+    from flask import request
+    if not user or not user.is_authenticated:
+        return []
+    try:
+        from .models import CustomForm
+        forms = CustomForm.query.order_by(CustomForm.title).all()
+    except Exception:  # noqa: BLE001 — table not migrated yet, etc.
+        return []
+    is_admin = user.is_admin()
+    # Current ?form= for active-state highlighting (request may be absent
+    # in some render paths, hence the guard).
+    current_form_id = None
+    try:
+        raw = (request.args.get("form") or "").strip()
+        current_form_id = int(raw) if raw.isdigit() else None
+    except RuntimeError:
+        current_form_id = None
+    on_submissions = (current_endpoint or "").startswith("main.frontend_form_submission")
+    # Per-form "new" (un-archived) submission counts, one grouped query so
+    # the section can carry an inbox-style number chip on each custom form
+    # without an N+1. Mirrors the notifications/inbox definition of "new":
+    # a submission counts until it's archived. Keyed by form id.
+    sub_counts = {}
+    try:
+        from .models import FormSubmission, db as _db
+        from sqlalchemy import func as _func
+        for fid, n in (_db.session.query(FormSubmission.form_id, _func.count())
+                       .filter(FormSubmission.is_archived.is_(False))
+                       .group_by(FormSubmission.form_id).all()):
+            sub_counts[fid] = n
+    except Exception:  # noqa: BLE001
+        sub_counts = {}
+    items = []
+    # Built-in Contact Form inbox — admin-only, pinned at the top of the
+    # Forms section (moved here from the Admin section). Keeps the
+    # ``is_admin()`` gate it carried before and the ``contact_form`` key so
+    # the unread-messages badge in _sidebar_nav.html still attaches to it.
+    if is_admin:
+        items.append({
+            "key": "contact_form",
+            "label": "Contact Form",
+            "href": url_for("main.contact_form"),
+            "active": "contact_form" in (current_endpoint or ""),
+            "target": None,
+        })
+    # Built-in module forms that also appear in the dashboard Forms widget,
+    # surfaced here as submission inboxes (their content-management items
+    # stay in their own sidebar sections). Each is gated by its module's
+    # enabled flag + required role, mirroring those modules' visibility.
+    # Active state is left to their primary sidebar items, so these don't
+    # double-highlight.
+    from .permissions import user_meets_role
+    # Pending counts for the module forms — reuse the SAME live-chip keys
+    # the primary sidebar items use (pending_posts / pending_stories /
+    # pending_recovery_contacts) so the poller updates both copies in step.
+    _module_counts = _module_pending_counts(site)
+    _module_forms = (
+        ("Announcements/Events Form", "main.posts",
+         getattr(site, "posts_enabled", False),
+         getattr(site, "posts_required_role", "admin"), {"show": "pending"},
+         "pending_posts", "Submissions awaiting review"),
+        ("Story Submission Form", "main.stories",
+         getattr(site, "stories_enabled", False),
+         getattr(site, "stories_required_role", "admin"), {"show": "pending"},
+         "pending_stories", "Story submissions awaiting review"),
+        ("Recovery Contacts", "main.recovery_contacts",
+         getattr(site, "recovery_contacts_enabled", False),
+         getattr(site, "recovery_contacts_required_role", "admin"), {},
+         "pending_recovery_contacts", "Recovery Contacts entries awaiting review"),
+    )
+    for _label, _ep, _enabled, _role, _kwargs, _live, _title in _module_forms:
+        if not (site and _enabled):
+            continue
+        try:
+            if not user_meets_role(user, _role or "admin"):
+                continue
+        except Exception:  # noqa: BLE001
+            continue
+        items.append({
+            "key": f"formsec_{_ep}",
+            "label": _label,
+            "href": url_for(_ep, **_kwargs),
+            "active": False,
+            "target": None,
+            "badge_live": _live,
+            "badge_count": _module_counts.get(_live, 0),
+            "badge_title": _title,
+        })
+    for cf in forms:
+        if not (is_admin or user.role in cf.submission_role_set()):
+            continue
+        items.append({
+            "key": f"form_{cf.id}",
+            "label": cf.title,
+            "href": url_for("main.frontend_form_submissions", form=cf.id),
+            "active": on_submissions and current_form_id == cf.id,
+            "target": None,
+            "badge_live": f"form_submissions_{cf.id}",
+            "badge_count": sub_counts.get(cf.id, 0),
+            "badge_title": "New submissions in this form's inbox",
+        })
+    return items
+
+
+def _module_pending_counts(site):
+    """Pending-review counts for the module forms surfaced in the Forms
+    section, keyed by the same live-chip keys the primary sidebar items
+    use. Each is gated by its module toggle so a disabled module costs no
+    query. Best-effort — any error collapses that key to 0."""
+    out = {"pending_posts": 0, "pending_stories": 0, "pending_recovery_contacts": 0}
+    if not site:
+        return out
+    try:
+        from .models import Post, Story, RecoveryContact
+        if getattr(site, "posts_enabled", False):
+            out["pending_posts"] = (Post.query
+                .filter(Post.is_pending_review.is_(True), Post.is_archived.is_(False))
+                .count())
+        if getattr(site, "stories_enabled", False):
+            out["pending_stories"] = (Story.query
+                .filter(Story.is_pending_review.is_(True), Story.is_archived.is_(False))
+                .count())
+        if getattr(site, "recovery_contacts_enabled", False):
+            out["pending_recovery_contacts"] = (RecoveryContact.query
+                .filter_by(approved=False).count())
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
 def build_sidebar(site, user, current_endpoint, nav_links, url_for):
     """Returns ``[(section_key, section_label, [items...]), ...]`` in
     the order the template should render. Each item is a dict with
@@ -406,8 +531,10 @@ def build_sidebar(site, user, current_endpoint, nav_links, url_for):
         })
 
     intergroup_items = _build_intergroup_items(site, user, current_endpoint, url_for)
+    forms_items = _build_forms_items(site, user, current_endpoint, url_for)
     sections = [
         ("main",       None,         main_items),
+        ("forms",      "Forms",      forms_items),
         ("intergroup", "Intergroup", intergroup_items),
         ("external",   "External",   external_items),
         ("admin",      "Admin",      admin_items),
@@ -426,7 +553,7 @@ def build_sidebar(site, user, current_endpoint, nav_links, url_for):
         # index is higher. This keeps a saved [main, external, admin]
         # order rendering [main, intergroup, external, admin] without
         # bumping admin off the bottom.
-        canonical = ("main", "intergroup", "external", "admin")
+        canonical = ("main", "forms", "intergroup", "external", "admin")
         canonical_idx = {k: i for i, k in enumerate(canonical)}
         missing = [k for k in canonical if k not in seen]
         order = list(explicit)

@@ -26,7 +26,7 @@
         {% endwith %}
       </header>
       <div class="fe-submission-card">
-        {% if _intro %}
+        {% if _intro and not cform_success %}
         <div class="fe-submission-intro">{{ _intro|markdown_block }}</div>
         {% endif %}
         {% include form_body_partial or "frontend/_submission_form_body.html" %}

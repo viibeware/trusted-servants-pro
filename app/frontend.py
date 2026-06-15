@@ -4180,7 +4180,7 @@ def contact_submit():
 
     sub = ContactSubmission(
         name=name, email=email, phone=phone, subject=subject,
-        message=message, ip_address=(request.remote_addr or "")[:64],
+        message=message, ip_address=(_client_ip() or "")[:64],
     )
     _db.session.add(sub)
     _db.session.commit()
@@ -4805,6 +4805,7 @@ def _render_custom_form(cf, ctx, errors=None, values=None, success_message=None)
     thank-you path (form body suppressed; thank-you copy rendered
     where the form would have sat)."""
     import json as _json
+    from . import dynbg
     blocks = []
     if cf.blocks_json:
         try:
@@ -4866,6 +4867,12 @@ def _render_custom_form(cf, ctx, errors=None, values=None, success_message=None)
         subheading_override="",
         intro_override=cf.description,
         form_body_partial="frontend/_custom_form_body.html",
+        # Per-form dynamic background. When the CustomForm has its own
+        # dynbg picked, the dispatcher uses it in place of the shared
+        # submission-form background; when unset (both falsy) it falls
+        # through to the site-wide submission-form dynbg above.
+        cform_dynbg_key=(dynbg.normalize(cf.bg_dynamic_key) if cf.bg_dynamic_key else None),
+        cform_dynbg_config=cf.bg_dynbg_config_json,
         # Body-partial context.
         cform=cf,
         cform_blocks=blocks,
@@ -5009,7 +5016,7 @@ def custom_form_submit(slug):
     sub = _FS(
         form_id=cf.id,
         payload_json=_json.dumps({"fields": payload, "files": file_attachments}),
-        ip=request.remote_addr or "unknown",
+        ip=_client_ip(),
     )
     _db.session.add(sub)
     _db.session.commit()
@@ -5064,6 +5071,8 @@ def custom_form_submit(slug):
                     submitted=_email_submission_local(site, sub.created_at),
                     ip=sub.ip,
                     public_url=url_for("frontend.page_detail", slug=cf.slug, _external=True),
+                    detail_url=url_for("main.frontend_form_submission_detail",
+                                       sub_id=sub.id, _external=True),
                     fields=_email_submission_fields(blocks, payload),
                     files=[{"name": info.get("original"), "label": _labels.get(n)}
                            for n, info in file_attachments.items()],
@@ -5208,6 +5217,30 @@ def _email_submission_fields(blocks, payload):
             entry["value"] = "" if val is None else str(val)
         out.append(entry)
     return out
+
+
+def _client_ip():
+    """Client IP for logging a submission, preferring an IPv4 form.
+
+    Resolution order:
+      1. Cloudflare's optional ``CF-Pseudo-IPv4`` header — an IPv4 the CF
+         edge derives for IPv6 visitors when "Pseudo IPv4" is enabled.
+      2. The ProxyFix / CF-Connecting-IP resolved ``remote_addr``.
+    An IPv4-mapped IPv6 address (``::ffff:1.2.3.4``) is unwrapped to its
+    dotted-quad IPv4. A genuine IPv6 visitor (no IPv4 equivalent) is
+    returned as-is — that's their real address."""
+    import ipaddress
+    pseudo = (request.headers.get("CF-Pseudo-IPv4") or "").strip()
+    raw = pseudo or (request.remote_addr or "")
+    if not raw:
+        return "unknown"
+    try:
+        addr = ipaddress.ip_address(raw)
+        if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
+            return str(addr.ipv4_mapped)
+    except ValueError:
+        pass
+    return raw
 
 
 @bp.route("/siteindex")

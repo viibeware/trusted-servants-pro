@@ -1921,6 +1921,10 @@ def _migrate_sqlite(app):
         for col, ddl in (("is_archived", "BOOLEAN NOT NULL DEFAULT 0"),
                          ("archived_at", "DATETIME")):
             add("form_submission", col, ddl)
+        for col, ddl in (("submission_roles_csv", "VARCHAR(200)"),
+                         ("bg_dynamic_key", "VARCHAR(64)"),
+                         ("bg_dynbg_config_json", "TEXT")):
+            add("custom_form", col, ddl)
         for col, ddl in (("contact_form_enabled",       "BOOLEAN NOT NULL DEFAULT 0"),
                          ("contact_form_to",            "VARCHAR(500)"),
                          ("contact_form_heading",       "VARCHAR(200)"),

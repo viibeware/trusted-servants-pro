@@ -3551,6 +3551,22 @@ button.chip { font-family: inherit; }
 .checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-bottom: 12px; }
 .check { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); cursor: pointer; }
 .check input { accent-color: var(--brand); }
+/* Per-form "Submission access" role checkboxes. Left-aligned column of
+   pills, each with the checkbox to the LEFT of its label — the higher
+   specificity beats ``.form label { flex-direction: column }`` (the edit
+   page is one big .form), which was stacking the box above the text. */
+/* Topbar "Visible to: Admins · Editors …" chips on the forms backend
+   pages (submission inbox + form editor) — at-a-glance role visibility. */
+.fe-vis-roles { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.fe-vis-roles-label { color: var(--muted); font-size: 0.8rem; font-weight: 600; }
+.fe-vis-role {
+  display: inline-block; padding: 2px 10px; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  color: var(--text); font-size: 0.76rem; font-weight: 700; white-space: nowrap;
+}
+.fe-form-access-roles { display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; padding: 1rem; }
+.fe-form-access-roles .check { display: flex; flex-direction: row; align-items: center; gap: 10px; }
+.fe-form-access-roles .check input { width: 16px; height: 16px; margin: 0; flex: 0 0 auto; }
 
 .lib-block { margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border); }
 
@@ -4319,6 +4335,9 @@ button.chip { font-family: inherit; }
 .sidebar-notif-icon .icon { width: 16px; height: 16px; display: block; }
 .sidebar-notif-label { flex: 1; text-align: left; }
 .sidebar-notif-chip { flex: 0 0 auto; margin-left: 0; }
+/* Specificity 0,2,0 beats the base .nav-badge (0,1,0) defined later in
+   source order, so the orange wins over the brand-blue default. */
+.nav-badge.sidebar-notif-chip { background: #f59e0b; color: #fff; }
 .sidebar-notif-chip[hidden] { display: none; }
 
 /* Dashboard button — same pill treatment as the Notifications / Watchtower
@@ -15519,6 +15538,177 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
 }
 .fe-submission-raw { background: var(--panel-2); padding: .75rem;
   border-radius: 8px; overflow-x: auto; font-size: .8rem; }
+
+/* ── Submission detail — elegant "card" presentation that mirrors the
+   branded submission email: gradient accent bar, an identity hero, then
+   one labelled row per answered field with options as check pills and
+   live email/phone/file links. Theme-aware via design tokens. ─────── */
+.fe-sub-detail { max-width: 760px; }
+.fe-sub-detail-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, .07);
+}
+.fe-sub-detail-accent {
+  height: 6px;
+  background: linear-gradient(90deg, #0b5cff 0%, #5164ff 50%, #2ad4c3 100%);
+}
+.fe-sub-detail-hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 24px 28px;
+  border-bottom: 1px solid var(--border);
+}
+.fe-sub-detail-avatar {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, #0b5cff, #5164ff);
+  box-shadow: 0 6px 18px rgba(11, 92, 255, .35);
+}
+.fe-sub-detail-hero-main { min-width: 0; }
+.fe-sub-detail-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--brand, #0b5cff);
+  margin-bottom: 4px;
+}
+.fe-sub-detail-archived {
+  color: #b45309;
+  background: rgba(245, 158, 11, .16);
+  padding: 1px 7px;
+  border-radius: 999px;
+  letter-spacing: .02em;
+}
+.fe-sub-detail-name {
+  margin: 0;
+  font-size: 25px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--text);
+  word-break: break-word;
+}
+.fe-sub-detail-metarow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.fe-sub-detail-metarow span { display: inline-flex; align-items: center; gap: 5px; }
+.fe-sub-detail-metarow .icon { width: 14px; height: 14px; opacity: .8; }
+.fe-sub-detail-contact { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.fe-sub-detail-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.fe-sub-detail-chip:hover { border-color: var(--brand, #0b5cff); color: var(--brand, #0b5cff); }
+.fe-sub-detail-chip .icon { width: 15px; height: 15px; }
+
+.fe-sub-detail-fields { padding: 6px 28px; }
+.fe-sub-detail-field { padding: 16px 0; border-bottom: 1px solid var(--border); }
+.fe-sub-detail-field:last-child { border-bottom: 0; }
+.fe-sub-detail-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 7px;
+}
+.fe-sub-detail-value {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre-line;
+  word-break: break-word;
+}
+.fe-sub-detail-link { color: var(--brand, #0b5cff); text-decoration: none; font-weight: 600; }
+.fe-sub-detail-link:hover { text-decoration: underline; }
+
+.fe-sub-detail-opts { display: flex; flex-direction: column; gap: 8px; }
+.fe-sub-detail-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.fe-sub-detail-opt-tick {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--brand, #0b5cff);
+  color: #fff;
+}
+.fe-sub-detail-opt-tick.is-square { border-radius: 6px; }
+.fe-sub-detail-opt-tick .icon { width: 13px; height: 13px; stroke-width: 3; }
+
+.fe-sub-detail-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 15px;
+  text-decoration: none;
+  max-width: 100%;
+}
+.fe-sub-detail-file:hover { border-color: var(--brand, #0b5cff); }
+.fe-sub-detail-file-icon { color: var(--brand, #0b5cff); display: inline-flex; }
+.fe-sub-detail-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fe-sub-detail-file-go { margin-left: auto; opacity: .6; display: inline-flex; }
+.fe-sub-detail-file .icon { width: 16px; height: 16px; }
+
+.fe-sub-detail-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 18px 28px;
+  background: var(--panel-2);
+  border-top: 1px solid var(--border);
+}
+.fe-sub-detail-foot form { margin: 0; }
+
+[data-theme="dark"] .fe-sub-detail-card { box-shadow: 0 12px 36px rgba(0, 0, 0, .35); }
+
+@media (max-width: 600px) {
+  .fe-sub-detail-hero { padding: 20px; gap: 14px; }
+  .fe-sub-detail-fields { padding: 4px 20px; }
+  .fe-sub-detail-foot { padding: 16px 20px; }
+  .fe-sub-detail-name { font-size: 21px; }
+}
 
 /* Custom-form field builder. Each field is a card with a head row
    (drag handle + type pill + title + edit/delete buttons) and a

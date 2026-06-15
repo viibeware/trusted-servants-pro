@@ -6,6 +6,61 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.15.5] — 2026-06-15
+
+### Added
+
+- **Per-form submission access for non-admin roles.** Each custom form can now
+  grant Editors / Intergroup Members / Viewers access to *its* submissions only.
+  Granted roles get the form in a new sidebar **Forms** section with its own inbox
+  + archive, and can view, archive, delete, and export entries (editing the form
+  itself stays admin-only). The old monolithic "Custom Form Submissions" admin
+  link is retired in favour of this per-form list — shown to admins too. The
+  built-in **Contact Form** inbox and the three module forms (Announcements/Events,
+  Story Submission, Recovery Contacts) now also live in the Forms section.
+- **Per-form submission-count chips.** Each Forms-section inbox carries an orange
+  number chip showing its un-archived submission count, updated live by the
+  attention-count poller and re-hidden at zero.
+- **Custom-form submissions in the Notifications Center.** New submissions surface
+  as notifications (role-gated per form, 14-day window), each linking to the
+  submission detail page.
+- **Dynamic backgrounds for custom forms.** Each custom form's edit page has a
+  **Background** card with the full dynbg picker (presets, overlays, custom
+  palette, knobs). When set it overrides the site-wide Forms background on that
+  form's public page; when unset it inherits the shared background as before.
+- **"View submission in app" button** in the submission notification email, linking
+  straight to that submission's detail page in the backend.
+- **CSV export for role-gated managers.** Non-admin managers can download a form's
+  entries as CSV, same as admins.
+- **"Submit another response" button** on a custom form's thank-you page, re-opening
+  the empty form for another entry.
+
+### Changed
+
+- **Submission detail page redesigned** to match the branded submission email:
+  gradient accent bar, an identity hero (avatar, submitter name, form, submitted
+  time / IP / field count, clickable email & phone chips), one labelled row per
+  answered field with selected options as check pills and live email/phone/file
+  links, and a clean actions footer. Theme-aware.
+- **Submission progress UX.** Submitting a custom form now locks the form, swaps the
+  button into a spinner state, and shows an elegant blurred overlay ("Submitting… —
+  please keep this page open") so visitors see clear progress during a slow upload
+  and don't double-submit.
+- **The custom-form thank-you page is cleaner** — the form description is hidden once
+  the green confirmation appears, so only the confirmation (and the "Submit another"
+  button) shows.
+- **Submission backend pages show their visibility roles** in the topbar, and the
+  per-form **Submission access** card was restyled (left-aligned checkboxes).
+- **Notifications sidebar chip is now orange.**
+- Removed the now-redundant form-switcher dropdown from the submission pages (each
+  form has its own sidebar entry).
+
+### Fixed
+
+- **Submission IP capture prefers IPv4.** The submitter's IP now unwraps
+  IPv4-mapped IPv6 and honours Cloudflare's Pseudo-IPv4 header, so submissions show
+  a real IPv4 where one exists (genuine IPv6-only clients still show IPv6).
+
 ## [2.15.4] — 2026-06-15
 
 ### Added

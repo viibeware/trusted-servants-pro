@@ -1,47 +1,42 @@
 {% extends "base.html" %}
-{% block heading %}Custom Form Submissions{% endblock %}
-{% block heading_help %}Everything visitors have submitted through your custom forms. Filter by form, archive what you've handled, and download a form's entries as a CSV. Most recent 200 shown.{% endblock %}
+{% block heading %}{{ selected_form.title }}{% endblock %}
+{% block heading_help %}Submissions to <b>{{ selected_form.title }}</b> — switch to the Archived tab to view filed entries, archive what you've handled, and download entries as a CSV. Most recent 200 shown.{% endblock %}
 {% block top_actions %}
-<a class="btn" href="{{ url_for('main.frontend_forms') }}">{{ icon('settings') }} Manage forms</a>
+{% set _rl = {'editor': 'Editors', 'intergroup_member': 'Intergroup Members', 'viewer': 'Viewers'} %}
+<span class="fe-vis-roles" title="Who can manage this form's submissions">
+  <span class="fe-vis-roles-label">Visible to</span>
+  <span class="fe-vis-role">Admins</span>
+  {% for r in selected_form.submission_role_set() %}<span class="fe-vis-role">{{ _rl.get(r, r) }}</span>{% endfor %}
+</span>
+{% if can_edit_form %}
+<a class="btn" href="{{ url_for('main.frontend_custom_form_edit', form_id=selected_form.id) }}">{{ icon('settings') }} Edit form</a>
+{% endif %}
 {% endblock %}
 {% block content %}
 <section class="card">
   <div class="card-head">
-    <h2>{% if show_archived %}Archived submissions{% else %}Submissions{% endif %}</h2>
+    <h2>{% if show_archived %}Archived{% else %}Inbox{% endif %}</h2>
     <span class="muted smaller">
       {{ submissions|length }} row{{ '' if submissions|length == 1 else 's' }} shown
     </span>
   </div>
 
-  {# Active / Archived tabs — counts scoped to the current form filter. #}
+  {# Active / Archived tabs — scoped to this form. #}
   <div class="fe-subs-tabs">
     <a class="fe-subs-tab{% if not show_archived %} is-active{% endif %}"
-       href="{{ url_for('main.frontend_form_submissions', form=selected_form_id or none) }}">
+       href="{{ url_for('main.frontend_form_submissions', form=selected_form_id) }}">
       Active <span class="fe-subs-tab-count">{{ active_count }}</span>
     </a>
     <a class="fe-subs-tab{% if show_archived %} is-active{% endif %}"
-       href="{{ url_for('main.frontend_form_submissions', form=selected_form_id or none, archived=1) }}">
+       href="{{ url_for('main.frontend_form_submissions', form=selected_form_id, archived=1) }}">
       Archived <span class="fe-subs-tab-count">{{ archived_count }}</span>
     </a>
   </div>
 
   <form method="get" class="form fe-submissions-filter">
     {% if show_archived %}<input type="hidden" name="archived" value="1">{% endif %}
-    <label>Filter by form
-      <select name="form" onchange="this.form.submit()">
-        <option value="" {% if not selected_form_id %}selected{% endif %}>— All forms —</option>
-        {% for f in forms %}
-        <option value="{{ f.id }}" {% if selected_form_id == f.id %}selected{% endif %}>{{ f.title }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    {% if selected_form_id %}
-    <a class="btn btn-sm" href="{{ url_for('main.frontend_form_submissions', archived=(1 if show_archived else none)) }}">Clear filter</a>
     {% if submissions %}
     <a class="btn btn-sm" href="{{ url_for('main.frontend_form_submissions_csv', form=selected_form_id, archived=(1 if show_archived else none)) }}">{{ icon('download') }} Download CSV</a>
-    {% endif %}
-    {% else %}
-    <span class="muted smaller fe-subs-csv-hint">Pick a form above to download its entries as CSV.</span>
     {% endif %}
   </form>
 
