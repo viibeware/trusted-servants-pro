@@ -15756,6 +15756,51 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
   .fe-sub-detail-name { font-size: 21px; }
 }
 
+/* ── Submission modal — the detail card rendered as a popup: sticky
+   identity header + close, a scrollable email-style body, and a sticky
+   Archive/Delete footer. Reuses the .modal / .modal-panel flex-column
+   chrome, so header + footer stay put while only the body scrolls. ── */
+.fe-sub-modal-panel { max-width: 720px; }
+.fe-sub-modal-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.fe-sub-modal-head-id { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.fe-sub-modal-avatar { width: 44px; height: 44px; font-size: 1.05rem; flex: 0 0 auto; }
+.fe-sub-modal-avatar.is-anon { background: var(--border); color: var(--muted); box-shadow: none; }
+.fe-sub-modal-head-text { min-width: 0; }
+.fe-sub-modal-name {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--text);
+  word-break: break-word;
+}
+.fe-sub-modal-metarow { margin-top: 3px; }
+.fe-sub-modal-close { flex: 0 0 auto; }
+.fe-sub-modal-body { flex: 1 1 auto; overflow-y: auto; padding: 2px 22px 10px; }
+.fe-sub-modal-body .fe-sub-detail-fields { padding: 0; max-width: none; }
+.fe-sub-modal-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 22px;
+  border-top: 1px solid var(--border);
+  background: var(--panel-2);
+}
+@media (max-width: 600px) {
+  .fe-sub-modal-head, .fe-sub-modal-foot { padding: 14px 16px; }
+  .fe-sub-modal-body { padding: 2px 16px 8px; }
+  .fe-sub-modal-name { font-size: 1.1rem; }
+}
+
 /* Custom-form field builder. Each field is a card with a head row
    (drag handle + type pill + title + edit/delete buttons) and a
    collapsed body. Card drag-and-drop reorder mirrors the dashboard-

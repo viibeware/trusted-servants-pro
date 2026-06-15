@@ -139,7 +139,17 @@
               {% endwith %}
             </div>
             <div class="fe-submission-panel-actions">
-              <a class="btn btn-sm btn-primary" href="{{ url_for('main.frontend_form_submission_detail', sub_id=sub.id) }}">{{ icon('external-link') }} View Submission</a>
+              <button type="button" class="btn btn-sm btn-primary" data-view-submission
+                      data-sub-id="{{ sub.id }}"
+                      data-sub-name="{{ p.display_name }}"
+                      data-sub-initial="{{ initial }}"
+                      data-sub-anon="{{ '1' if anonymous else '' }}"
+                      data-sub-form="{{ sub.form.title if sub.form else '' }}"
+                      data-sub-when="{{ sub.created_at|fmt_site_local('%b %-d, %Y · %-I:%M %p') }}"
+                      data-sub-ip="{{ sub.ip or 'unknown' }}"
+                      data-archive-url="{{ url_for('main.frontend_form_submission_archive', sub_id=sub.id) }}"
+                      data-delete-url="{{ url_for('main.frontend_form_submission_delete', sub_id=sub.id) }}"
+                      data-seen-url="{{ url_for('main.frontend_form_submission_seen', sub_id=sub.id) }}">{{ icon('maximize-2') }} View Submission</button>
             </div>
           </div>
         </div>
@@ -218,6 +228,110 @@
       });
     });
     refresh();
+  })();
+  </script>
+
+  {# Submission modal — opened by a row's "View Submission" button. Styled
+     like the detail page: gradient accent, a sticky identity header with
+     the close button, a scrollable email-style body, and a sticky footer
+     with Archive/Restore + Delete. Populated client-side from the row's
+     data + its already-rendered inline fields, so no round-trip. #}
+  <div class="modal fe-sub-modal" id="submission-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel fe-sub-modal-panel" role="dialog" aria-modal="true" aria-labelledby="fe-sub-modal-name">
+      <div class="fe-sub-detail-accent" aria-hidden="true"></div>
+      <header class="fe-sub-modal-head">
+        <div class="fe-sub-modal-head-id">
+          <span class="fe-sub-detail-avatar fe-sub-modal-avatar" data-sub-avatar aria-hidden="true"></span>
+          <div class="fe-sub-modal-head-text">
+            <div class="fe-sub-detail-eyebrow" data-sub-eyebrow></div>
+            <h2 class="fe-sub-modal-name" id="fe-sub-modal-name" data-sub-name></h2>
+            <div class="fe-sub-modal-metarow muted smaller" data-sub-meta></div>
+          </div>
+        </div>
+        <button type="button" class="icon-btn fe-sub-modal-close" data-close aria-label="Close">{{ icon('x') }}</button>
+      </header>
+      <div class="fe-sub-modal-body" data-sub-body></div>
+      <footer class="fe-sub-modal-foot">
+        <form method="post" data-sub-archive-form style="margin:0;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% if show_archived %}
+          <input type="hidden" name="target" value="0">
+          <button type="submit" class="btn">{{ icon('rotate-ccw') }} Restore submission</button>
+          {% else %}
+          <input type="hidden" name="target" value="1">
+          <button type="submit" class="btn">{{ icon('box') }} Archive submission</button>
+          {% endif %}
+        </form>
+        <form method="post" data-sub-delete-form style="margin:0; margin-left:auto;"
+              onsubmit="return confirm('Delete this submission permanently?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-danger">{{ icon('trash') }} Delete</button>
+        </form>
+      </footer>
+    </div>
+  </div>
+  <script>
+  (function () {
+    var modal = document.getElementById('submission-modal');
+    var list = document.querySelector('[data-subs-list]');
+    if (!modal || !list) return;
+    var elName = modal.querySelector('[data-sub-name]');
+    var elAvatar = modal.querySelector('[data-sub-avatar]');
+    var elEyebrow = modal.querySelector('[data-sub-eyebrow]');
+    var elMeta = modal.querySelector('[data-sub-meta]');
+    var elBody = modal.querySelector('[data-sub-body]');
+    var archiveForm = modal.querySelector('[data-sub-archive-form]');
+    var deleteForm = modal.querySelector('[data-sub-delete-form]');
+
+    function open(btn) {
+      var id = btn.getAttribute('data-sub-id');
+      var name = btn.getAttribute('data-sub-name') || 'Submission';
+      elName.textContent = name;
+      elAvatar.textContent = (btn.getAttribute('data-sub-initial') || '?');
+      elAvatar.classList.toggle('is-anon', btn.getAttribute('data-sub-anon') === '1');
+      elEyebrow.textContent = btn.getAttribute('data-sub-form') || '';
+      var when = btn.getAttribute('data-sub-when') || '';
+      var ip = btn.getAttribute('data-sub-ip') || '';
+      elMeta.textContent = [when ? 'Submitted ' + when : '', ip ? 'IP ' + ip : '']
+                             .filter(Boolean).join('  ·  ');
+      // Body: clone the already-rendered inline field rows for this row.
+      elBody.innerHTML = '';
+      var src = document.querySelector('#sub-panel-' + id + ' .fe-sub-detail-fields');
+      if (src) elBody.appendChild(src.cloneNode(true));
+      // Wire the action forms to this submission.
+      archiveForm.setAttribute('action', btn.getAttribute('data-archive-url'));
+      deleteForm.setAttribute('action', btn.getAttribute('data-delete-url'));
+      // Show (mirrors the app's openModal): the global [data-close] +
+      // Escape handlers in app.js close it.
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      elBody.scrollTop = 0;
+      var closeBtn = modal.querySelector('.fe-sub-modal-close');
+      if (closeBtn) closeBtn.focus();
+      // Mark seen (the modal replaced the detail-page view that used to do
+      // this) and update the sidebar count chip live. Fire-and-forget; the
+      // global fetch wrapper adds the CSRF header.
+      var seenUrl = btn.getAttribute('data-seen-url');
+      if (seenUrl) {
+        fetch(seenUrl, { method: 'POST', credentials: 'same-origin',
+                         headers: { 'X-Requested-With': 'fetch' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) {
+            if (!d || !d.ok) return;
+            document.querySelectorAll('[data-live-chip="form_submissions_' + d.form_id + '"]')
+              .forEach(function (chip) { chip.textContent = d.count; chip.hidden = !d.count; });
+          }).catch(function () {});
+      }
+    }
+
+    list.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-view-submission]');
+      if (!btn) return;
+      e.preventDefault();
+      open(btn);
+    });
   })();
   </script>
   {% else %}

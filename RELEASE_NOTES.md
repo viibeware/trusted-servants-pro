@@ -7,7 +7,11 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.15.10 — 2026-06-15 (latest) — Link previews for forms + smoother expanding
+## 2.15.11 — 2026-06-15 (latest) — Submissions open in a popup
+
+- **"View Submission" now opens a clean popup** instead of taking you to a separate page. It looks just like the full record — the submitter's name and a close button pinned at the top, the answers scrolling in the middle, and Archive and Delete buttons pinned at the bottom. Close it with the ✕, by clicking outside, or with the Escape key. Opening it also marks the submission as read, just like before.
+
+## 2.15.10 — 2026-06-15 — Link previews for forms + smoother expanding
 
 - **Forms get proper link previews.** When you share a custom form's link (Slack, iMessage, Facebook, Twitter/X, etc.), it now shows a real preview — the form's title and description, plus a preview image you can upload right in the form editor. No image? It falls back to your site's frontend preview image automatically.
 - **Smoother inbox.** Submission rows now glide open and closed with a smooth animation instead of snapping.

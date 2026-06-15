@@ -6,6 +6,17 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.15.11] — 2026-06-15
+
+### Changed
+
+- **"View Submission" now opens a modal** instead of navigating to the detail page.
+  The popup is styled like the detail record: a sticky header (submitter name +
+  close), a scrollable email-style body, and a sticky footer with Archive/Restore +
+  Delete. Closes via the ✕, the backdrop, or Escape. Opening it marks the submission
+  seen and updates the sidebar count chip live (preserving the behaviour the
+  detail-page view had).
+
 ## [2.15.10] — 2026-06-15
 
 ### Added

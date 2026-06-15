@@ -9707,6 +9707,24 @@ def frontend_form_submissions():
                            can_edit_form=current_user.is_admin())
 
 
+@bp.route("/frontend/forms/submissions/<int:sub_id>/seen", methods=["POST"])
+@login_required
+def frontend_form_submission_seen(sub_id):
+    """Mark a submission seen without leaving the inbox — fired when the
+    "View Submission" modal opens (the modal replaced the detail-page
+    navigation, which used to mark it seen). Returns the form's new
+    un-seen, un-archived count so the sidebar chip can update live."""
+    sub = db.session.get(FormSubmission, sub_id) or abort(404)
+    _form_access_or_403(sub.form)
+    if not sub.is_seen:
+        sub.is_seen = True
+        sub.seen_at = datetime.utcnow()
+        db.session.commit()
+    n = FormSubmission.query.filter_by(
+        form_id=sub.form_id, is_archived=False, is_seen=False).count()
+    return jsonify(ok=True, form_id=sub.form_id, count=n)
+
+
 @bp.route("/frontend/forms/submissions/<int:sub_id>")
 @login_required
 def frontend_form_submission_detail(sub_id):
