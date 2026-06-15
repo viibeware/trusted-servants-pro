@@ -9554,11 +9554,23 @@ def frontend_form_submissions():
     field count + file-attachment count."""
     form_id_raw = (request.args.get("form") or "").strip()
     form_id = int(form_id_raw) if form_id_raw.isdigit() else None
-    q = FormSubmission.query
+    show_archived = request.args.get("archived") == "1"
+    q = FormSubmission.query.filter_by(is_archived=show_archived)
     if form_id is not None:
         q = q.filter_by(form_id=form_id)
     submissions = q.order_by(FormSubmission.created_at.desc()).limit(200).all()
     forms = CustomForm.query.order_by(CustomForm.title).all()
+
+    # Active / Archived tab counts, scoped to the form filter when one is
+    # picked so the numbers match what each tab would show.
+    def _count(archived):
+        cq = FormSubmission.query.filter_by(is_archived=archived)
+        if form_id is not None:
+            cq = cq.filter_by(form_id=form_id)
+        return cq.count()
+    active_count = _count(False)
+    archived_count = _count(True)
+
     # Pre-compute per-row preview dicts so the template stays declarative
     # (no payload JSON parsing in Jinja). Mapping by id keeps the lookup
     # cheap inside the loop.
@@ -9567,7 +9579,10 @@ def frontend_form_submissions():
                            submissions=submissions,
                            previews=previews,
                            forms=forms,
-                           selected_form_id=form_id)
+                           selected_form_id=form_id,
+                           show_archived=show_archived,
+                           active_count=active_count,
+                           archived_count=archived_count)
 
 
 @bp.route("/frontend/forms/submissions/<int:sub_id>")
@@ -9600,6 +9615,124 @@ def frontend_form_submission_delete(sub_id):
     db.session.commit()
     flash("Submission deleted.", "success")
     return redirect(url_for("main.frontend_form_submissions", form=form_id))
+
+
+def _submissions_redirect():
+    """Send a bulk action back to the view it came from — same form
+    filter + active/archived tab — read from the POST so the operator
+    lands where they were."""
+    form_id = (request.form.get("form") or "").strip()
+    archived = request.form.get("archived") == "1"
+    kwargs = {}
+    if form_id.isdigit():
+        kwargs["form"] = int(form_id)
+    if archived:
+        kwargs["archived"] = 1
+    return redirect(url_for("main.frontend_form_submissions", **kwargs))
+
+
+@bp.route("/frontend/forms/submissions/bulk-delete", methods=["POST"])
+@admin_required
+def frontend_form_submissions_bulk_delete():
+    """Permanently delete a multi-select set of submissions."""
+    ids = set(request.form.getlist("submission_ids", type=int))
+    if not ids:
+        flash("Pick at least one submission to delete.", "danger")
+        return _submissions_redirect()
+    subs = FormSubmission.query.filter(FormSubmission.id.in_(ids)).all()
+    n = 0
+    for s in subs:
+        db.session.delete(s)
+        n += 1
+    db.session.commit()
+    if n:
+        flash(f"Deleted {n} submission{'' if n == 1 else 's'}.", "success")
+    return _submissions_redirect()
+
+
+@bp.route("/frontend/forms/submissions/bulk-archive", methods=["POST"])
+@admin_required
+def frontend_form_submissions_bulk_archive():
+    """Archive (or, with ``archived=0``, restore) a multi-select set of
+    submissions. Archived rows leave the default list but are kept."""
+    ids = set(request.form.getlist("submission_ids", type=int))
+    target = request.form.get("target") != "0"  # default: archive; "0" restores
+    if not ids:
+        flash("Pick at least one submission first.", "danger")
+        return _submissions_redirect()
+    subs = FormSubmission.query.filter(FormSubmission.id.in_(ids)).all()
+    n = 0
+    for s in subs:
+        s.is_archived = target
+        s.archived_at = datetime.utcnow() if target else None
+        n += 1
+    db.session.commit()
+    if n:
+        verb = "Archived" if target else "Restored"
+        flash(f"{verb} {n} submission{'' if n == 1 else 's'}.", "success")
+    return _submissions_redirect()
+
+
+@bp.route("/frontend/forms/submissions/export.csv")
+@admin_required
+def frontend_form_submissions_csv():
+    """Download one form's submissions as CSV. Columns are the form's
+    fields (by label), in builder order, preceded by Submitted + IP.
+    Respects the active/archived tab so the export matches the view."""
+    import csv as _csv
+    import json as _json
+    from io import StringIO
+    from datetime import timezone as _tz
+    from flask import make_response
+    from .timezone import site_timezone
+    form_id_raw = (request.args.get("form") or "").strip()
+    if not form_id_raw.isdigit():
+        flash("Pick a form from the dropdown before exporting to CSV.", "danger")
+        return redirect(url_for("main.frontend_form_submissions"))
+    cf = db.session.get(CustomForm, int(form_id_raw)) or abort(404)
+    show_archived = request.args.get("archived") == "1"
+    subs = (FormSubmission.query
+            .filter_by(form_id=cf.id, is_archived=show_archived)
+            .order_by(FormSubmission.created_at.desc())
+            .all())
+    fields = _load_form_fields(cf)
+
+    zone = site_timezone(_get_site_setting())
+    def _local(dt):
+        if not dt:
+            return ""
+        return dt.replace(tzinfo=_tz.utc).astimezone(zone).strftime("%Y-%m-%d %H:%M %Z")
+
+    buf = StringIO()
+    w = _csv.writer(buf)
+    w.writerow(["Submitted", "IP"] + [f.get("label") or f.get("name") for f in fields])
+    for s in subs:
+        try:
+            payload = _json.loads(s.payload_json or "{}")
+        except (ValueError, TypeError):
+            payload = {}
+        fvals = payload.get("fields") or {}
+        files = payload.get("files") or {}
+        row = [_local(s.created_at), s.ip or ""]
+        for f in fields:
+            name, ftype = f.get("name"), f.get("type")
+            if ftype == "file":
+                info = files.get(name) or {}
+                row.append(info.get("original") or "")
+            else:
+                v = fvals.get(name)
+                if isinstance(v, (list, tuple)):
+                    v = "; ".join(str(x) for x in v)
+                row.append("" if v is None else str(v))
+        w.writerow(row)
+
+    resp = make_response(buf.getvalue())
+    resp.headers["Content-Type"] = "text/csv; charset=utf-8"
+    suffix = "-archived" if show_archived else ""
+    filename = f"{cf.slug}-submissions{suffix}-{datetime.utcnow():%Y%m%d}.csv"
+    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @bp.route("/frontend/forms/submissions/<int:sub_id>/import-to-stories", methods=["POST"])
@@ -9789,6 +9922,19 @@ def frontend_custom_form_delete(form_id):
     db.session.commit()
     flash(f"Form '{title}' deleted.", "success")
     return redirect(url_for("main.frontend_forms"))
+
+
+@bp.route("/frontend/forms/custom/<int:form_id>/toggle", methods=["POST"])
+@admin_required
+def frontend_custom_form_toggle(form_id):
+    """Inline enable/disable switch for a custom form on the Forms list.
+    JSON in / JSON out so the per-row toggle can fire-and-forget — mirrors
+    ``frontend_form_toggle`` for the registered built-in forms."""
+    cf = db.session.get(CustomForm, form_id) or abort(404)
+    payload = request.get_json(silent=True) or {}
+    cf.enabled = bool(payload.get("enabled"))
+    db.session.commit()
+    return jsonify(id=cf.id, enabled=cf.enabled)
 
 
 @bp.route("/frontend/forms/custom/bulk-delete", methods=["POST"])

@@ -6,6 +6,47 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.15.1] — 2026-06-15
+
+### Added
+
+- **Archiving + bulk actions for Custom Form Submissions.** The submissions page
+  now has **Active / Archived** tabs (with counts scoped to the form filter), a
+  checkbox on every row, and a bulk bar to **Archive**, **Restore**, or
+  **Delete** the selected submissions — the action buttons appear only once a row
+  is ticked, and each action returns you to the same form-filter + tab. New
+  `is_archived` / `archived_at` columns on `FormSubmission` (added in
+  `_migrate_sqlite`, mirroring the `access_request` archive pattern).
+- **Download a form's submissions as CSV.** Filter to a single form and click
+  **Download CSV** to export its entries — columns are the form's fields by label
+  (builder order), preceded by Submitted + IP. Checkbox values are joined with
+  `;`, file fields show the original filename, and timestamps render in the site
+  timezone. Respects the active/archived tab.
+- **Enable/disable toggle on each custom form** in the Forms list, matching the
+  built-in "Available forms" switches (new JSON-in/JSON-out
+  `frontend_custom_form_toggle` route, reusing the existing per-row toggle JS).
+
+### Changed
+
+- **Add field no longer auto-opens the field editor.** Clicking *Add field* drops
+  a collapsed, type-labelled block into the form; its editor modal opens only
+  when you click the block — so adding several fields in a row doesn't keep
+  popping modals open.
+- **The custom-form edit page no longer has collapsible cards.** The Visibility /
+  Settings / Fields cards are always expanded (page-level `data-no-collapse`
+  opt-out for the collapsible-cards feature) — no click-to-collapse title bars.
+
+### Fixed
+
+- **Hidden buttons stayed visible.** `.btn { display: inline-flex }` outranks the
+  UA `[hidden]` rule (equal specificity, later wins), so the bulk "Delete
+  selected" / "Archive" buttons — which hide until a row is ticked — still
+  showed. Added a global `.btn[hidden] { display: none !important }`.
+- **The form-builder card title bars read as clickable** even with collapse
+  disabled. The page-level `data-no-collapse` opt-out now also resets the pointer
+  cursor and the blue heading hover-colour the collapsible cards use to advertise
+  their toggle.
+
 ## [2.15.0] — 2026-06-14
 
 ### Added

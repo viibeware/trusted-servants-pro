@@ -7,7 +7,9 @@
 {% block content %}
 <div class="fe-admin-layout">
   {% include "_frontend_subnav.html" %}
-  <div class="fe-admin-main">
+  {# data-no-collapse: keep the Visibility / Settings / Fields cards always
+     expanded — no click-to-collapse title bars on the form builder. #}
+  <div class="fe-admin-main" data-no-collapse>
 
     {# A freshly-created stub lands here with a placeholder "Untitled form"
        title. Flag the form so the yellow save bar shows immediately — the

@@ -82,7 +82,7 @@
           </label>
           <span class="fe-forms-row-icon" aria-hidden="true">{{ icon('send') }}</span>
           <div class="fe-forms-row-text">
-            <div class="fe-forms-row-name">{{ cf.title }}{% if not cf.enabled %} <span class="muted smaller">· disabled</span>{% endif %}</div>
+            <div class="fe-forms-row-name">{{ cf.title }}</div>
             {% if cf.description %}<p class="fe-forms-row-desc muted small">{{ cf.description }}</p>{% endif %}
             <p class="fe-forms-row-meta muted smaller">
               <code>/{{ cf.slug }}</code>
@@ -91,6 +91,15 @@
             </p>
           </div>
           <div class="fe-forms-row-actions">
+            <label class="mode-toggle fe-forms-row-toggle"
+                   title="Enable or disable this form site-wide">
+              <input type="checkbox"
+                     data-form-toggle="cf-{{ cf.id }}"
+                     data-toggle-url="{{ url_for('main.frontend_custom_form_toggle', form_id=cf.id) }}"
+                     {% if cf.enabled %}checked{% endif %}>
+              <span class="mode-track"><span class="mode-thumb"></span></span>
+              <span class="mode-toggle-label muted smaller" data-form-toggle-label>{{ 'On' if cf.enabled else 'Off' }}</span>
+            </label>
             <a class="btn btn-sm" href="{{ url_for('main.frontend_custom_form_edit', form_id=cf.id) }}">Edit</a>
             <form method="post" action="{{ url_for('main.frontend_custom_form_delete', form_id=cf.id) }}"
                   style="display:inline" onsubmit="return confirm('Delete this form? Existing submissions will also be removed.');">

@@ -3889,6 +3889,11 @@
 (function feCollapsibleCards() {
   const main = document.querySelector(".fe-admin-main");
   if (!main) return;
+  // Page-level opt-out: a [data-no-collapse] main column keeps every card
+  // permanently expanded (no chevron, no click-to-collapse) — e.g. the
+  // custom-form edit page, where collapsing the settings/fields cards just
+  // gets in the way of building the form.
+  if (main.hasAttribute("data-no-collapse")) return;
 
   const STORAGE_KEY = "fe-card-collapse:" + window.location.pathname;
   let stored = {};

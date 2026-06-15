@@ -2809,10 +2809,16 @@ body:not(.embed) .flashes { top: calc(var(--topbar-h, 56px) + 12px); }
 /* Opted-out cards (``data-no-collapse``) are non-interactive — they
    never collapse, so they shouldn't read as clickable: reset the
    pointer cursor + the hover heading-colour shift the collapsible
-   cards use to advertise their toggle. */
+   cards use to advertise their toggle. The opt-out works both per-card
+   (``.card[data-no-collapse]``) and page-wide
+   (``.fe-admin-main[data-no-collapse]``, which disables collapse for
+   every card on the page). */
 .fe-admin-main .card[data-no-collapse],
-.fe-admin-main .card[data-no-collapse] .card-head { cursor: default; }
-.fe-admin-main .card[data-no-collapse] .card-head:hover h2 { color: inherit; }
+.fe-admin-main .card[data-no-collapse] .card-head,
+.fe-admin-main[data-no-collapse] .card,
+.fe-admin-main[data-no-collapse] .card-head { cursor: default; }
+.fe-admin-main .card[data-no-collapse] .card-head:hover h2,
+.fe-admin-main[data-no-collapse] .card-head:hover h2 { color: inherit; }
 /* Re-enable spacing under the head when expanded (we cleared the default
    margin-bottom above so the chevron alignment stays consistent). */
 .fe-admin-main .card:not(.is-collapsed) .card-head { margin-bottom: 12px; }
@@ -3271,6 +3277,11 @@ button.chip { font-family: inherit; }
   font-weight: 600; font-size: 1rem; line-height: 1.25; text-decoration: none;
   box-sizing: border-box; font-family: inherit;
 }
+/* ``.btn`` sets ``display: inline-flex``, which (equal specificity, later
+   in the cascade) outranks the UA ``[hidden] { display: none }`` rule — so
+   a button toggled hidden via the ``hidden`` attribute (e.g. the bulk
+   "Delete selected" / "Archive" actions) would still show. Force it shut. */
+.btn[hidden] { display: none !important; }
 .btn:hover { background: var(--brand-soft); text-decoration: none; }
 .btn-primary { background: var(--access); color: white; border-color: transparent; }
 .btn-primary:hover { background: var(--access-hover); color: white; }
@@ -15308,7 +15319,42 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
    on the right. Anonymous submissions get a muted avatar to fade
    into the rail. Hover lifts the border to brand-blue without
    shifting layout. */
-.fe-submissions-filter { margin-bottom: 1rem; }
+.fe-submissions-filter {
+  margin-bottom: 1rem;
+  display: flex; flex-direction: row; flex-wrap: wrap;
+  align-items: flex-end; gap: 12px;
+}
+.fe-subs-csv-hint { padding-bottom: 8px; }
+/* Active / Archived tabs */
+.fe-subs-tabs { display: flex; gap: 2px; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.fe-subs-tab {
+  padding: 8px 14px; text-decoration: none; color: var(--muted);
+  font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.fe-subs-tab:hover { color: var(--text); }
+.fe-subs-tab.is-active { color: var(--brand, #0B5CFF); border-bottom-color: var(--brand, #0B5CFF); }
+.fe-subs-tab-count {
+  min-width: 18px; padding: 0 6px; border-radius: 999px;
+  background: var(--panel-2); color: var(--muted);
+  font-size: 0.72rem; font-weight: 700; text-align: center;
+}
+.fe-subs-tab.is-active .fe-subs-tab-count {
+  background: color-mix(in srgb, var(--brand, #0B5CFF) 16%, transparent); color: var(--brand, #0B5CFF);
+}
+/* Bulk-action bar + per-row select checkbox */
+.fe-subs-bulkbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 12px; margin-bottom: 10px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+}
+.fe-subs-bulk-all { display: flex; align-items: center; gap: 7px; margin: 0; font-weight: 600; cursor: pointer; }
+.fe-subs-bulk-actions { margin-left: auto; display: flex; gap: 8px; }
+.fe-submission-check {
+  flex: 0 0 auto; display: grid; place-items: center;
+  align-self: stretch; padding: 0 2px 0 14px; cursor: pointer;
+}
+.fe-submission-check input { width: 16px; height: 16px; cursor: pointer; }
 .fe-submissions-list {
   list-style: none;
   margin: 0;
@@ -15323,7 +15369,10 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
   background: var(--panel);
   transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
   overflow: hidden;
+  display: flex;
+  align-items: center;
 }
+.fe-submission-card .fe-submission-card-main { flex: 1 1 auto; min-width: 0; }
 .fe-submission-card:hover {
   border-color: var(--brand, #0B5CFF);
   box-shadow: 0 2px 8px rgba(11, 92, 255, .08);

@@ -7,7 +7,15 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.15.0 — 2026-06-14 (latest) — Custom form builder overhaul
+## 2.15.1 — 2026-06-15 (latest) — Submissions archive + CSV export, and form-list switches
+
+- **Archive and bulk-manage form submissions.** The Custom Form Submissions page now has **Active** and **Archived** tabs, a checkbox on every row, and a bar to **Archive**, **Restore**, or **Delete** the ones you've ticked. Archiving clears handled entries out of your inbox without deleting them.
+- **Download a form's entries as a spreadsheet.** Pick a form from the dropdown and click **Download CSV** to get all its submissions as a CSV — one column per field, with times shown in your timezone.
+- **On/off switch for each custom form.** The Forms list now has an enable/disable toggle next to every custom form, just like the built-in forms.
+- **Calmer form building.** Adding a field drops a labelled block into your form; its editor opens when you click the block (instead of popping open every time). The settings cards on the form editor no longer collapse when you click their titles — they stay open.
+- **Fixes:** bulk action buttons (Delete / Archive) now stay hidden until you select something, and the form-editor card titles no longer look clickable.
+
+## 2.15.0 — 2026-06-14 — Custom form builder overhaul
 
 - **A new "Name" field for your forms.** When building a custom form, pick **Name** from the field list and the public form shows two boxes — **First name** and **Last name**. Submissions show the full name as one tidy entry.
 - **The field editor is now a clean pop-up.** Click a field block to open a centered editor window (instead of the old drop-down panel). Press **Esc**, click the ✕, or click outside to close. Only one editor is open at a time.

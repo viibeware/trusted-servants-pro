@@ -1,19 +1,32 @@
 {% extends "base.html" %}
 {% block heading %}Custom Form Submissions{% endblock %}
-{% block heading_help %}Everything visitors have submitted through your custom forms. Filter by form using the dropdown; click any row for the full detail view. Most recent 200 shown.{% endblock %}
+{% block heading_help %}Everything visitors have submitted through your custom forms. Filter by form, archive what you've handled, and download a form's entries as a CSV. Most recent 200 shown.{% endblock %}
 {% block top_actions %}
 <a class="btn" href="{{ url_for('main.frontend_forms') }}">{{ icon('settings') }} Manage forms</a>
 {% endblock %}
 {% block content %}
 <section class="card">
   <div class="card-head">
-    <h2>All submissions</h2>
+    <h2>{% if show_archived %}Archived submissions{% else %}Submissions{% endif %}</h2>
     <span class="muted smaller">
       {{ submissions|length }} row{{ '' if submissions|length == 1 else 's' }} shown
     </span>
   </div>
 
+  {# Active / Archived tabs — counts scoped to the current form filter. #}
+  <div class="fe-subs-tabs">
+    <a class="fe-subs-tab{% if not show_archived %} is-active{% endif %}"
+       href="{{ url_for('main.frontend_form_submissions', form=selected_form_id or none) }}">
+      Active <span class="fe-subs-tab-count">{{ active_count }}</span>
+    </a>
+    <a class="fe-subs-tab{% if show_archived %} is-active{% endif %}"
+       href="{{ url_for('main.frontend_form_submissions', form=selected_form_id or none, archived=1) }}">
+      Archived <span class="fe-subs-tab-count">{{ archived_count }}</span>
+    </a>
+  </div>
+
   <form method="get" class="form fe-submissions-filter">
+    {% if show_archived %}<input type="hidden" name="archived" value="1">{% endif %}
     <label>Filter by form
       <select name="form" onchange="this.form.submit()">
         <option value="" {% if not selected_form_id %}selected{% endif %}>— All forms —</option>
@@ -23,17 +36,50 @@
       </select>
     </label>
     {% if selected_form_id %}
-    <a class="btn btn-sm" href="{{ url_for('main.frontend_form_submissions') }}">Clear filter</a>
+    <a class="btn btn-sm" href="{{ url_for('main.frontend_form_submissions', archived=(1 if show_archived else none)) }}">Clear filter</a>
+    {% if submissions %}
+    <a class="btn btn-sm" href="{{ url_for('main.frontend_form_submissions_csv', form=selected_form_id, archived=(1 if show_archived else none)) }}">{{ icon('download') }} Download CSV</a>
+    {% endif %}
+    {% else %}
+    <span class="muted smaller fe-subs-csv-hint">Pick a form above to download its entries as CSV.</span>
     {% endif %}
   </form>
 
   {% if submissions %}
-  <ul class="fe-submissions-list">
+  {# Bulk-action bar — revealed by JS. data-form / data-archived ride along
+     on every bulk POST so the action returns to this exact view. #}
+  <div class="fe-subs-bulkbar" data-subs-bulkbar hidden
+       data-form="{{ selected_form_id or '' }}" data-archived="{{ '1' if show_archived else '' }}">
+    <label class="fe-subs-bulk-all">
+      <input type="checkbox" data-subs-select-all aria-label="Select all submissions">
+      <span>Select all</span>
+    </label>
+    <span class="muted smaller" data-subs-bulk-count>0 selected</span>
+    <div class="fe-subs-bulk-actions">
+      {% if show_archived %}
+      <button type="button" class="btn btn-sm" data-subs-action
+              data-bulk-url="{{ url_for('main.frontend_form_submissions_bulk_archive') }}"
+              data-target="0" data-verb="Restore" hidden>{{ icon('rotate-ccw') }} Restore</button>
+      {% else %}
+      <button type="button" class="btn btn-sm" data-subs-action
+              data-bulk-url="{{ url_for('main.frontend_form_submissions_bulk_archive') }}"
+              data-target="1" data-verb="Archive" hidden>{{ icon('box') }} Archive</button>
+      {% endif %}
+      <button type="button" class="btn btn-sm btn-danger" data-subs-action
+              data-bulk-url="{{ url_for('main.frontend_form_submissions_bulk_delete') }}"
+              data-verb="Delete" data-danger="1" hidden>{{ icon('trash') }} Delete</button>
+    </div>
+  </div>
+
+  <ul class="fe-submissions-list" data-subs-list>
     {% for sub in submissions %}
     {% set p = previews[sub.id] %}
     {% set initial = (p.display_name or '?')[:1]|upper %}
     {% set anonymous = (p.display_name == 'Anonymous') %}
     <li class="fe-submission-card{% if anonymous %} is-anonymous{% endif %}">
+      <label class="fe-submission-check" aria-label="Select submission">
+        <input type="checkbox" data-subs-select value="{{ sub.id }}">
+      </label>
       <a class="fe-submission-card-main"
          href="{{ url_for('main.frontend_form_submission_detail', sub_id=sub.id) }}">
         <span class="fe-submission-avatar" aria-hidden="true">{{ initial }}</span>
@@ -82,8 +128,64 @@
     </li>
     {% endfor %}
   </ul>
+
+  <script>
+  (function () {
+    var bar = document.querySelector('[data-subs-bulkbar]');
+    var list = document.querySelector('[data-subs-list]');
+    if (!bar || !list) return;
+    var boxes = function () { return Array.prototype.slice.call(list.querySelectorAll('input[data-subs-select]')); };
+    if (!boxes().length) return;
+    bar.hidden = false;
+    var all = bar.querySelector('[data-subs-select-all]');
+    var count = bar.querySelector('[data-subs-bulk-count]');
+    var actions = Array.prototype.slice.call(bar.querySelectorAll('[data-subs-action]'));
+    function selected() { return boxes().filter(function (b) { return b.checked; }); }
+    function refresh() {
+      var sel = selected(), total = boxes();
+      count.textContent = sel.length + ' selected';
+      // Action buttons only appear once something is ticked.
+      actions.forEach(function (b) { b.hidden = sel.length === 0; });
+      all.checked = sel.length > 0 && sel.length === total.length;
+      all.indeterminate = sel.length > 0 && sel.length < total.length;
+    }
+    list.addEventListener('change', function (e) {
+      if (e.target.matches('input[data-subs-select]')) refresh();
+    });
+    all.addEventListener('change', function () {
+      boxes().forEach(function (b) { b.checked = all.checked; });
+      refresh();
+    });
+    function addHidden(form, name, value) {
+      var i = document.createElement('input');
+      i.type = 'hidden'; i.name = name; i.value = value;
+      form.appendChild(i);
+    }
+    actions.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var ids = selected().map(function (b) { return b.value; });
+        if (!ids.length) return;
+        var noun = ids.length === 1 ? 'submission' : 'submissions';
+        var verb = btn.getAttribute('data-verb') || 'Update';
+        var msg = verb + ' ' + ids.length + ' ' + noun + '?';
+        if (btn.getAttribute('data-danger')) msg += ' This cannot be undone.';
+        if (!confirm(msg)) return;
+        var f = document.createElement('form');
+        f.method = 'POST'; f.action = btn.dataset.bulkUrl;
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) addHidden(f, 'csrf_token', meta.content);
+        addHidden(f, 'form', bar.dataset.form || '');
+        addHidden(f, 'archived', bar.dataset.archived || '');
+        if (btn.dataset.target !== undefined) addHidden(f, 'target', btn.dataset.target);
+        ids.forEach(function (id) { addHidden(f, 'submission_ids', id); });
+        document.body.appendChild(f); f.submit();
+      });
+    });
+    refresh();
+  })();
+  </script>
   {% else %}
-  <p class="muted">No submissions yet{% if selected_form_id %} for this form{% endif %}.</p>
+  <p class="muted">No {% if show_archived %}archived {% endif %}submissions{% if selected_form_id %} for this form{% endif %} yet.</p>
   {% endif %}
 </section>
 {% endblock %}

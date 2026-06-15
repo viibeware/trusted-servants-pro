@@ -3483,3 +3483,8 @@ class FormSubmission(db.Model):
     payload_json = db.Column(db.Text)
     ip = db.Column(db.String(45))
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    # Archive flag — archived rows drop out of the default submissions
+    # list (viewable via the Archived tab) without being deleted, so an
+    # operator can clear the inbox without losing the record.
+    is_archived = db.Column(db.Boolean, nullable=False, default=False)
+    archived_at = db.Column(db.DateTime)
