@@ -15395,11 +15395,18 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
    ``.fe-submission-card`` is ALSO the class the public form page uses
    (frontend.css), so an unscoped ``display:flex`` here leaked onto the
    public form and laid its intro + fields out side-by-side. */
-.fe-submissions-list .fe-submission-card { display: flex; align-items: center; }
-.fe-submissions-list .fe-submission-card .fe-submission-card-main { flex: 1 1 auto; min-width: 0; }
+/* Card = a header row (checkbox + clickable toggle) stacked above an
+   inline detail panel that expands on click. */
+.fe-submissions-list .fe-submission-card { display: block; }
+.fe-submission-row { display: flex; align-items: center; }
+.fe-submission-row .fe-submission-card-main { flex: 1 1 auto; min-width: 0; }
 .fe-submission-card:hover {
   border-color: var(--brand, #0B5CFF);
   box-shadow: 0 2px 8px rgba(11, 92, 255, .08);
+}
+.fe-submission-card.is-expanded {
+  border-color: var(--brand, #0B5CFF);
+  box-shadow: 0 2px 10px rgba(11, 92, 255, .10);
 }
 .fe-submission-card-main {
   display: grid;
@@ -15409,6 +15416,13 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
   padding: 14px 16px;
   text-decoration: none;
   color: inherit;
+  /* <button> resets — this is now a toggle, not a link. */
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .fe-submission-avatar {
   width: 44px;
@@ -15515,16 +15529,32 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
   flex: 0 0 auto;
   transition: transform 120ms ease, color 120ms ease;
 }
-.fe-submission-card:hover .fe-submission-cta {
+.fe-submission-card:hover .fe-submission-cta { color: var(--brand, #0B5CFF); }
+.fe-submission-card-main[aria-expanded="true"] .fe-submission-cta {
+  transform: rotate(180deg);
   color: var(--brand, #0B5CFF);
-  transform: translateX(2px);
 }
 .fe-submission-cta .icon { width: 18px; height: 18px; }
 
+/* Inline detail panel — the full record in the email/detail style. */
+.fe-submission-detail-panel {
+  border-top: 1px solid var(--border);
+  padding: 2px 18px 16px;
+  background: var(--panel-2);
+}
+.fe-submission-detail-panel .fe-sub-detail-fields--inline { padding: 0; max-width: none; }
+.fe-submission-panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
 @media (max-width: 640px) {
-  .fe-submission-card-main { grid-template-columns: auto 1fr; gap: 12px; padding: 12px; }
-  .fe-submission-cta { display: none; }
+  .fe-submission-card-main { gap: 12px; padding: 12px; }
   .fe-submission-when { margin-left: 0; width: 100%; }
+  .fe-submission-detail-panel { padding: 2px 12px 14px; }
 }
 
 [data-theme="dark"] .fe-submission-card:hover {

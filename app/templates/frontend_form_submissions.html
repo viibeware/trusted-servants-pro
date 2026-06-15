@@ -75,59 +75,90 @@
     {% set initial = (p.display_name or '?')[:1]|upper %}
     {% set anonymous = (p.display_name == 'Anonymous') %}
     <li class="fe-submission-card{% if anonymous %} is-anonymous{% endif %}">
-      <label class="fe-submission-check" aria-label="Select submission">
-        <input type="checkbox" data-subs-select value="{{ sub.id }}">
-      </label>
-      <a class="fe-submission-card-main"
-         href="{{ url_for('main.frontend_form_submission_detail', sub_id=sub.id) }}">
-        <span class="fe-submission-avatar" aria-hidden="true">{{ initial }}</span>
-        <div class="fe-submission-body">
-          <div class="fe-submission-head">
-            <span class="fe-submission-name">{{ p.display_name }}</span>
-            <span class="fe-submission-form-pill">
-              {{ icon('send') }} {{ sub.form.title if sub.form else '(deleted form)' }}
-            </span>
-            <span class="fe-submission-when muted smaller">{{ sub.created_at|fmt_site_local('%b %-d, %-I:%M %p') }}</span>
+      <div class="fe-submission-row">
+        <label class="fe-submission-check" aria-label="Select submission">
+          <input type="checkbox" data-subs-select value="{{ sub.id }}">
+        </label>
+        <button type="button" class="fe-submission-card-main" data-subs-toggle
+                aria-expanded="false" aria-controls="sub-panel-{{ sub.id }}">
+          <span class="fe-submission-avatar" aria-hidden="true">{{ initial }}</span>
+          <div class="fe-submission-body">
+            <div class="fe-submission-head">
+              <span class="fe-submission-name">{{ p.display_name }}</span>
+              <span class="fe-submission-form-pill">
+                {{ icon('send') }} {{ sub.form.title if sub.form else '(deleted form)' }}
+              </span>
+              <span class="fe-submission-when muted smaller">{{ sub.created_at|fmt_site_local('%b %-d, %-I:%M %p') }}</span>
+            </div>
+            {% if p.headline %}
+            <div class="fe-submission-headline">{{ p.headline }}</div>
+            {% endif %}
+            <div class="fe-submission-meta">
+              {% if p.email %}
+              <span class="fe-submission-chip">
+                {{ icon('mail') }}
+                <span>{{ p.email }}</span>
+              </span>
+              {% endif %}
+              {% if p.phone %}
+              <span class="fe-submission-chip">
+                {{ icon('phone') }}
+                <span>{{ p.phone }}</span>
+              </span>
+              {% endif %}
+              <span class="fe-submission-chip fe-submission-chip--ghost" title="Fields answered">
+                {{ icon('list') }}
+                <span>{{ p.field_count }} field{{ '' if p.field_count == 1 else 's' }}</span>
+              </span>
+              {% if p.file_count %}
+              <span class="fe-submission-chip fe-submission-chip--ghost" title="File attachments">
+                {{ icon('paperclip') }}
+                <span>{{ p.file_count }}</span>
+              </span>
+              {% endif %}
+              <span class="fe-submission-chip fe-submission-chip--ghost" title="Submitter IP address">
+                {{ icon('globe') }}
+                <span class="mono">{{ sub.ip or 'unknown' }}</span>
+              </span>
+            </div>
           </div>
-          {% if p.headline %}
-          <div class="fe-submission-headline">{{ p.headline }}</div>
-          {% endif %}
-          <div class="fe-submission-meta">
-            {% if p.email %}
-            <span class="fe-submission-chip">
-              {{ icon('mail') }}
-              <span>{{ p.email }}</span>
-            </span>
-            {% endif %}
-            {% if p.phone %}
-            <span class="fe-submission-chip">
-              {{ icon('phone') }}
-              <span>{{ p.phone }}</span>
-            </span>
-            {% endif %}
-            <span class="fe-submission-chip fe-submission-chip--ghost" title="Fields answered">
-              {{ icon('list') }}
-              <span>{{ p.field_count }} field{{ '' if p.field_count == 1 else 's' }}</span>
-            </span>
-            {% if p.file_count %}
-            <span class="fe-submission-chip fe-submission-chip--ghost" title="File attachments">
-              {{ icon('paperclip') }}
-              <span>{{ p.file_count }}</span>
-            </span>
-            {% endif %}
-            <span class="fe-submission-chip fe-submission-chip--ghost" title="Submitter IP address">
-              {{ icon('globe') }}
-              <span class="mono">{{ sub.ip or 'unknown' }}</span>
-            </span>
-          </div>
+          <span class="fe-submission-cta" aria-hidden="true">{{ icon('chevron-down') }}</span>
+        </button>
+      </div>
+      {# Inline expand — the full record in the same email style as the
+         detail page, plus a button through to that detail page. #}
+      <div class="fe-submission-detail-panel" id="sub-panel-{{ sub.id }}" hidden>
+        <div class="fe-sub-detail-fields fe-sub-detail-fields--inline">
+          {% with fields=form_fields, fvals=payloads[sub.id].fields, files=payloads[sub.id].files %}
+          {% include "_submission_fields.html" %}
+          {% endwith %}
         </div>
-        <span class="fe-submission-cta" aria-hidden="true">{{ icon('chevron-right') }}</span>
-      </a>
+        <div class="fe-submission-panel-actions">
+          <a class="btn btn-sm btn-primary" href="{{ url_for('main.frontend_form_submission_detail', sub_id=sub.id) }}">{{ icon('external-link') }} View Submission</a>
+        </div>
+      </div>
     </li>
     {% endfor %}
   </ul>
 
   <script>
+  (function () {
+    // Inline expand/collapse — clicking a row's main button reveals the
+    // full submission record (email-style) below it.
+    var list = document.querySelector('[data-subs-list]');
+    if (list) {
+      list.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-subs-toggle]');
+        if (!btn) return;
+        var panel = document.getElementById(btn.getAttribute('aria-controls'));
+        if (!panel) return;
+        var open = btn.getAttribute('aria-expanded') === 'true';
+        btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+        panel.hidden = open;
+        btn.closest('.fe-submission-card').classList.toggle('is-expanded', !open);
+      });
+    }
+  })();
   (function () {
     var bar = document.querySelector('[data-subs-bulkbar]');
     var list = document.querySelector('[data-subs-list]');

@@ -6,6 +6,17 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.15.9] — 2026-06-15
+
+### Added
+
+- **Expand a submission inline from the inbox.** Each row in a form's submission
+  inbox now expands on click to show the full record in the same email/detail style
+  (labelled fields, checkbox/radio options as check pills, clickable email/phone,
+  file download links) without leaving the list. Each expanded row has a **View
+  Submission** button through to the full detail page. The field rendering is now a
+  shared partial, so the inline view and the detail page stay identical.
+
 ## [2.15.8] — 2026-06-15
 
 ### Added

@@ -9649,10 +9649,25 @@ def frontend_form_submissions():
     active_count = _count(False)
     archived_count = _count(True)
 
+    import json as _json
     previews = {sub.id: _summarise_form_submission(sub) for sub in submissions}
+    # Decoded payloads keyed by submission id, so each row can expand inline
+    # to show the full email-style record without a round-trip. The form's
+    # field set (blocks) is shared across every row.
+    form_fields = _load_form_fields(cf)
+    payloads = {}
+    for sub in submissions:
+        try:
+            data = _json.loads(sub.payload_json or "{}")
+        except (ValueError, TypeError):
+            data = {}
+        payloads[sub.id] = {"fields": data.get("fields") or {},
+                            "files": data.get("files") or {}}
     return render_template("frontend_form_submissions.html",
                            submissions=submissions,
                            previews=previews,
+                           form_fields=form_fields,
+                           payloads=payloads,
                            forms=accessible,
                            selected_form=cf,
                            selected_form_id=cf.id,

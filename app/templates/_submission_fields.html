@@ -1,0 +1,39 @@
+{# Email-style labelled field rows for one form submission. Shared by the
+   submission detail page and the inbox row's inline expand.
+
+   Inputs:
+     fields  — the form's field blocks (shared across a form's submissions)
+     fvals   — this submission's {field_name: value} payload
+     files   — this submission's {field_name: file-info} payload
+#}
+{% set _ns = namespace(shown=0) %}
+{% for f in fields %}
+  {% set name = f.name %}
+  {% set v = fvals.get(name) %}
+  {% if v is not none and v != '' and not (v is iterable and v is not string and v|length == 0) %}
+  {% set _ns.shown = _ns.shown + 1 %}
+  <div class="fe-sub-detail-field">
+    <div class="fe-sub-detail-label">{{ f.label }}</div>
+    <div class="fe-sub-detail-value">{% if f.type in ('checkboxes', 'radio', 'select') -%}
+        {% set _opts = v if (v is iterable and v is not string) else [v] %}
+        <div class="fe-sub-detail-opts">
+          {% for opt in _opts %}
+          <span class="fe-sub-detail-opt"><span class="fe-sub-detail-opt-tick {% if f.type == 'checkboxes' %}is-square{% endif %}" aria-hidden="true">{{ icon('check') }}</span>{{ opt }}</span>
+          {% endfor %}
+        </div>
+      {%- elif f.type == 'file' -%}
+        {% set info = files.get(name) %}
+        {% if info %}<a class="fe-sub-detail-file" href="{{ url_for('public.public_file', filename=info.stored) }}" target="_blank" rel="noopener"><span class="fe-sub-detail-file-icon" aria-hidden="true">{{ icon('file') }}</span><span class="fe-sub-detail-file-name">{{ info.original }}</span><span class="fe-sub-detail-file-go" aria-hidden="true">{{ icon('external-link') }}</span></a>{% else %}<span class="muted">{{ v }}</span>{% endif %}
+      {%- elif f.type == 'email' -%}
+        <a href="mailto:{{ v }}" class="fe-sub-detail-link">{{ v }}</a>
+      {%- elif f.type == 'phone' -%}
+        <a href="tel:{{ v }}" class="fe-sub-detail-link">{{ v }}</a>
+      {%- else -%}
+        {{- v -}}
+      {%- endif %}</div>
+  </div>
+  {% endif %}
+{% endfor %}
+{% if _ns.shown == 0 %}
+<p class="muted" style="padding: 16px 0;">This submission contains no field values.</p>
+{% endif %}

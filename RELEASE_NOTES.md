@@ -7,7 +7,12 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.15.8 — 2026-06-15 (latest) — Quick frontend link + steadier sidebar
+## 2.15.9 — 2026-06-15 (latest) — Expand submissions right in the inbox
+
+- **Read a submission without leaving the list.** Click any row in a form's inbox to expand it and see the whole submission, laid out in the same clean style as the email and the full record — every answer labelled, multiple-choice shown with check marks, email/phone tappable, and files linked. Click again to collapse.
+- **View Submission button.** Each expanded row has a button that opens the full submission detail page.
+
+## 2.15.8 — 2026-06-15 — Quick frontend link + steadier sidebar
 
 - **Jump to the live form.** A form's submissions page now has a **View on frontend** button that opens the form's public page in a new tab.
 - **No more sidebar jump.** Collapsed sidebar sections used to briefly pop open and snap shut every time you changed pages — they now stay put.
