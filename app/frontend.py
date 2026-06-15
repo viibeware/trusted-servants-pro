@@ -2269,11 +2269,27 @@ def story_submission_submit():
             lines += ["", f"Attachment: {s.submission_attachment_original} "
                           f"(download via the Stories admin)"]
         email_body = "\n".join(lines)
+        body_html = _render_branded_email(
+            site, eyebrow="New story submission", title=title,
+            submitted=_email_submission_local(site, s.submitted_at),
+            intro=("Reply directly to this email to reach the submitter."
+                   if submitter_email else None),
+            fields=[
+                _branded_field("Submitter", submitter_name),
+                _branded_field("Email", submitter_email, "email"),
+                _branded_field("Story", s.body),
+            ],
+            files=([{"name": s.submission_attachment_original,
+                     "label": "download via the Stories admin"}]
+                   if s.submission_attachment_original else None),
+            cta_url=url_for("main.stories", show="pending", _external=True),
+            cta_label="Review in the holding tank",
+        )
         try:
             send_mail(site, [r.strip() for r in recipients.split(",") if r.strip()],
                       f"[{site.frontend_title or 'Trusted Servants'}] "
                       f"New story submission — {title}",
-                      email_body,
+                      email_body, body_html=body_html,
                       reply_to=submitter_email or None)
         except Exception:  # noqa: BLE001
             current_app.logger.exception("Story submission email failed")
@@ -2608,9 +2624,51 @@ def submission_submit():
             attachments.append({"path": path, "filename": friendly,
                                 "mime_type": mime_guess})
 
+        # Branded HTML twin — same structured sections as the text body.
+        _event_rows = []
+        if is_event:
+            _event_rows = [
+                _branded_field("Starts", p.event_starts_at.strftime("%a %b %-d, %Y · %-I:%M %p") if p.event_starts_at else None),
+                _branded_field("Ends", p.event_ends_at.strftime("%a %b %-d, %Y · %-I:%M %p") if p.event_ends_at else None),
+                _branded_field("Online", "Yes" if p.is_online else "No"),
+                _branded_field("Location", p.location_name),
+                _branded_field("Address", p.location_address),
+                _branded_field("Maps URL", p.google_maps_url, "url"),
+                _branded_field("Zoom ID", p.zoom_meeting_id),
+                _branded_field("Zoom passcode", p.zoom_passcode),
+                _branded_field("Zoom URL", p.zoom_url, "url"),
+                _branded_field("Website", p.website_url, "url"),
+                _branded_field("Website label", p.website_label),
+            ]
+        body_html = _render_branded_email(
+            site, eyebrow=f"New {kind_label.lower()} submission", title=title,
+            intro="Reply directly to this email to reach the submitter.",
+            sections=[
+                {"heading": "Submitter", "rows": [
+                    _branded_field("Name", submitter_name),
+                    _branded_field("Email", submitter_email, "email"),
+                    _branded_field("Phone", p.submitter_phone, "phone"),
+                    _branded_field("Notes from submitter", p.submitter_notes),
+                ]},
+                {"heading": "Submission", "rows": [
+                    _branded_field("Type", kind_label),
+                    _branded_field("Summary", p.summary),
+                    _branded_field("Full content", p.body),
+                    _branded_field("Featured image", p.featured_image_filename and "Attached to this email"),
+                ]},
+                {"heading": "Event details", "rows": _event_rows},
+                {"heading": "Public contact (shown on the post)", "rows": [
+                    _branded_field("Name", p.contact_name) if is_event else None,
+                    _branded_field("Phone", p.contact_phone, "phone") if is_event else None,
+                    _branded_field("Email", p.contact_email, "email") if is_event else None,
+                ]},
+            ],
+            cta_url=review_url, cta_label="Review in the holding tank",
+        )
+
         send_mail(site, recipients,
                   f"New {kind_label.lower()} submission: {title}",
-                  body, attachments=attachments)
+                  body, body_html=body_html, attachments=attachments)
         # Mail failures are not surfaced to the visitor — the submission
         # is already persisted; the admin can find it in the holding
         # tank regardless of whether the notification email landed.
@@ -4222,6 +4280,24 @@ def contact_submit():
             pass
         body_text = "\n".join(lines)
 
+        # Branded HTML twin (same look as every other form email).
+        body_html = _render_branded_email(
+            site, eyebrow="New contact message",
+            title=(subject or f"Message from {name}"),
+            submitted=_email_submission_local(site, sub.created_at),
+            intro="Reply directly to this email — your reply goes to the visitor.",
+            fields=[
+                _branded_field("Name", name),
+                _branded_field("Email", email, "email"),
+                _branded_field("Phone", phone, "phone"),
+                _branded_field("Subject", subject),
+                _branded_field("Message", message),
+            ],
+            cta_url=url_for("main.contact_form", _external=True),
+            cta_label="View in the admin",
+            meta_text=(f"IP {sub.ip_address}" if sub.ip_address else None),
+        )
+
         # Override the From + Reply-To so admins can hit Reply in
         # their mail client and have it route straight back to the
         # visitor. send_mail() always writes From from SMTP settings
@@ -4229,12 +4305,13 @@ def contact_submit():
         # below. Falls back to send_mail() on failure so an install
         # that customised send_mail() doesn't lose the email path.
         ok, err = _send_with_reply_to(site, recipients, subject_line,
-                                      body_text, reply_to=email,
-                                      reply_to_name=name)
+                                      body_text, body_html=body_html,
+                                      reply_to=email, reply_to_name=name)
         if not ok:
             # Fall back to the standard helper — drops Reply-To but
-            # still gets the message out.
-            ok, err = send_mail(site, recipients, subject_line, body_text)
+            # still gets the message out (HTML twin included).
+            ok, err = send_mail(site, recipients, subject_line, body_text,
+                                body_html=body_html)
         sub.email_sent = bool(ok)
         sub.email_error = (err or None) if not ok else None
         _db.session.commit()
@@ -4504,7 +4581,29 @@ def recovery_contacts_submit():
                     "report it — the request will be discarded and your listing locked "
                     "against further changes for 7 days:", "",
                     disavow_url]
-            send_mail(site, email, subj, "\n".join(msg))
+            if wants_removal:
+                _vtitle = "Confirm your removal request"
+                _vintro = (f"Hi {name}, we received a request to remove you from the "
+                           f"{site_label} Recovery Contacts list. Confirm below and you'll "
+                           "be removed automatically.")
+            else:
+                _vtitle = "Confirm your listing update"
+                _vintro = (f"Hi {name}, we received an update to your {site_label} Recovery "
+                           "Contacts listing. Confirm below and your listing updates "
+                           "automatically.")
+            body_html = _render_branded_email(
+                site, eyebrow="Please confirm", title=_vtitle, intro=_vintro,
+                buttons=[
+                    {"url": confirm_url,
+                     "label": ("Confirm removal" if wants_removal else "Confirm update"),
+                     "style": "primary"},
+                    {"url": disavow_url, "label": "I didn't request this", "style": "danger"},
+                ],
+                meta_text=("Didn't request this? Use the second button to report it — the "
+                           "request is discarded and your listing is locked against further "
+                           "changes for 7 days."),
+            )
+            send_mail(site, email, subj, "\n".join(msg), body_html=body_html)
         # NOTE: removal requests do NOT email the admin at submission time.
         # The admin is only notified once the person clicks the confirmation
         # link (see recovery_contacts_confirm) — so a bad actor can't get
@@ -4536,7 +4635,21 @@ def recovery_contacts_submit():
                 lines += ["", f"Review: {url_for('main.recovery_contacts', _external=True)}"]
             except Exception:  # noqa: BLE001
                 pass
-            send_mail(site, recipients, subject_line, "\n".join(lines))
+            body_html = _render_branded_email(
+                site, eyebrow="New Recovery Contacts entry",
+                title=f"New listing from {name}",
+                intro="It is awaiting your approval and is not yet visible to the public.",
+                fields=[
+                    _branded_field("Name", name),
+                    _branded_field("Phone", (phone + ("" if show_phone else "  (submitter asked to hide)")) if phone else None),
+                    _branded_field("Email", (email + ("" if show_email else "  (submitter asked to hide)")) if email else None),
+                    _branded_field("Available to sponsor", "Yes" if available_to_sponsor else None),
+                ],
+                cta_url=url_for("main.recovery_contacts", _external=True),
+                cta_label="Review in the admin",
+            )
+            send_mail(site, recipients, subject_line, "\n".join(lines),
+                      body_html=body_html)
 
     # Audit log.
     _ip = (request.remote_addr or "")[:64]
@@ -4600,11 +4713,18 @@ def recovery_contacts_confirm(token):
                       or getattr(site, "access_request_to", None) or "").strip()
         if getattr(site, "recovery_contacts_removal_alerts", False) and site.mail_ready() and recipients:
             site_label = (site.frontend_title or "Trusted Servants")
+            body_html = _render_branded_email(
+                site, eyebrow="Recovery Contacts removal confirmed",
+                title=f"{name} was removed from the list",
+                intro=(f"{name} confirmed their removal from the {site_label} Recovery "
+                       "Contacts list and has been taken off it automatically. No action needed."),
+            )
             send_mail(site, recipients,
                       f"Recovery Contacts removal confirmed — {name}",
                       "\n".join([f"{name} confirmed their removal from the {site_label} "
                                  "Recovery Contacts list and has been taken off it automatically.",
-                                 "", "No action needed."]))
+                                 "", "No action needed."]),
+                      body_html=body_html)
     else:
         # Auto-apply update onto the matched entry (or publish as new).
         if target is not None:
@@ -4696,6 +4816,20 @@ def recovery_contacts_disavow(token):
                   or getattr(site, "access_request_to", None) or "").strip()
     if getattr(site, "recovery_contacts_removal_alerts", False) and site.smtp_host and recipients:
         site_label = (site.frontend_title or "Trusted Servants")
+        try:
+            _wt_url = url_for("main.watchtower", _external=True)
+        except Exception:  # noqa: BLE001
+            _wt_url = None
+        body_html = _render_branded_email(
+            site, eyebrow="Reported as not submitted by the owner",
+            title=f"Disavowed {kind} request — {name}",
+            intro=(f"A {kind} request for the {site_label} Recovery Contacts listing "
+                   f"“{name}” was reported as not submitted by the owner. The "
+                   "request has been discarded and the listing locked against further "
+                   "update/removal requests for 7 days."),
+            fields=[_branded_field("Requestor IP", req_ip or "unknown")],
+            cta_url=_wt_url, cta_label="Review in Watchtower",
+        )
         send_mail(site, recipients,
                   f"Recovery Contacts: disavowed {kind} request — {name}",
                   "\n".join([
@@ -4704,7 +4838,8 @@ def recovery_contacts_disavow(token):
                       "", f"Requestor IP: {req_ip or 'unknown'}",
                       "The request has been discarded and the listing locked against "
                       "further update/removal requests for 7 days.",
-                      "", "Open Watchtower to review it and block the IP if needed."]))
+                      "", "Open Watchtower to review it and block the IP if needed."]),
+                  body_html=body_html)
     return _render_rc_confirm(site, status="disavowed", kind=kind, name=name)
 
 
@@ -4771,10 +4906,21 @@ def recovery_contacts_contact():
         f"From: {vname} <{vemail}>",
         "", "─" * 56, "", vmsg, "", "─" * 56,
     ])
+    body_html = _render_branded_email(
+        site, eyebrow="Someone wants to connect",
+        title=f"{vname} would like to connect with you",
+        intro="You received this through the contact list. Reply directly to this email — your reply goes straight to them.",
+        fields=[
+            _branded_field("From", vname),
+            _branded_field("Email", vemail, "email"),
+            _branded_field("Message", vmsg),
+        ],
+    )
     ok, err = _send_with_reply_to(site, entry.email, subject, body,
+                                  body_html=body_html,
                                   reply_to=vemail, reply_to_name=vname)
     if not ok:
-        ok, err = send_mail(site, entry.email, subject, body)
+        ok, err = send_mail(site, entry.email, subject, body, body_html=body_html)
     if not ok:
         flash("Sorry — we couldn't send your message. Please try again later.", "danger")
         return back
@@ -5151,6 +5297,50 @@ def _send_with_reply_to(site, recipients, subject, body_text, body_html=None,
         return True, None
     except Exception as exc:  # noqa: BLE001
         return False, str(exc)
+
+
+def _branded_field(label, value, ftype=None):
+    """One plain labelled row for the branded email. Returns None when the
+    value is empty so callers can build rows with a list comprehension and
+    drop blanks. ``ftype`` ('email'/'phone'/'url') makes the value a link."""
+    if value is None:
+        return None
+    v = str(value).strip()
+    if not v:
+        return None
+    return {"label": label, "value": v, "type": ftype}
+
+
+def _render_branded_email(site, *, eyebrow, title, submitted=None, intro=None,
+                          sections=None, fields=None, files=None,
+                          cta_url=None, cta_label=None, buttons=None,
+                          meta_text=None, meta_url=None, meta_url_label=None):
+    """Render the shared branded notification email (``email/branded.html``)
+    and return the HTML string, or None on any failure so a render error can
+    never block the underlying notification. Accepts either pre-built
+    ``sections`` (list of {heading, rows}) or a flat ``fields`` list (wrapped
+    into a single unheaded section). Rows with a falsy value are dropped."""
+    if sections is None:
+        rows = [f for f in (fields or []) if f]
+        sections = [{"heading": None, "rows": rows}] if rows else []
+    else:
+        sections = [{"heading": s.get("heading"),
+                     "rows": [r for r in (s.get("rows") or []) if r]}
+                    for s in sections]
+        sections = [s for s in sections if s["rows"]]
+    try:
+        return render_template(
+            "email/branded.html",
+            site_name=(getattr(site, "frontend_title", None) if site else None) or "Notification",
+            site_logo_url=_email_site_logo_url(site),
+            tspro_logo_url=url_for("static", filename="img/logo_email.png", _external=True),
+            eyebrow=eyebrow, title=title, submitted=submitted, intro=intro,
+            sections=sections, files=files or [], buttons=buttons or [],
+            cta_url=cta_url, cta_label=cta_label,
+            meta_text=meta_text, meta_url=meta_url, meta_url_label=meta_url_label,
+        )
+    except Exception:  # noqa: BLE001 — HTML is a nicety; never block the send
+        return None
 
 
 def _email_submission_local(site, dt):

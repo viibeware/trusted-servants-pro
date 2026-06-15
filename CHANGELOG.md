@@ -6,6 +6,32 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.15.6] — 2026-06-15
+
+### Added
+
+- **Every form email now uses the branded HTML style.** A new shared template
+  (`email/branded.html`) gives every email the app sends the same polished,
+  mobile-friendly look introduced for custom-form submissions: brand gradient,
+  site logo, labelled field sections (with email/phone/URL links and check-pill
+  options), optional call-to-action button(s), and a "Powered by Trusted Servants
+  Pro" footer. Each email keeps its plain-text version as the multipart fallback.
+  Converted: the **contact form**, **story submission**, **announcements/events
+  submission**, **access request**, **Recovery Contacts** new-listing notification
+  and "contact a listing" message, the Recovery Contacts **verification email**
+  (with **Confirm** + **I didn't request this** buttons), the **removal-confirmed**
+  and **disavow** operator alerts, the **welcome email** for new accounts, and the
+  **password-reset email**.
+
+### Changed
+
+- The Forms-sidebar submission-count chips are **blue** (matching the other
+  attention chips) instead of orange.
+
+### Fixed
+
+- N/A
+
 ## [2.15.5] — 2026-06-15
 
 ### Added

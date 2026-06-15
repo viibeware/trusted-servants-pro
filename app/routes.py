@@ -16591,9 +16591,27 @@ def request_access_submit():
         if meeting_name:
             lines.append(f"Meeting: {meeting_name}")
         lines += ["", "Review pending requests in the portal under Access Requests."]
+        # Branded HTML twin — same style as every other form email.
+        from .frontend import _render_branded_email, _branded_field
+        try:
+            review_url = url_for("main.watchtower_requests", _external=True)
+        except Exception:  # noqa: BLE001
+            review_url = None
+        body_html = _render_branded_email(
+            s, eyebrow="New access request", title=f"Access request from {name}",
+            intro="It's awaiting your review and isn't active yet.",
+            fields=[
+                _branded_field("Name", name),
+                _branded_field("Phone", phone, "phone"),
+                _branded_field("Email", email, "email"),
+                _branded_field("Roles", ", ".join(roles)),
+                _branded_field("Meeting", meeting_name),
+            ],
+            cta_url=review_url, cta_label="Review access requests",
+        )
         ok, err = send_mail(s, s.access_request_to,
                             f"Access request: {name}",
-                            "\n".join(lines))
+                            "\n".join(lines), body_html=body_html)
         if not ok:
             mail_error = err
 

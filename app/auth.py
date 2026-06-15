@@ -182,9 +182,25 @@ def _send_welcome_email(user, plaintext_password):
         "— Trusted Servants Pro",
     ]
     body = "\n".join(lines)
+    from .frontend import _render_branded_email, _branded_field
+    body_html = _render_branded_email(
+        site, eyebrow="Welcome aboard", title=f"Your {portal_name} account",
+        intro=(f"Hello {user.username}, an account has been created for you on "
+               f"{portal_name}. Use the details below to sign in."),
+        fields=[
+            _branded_field("Username", user.username),
+            _branded_field("Email", user.email, "email"),
+            _branded_field("Password", plaintext_password),
+            _branded_field("Role", role_label),
+            _branded_field(f"What your {role_label} role can do",
+                           "\n".join(f"• {p}" for p in perms) if perms else None),
+        ],
+        cta_url=login_url, cta_label="Sign in",
+        meta_text="If you did not expect this email, please ignore it or let an administrator know.",
+    )
     return send_mail(site, user.email,
                      f"Your {portal_name} account",
-                     body)
+                     body, body_html=body_html)
 
 TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
@@ -694,18 +710,28 @@ def _send_reset_email(user, token):
     from .routes import _public_url_for
     link = _public_url_for("auth.reset_password", token=token)
     portal_name = (site.smtp_from_name or "Trusted Servants Pro").strip() or "Trusted Servants Pro"
+    _ttl = f"{RESET_TOKEN_TTL_HOURS} hour{'s' if RESET_TOKEN_TTL_HOURS != 1 else ''}"
     body = (
         f"Hello {user.username},\n\n"
         f"Someone requested a password reset for your {portal_name} account. "
         f"If that was you, follow the link below to choose a new password. "
-        f"The link is valid for {RESET_TOKEN_TTL_HOURS} hour"
-        f"{'s' if RESET_TOKEN_TTL_HOURS != 1 else ''} and can only be used once.\n\n"
+        f"The link is valid for {_ttl} and can only be used once.\n\n"
         f"  {link}\n\n"
         f"If you didn't request this, you can safely ignore this email — "
         f"your password will stay the same.\n\n"
         f"— Trusted Servants Pro"
     )
-    return send_mail(site, user.email, f"Reset your {portal_name} password", body)
+    from .frontend import _render_branded_email
+    body_html = _render_branded_email(
+        site, eyebrow="Password reset", title=f"Reset your {portal_name} password",
+        intro=(f"Hello {user.username}, someone requested a password reset for your "
+               f"{portal_name} account. If that was you, use the button below to choose "
+               f"a new password. The link is valid for {_ttl} and can only be used once."),
+        cta_url=link, cta_label="Choose a new password",
+        meta_text="If you didn't request this, you can safely ignore this email — your password will stay the same.",
+    )
+    return send_mail(site, user.email, f"Reset your {portal_name} password",
+                     body, body_html=body_html)
 
 
 @bp.route("/forgot-password", methods=["GET", "POST"])

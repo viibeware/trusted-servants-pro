@@ -7,7 +7,13 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.15.5 — 2026-06-15 (latest) — Per-form access, a redesigned submission view, and a smoother submit
+## 2.15.6 — 2026-06-15 (latest) — Every email now looks the part
+
+- **All of your site's emails are now beautifully branded.** The polished, mobile-friendly email design we built for form submissions now applies to *every* email Trusted Servants Pro sends — your contact form, story and event/announcement submissions, access requests, Recovery Contacts notifications and the "confirm your listing" verification email, the message visitors send to a listing, account welcome emails, and password-reset emails. Each shows your logo, the details in clean labelled sections, tappable email/phone links, and a clear action button where it helps. (Every email still includes a plain-text version for any client that needs it.)
+- **The "confirm your listing" email** now has two clear buttons — **Confirm** and **I didn't request this** — instead of plain links.
+- **Small touch:** the submission-count chips in the sidebar's Forms section are now blue, matching the rest of the badges.
+
+## 2.15.5 — 2026-06-15 — Per-form access, a redesigned submission view, and a smoother submit
 
 - **Let the right people see the right forms.** Each custom form can now be opened up to specific roles (Editors, Intergroup Members, Viewers) for *its submissions only*. Anyone you grant access to gets that form in a new **Forms** area of the sidebar — with its own inbox and archive — where they can read, archive, delete, and download entries as CSV. Editing the form itself stays admin-only. Admins see this same per-form list, and the Contact Form plus the Announcements/Events, Story, and Recovery Contacts forms now live there too.
 - **See new submissions at a glance.** Every form in the Forms list shows an orange number chip with its unread (un-archived) submission count, and new submissions now appear in the **Notifications Center** as well.

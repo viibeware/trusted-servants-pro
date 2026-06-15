@@ -45,7 +45,7 @@
           forms + the module-form copies). The item carries its own live
           key + server-seeded count so the /_live/counts poller keeps it
           fresh exactly like the hard-coded chips above. -#}
-      {%- if it.badge_live %}<span class="nav-badge nav-badge-warn" data-live-chip="{{ it.badge_live }}" title="{{ it.badge_title or 'New submissions' }}" {% if not it.badge_count %}hidden{% endif %}>{{ it.badge_count or 0 }}</span>{% endif -%}
+      {%- if it.badge_live %}<span class="nav-badge" data-live-chip="{{ it.badge_live }}" title="{{ it.badge_title or 'New submissions' }}" {% if not it.badge_count %}hidden{% endif %}>{{ it.badge_count or 0 }}</span>{% endif -%}
       {%- if it.key == 'web_frontend' and site and not site.frontend_enabled %} <span class="nav-badge nav-badge-muted" title="Public access is off — only signed-in admins and frontend editors can preview">Off</span>{% endif -%}
     </a>
   {% endfor %}

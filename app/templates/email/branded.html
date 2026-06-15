@@ -1,0 +1,182 @@
+{#- Generic branded notification email — the shared HTML style every
+   form-generated email renders through (contact form, story / event /
+   announcement submissions, recovery-contact requests, custom forms).
+   Email-safe: table layout + inline styles only (no <style>, flexbox or
+   grid). Images are hosted URLs so they work across the SMTP and relay
+   transports; the layout reads fine even when a client blocks images.
+
+   Context:
+     site_name, site_logo_url, tspro_logo_url — branding
+     eyebrow      — small uppercase kicker (e.g. "New contact message")
+     title        — large headline (form / subject title)
+     submitted    — optional "submitted at" string
+     intro        — optional short paragraph above the fields
+     cta_url/cta_label — optional primary button
+     sections     — list of {heading (optional), rows: [...]}
+                    each row is either {label, value} (plain) or
+                    {label, options:[{text}], multi} (checkbox/radio)
+     files        — optional list of {name, label}
+     meta_text    — optional small footer line (e.g. "IP 1.2.3.4")
+     meta_url/meta_url_label — optional footer link
+-#}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <title>{{ title }}</title>
+</head>
+<body style="margin:0; padding:0; background:#eef2f8; -webkit-text-size-adjust:100%;">
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0;">{{ eyebrow }}{% if title %} — {{ title }}{% endif %}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f8;">
+    <tr>
+      <td align="center" style="padding:28px 14px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px; max-width:600px; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 10px 34px rgba(15,23,42,0.10); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+
+          {#- Brand gradient accent bar -#}
+          <tr><td style="height:6px; line-height:6px; font-size:0; background:#0b5cff; background-image:linear-gradient(90deg,#0b5cff 0%,#5164ff 50%,#2ad4c3 100%);">&nbsp;</td></tr>
+
+          {#- Header: site logo (or name) + eyebrow -#}
+          <tr>
+            <td align="center" style="padding:30px 36px 8px;">
+              {% if site_logo_url %}
+              <img src="{{ site_logo_url }}" alt="{{ site_name }}" height="38" style="height:38px; width:auto; max-width:240px; display:block; margin:0 auto 4px; border:0;">
+              {% else %}
+              <div style="font-size:22px; font-weight:800; color:#0f172a; letter-spacing:-0.01em;">{{ site_name }}</div>
+              {% endif %}
+              {% if eyebrow %}<div style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#0b5cff; margin-top:10px;">{{ eyebrow }}</div>{% endif %}
+            </td>
+          </tr>
+
+          {#- Title + submitted meta -#}
+          <tr>
+            <td align="center" style="padding:0 36px 18px;">
+              <div style="font-size:25px; font-weight:800; color:#0f172a; line-height:1.25;">{{ title }}</div>
+              {% if submitted %}<div style="font-size:13px; color:#64748b; margin-top:7px;">Submitted {{ submitted }}</div>{% endif %}
+            </td>
+          </tr>
+
+          {#- Optional intro paragraph -#}
+          {% if intro %}
+          <tr>
+            <td style="padding:0 36px 6px;">
+              <div style="font-size:15px; line-height:1.6; color:#334155; white-space:pre-line;">{{ intro }}</div>
+            </td>
+          </tr>
+          {% endif %}
+
+          {#- CTA button(s). ``cta_url``/``cta_label`` render a single primary
+             button; ``buttons`` (list of {url, label, style}) renders one or
+             more stacked buttons — style 'primary' (default, filled blue),
+             'secondary' (outline), or 'danger' (outline red). -#}
+          {% if cta_url %}
+          <tr>
+            <td align="center" style="padding:14px 36px 18px;">
+              <a href="{{ cta_url }}" style="display:inline-block; background:#0b5cff; color:#ffffff; text-decoration:none; font-size:15px; font-weight:700; line-height:1; padding:13px 28px; border-radius:10px;">{{ cta_label or 'Open in app' }} &rarr;</a>
+            </td>
+          </tr>
+          {% endif %}
+          {% if buttons %}
+          <tr>
+            <td align="center" style="padding:14px 36px 18px;">
+              {% for b in buttons %}
+              {% if b.style == 'secondary' %}
+              <a href="{{ b.url }}" style="display:inline-block; margin:5px 0; background:#ffffff; color:#0b5cff; border:1px solid #c7d2e8; text-decoration:none; font-size:15px; font-weight:700; line-height:1; padding:12px 26px; border-radius:10px;">{{ b.label }}</a>
+              {% elif b.style == 'danger' %}
+              <a href="{{ b.url }}" style="display:inline-block; margin:5px 0; background:#ffffff; color:#b91c1c; border:1px solid #f2c2c2; text-decoration:none; font-size:15px; font-weight:700; line-height:1; padding:12px 26px; border-radius:10px;">{{ b.label }}</a>
+              {% else %}
+              <a href="{{ b.url }}" style="display:inline-block; margin:5px 0; background:#0b5cff; color:#ffffff; text-decoration:none; font-size:15px; font-weight:700; line-height:1; padding:13px 28px; border-radius:10px;">{{ b.label }} &rarr;</a>
+              {% endif %}
+              {% if not loop.last %}<br>{% endif %}
+              {% endfor %}
+            </td>
+          </tr>
+          {% endif %}
+
+          {#- Sections of labelled fields -#}
+          {% for section in sections %}
+          {% if section.rows %}
+          <tr>
+            <td style="padding:6px 36px 0;">
+              {% if section.heading %}
+              <div style="font-size:12px; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:#0b5cff; padding:14px 0 2px; border-top:1px solid #e9eef5;">{{ section.heading }}</div>
+              {% endif %}
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0"{% if not section.heading %} style="border-top:1px solid #e9eef5;"{% endif %}>
+                {% for f in section.rows %}
+                <tr>
+                  <td style="padding:16px 0 16px; border-bottom:1px solid #e9eef5;">
+                    <div style="font-size:11px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:#8a96a8; margin-bottom:7px;">{{ f.label }}</div>
+                    {% if f.options is defined %}
+                      {% for opt in f.options %}
+                      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0;"><tr>
+                        <td valign="middle" style="width:24px;">
+                          <span style="display:inline-block; width:18px; height:18px; line-height:18px; text-align:center; background:#0b5cff; border-radius:{{ '9px' if not f.multi else '5px' }}; color:#ffffff; font-size:12px; font-weight:700;">&#10003;</span>
+                        </td>
+                        <td valign="middle" style="padding-left:8px; font-size:15px; line-height:1.4; color:#0f172a; font-weight:600;">{{ opt.text }}</td>
+                      </tr></table>
+                      {% else %}
+                      <div style="font-size:16px; line-height:1.55; color:#94a3b8;">—</div>
+                      {% endfor %}
+                    {% elif f.type == 'email' and f.value %}
+                      <div style="font-size:16px; line-height:1.5;"><a href="mailto:{{ f.value }}" style="color:#0b5cff; text-decoration:none;">{{ f.value }}</a></div>
+                    {% elif f.type == 'phone' and f.value %}
+                      <div style="font-size:16px; line-height:1.5;"><a href="tel:{{ f.value }}" style="color:#0b5cff; text-decoration:none;">{{ f.value }}</a></div>
+                    {% elif f.type == 'url' and f.value %}
+                      <div style="font-size:16px; line-height:1.5; word-break:break-all;"><a href="{{ f.value }}" style="color:#0b5cff; text-decoration:none;">{{ f.value }}</a></div>
+                    {% else %}
+                      <div style="font-size:16px; line-height:1.55; color:#0f172a; white-space:pre-line;">{{ f.value if (f.value is defined and f.value) else '—' }}</div>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </table>
+            </td>
+          </tr>
+          {% endif %}
+          {% endfor %}
+
+          {#- File attachments -#}
+          {% if files %}
+          <tr>
+            <td style="padding:14px 36px 8px;">
+              <div style="background:#f4f7fb; border:1px solid #e9eef5; border-radius:12px; padding:14px 16px;">
+                <div style="font-size:11px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:#8a96a8; margin-bottom:8px;">Attachments</div>
+                {% for file in files %}
+                <div style="font-size:14px; color:#0f172a; margin:3px 0;">&#128206;&nbsp; {{ file.name }}{% if file.label %} <span style="color:#94a3b8;">· {{ file.label }}</span>{% endif %}</div>
+                {% endfor %}
+              </div>
+            </td>
+          </tr>
+          {% endif %}
+
+          {#- Meta footer (IP / link) -#}
+          {% if meta_text or meta_url %}
+          <tr>
+            <td style="padding:14px 36px 22px;">
+              <div style="font-size:12px; color:#94a3b8; line-height:1.6;">
+                {% if meta_url %}<a href="{{ meta_url }}" style="color:#64748b; text-decoration:none;">{{ meta_url_label or meta_url }}</a>{% if meta_text %} &nbsp;·&nbsp; {% endif %}{% endif %}{{ meta_text or '' }}
+              </div>
+            </td>
+          </tr>
+          {% endif %}
+
+          {#- Powered-by footer -#}
+          <tr>
+            <td align="center" style="padding:20px 36px 26px; background:#f7f9fc; border-top:1px solid #e9eef5;">
+              <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+                <td valign="middle" style="font-size:12px; color:#94a3b8;">Powered by</td>
+                {% if tspro_logo_url %}
+                <td valign="middle" style="padding:0 5px 0 7px;"><img src="{{ tspro_logo_url }}" alt="TS" height="15" style="height:15px; width:auto; display:block; border:0;"></td>
+                {% endif %}
+                <td valign="middle" style="font-size:12px; font-weight:700; color:#0b5cff;">Trusted Servants&nbsp;Pro</td>
+              </tr></table>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
