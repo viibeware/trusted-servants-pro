@@ -18,6 +18,10 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
   string).
 - **More breathing room on the public form** — 2rem of space between a custom
   form's description and its first field (scoped to custom forms).
+- **Field help text now renders under the field title, above the field**
+  (previously it sat below the field). The validation error still shows below
+  the field, and help + error are now independent (help no longer disappears
+  when an error is shown). Custom forms only.
 
 ### Fixed
 

@@ -12,6 +12,7 @@ release notes expanded by default and the changelog collapsed.
 - **The "Name" field is one box again.** Custom forms with a Name field now show a single full-name box instead of separate First and Last boxes (and you can give it a placeholder again).
 - **Checkboxes and radio buttons line up properly.** Each option's box now sits to the left of its label, one option per line, instead of stacking the box on top of the text.
 - **A little more space** between a form's description and its first field.
+- **Field help text now sits under the field's title** (above the field) instead of below it.
 
 ## 2.15.2 — 2026-06-15 — Public form cleanup + "View on frontend" buttons
 

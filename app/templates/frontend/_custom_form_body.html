@@ -47,6 +47,18 @@
         {{ block.label }}{% if block.required %} <span class="muted smaller">*</span>{% endif %}
       </span>
 
+      {# Help text sits directly under the title, above the field. #}
+      {% if block.get('help') %}
+        {% if block.type == 'checkboxes' %}
+          {# Checkboxes-only: markdown so the operator can lay out longer
+             instructions, lists, links, emphasis. ``<div>`` (not span) so
+             block-level markdown output (``<p>``, ``<ul>``, …) is legal. #}
+          <div class="fe-custom-form-help fe-custom-form-help--md muted small">{{ block.help|markdown_block }}</div>
+        {% else %}
+          <span class="fe-custom-form-help muted small">{{ block.help }}</span>
+        {% endif %}
+      {% endif %}
+
       {% if block.type == 'text' %}
         <input type="text" name="{{ block.name }}" value="{{ val }}"
                placeholder="{{ block.get('placeholder', '') }}"
@@ -103,18 +115,9 @@
                {% if block.required %}required{% endif %}>
       {% endif %}
 
+      {# Validation error stays below the field. #}
       {% if err %}
       <span class="fe-custom-form-err">{{ err }}</span>
-      {% elif block.get('help') %}
-        {% if block.type == 'checkboxes' %}
-          {# Checkboxes-only: help text renders as markdown so the
-             operator can lay out longer instructions, lists, links,
-             emphasis. ``<div>`` instead of ``<span>`` so block-level
-             markdown output (``<p>``, ``<ul>``, etc.) is legal. #}
-          <div class="fe-custom-form-help fe-custom-form-help--md muted small">{{ block.help|markdown_block }}</div>
-        {% else %}
-          <span class="fe-custom-form-help muted small">{{ block.help }}</span>
-        {% endif %}
       {% endif %}
     </label>
     {% endif %}

@@ -148,12 +148,12 @@
                 <input type="text" name="field_{{ idx }}_placeholder" value="{{ f.get('placeholder', '') }}" maxlength="200">
               </label>
               {% if f.type == 'checkboxes' %}
-              <label data-field-help-wrap>Help text <span class="muted smaller">— Markdown supported. Shown below the checkboxes.</span>
+              <label data-field-help-wrap>Help text <span class="muted smaller">— Markdown supported. Shown under the field title.</span>
                 <textarea name="field_{{ idx }}_help" rows="4" maxlength="2000"
                           placeholder="Add longer instructions here — **bold**, *italic*, [links](https://example.com), - lists, etc.">{{ f.get('help', '') }}</textarea>
               </label>
               {% else %}
-              <label data-field-help-wrap>Help text <span class="muted smaller">(shown below the input)</span>
+              <label data-field-help-wrap>Help text <span class="muted smaller">(shown under the field title)</span>
                 <input type="text" name="field_{{ idx }}_help" value="{{ f.get('help', '') }}" maxlength="500">
               </label>
               {% endif %}
@@ -198,7 +198,7 @@
               <label data-field-placeholder-wrap>Placeholder
                 <input type="text" name="field___IDX___placeholder" value="" maxlength="200">
               </label>
-              <label data-field-help-wrap>Help text <span class="muted smaller">(shown below the input)</span>
+              <label data-field-help-wrap>Help text <span class="muted smaller">(shown under the field title)</span>
                 <input type="text" name="field___IDX___help" value="" maxlength="500">
               </label>
               <label data-field-options-wrap hidden>Options <span class="muted smaller">(one per line)</span>
@@ -328,7 +328,7 @@
         // Rebuild the inner HTML — hint copy stays in sync with the
         // server-side checkboxes branch in the template.
         wrap.innerHTML =
-          'Help text <span class="muted smaller">— Markdown supported. Shown below the checkboxes.</span>' +
+          'Help text <span class="muted smaller">— Markdown supported. Shown under the field title.</span>' +
           '<textarea name="' + name + '" rows="4" maxlength="2000" ' +
           'placeholder="Add longer instructions here — **bold**, *italic*, [links](https://example.com), - lists, etc.">' +
           val + '</textarea>';

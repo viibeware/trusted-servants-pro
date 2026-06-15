@@ -39,6 +39,11 @@
             {{ block.label }}{% if block.required %} <span class="muted smaller">*</span>{% endif %}
           </span>
 
+          {# Help text sits directly under the title, above the field. #}
+          {% if block.get('help') %}
+          <span class="fe-custom-form-help muted small">{{ block.help }}</span>
+          {% endif %}
+
           {% if block.type == 'text' %}
             <input type="text" name="{{ block.name }}" value="{{ val }}"
                    placeholder="{{ block.get('placeholder', '') }}"
@@ -95,8 +100,6 @@
 
           {% if err %}
           <span class="fe-custom-form-err">{{ err }}</span>
-          {% elif block.get('help') %}
-          <span class="fe-custom-form-help muted small">{{ block.help }}</span>
           {% endif %}
         </label>
         {% endif %}
