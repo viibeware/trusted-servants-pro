@@ -6,6 +6,15 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.15.12] — 2026-06-15
+
+### Changed
+
+- **The "View" button is always visible on a submission row**, even while the card
+  is collapsed — moved from inside the expandable panel into the row header (next to
+  the expand chevron), so the full record is one click away without expanding first.
+  Collapses to an icon-only button on narrow screens.
+
 ## [2.15.11] — 2026-06-15
 
 ### Changed

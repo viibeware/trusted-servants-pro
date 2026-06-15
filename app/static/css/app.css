@@ -15400,6 +15400,10 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
 .fe-submissions-list .fe-submission-card { display: block; }
 .fe-submission-row { display: flex; align-items: center; }
 .fe-submission-row .fe-submission-card-main { flex: 1 1 auto; min-width: 0; }
+/* Always-visible "View" button — sits at the right of the row so the
+   full record is reachable even while the card is collapsed. */
+.fe-submission-view-btn { flex: 0 0 auto; margin: 0 14px 0 2px; white-space: nowrap; }
+.fe-submission-view-btn .icon { width: 15px; height: 15px; }
 .fe-submission-card:hover {
   border-color: var(--brand, #0B5CFF);
   box-shadow: 0 2px 8px rgba(11, 92, 255, .08);
@@ -15569,6 +15573,9 @@ body.embed .backups-wrap.backup-edit { max-width: none; }
   .fe-submission-card-main { gap: 12px; padding: 12px; }
   .fe-submission-when { margin-left: 0; width: 100%; }
   .fe-submission-detail-inner { padding: 2px 12px 14px; }
+  /* Compact to an icon-only button on narrow screens. */
+  .fe-submission-view-label { display: none; }
+  .fe-submission-view-btn { margin: 0 8px 0 2px; }
 }
 
 [data-theme="dark"] .fe-submission-card:hover {

@@ -124,6 +124,20 @@
           </div>
           <span class="fe-submission-cta" aria-hidden="true">{{ icon('chevron-down') }}</span>
         </button>
+        {# Always visible (even when the card is collapsed) so the full
+           record is one click away without expanding. Opens the modal. #}
+        <button type="button" class="btn btn-sm fe-submission-view-btn" data-view-submission
+                data-sub-id="{{ sub.id }}"
+                data-sub-name="{{ p.display_name }}"
+                data-sub-initial="{{ initial }}"
+                data-sub-anon="{{ '1' if anonymous else '' }}"
+                data-sub-form="{{ sub.form.title if sub.form else '' }}"
+                data-sub-when="{{ sub.created_at|fmt_site_local('%b %-d, %Y · %-I:%M %p') }}"
+                data-sub-ip="{{ sub.ip or 'unknown' }}"
+                data-archive-url="{{ url_for('main.frontend_form_submission_archive', sub_id=sub.id) }}"
+                data-delete-url="{{ url_for('main.frontend_form_submission_delete', sub_id=sub.id) }}"
+                data-seen-url="{{ url_for('main.frontend_form_submission_seen', sub_id=sub.id) }}"
+                title="View submission"><span class="fe-submission-view-icon">{{ icon('maximize-2') }}</span><span class="fe-submission-view-label">View</span></button>
       </div>
       {# Inline expand — the full record in the same email style as the
          detail page, plus a button through to that detail page. Three
@@ -137,19 +151,6 @@
               {% with fields=form_fields, fvals=payloads[sub.id].fields, files=payloads[sub.id].files %}
               {% include "_submission_fields.html" %}
               {% endwith %}
-            </div>
-            <div class="fe-submission-panel-actions">
-              <button type="button" class="btn btn-sm btn-primary" data-view-submission
-                      data-sub-id="{{ sub.id }}"
-                      data-sub-name="{{ p.display_name }}"
-                      data-sub-initial="{{ initial }}"
-                      data-sub-anon="{{ '1' if anonymous else '' }}"
-                      data-sub-form="{{ sub.form.title if sub.form else '' }}"
-                      data-sub-when="{{ sub.created_at|fmt_site_local('%b %-d, %Y · %-I:%M %p') }}"
-                      data-sub-ip="{{ sub.ip or 'unknown' }}"
-                      data-archive-url="{{ url_for('main.frontend_form_submission_archive', sub_id=sub.id) }}"
-                      data-delete-url="{{ url_for('main.frontend_form_submission_delete', sub_id=sub.id) }}"
-                      data-seen-url="{{ url_for('main.frontend_form_submission_seen', sub_id=sub.id) }}">{{ icon('maximize-2') }} View Submission</button>
             </div>
           </div>
         </div>

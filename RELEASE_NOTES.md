@@ -7,7 +7,11 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.15.11 — 2026-06-15 (latest) — Submissions open in a popup
+## 2.15.12 — 2026-06-15 (latest) — View button always within reach
+
+- **The "View" button now sits on every submission row**, even when it's collapsed — so you can open the full record in one click without expanding the row first.
+
+## 2.15.11 — 2026-06-15 — Submissions open in a popup
 
 - **"View Submission" now opens a clean popup** instead of taking you to a separate page. It looks just like the full record — the submitter's name and a close button pinned at the top, the answers scrolling in the middle, and Archive and Delete buttons pinned at the bottom. Close it with the ✕, by clicking outside, or with the Escape key. Opening it also marks the submission as read, just like before.
 
