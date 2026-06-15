@@ -6,6 +6,40 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.15.4] — 2026-06-15
+
+### Added
+
+- **Branded HTML emails for custom-form submissions.** Notifications now go out
+  as a polished, mobile-friendly HTML message (with a plain-text fallback): brand
+  gradient, the site's logo, the form title + site-timezone submitted time, each
+  field in its own labelled section (email/phone become clickable links),
+  selected checkbox/radio options shown with check marks, an attachments card,
+  and a "Powered by Trusted Servants Pro" footer. Email-safe table layout with
+  hosted-image logos, so it renders across the mainstream clients (Apple Mail /
+  iOS Mail / Gmail).
+- **Archive a single submission from its detail view.** The submission detail
+  page has an **Archive** button (it returns you to the submissions list); on an
+  already-archived submission it reads **Restore**. Complements the bulk
+  archive/restore on the list.
+- **SVG → PNG rasterizer.** Added `cairosvg` (rendering through the existing
+  libcairo runtime). Uploading an SVG now auto-generates a same-stem PNG twin for
+  raster-only contexts — notably the HTML emails above, which can't display SVG —
+  served at `/site-branding/footer-logo.png`. The PNG twin is cleaned up when its
+  SVG is retired.
+
+### Changed
+
+- **Submission emails list only the options the submitter selected.** Checkbox
+  and radio fields now show just the ticked/chosen items (each with a check mark)
+  instead of every option with its state.
+
+### Removed
+
+- **The "Import to Stories pending review" button** is gone from the
+  custom-form submission detail view — a leftover migration tool that didn't
+  belong on general custom-form submissions.
+
 ## [2.15.3] — 2026-06-15
 
 ### Changed

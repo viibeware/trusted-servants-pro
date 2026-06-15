@@ -7,7 +7,15 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.15.3 — 2026-06-15 (latest) — Single Name field + checkbox layout fix
+## 2.15.4 — 2026-06-15 (latest) — Beautiful submission emails + archive from the detail view
+
+- **Form-submission notification emails are now beautifully designed.** Instead of a plain-text list, each submission arrives as a clean, branded email — your site logo up top, the form title and submission time, every answer in its own tidy section, selected checkbox/radio options shown with check marks, attachments listed, and a "Powered by Trusted Servants Pro" footer. Email and phone fields become tappable links. Looks great on phones and the major email apps.
+- **Only the chosen options are shown.** For checkbox and multiple-choice questions, the email lists just what the person selected — not the options they left blank.
+- **Archive a submission while reading it.** The submission detail page now has an **Archive** button (and **Restore** when you're viewing an archived one), so you don't have to go back to the list to file it away.
+- **Behind the scenes:** uploading an SVG logo now automatically creates a matching PNG so it shows up correctly in emails (which can't display SVG).
+- Removed a leftover "Import to Stories" button from the submission detail page.
+
+## 2.15.3 — 2026-06-15 — Single Name field + checkbox layout fix
 
 - **The "Name" field is one box again.** Custom forms with a Name field now show a single full-name box instead of separate First and Last boxes (and you can give it a placeholder again).
 - **Checkboxes and radio buttons line up properly.** Each option's box now sits to the left of its label, one option per line, instead of stacking the box on top of the text.

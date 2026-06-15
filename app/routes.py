@@ -7846,6 +7846,27 @@ def site_footer_logo():
     return send_from_directory(current_app.config["UPLOAD_FOLDER"], s.footer_logo_filename)
 
 
+@public_bp.route("/site-branding/footer-logo.png")
+def site_footer_logo_png():
+    """Raster (PNG) version of the footer logo for HTML emails — email
+    clients don't render SVG. Serves the original when it's already a
+    raster, otherwise a same-stem ``.png`` sibling generated alongside an
+    uploaded SVG (see scripts/gen_email_logos.py / the upload handler)."""
+    s = _get_site_setting()
+    fn = s.footer_logo_filename
+    if not fn:
+        abort(404)
+    folder = current_app.config["UPLOAD_FOLDER"]
+    ext = fn.rsplit(".", 1)[-1].lower() if "." in fn else ""
+    if ext in ("png", "jpg", "jpeg", "gif", "webp"):
+        return send_from_directory(folder, fn)
+    stem = fn.rsplit(".", 1)[0] if "." in fn else fn
+    png = stem + ".png"
+    if os.path.isfile(os.path.join(folder, png)):
+        return send_from_directory(folder, png)
+    abort(404)
+
+
 _HERO_BG_STYLES = {"frosty", "solid", "gradient", "image", "sinewave", "video", "dynamic"}
 _HERO_VIDEO_SPEEDS = {50, 100, 150, 200, 300}
 _HERO_HEADING_FONTS = {"fraunces", "inter"}
@@ -9615,6 +9636,26 @@ def frontend_form_submission_delete(sub_id):
     db.session.commit()
     flash("Submission deleted.", "success")
     return redirect(url_for("main.frontend_form_submissions", form=form_id))
+
+
+@bp.route("/frontend/forms/submissions/<int:sub_id>/archive", methods=["POST"])
+@admin_required
+def frontend_form_submission_archive(sub_id):
+    """Archive (or, with ``target=0``, restore) a single submission from
+    its detail view, then return to the submissions list — the active
+    list after archiving, the archived list after restoring (i.e. the
+    tab the row now lives on)."""
+    sub = db.session.get(FormSubmission, sub_id) or abort(404)
+    form_id = sub.form_id
+    restore = request.form.get("target") == "0"
+    sub.is_archived = not restore
+    sub.archived_at = None if restore else datetime.utcnow()
+    db.session.commit()
+    flash("Submission restored." if restore else "Submission archived.", "success")
+    kwargs = {"form": form_id}
+    if restore:
+        kwargs["archived"] = 1
+    return redirect(url_for("main.frontend_form_submissions", **kwargs))
 
 
 def _submissions_redirect():
@@ -15690,6 +15731,13 @@ def _save_upload(uploaded):
     path = os.path.join(current_app.config["UPLOAD_FOLDER"], stored)
     with open(path, "wb") as f:
         f.write(data)
+    if ext == ".svg":
+        # Auto-generate a same-stem PNG twin for raster contexts that
+        # can't show SVG — notably the branded form-submission emails
+        # (see public.site_footer_logo_png). Best-effort; a missing
+        # rasterizer just leaves no PNG and callers fall back.
+        from .svg_raster import svg_bytes_to_png
+        svg_bytes_to_png(data, os.path.splitext(path)[0] + ".png", output_width=640)
     m = MediaItem(stored_filename=stored, original_filename=original,
                   content_hash=h, size_bytes=len(data),
                   mime_type=getattr(uploaded, "mimetype", None),
@@ -15866,6 +15914,11 @@ def _cleanup_retired_asset(stored):
     except Exception:  # noqa: BLE001 — cleanup is best-effort
         pass
     _delete_upload(stored)
+    # Drop the auto-generated PNG twin of a retired SVG (see _save_upload).
+    # _delete_upload no-ops when the sibling doesn't exist, so this is safe
+    # for SVGs uploaded before the twin existed.
+    if stored.lower().endswith(".svg"):
+        _delete_upload(os.path.splitext(stored)[0] + ".png")
     MediaItem.query.filter_by(stored_filename=stored).delete()
     db.session.flush()
 

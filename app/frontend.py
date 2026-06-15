@@ -5049,8 +5049,29 @@ def custom_form_submit(slug):
                     nm = block.get("name")
                     if nm and payload.get(nm):
                         reply_to = payload[nm]; break
+            # Branded HTML body (multipart/alternative — clients that can't
+            # render it fall back to the plain text above). A render failure
+            # must never block the notification, so guard it.
+            _labels = {b.get("name"): (b.get("label") or b.get("name"))
+                       for b in blocks if isinstance(b, dict) and b.get("name")}
+            try:
+                body_html = render_template(
+                    "email/form_submission.html",
+                    site_name=(site.frontend_title if site else None) or "Submission",
+                    site_logo_url=_email_site_logo_url(site),
+                    tspro_logo_url=url_for("static", filename="img/logo_email.png", _external=True),
+                    form_title=cf.title,
+                    submitted=_email_submission_local(site, sub.created_at),
+                    ip=sub.ip,
+                    public_url=url_for("frontend.page_detail", slug=cf.slug, _external=True),
+                    fields=_email_submission_fields(blocks, payload),
+                    files=[{"name": info.get("original"), "label": _labels.get(n)}
+                           for n, info in file_attachments.items()],
+                )
+            except Exception:
+                body_html = None
             _send_with_reply_to(site, rcpts, subject, "\n".join(body_lines),
-                                reply_to=reply_to)
+                                body_html=body_html, reply_to=reply_to)
 
     # Success handoff: redirect if configured, otherwise render the form
     # template again with a success message inline.
@@ -5060,14 +5081,15 @@ def custom_form_submit(slug):
     return _render_custom_form(cf, ctx=_frontend_context(site), success_message=msg)
 
 
-def _send_with_reply_to(site, recipients, subject, body_text,
+def _send_with_reply_to(site, recipients, subject, body_text, body_html=None,
                         reply_to=None, reply_to_name=None):
     """Lightweight twin of mail.send_mail that lets us set Reply-To.
 
     Mirrors the outer helper's transport handling (SSL vs STARTTLS
     vs plain) so a site whose SMTP server requires implicit TLS still
-    works. Returns ``(ok, error)`` exactly like ``send_mail`` so the
-    caller can branch identically.
+    works. Sends a ``multipart/alternative`` (text + HTML) when
+    ``body_html`` is given. Returns ``(ok, error)`` exactly like
+    ``send_mail`` so the caller can branch identically.
     """
     import smtplib, ssl
     from email.message import EmailMessage
@@ -5076,9 +5098,10 @@ def _send_with_reply_to(site, recipients, subject, body_text,
     from .mail import _recipients, send_mail
 
     # API-relay transport has no local SMTP socket — hand the whole
-    # message (Reply-To included) to the canonical relay sender.
+    # message (Reply-To + HTML included) to the canonical relay sender.
     if (getattr(site, "mail_transport", "smtp") or "smtp") == "relay":
         return send_mail(site, recipients, subject, body_text,
+                         body_html=body_html,
                          reply_to=reply_to, reply_to_name=reply_to_name)
 
     if not site or not site.smtp_host or not site.smtp_from_email:
@@ -5094,6 +5117,8 @@ def _send_with_reply_to(site, recipients, subject, body_text,
     if reply_to:
         msg["Reply-To"] = formataddr((reply_to_name or "", reply_to))
     msg.set_content(body_text or "")
+    if body_html:
+        msg.add_alternative(body_html, subtype="html")
 
     password = decrypt(site.smtp_password_enc) if site.smtp_password_enc else ""
     port = int(site.smtp_port or (465 if site.smtp_security == "ssl" else 587))
@@ -5117,6 +5142,72 @@ def _send_with_reply_to(site, recipients, subject, body_text,
         return True, None
     except Exception as exc:  # noqa: BLE001
         return False, str(exc)
+
+
+def _email_submission_local(site, dt):
+    """Site-local 'Jun 15, 2026 · 9:51 AM EDT' string for an email, from a
+    naive-UTC stored datetime. Falls back to a UTC stamp on any error."""
+    if not dt:
+        return ""
+    from datetime import timezone as _tz
+    try:
+        from .timezone import site_timezone
+        return (dt.replace(tzinfo=_tz.utc).astimezone(site_timezone(site))
+                  .strftime("%b %-d, %Y · %-I:%M %p %Z"))
+    except Exception:
+        return dt.strftime("%b %d, %Y · %H:%M UTC")
+
+
+def _email_site_logo_url(site):
+    """Absolute URL to a RASTER site logo for emails, or None. Uses the
+    uploaded footer logo when it's already a raster, or a same-stem .png
+    sibling when it's an SVG (email clients can't render SVG)."""
+    import os as _os
+    fn = getattr(site, "footer_logo_filename", None)
+    if not fn:
+        return None
+    folder = current_app.config["UPLOAD_FOLDER"]
+    ext = fn.rsplit(".", 1)[-1].lower() if "." in fn else ""
+    if ext in ("png", "jpg", "jpeg", "gif", "webp"):
+        target = fn
+    else:
+        target = (fn.rsplit(".", 1)[0] if "." in fn else fn) + ".png"
+    if _os.path.isfile(_os.path.join(folder, target)):
+        return url_for("public.site_footer_logo_png", _external=True)
+    return None
+
+
+def _email_submission_fields(blocks, payload):
+    """Per-field render data for the submission email: label + type, plus a
+    value (text fields) or an options list carrying each option's checked
+    state (checkbox / radio) so the email can draw real check / radio
+    boxes."""
+    out = []
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        name = block.get("name")
+        if not name or name not in payload:
+            continue
+        btype = block.get("type") or "text"
+        entry = {"label": block.get("label") or name, "type": btype}
+        val = payload.get(name)
+        if btype == "checkboxes":
+            # Only the options the submitter actually ticked (each shown
+            # with a check mark) — unticked options are left off.
+            checked = val if isinstance(val, (list, tuple)) else ([val] if val else [])
+            entry["multi"] = True
+            entry["options"] = [{"text": o} for o in (block.get("options") or [])
+                                if o in checked]
+        elif btype == "radio":
+            entry["multi"] = False
+            entry["options"] = [{"text": val}] if val else []
+        else:
+            if isinstance(val, (list, tuple)):
+                val = ", ".join(str(x) for x in val)
+            entry["value"] = "" if val is None else str(val)
+        out.append(entry)
+    return out
 
 
 @bp.route("/siteindex")
