@@ -7,7 +7,11 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.15.12 — 2026-06-15 (latest) — View button always within reach
+## 2.15.13 — 2026-06-15 (latest) — Archive and delete right from the list
+
+- **Archive and delete buttons are now on every submission row.** File a submission away (or restore it on the Archived tab) or delete it without opening it or selecting it first — the buttons sit right next to View. Delete still asks you to confirm.
+
+## 2.15.12 — 2026-06-15 — View button always within reach
 
 - **The "View" button now sits on every submission row**, even when it's collapsed — so you can open the full record in one click without expanding the row first.
 

@@ -6,6 +6,16 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.15.13] — 2026-06-15
+
+### Added
+
+- **Per-row archive and delete buttons on the submission inbox.** Each row now has
+  archive (or restore, on the Archived tab) and delete buttons right in the list —
+  always visible alongside View — so a single submission can be filed or removed
+  without opening it or using the bulk bar. They're inline POST forms targeting the
+  existing endpoints; delete still confirms first.
+
 ## [2.15.12] — 2026-06-15
 
 ### Changed

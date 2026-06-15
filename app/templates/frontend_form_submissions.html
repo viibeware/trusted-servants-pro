@@ -124,20 +124,39 @@
           </div>
           <span class="fe-submission-cta" aria-hidden="true">{{ icon('chevron-down') }}</span>
         </button>
-        {# Always visible (even when the card is collapsed) so the full
-           record is one click away without expanding. Opens the modal. #}
-        <button type="button" class="btn btn-sm fe-submission-view-btn" data-view-submission
-                data-sub-id="{{ sub.id }}"
-                data-sub-name="{{ p.display_name }}"
-                data-sub-initial="{{ initial }}"
-                data-sub-anon="{{ '1' if anonymous else '' }}"
-                data-sub-form="{{ sub.form.title if sub.form else '' }}"
-                data-sub-when="{{ sub.created_at|fmt_site_local('%b %-d, %Y · %-I:%M %p') }}"
-                data-sub-ip="{{ sub.ip or 'unknown' }}"
-                data-archive-url="{{ url_for('main.frontend_form_submission_archive', sub_id=sub.id) }}"
-                data-delete-url="{{ url_for('main.frontend_form_submission_delete', sub_id=sub.id) }}"
-                data-seen-url="{{ url_for('main.frontend_form_submission_seen', sub_id=sub.id) }}"
-                title="View submission"><span class="fe-submission-view-icon">{{ icon('maximize-2') }}</span><span class="fe-submission-view-label">View</span></button>
+        {# Per-row actions — always visible (even when the card is
+           collapsed): open the full record, plus archive/restore and
+           delete right from the list. Archive + delete are tiny inline
+           POST forms so they need no JS. #}
+        <div class="fe-submission-row-actions">
+          <button type="button" class="btn btn-sm fe-submission-view-btn" data-view-submission
+                  data-sub-id="{{ sub.id }}"
+                  data-sub-name="{{ p.display_name }}"
+                  data-sub-initial="{{ initial }}"
+                  data-sub-anon="{{ '1' if anonymous else '' }}"
+                  data-sub-form="{{ sub.form.title if sub.form else '' }}"
+                  data-sub-when="{{ sub.created_at|fmt_site_local('%b %-d, %Y · %-I:%M %p') }}"
+                  data-sub-ip="{{ sub.ip or 'unknown' }}"
+                  data-archive-url="{{ url_for('main.frontend_form_submission_archive', sub_id=sub.id) }}"
+                  data-delete-url="{{ url_for('main.frontend_form_submission_delete', sub_id=sub.id) }}"
+                  data-seen-url="{{ url_for('main.frontend_form_submission_seen', sub_id=sub.id) }}"
+                  title="View submission"><span class="fe-submission-view-icon">{{ icon('maximize-2') }}</span><span class="fe-submission-view-label">View</span></button>
+          <form method="post" class="fe-submission-rowact-form"
+                action="{{ url_for('main.frontend_form_submission_archive', sub_id=sub.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="target" value="{{ '0' if show_archived else '1' }}">
+            <button type="submit" class="btn btn-sm fe-submission-rowact-btn"
+                    title="{{ 'Restore submission' if show_archived else 'Archive submission' }}"
+                    aria-label="{{ 'Restore submission' if show_archived else 'Archive submission' }}">{{ icon('rotate-ccw' if show_archived else 'box') }}</button>
+          </form>
+          <form method="post" class="fe-submission-rowact-form"
+                action="{{ url_for('main.frontend_form_submission_delete', sub_id=sub.id) }}"
+                onsubmit="return confirm('Delete this submission permanently?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-danger fe-submission-rowact-btn"
+                    title="Delete submission" aria-label="Delete submission">{{ icon('trash') }}</button>
+          </form>
+        </div>
       </div>
       {# Inline expand — the full record in the same email style as the
          detail page, plus a button through to that detail page. Three
