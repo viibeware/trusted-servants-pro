@@ -11513,6 +11513,10 @@ body.fe-footer-force-dark .fe-footer-admin-login--logout:focus-visible {
 .fe-custom-form-head h1 { margin: 0 0 .5rem; }
 .fe-custom-form-desc { margin: 0 0 1.25rem; color: var(--fe-color-text-soft, #475569); }
 .fe-custom-form { display: flex; flex-direction: column; gap: 1rem; }
+/* Extra breathing room between the form's description (rendered through the
+   submission chrome's intro slot) and its first field. Scoped to the custom
+   form so the events/announcements submission form is unaffected. */
+.fe-submission-intro + .fe-custom-form { margin-top: 2rem; }
 .fe-custom-form-field { display: flex; flex-direction: column; gap: .3rem; }
 .fe-custom-form-label { font-weight: 600; }
 .fe-custom-form-field input[type="text"],

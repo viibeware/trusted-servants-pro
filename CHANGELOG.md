@@ -16,6 +16,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
   builder's Placeholder field is re-enabled for it. Existing submissions captured
   under the old composite remain readable (stored as the joined "First Last"
   string).
+- **More breathing room on the public form** — 2rem of space between a custom
+  form's description and its first field (scoped to custom forms).
 
 ### Fixed
 
