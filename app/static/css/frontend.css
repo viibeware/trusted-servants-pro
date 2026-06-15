@@ -11533,21 +11533,17 @@ body.fe-footer-force-dark .fe-footer-admin-login--logout:focus-visible {
 .fe-custom-form-field--error select { border-color: #dc2626; }
 .fe-custom-form-err { color: #dc2626; font-size: .85rem; }
 .fe-custom-form-help { font-size: .85rem; }
+/* Options stack one per line (column). */
 .fe-custom-form-radios,
-.fe-custom-form-checks { display: flex; flex-direction: column; gap: .35rem; }
-.fe-custom-form-radio,
-.fe-custom-form-check { display: flex; align-items: center; gap: .5rem; }
-/* Composite "name" field — first + last sit side by side, each with a
-   small sub-label beneath, and wrap to stacked on narrow viewports. */
-.fe-custom-form-name { display: flex; gap: .6rem; flex-wrap: wrap; }
-.fe-custom-form-name-part {
-  display: flex;
-  flex-direction: column;
-  gap: .25rem;
-  flex: 1 1 8rem;
-  min-width: 8rem;
+.fe-custom-form-checks { display: flex; flex-direction: column; gap: .4rem; }
+/* ...but within each option the box sits inline-left of its text. Scoped
+   under the container so ``flex-direction: row`` beats the admin-leaked
+   ``.form label { flex-direction: column }`` rule (the public page loads
+   app.css too), which would otherwise stack the box above its label. */
+.fe-custom-form-radios .fe-custom-form-radio,
+.fe-custom-form-checks .fe-custom-form-check {
+  display: flex; flex-direction: row; align-items: center; gap: .5rem;
 }
-.fe-custom-form-name-sub { font-size: .8rem; }
 .fe-custom-form-actions { margin-top: .5rem; display: flex; justify-content: flex-end; }
 .fe-custom-form-success {
   padding: 1.25rem 1.5rem;

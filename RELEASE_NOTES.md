@@ -7,7 +7,12 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.15.2 — 2026-06-15 (latest) — Public form cleanup + "View on frontend" buttons
+## 2.15.3 — 2026-06-15 (latest) — Single Name field + checkbox layout fix
+
+- **The "Name" field is one box again.** Custom forms with a Name field now show a single full-name box instead of separate First and Last boxes (and you can give it a placeholder again).
+- **Checkboxes and radio buttons line up properly.** Each option's box now sits to the left of its label, one option per line, instead of stacking the box on top of the text.
+
+## 2.15.2 — 2026-06-15 — Public form cleanup + "View on frontend" buttons
 
 - **"View on frontend" button.** The form editor and each row on the Forms list now have a quick button to open the form's live public page in a new tab — it appears whenever the form is switched on.
 - **The public form page looks right again.** A recent change had pushed the form's description off to the side and squeezed the fields; the layout is back to a clean, single-column form (description on top, full-width fields).

@@ -144,7 +144,7 @@
                          pattern="[a-z0-9_]*" placeholder="auto-from-label">
                 </label>
               </div>
-              <label data-field-placeholder-wrap {% if f.type == 'name' %}hidden{% endif %}>Placeholder
+              <label data-field-placeholder-wrap>Placeholder
                 <input type="text" name="field_{{ idx }}_placeholder" value="{{ f.get('placeholder', '') }}" maxlength="200">
               </label>
               {% if f.type == 'checkboxes' %}
@@ -304,10 +304,6 @@
 
       function showOptionsIfNeeded(card) {
         var type = (card.querySelector('input[name$="_type"]') || {}).value;
-        // Placeholder is meaningless for the composite "name" field — it
-        // renders two fixed-labelled (First / Last) inputs — so hide it.
-        var phWrap = card.querySelector('[data-field-placeholder-wrap]');
-        if (phWrap) phWrap.hidden = (type === 'name');
         var wrap = card.querySelector('[data-field-options-wrap]');
         if (!wrap) return;
         wrap.hidden = !OPTION_TYPES[type];

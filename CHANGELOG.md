@@ -6,6 +6,24 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.15.3] — 2026-06-15
+
+### Changed
+
+- **The custom-form "Name" field is a single full-name input again** (not a
+  split First / Last). It's still recognised as the submitter's display name in
+  the submissions list, and now stores one plain value like a text field. The
+  builder's Placeholder field is re-enabled for it. Existing submissions captured
+  under the old composite remain readable (stored as the joined "First Last"
+  string).
+
+### Fixed
+
+- **Public-form checkbox/radio options stacked their box above the label.** The
+  public page also loads `app.css`, whose `.form label { flex-direction: column }`
+  outranked the option rule — so each box rendered on top of its text. Scoped the
+  option rule so the box sits inline-left of its label, one option per line.
+
 ## [2.15.2] — 2026-06-15
 
 ### Added

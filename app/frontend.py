@@ -4984,21 +4984,11 @@ def custom_form_submit(slug):
                 payload[name] = stored
             elif required:
                 errors[name] = "Please upload a file."
-        elif ftype == "name":
-            # Composite first+last name. The public form renders two
-            # inputs (``<name>_first`` / ``<name>_last``); we store the
-            # joined "First Last" under the field's own name so it reads
-            # as a single value everywhere downstream (submission list,
-            # detail view, notification email) with no special-casing.
-            first = (request.form.get(name + "_first") or "").strip()
-            last = (request.form.get(name + "_last") or "").strip()
-            posted_values[name + "_first"] = first
-            posted_values[name + "_last"] = last
-            if required and not (first and last):
-                errors[name] = "Please enter a first and last name."
-                continue
-            payload[name] = (first + " " + last).strip()
         else:
+            # Covers text / name / email / phone / textarea / select /
+            # radio — all single-value inputs. (``name`` is a plain
+            # full-name text field; it's only special in that the
+            # submissions list prefers it for the submitter's display name.)
             raw = (request.form.get(name) or "").strip()
             posted_values[name] = raw
             if required and not raw:
