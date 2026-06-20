@@ -10847,32 +10847,52 @@ input.page-typo-color-text.is-invalid {
    inside the rectangle. The bordered centre + axis lines mirror
    the actual padding the box represents. */
 .be-container-row--pad-box {
-  grid-template-columns: 140px 1fr;
+  /* Full-width single column: the "Padding" / "Padding (mobile)"
+     row label stacks above the diagram so the 5-column cross below
+     has the whole modal width to breathe. The old 140px label
+     gutter squeezed the box and forced the LEFT/RIGHT labels to
+     overlap their inputs. */
+  grid-template-columns: 1fr;
   align-items: start;
 }
+/* The shared hint sits under the *control* in normal 2-column rows
+   via `grid-column: 2 / -1`. Pad-box rows are a single column, so
+   that placement would conjure a phantom second track and shove the
+   diagram sideways — pin the hint back to the lone column here. */
+.be-container-row--pad-box .be-container-row-hint {
+  grid-column: 1 / -1;
+}
 .be-pad-box {
+  /* 5 columns × 5 rows. Each side label owns its OWN column/row so
+     it never shares a grid cell with an input (the previous 3-col
+     layout put LEFT/RIGHT labels in the same cell as their inputs,
+     so they overlapped and overflowed). Centre column is the only
+     flexible track; the four input chips + their labels are sized
+     to content. */
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: auto auto minmax(72px, 1fr) auto auto;
   grid-template-rows: auto auto auto auto auto;
   gap: 4px 8px;
   justify-items: center; align-items: center;
-  max-width: 360px;
+  justify-self: start;
+  max-width: 440px;
   padding: 4px;
 }
 .be-pad-box-axis {
   font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.08em;
   text-transform: uppercase; color: var(--muted);
+  white-space: nowrap;
 }
-.be-pad-box-axis--top    { grid-row: 1; grid-column: 2; }
-.be-pad-box-axis--bottom { grid-row: 5; grid-column: 2; }
-.be-pad-box-axis--left   { grid-row: 3; grid-column: 1; justify-self: end; }
-.be-pad-box-axis--right  { grid-row: 3; grid-column: 3; justify-self: start; }
-.be-pad-box-cell--top    { grid-row: 2; grid-column: 2; }
-.be-pad-box-cell--bottom { grid-row: 4; grid-column: 2; }
-.be-pad-box-cell--left   { grid-row: 3; grid-column: 1; }
-.be-pad-box-cell--right  { grid-row: 3; grid-column: 3; }
+.be-pad-box-axis--top    { grid-row: 1; grid-column: 3; }
+.be-pad-box-axis--bottom { grid-row: 5; grid-column: 3; }
+.be-pad-box-axis--left   { grid-row: 3; grid-column: 1; }
+.be-pad-box-axis--right  { grid-row: 3; grid-column: 5; }
+.be-pad-box-cell--top    { grid-row: 2; grid-column: 3; }
+.be-pad-box-cell--bottom { grid-row: 4; grid-column: 3; }
+.be-pad-box-cell--left   { grid-row: 3; grid-column: 2; }
+.be-pad-box-cell--right  { grid-row: 3; grid-column: 4; }
 .be-pad-box-center {
-  grid-row: 3; grid-column: 2;
+  grid-row: 3; grid-column: 3;
   min-width: 80px; min-height: 44px;
   display: flex; align-items: center; justify-content: center;
   background: var(--panel-2);

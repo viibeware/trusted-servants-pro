@@ -4646,7 +4646,10 @@
           type: 'number',
           value: parts.num,
           min: '0', max: '9999', step: '1',
-          placeholder: '0',
+          // No placeholder: an empty box must read as "undefined /
+          // inherit", not as the value 0. A greyed "0" here misled
+          // admins into thinking a blank mobile side was set to 0
+          // (it actually inherits the desktop value at ≤720px).
           'aria-label': 'amount',
         });
         const sel = el('select', { 'aria-label': 'unit', class: 'be-pad-cell-unit-sel' });
