@@ -7,7 +7,11 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.16.0 — 2026-06-21 (latest) — Google Meet & Microsoft Teams join meetings
+## 2.16.1 — 2026-06-21 (latest) — Save bar fits the "Saving…" label
+
+- **Fixed a yellow save bar that could spill its button outside the bar.** When you clicked Save and the button briefly changed to "Saving…", the longer text could push past the edge of the rounded bar. The bar now reserves room for the label up front, so it stays tidy with no overflow or jiggle.
+
+## 2.16.0 — 2026-06-21 — Google Meet & Microsoft Teams join meetings
 
 - **Meetings now support Google Meet and Microsoft Teams, right alongside Zoom.** Each meeting can offer any combination of the three. In the meeting editor, every platform has its own on/off switch — flip one on and its link, meeting ID, and passcode fields appear; flip it off and it tucks away to a single row, and that platform won't show anywhere on the site. Turning a platform off keeps whatever you'd entered, so switching it back on brings your details right back.
 - **They show up everywhere Zoom does** — on the public meeting list cards and on every meeting-page style, each with its own "Join" button and copy-to-clipboard meeting ID and passcode. On the admin meeting page the three sit as separate cards: Google Meet has a green edge, Microsoft Teams a purple one. (The Teams button just says "Join Teams" to keep it tidy.)

@@ -2455,7 +2455,14 @@ html[data-theme="dark"] .post-featured-clear input:checked + span {
 }
 .fe-save-bar-btn.btn { background: #422006; color: #facc15;
   border-color: #422006; padding: 6px 14px;
-  flex: 0 0 auto; white-space: nowrap; }
+  flex: 0 0 auto; white-space: nowrap;
+  /* Reserve enough width for the widest label this button cycles through
+     ("Save" → "Saving…" → "Saved"), centred. Several callers pin the bar's
+     width the instant Save is clicked, then swap the text to the wider
+     "Saving…" — without a floor the button grew past the pinned width and
+     spilled out of the rounded bar. Sizing for "Saving…" up front means the
+     bar is already wide enough, so the swap neither overflows nor jiggles. */
+  min-width: 5.75rem; text-align: center; }
 .fe-save-bar-btn.btn:hover { background: #1c0f02; color: #fde047; }
 /* Save-Draft secondary button — page-edit screen only. Outlined
    variant tinted with the Publish button's fill colour (#422006) for

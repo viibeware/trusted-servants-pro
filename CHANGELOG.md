@@ -6,6 +6,18 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.16.1] — 2026-06-21
+
+### Fixed
+
+- **The yellow save bar no longer overflows when its button changes to "Saving…".**
+  The save-bar button can't shrink and several bars pin/fix their width the instant
+  Save is clicked, so swapping the label to the wider "Saving…" spilled the button out
+  of the rounded bar. The shared `.fe-save-bar-btn` now reserves `min-width` for its
+  widest label ("Save" → "Saving…" → "Saved"), so the bar is sized for it up front —
+  no overflow and no width jiggle. Applies to every save bar (meeting modal, Settings,
+  frontend editor, Users, etc.).
+
 ## [2.16.0] — 2026-06-21
 
 ### Added
