@@ -2095,18 +2095,39 @@ def _apply_meeting_form(m, form, schedules, files=None):
     else:
         m.extended_blocks_json = None
     if mtype == "in_person":
+        m.zoom_enabled = False
         m.zoom_meeting_id = ""
         m.zoom_passcode = ""
         m.zoom_opens_time = ""
         m.zoom_link = ""
         m.zoom_account_id = None
+        m.gmeet_enabled = False
+        m.gmeet_link = ""
+        m.gmeet_meeting_id = ""
+        m.gmeet_passcode = ""
+        m.teams_enabled = False
+        m.teams_link = ""
+        m.teams_meeting_id = ""
+        m.teams_passcode = ""
     else:
+        # Field values are always read/stored regardless of the per-platform
+        # enable toggle, so disabling a platform keeps its details for an
+        # easy re-enable. Display is gated by the *_enabled flags everywhere.
+        m.zoom_enabled = form.get("zoom_enabled") == "1"
         m.zoom_meeting_id = form.get("zoom_meeting_id", "").strip()
         m.zoom_passcode = form.get("zoom_passcode", "").strip()
         m.zoom_opens_time = form.get("zoom_opens_time", "").strip()
         m.zoom_link = form.get("zoom_link", "").strip()
         acct_raw = form.get("zoom_account_id", "")
         m.zoom_account_id = int(acct_raw) if acct_raw else None
+        m.gmeet_enabled = form.get("gmeet_enabled") == "1"
+        m.gmeet_link = form.get("gmeet_link", "").strip()
+        m.gmeet_meeting_id = form.get("gmeet_meeting_id", "").strip()
+        m.gmeet_passcode = form.get("gmeet_passcode", "").strip()
+        m.teams_enabled = form.get("teams_enabled") == "1"
+        m.teams_link = form.get("teams_link", "").strip()
+        m.teams_meeting_id = form.get("teams_meeting_id", "").strip()
+        m.teams_passcode = form.get("teams_passcode", "").strip()
     if files is not None:
         uploaded = files.get("logo")
         if uploaded and uploaded.filename:
@@ -16643,8 +16664,10 @@ def request_access_submit():
         flash(msg, "danger")
         return redirect(url_for("auth.login"))
 
+    from .frontend import _client_ip
     req = AccessRequest(name=name, phone=phone, email=email,
-                        roles_json=json.dumps(roles), meeting_name=meeting_name)
+                        roles_json=json.dumps(roles), meeting_name=meeting_name,
+                        ip_address=(_client_ip() or "")[:64] or None)
     db.session.add(req)
     db.session.commit()
 
@@ -17244,13 +17267,25 @@ def watchtower_requests():
             })
         recent_resets.sort(key=lambda r: r["requested_at"], reverse=True)
         recent_resets = recent_resets[:100]
+    # Which of the displayed requests' IPs are currently blocked? Map
+    # ip -> IPBlock row so each row can render Block vs Unblock.
+    from .models import IPBlock
+    req_ips = {r.ip_address for r in items if r.ip_address}
+    blocked_ips = {}
+    if req_ips:
+        now2 = datetime.utcnow()
+        for b in (IPBlock.query.filter(IPBlock.ip.in_(req_ips))
+                  .filter(IPBlock.expires_at.is_(None)
+                          | (IPBlock.expires_at > now2)).all()):
+            blocked_ips[b.ip] = b
     return render_template("watchtower/requests.html",
                            active_tab="requests",
                            items=items, view=view,
                            archived_count=archived_count,
                            active_count=active_count,
                            pending_resets=pending_resets,
-                           recent_resets=recent_resets)
+                           recent_resets=recent_resets,
+                           blocked_ips=blocked_ips)
 
 
 @bp.route("/watchtower/ban-ip", methods=["POST"])

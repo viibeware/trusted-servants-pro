@@ -388,6 +388,20 @@ class Meeting(db.Model):
     zoom_passcode = db.Column(db.String(128))
     zoom_link = db.Column(db.String(1000))
     zoom_opens_time = db.Column(db.String(16))  # "HH:MM"
+    # Per-platform enable toggles. Zoom defaults on so existing online
+    # meetings keep showing their Zoom details after upgrade; Meet/Teams
+    # default off. When a platform is off it renders nowhere (backend
+    # detail page or any frontend theme); its stored values are kept so
+    # re-enabling restores them.
+    zoom_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    gmeet_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    gmeet_link = db.Column(db.String(1000))
+    gmeet_meeting_id = db.Column(db.String(64))
+    gmeet_passcode = db.Column(db.String(128))
+    teams_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    teams_link = db.Column(db.String(1000))
+    teams_meeting_id = db.Column(db.String(64))
+    teams_passcode = db.Column(db.String(128))
     meeting_type = db.Column(db.String(16), nullable=False, default="in_person")  # in_person|online|hybrid
     logo_filename = db.Column(db.String(500))
     zoom_account_id = db.Column(db.Integer, db.ForeignKey("zoom_account.id", ondelete="SET NULL"))
@@ -406,6 +420,33 @@ class Meeting(db.Model):
     schedules = db.relationship("MeetingSchedule", backref="meeting",
                                 cascade="all, delete-orphan", lazy="select",
                                 order_by="MeetingSchedule.day_of_week, MeetingSchedule.start_time")
+
+    @property
+    def conferencing_platforms(self):
+        """Normalized list of enabled + populated video platforms, in
+        display order (Zoom, Google Meet, Teams). Backend detail page and
+        every frontend theme iterate this so the three platforms render
+        identically. A platform is included only when its toggle is on AND
+        it has at least a join link / meeting ID / passcode — so an enabled
+        but empty platform never renders an empty card. ``opens_time`` is
+        Zoom-only (others carry None). ``short`` is the compact name used on
+        "Join …" buttons (Teams → "Teams"); ``label`` is the full name used
+        for card headings."""
+        specs = (
+            ("zoom", "Zoom", "Zoom", self.zoom_enabled, self.zoom_link,
+             self.zoom_meeting_id, self.zoom_passcode, self.zoom_opens_time),
+            ("gmeet", "Google Meet", "Google Meet", self.gmeet_enabled, self.gmeet_link,
+             self.gmeet_meeting_id, self.gmeet_passcode, None),
+            ("teams", "Microsoft Teams", "Teams", self.teams_enabled, self.teams_link,
+             self.teams_meeting_id, self.teams_passcode, None),
+        )
+        out = []
+        for key, label, short, enabled, link, mid, passcode, opens in specs:
+            if enabled and (link or mid or passcode):
+                out.append({"key": key, "label": label, "short": short,
+                            "link": link, "meeting_id": mid,
+                            "passcode": passcode, "opens_time": opens})
+        return out
 
     def files_by_category(self, category):
         return self.files.filter_by(category=category).order_by(MeetingFile.position, MeetingFile.id).all()
@@ -1657,6 +1698,9 @@ class AccessRequest(db.Model):
     roles_json = db.Column(db.Text)  # JSON array of selected role labels
     meeting_name = db.Column(db.String(255))
     status = db.Column(db.String(16), nullable=False, default="pending")  # pending|handled
+    # IP the request was submitted from (best-effort, via _client_ip()).
+    # Lets an admin block an abusive requester from Watchtower → Requests.
+    ip_address = db.Column(db.String(64))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     handled_at = db.Column(db.DateTime)
     # Soft-archive flag: handled rows that the admin no longer wants

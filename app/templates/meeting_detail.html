@@ -114,7 +114,7 @@
     {# Always render the right column so the 50/50 grid is preserved — for
        in-person meetings with no Zoom data it simply stays blank. #}
     <div class="detail-block zoom-col">
-      {% if meeting.zoom_meeting_id or meeting.zoom_passcode or meeting.zoom_account or meeting.zoom_link %}
+      {% if meeting.zoom_enabled and (meeting.zoom_meeting_id or meeting.zoom_passcode or meeting.zoom_account or meeting.zoom_link) %}
       <section class="card data-card zoom-card">
       {% if meeting.meeting_type != 'in_person' and (meeting.zoom_link or meeting.zoom_meeting_id or meeting.zoom_account) %}
       <div class="zoom-guide-launch">
@@ -191,6 +191,48 @@
       {% endif %}
       </div>
       {% endif %}
+      </section>
+      {% endif %}
+
+      {# Google Meet + Microsoft Teams — same copy-to-clipboard layout as
+         Zoom, gated on the per-platform enable toggle + presence of data. #}
+      {% if meeting.gmeet_enabled and (meeting.gmeet_meeting_id or meeting.gmeet_passcode or meeting.gmeet_link) %}
+      <section class="card data-card zoom-card gmeet-card">
+        <div class="detail-label detail-section-divider">Google Meet</div>
+        <dl class="zoom-info">
+          {% if meeting.gmeet_meeting_id %}
+          <dt>Meeting ID</dt>
+          <dd><button type="button" class="copy-btn mono" data-copy="{{ meeting.gmeet_meeting_id }}" data-tip="Click to copy">{{ meeting.gmeet_meeting_id }}</button></dd>
+          {% endif %}
+          {% if meeting.gmeet_passcode %}
+          <dt>Passcode</dt>
+          <dd><button type="button" class="copy-btn mono" data-copy="{{ meeting.gmeet_passcode }}" data-tip="Click to copy">{{ meeting.gmeet_passcode }}</button></dd>
+          {% endif %}
+          {% if meeting.gmeet_link %}
+          <dt></dt>
+          <dd><a class="btn btn-primary" href="{{ meeting.gmeet_link }}" target="_blank" rel="noopener">Start Google Meet</a></dd>
+          {% endif %}
+        </dl>
+      </section>
+      {% endif %}
+
+      {% if meeting.teams_enabled and (meeting.teams_meeting_id or meeting.teams_passcode or meeting.teams_link) %}
+      <section class="card data-card zoom-card teams-card">
+        <div class="detail-label detail-section-divider">Microsoft Teams</div>
+        <dl class="zoom-info">
+          {% if meeting.teams_meeting_id %}
+          <dt>Meeting ID</dt>
+          <dd><button type="button" class="copy-btn mono" data-copy="{{ meeting.teams_meeting_id }}" data-tip="Click to copy">{{ meeting.teams_meeting_id }}</button></dd>
+          {% endif %}
+          {% if meeting.teams_passcode %}
+          <dt>Passcode</dt>
+          <dd><button type="button" class="copy-btn mono" data-copy="{{ meeting.teams_passcode }}" data-tip="Click to copy">{{ meeting.teams_passcode }}</button></dd>
+          {% endif %}
+          {% if meeting.teams_link %}
+          <dt></dt>
+          <dd><a class="btn btn-primary" href="{{ meeting.teams_link }}" target="_blank" rel="noopener">Start Teams Meeting</a></dd>
+          {% endif %}
+        </dl>
       </section>
       {% endif %}
     </div>
@@ -420,9 +462,13 @@
   {% endwith %}
 {% endif %}
 
+{# External links sits directly under Libraries on this backend page, so
+   pull it to the front of the category order here (FILE_CATEGORIES stays
+   as-is everywhere else). #}
+{% set ORDERED_CATS = ['external_links'] + (FILE_CATEGORIES|reject('equalto','external_links')|list) %}
 <div class="tabs">
   {% if meeting.libraries %}<a href="#libraries" class="tab">Libraries <span class="count">{{ meeting.libraries|length }}</span></a>{% endif %}
-  {% for cat in FILE_CATEGORIES %}
+  {% for cat in ORDERED_CATS %}
     {% set cnt = meeting.files.filter_by(category=cat).count() %}
     {% if cnt %}<a href="#{{ cat }}" class="tab">{{ CATEGORY_LABELS[cat] }} <span class="count">{{ cnt }}</span></a>{% endif %}
   {% endfor %}
@@ -470,7 +516,7 @@
 </section>
 {% endif %}
 
-{% for cat in FILE_CATEGORIES %}
+{% for cat in ORDERED_CATS %}
 {% set items = meeting.files_by_category(cat) %}
 {% if items %}
 <section class="card" id="{{ cat }}">

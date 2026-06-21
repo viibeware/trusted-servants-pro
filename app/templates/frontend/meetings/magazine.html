@@ -90,39 +90,41 @@
         </section>
         {% endif %}
 
-        {% if meeting.meeting_type in ('online', 'hybrid') and (meeting.zoom_link or meeting.zoom_meeting_id) %}
-        <section class="fe-meeting-mag-side-card fe-meeting-mag-side-zoom">
-          <span class="fe-meeting-mag-side-label">{{ icon('video') }} Zoom</span>
-          {% if meeting.zoom_link %}
-          <a class="fe-btn fe-btn-primary fe-meeting-mag-side-cta" href="{{ meeting.zoom_link }}" target="_blank" rel="noopener">
+        {% if meeting.meeting_type in ('online', 'hybrid') %}
+        {% for p in meeting.conferencing_platforms %}
+        <section class="fe-meeting-mag-side-card fe-meeting-mag-side-zoom fe-meeting-mag-side-{{ p.key }}">
+          <span class="fe-meeting-mag-side-label">{{ icon('video') }} {{ p.label }}</span>
+          {% if p.link %}
+          <a class="fe-btn fe-btn-primary fe-meeting-mag-side-cta" href="{{ p.link }}" target="_blank" rel="noopener">
             Join meeting <span aria-hidden="true">↗</span>
           </a>
           {% endif %}
           <dl class="fe-meeting-mag-side-creds">
-            {% if meeting.zoom_meeting_id %}
+            {% if p.meeting_id %}
             <dt>ID</dt>
             <dd>
-              <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ meeting.zoom_meeting_id }}" aria-label="Copy meeting ID">
-                <code>{{ meeting.zoom_meeting_id }}</code>
+              <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ p.meeting_id }}" aria-label="Copy {{ p.label }} meeting ID">
+                <code>{{ p.meeting_id }}</code>
                 <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
               </button>
             </dd>
             {% endif %}
-            {% if meeting.zoom_passcode %}
+            {% if p.passcode %}
             <dt>Passcode</dt>
             <dd>
-              <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ meeting.zoom_passcode }}" aria-label="Copy Zoom passcode">
-                <code>{{ meeting.zoom_passcode }}</code>
+              <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ p.passcode }}" aria-label="Copy {{ p.label }} passcode">
+                <code>{{ p.passcode }}</code>
                 <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
               </button>
             </dd>
             {% endif %}
-            {% if meeting.zoom_opens_time %}
+            {% if p.opens_time %}
             <dt>Opens</dt>
-            <dd>{{ meeting.zoom_opens_time|fmt12h }}</dd>
+            <dd>{{ p.opens_time|fmt12h }}</dd>
             {% endif %}
           </dl>
         </section>
+        {% endfor %}
         {% endif %}
 
         {% include "frontend/meetings/_resources.html" %}

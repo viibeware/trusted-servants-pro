@@ -74,31 +74,35 @@
       </dd>
       {% endif %}
 
-      {% if meeting.meeting_type in ('online', 'hybrid') and meeting.zoom_link %}
-      <dt>Zoom</dt>
+      {% if meeting.meeting_type in ('online', 'hybrid') %}
+      {% for p in meeting.conferencing_platforms %}
+      <dt>{{ p.label }}</dt>
       <dd>
-        <a class="fe-meeting-min-link fe-meeting-min-link-strong" href="{{ meeting.zoom_link }}" target="_blank" rel="noopener">
+        {% if p.link %}
+        <a class="fe-meeting-min-link fe-meeting-min-link-strong" href="{{ p.link }}" target="_blank" rel="noopener">
           Join the meeting →
         </a>
-        {% if meeting.zoom_meeting_id %}
+        {% endif %}
+        {% if p.meeting_id %}
         <div class="fe-meeting-min-cred">
           <span class="muted">ID</span>
-          <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ meeting.zoom_meeting_id }}" aria-label="Copy meeting ID">
-            <code>{{ meeting.zoom_meeting_id }}</code>
+          <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ p.meeting_id }}" aria-label="Copy {{ p.label }} meeting ID">
+            <code>{{ p.meeting_id }}</code>
             <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
           </button>
         </div>
         {% endif %}
-        {% if meeting.zoom_passcode %}
+        {% if p.passcode %}
         <div class="fe-meeting-min-cred">
           <span class="muted">Passcode</span>
-          <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ meeting.zoom_passcode }}" aria-label="Copy Zoom passcode">
-            <code>{{ meeting.zoom_passcode }}</code>
+          <button type="button" class="fe-copy-btn fe-mlist-copy" data-copy="{{ p.passcode }}" aria-label="Copy {{ p.label }} passcode">
+            <code>{{ p.passcode }}</code>
             <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
           </button>
         </div>
         {% endif %}
       </dd>
+      {% endfor %}
       {% endif %}
     </dl>
 

@@ -6,6 +6,37 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.16.0] — 2026-06-21
+
+### Added
+
+- **Google Meet and Microsoft Teams alongside Zoom on meetings.** Each meeting can
+  now carry up to three video platforms. Every platform has an enable toggle in the
+  meeting editor; when a toggle is off, its fields collapse to a single toggle row
+  and the platform renders nowhere (backend detail page or any frontend theme).
+  Disabling keeps the stored link/ID/passcode so re-enabling restores them. New
+  `Meeting` columns (`zoom_enabled`, `gmeet_*`, `teams_*`) with matching
+  `_migrate_sqlite` entries; `zoom_enabled` defaults on so existing online meetings
+  are unchanged. A `Meeting.conferencing_platforms` property drives identical
+  rendering across the backend detail page, the shared meeting-list card (all
+  layouts), and all four detail themes (classic, minimal, card_stack, magazine).
+- **IP tracking on access requests + one-click IP blocking.** Each access request now
+  records the submitter's IP (best-effort, via the same Cloudflare-aware helper the
+  contact form uses; new `access_request.ip_address` column). Watchtower → Requests
+  shows the IP per row with a **Block IP** / **Unblock** control wired to the existing
+  IP blocklist. The block sends `protect_known_users`, so it won't lock out an IP a
+  signed-in user recently used (pointing the admin to Watchtower → Access to override).
+
+### Changed
+
+- **Backend meeting detail page: External links card now sits directly under
+  Libraries** (template-local reorder; the global `FILE_CATEGORIES` order — and the
+  frontend/upload forms that depend on it — are unchanged).
+- **Conferencing card accents on the backend detail page.** Google Meet gets a green
+  left border, Microsoft Teams a purple (`#8157f6`) one, distinct from Zoom's.
+- **The Teams join button reads "Join Teams"** on the frontend (the card heading still
+  shows the full "Microsoft Teams").
+
 ## [2.15.13] — 2026-06-15
 
 ### Added

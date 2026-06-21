@@ -7,7 +7,14 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.15.13 — 2026-06-15 (latest) — Archive and delete right from the list
+## 2.16.0 — 2026-06-21 (latest) — Google Meet & Microsoft Teams join meetings
+
+- **Meetings now support Google Meet and Microsoft Teams, right alongside Zoom.** Each meeting can offer any combination of the three. In the meeting editor, every platform has its own on/off switch — flip one on and its link, meeting ID, and passcode fields appear; flip it off and it tucks away to a single row, and that platform won't show anywhere on the site. Turning a platform off keeps whatever you'd entered, so switching it back on brings your details right back.
+- **They show up everywhere Zoom does** — on the public meeting list cards and on every meeting-page style, each with its own "Join" button and copy-to-clipboard meeting ID and passcode. On the admin meeting page the three sit as separate cards: Google Meet has a green edge, Microsoft Teams a purple one. (The Teams button just says "Join Teams" to keep it tidy.)
+- **Spot and block abusive access requests.** Access requests now record the requester's IP address, shown on Watchtower → Requests with a one-click **Block IP** button (and Unblock). It won't let you accidentally block an address one of your own signed-in users recently came from.
+- **Tidier admin meeting page.** The External Links card now sits directly under Libraries.
+
+## 2.15.13 — 2026-06-15 — Archive and delete right from the list
 
 - **Archive and delete buttons are now on every submission row.** File a submission away (or restore it on the Archived tab) or delete it without opening it or selecting it first — the buttons sit right next to View. Delete still asks you to confirm.
 

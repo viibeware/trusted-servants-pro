@@ -22,7 +22,8 @@
 {%- set _dense = dense if dense is defined else false -%}
 {%- set _card_class = card_class if card_class is defined else '' -%}
 {%- set _primary = primary_schedule if primary_schedule is defined else none -%}
-{%- set _has_zoom = m.meeting_type in ('online', 'hybrid') and m.zoom_link -%}
+{# Enabled video platforms (Zoom / Google Meet / Teams), online & hybrid only. #}
+{%- set _platforms = m.conferencing_platforms if m.meeting_type in ('online', 'hybrid') else [] -%}
 {%- set _has_loc  = m.meeting_type in ('in_person', 'hybrid') and m.location -%}
 {%- set _maps_url = ('https://www.google.com/maps/search/?api=1&query=' ~ (m.location|urlencode)) if _has_loc else '' -%}
 {# `data-meeting-times` packs each schedule as "<day>:<HH:MM>" tokens so
@@ -136,42 +137,47 @@
     </div>
     {% endif %}
 
-    {% if _has_zoom and (m.zoom_meeting_id or m.zoom_passcode) %}
-    <dl class="fe-mlist-card-zoom-creds">
-      {% if m.zoom_meeting_id %}
-      <div>
-        <dt>Meeting ID</dt>
-        <dd>
-          <button type="button" class="fe-copy-btn fe-mlist-copy"
-                  data-copy="{{ m.zoom_meeting_id }}"
-                  aria-label="Copy meeting ID">
-            <code>{{ m.zoom_meeting_id }}</code>
-            <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
-          </button>
-        </dd>
-      </div>
-      {% endif %}
-      {% if m.zoom_passcode %}
-      <div>
-        <dt>Passcode</dt>
-        <dd>
-          <button type="button" class="fe-copy-btn fe-mlist-copy"
-                  data-copy="{{ m.zoom_passcode }}"
-                  aria-label="Copy Zoom passcode">
-            <code>{{ m.zoom_passcode }}</code>
-            <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
-          </button>
-        </dd>
-      </div>
-      {% endif %}
-    </dl>
+    {% for p in _platforms %}
+    {% if p.meeting_id or p.passcode %}
+    <div class="fe-mlist-card-conf">
+      <span class="fe-mlist-card-conf-label">{{ icon('video') }} {{ p.label }}</span>
+      <dl class="fe-mlist-card-zoom-creds">
+        {% if p.meeting_id %}
+        <div>
+          <dt>Meeting ID</dt>
+          <dd>
+            <button type="button" class="fe-copy-btn fe-mlist-copy"
+                    data-copy="{{ p.meeting_id }}"
+                    aria-label="Copy {{ p.label }} meeting ID">
+              <code>{{ p.meeting_id }}</code>
+              <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+            </button>
+          </dd>
+        </div>
+        {% endif %}
+        {% if p.passcode %}
+        <div>
+          <dt>Passcode</dt>
+          <dd>
+            <button type="button" class="fe-copy-btn fe-mlist-copy"
+                    data-copy="{{ p.passcode }}"
+                    aria-label="Copy {{ p.label }} passcode">
+              <code>{{ p.passcode }}</code>
+              <span class="fe-mlist-copy-icon" aria-hidden="true">{{ icon('copy') }}</span>
+            </button>
+          </dd>
+        </div>
+        {% endif %}
+      </dl>
+    </div>
     {% endif %}
+    {% endfor %}
 
     <div class="fe-mlist-card-action-stack">
-      {% if _has_zoom %}
+      {% for p in _platforms %}{% if p.link %}
       <a class="fe-btn fe-btn-primary"
-         href="{{ m.zoom_link }}" target="_blank" rel="noopener">Join Zoom Meeting</a>
-      {% endif %}
+         href="{{ p.link }}" target="_blank" rel="noopener">Join {{ p.short }}</a>
+      {% endif %}{% endfor %}
       {% if _has_loc %}
       <a class="fe-btn fe-btn-ghost"
          href="{{ _maps_url }}" target="_blank" rel="noopener">Get Directions</a>
@@ -227,15 +233,15 @@
   </div>
   {% endif %}
 
-  {% if _has_zoom %}
+  {% for p in _platforms %}
   <div class="fe-mlist-card-row fe-mlist-card-row-zoom">
     <span class="fe-mlist-card-row-icon" aria-hidden="true">{{ icon('video') }}</span>
     <span class="fe-mlist-card-row-text">
-      Zoom
-      {%- if m.zoom_meeting_id %} · ID <code>{{ m.zoom_meeting_id }}</code>{% endif -%}
+      {{ p.label }}
+      {%- if p.meeting_id %} · ID <code>{{ p.meeting_id }}</code>{% endif -%}
     </span>
   </div>
-  {% endif %}
+  {% endfor %}
 
   {% if m.public_alert_message %}
   <div class="fe-mlist-card-alert" role="status">
@@ -249,9 +255,9 @@
   {% endif %}
 
   <div class="fe-mlist-card-actions">
-    {% if _has_zoom %}
-    <a class="fe-btn fe-btn-primary" href="{{ m.zoom_link }}" target="_blank" rel="noopener">Join Zoom</a>
-    {% endif %}
+    {% for p in _platforms %}{% if p.link %}
+    <a class="fe-btn fe-btn-primary" href="{{ p.link }}" target="_blank" rel="noopener">Join {{ p.short }}</a>
+    {% endif %}{% endfor %}
     {% if _has_loc %}
     <a class="fe-btn fe-btn-ghost" href="{{ _maps_url }}" target="_blank" rel="noopener">Get Directions</a>
     {% endif %}

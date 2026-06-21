@@ -6049,6 +6049,15 @@ body.fe-frontend-force-dark .fe-mlist-search-kbd {
   color: color-mix(in srgb, currentColor 65%, transparent);
 }
 
+/* Per-platform conferencing block (Zoom / Google Meet / Teams) in the
+   3-column card — a small platform label above its credentials. */
+.fe-mlist-card-conf { display: flex; flex-direction: column; gap: 6px; }
+.fe-mlist-card-conf + .fe-mlist-card-conf { margin-top: 10px; }
+.fe-mlist-card-conf-label {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.78rem; font-weight: 700;
+}
+.fe-mlist-card-conf-label svg { width: 15px; height: 15px; }
 .fe-mlist-card-zoom-creds {
   margin: 0;
   display: flex; flex-direction: column; gap: 8px;

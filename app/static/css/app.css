@@ -5000,6 +5000,10 @@ form[data-savebar-row].is-dirty {
 .reading-hero { max-width: 320px; max-height: 220px; border-radius: 10px;
   border: 1px solid var(--border); margin-bottom: 12px; display: block; }
 form.hide-zoom .zoom-only, form.hide-zoom .zoom-only-field { display: none; }
+/* Video-conferencing platform fieldsets: the enable toggle sits at the top;
+   when off the fields collapse so the fieldset is just the toggle row. */
+.conf-fields { margin-top: 10px; }
+.conf-fieldset.conf-off { padding-bottom: 12px; }
 
 /* Settings modal */
 .modal-lg .modal-panel { max-width: 1180px; }
@@ -5397,6 +5401,15 @@ body.embed .card.data-card:last-child {
    becomes the card's first child — drop its top hairline/padding so it
    doesn't double up with the card's own top edge. */
 .zoom-card > .detail-section-divider:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+/* Per-platform accent: a colored left border distinguishes the conferencing
+   cards at a glance — green for Google Meet, purple for Teams. The detail
+   page renders inside an embed iframe whose `body.embed .card.data-card`
+   rule paints a 4px --brand (blue) left border, so these are scoped to the
+   same depth to win, with a plain fallback for any non-embed context. */
+.data-card.gmeet-card,
+body.embed .card.data-card.gmeet-card { border-left: 4px solid #22c55e; }
+.data-card.teams-card,
+body.embed .card.data-card.teams-card { border-left: 4px solid #8157f6; }
 /* Divider line between sub-sections inside a detail-block (e.g. the
    right column's Location → Zoom transition). Adds a hairline +
    breathing room in one rule so the inline `margin-top` style on
@@ -6400,6 +6413,7 @@ html[data-theme="dark"] .access-matrix .access-foot-mark { color: #facc15; }
    accent + border; the count chip mirrors the other small badges. */
 .ar-card-head { display: flex; align-items: center; justify-content: space-between;
   flex-wrap: wrap; gap: 12px; }
+.ar-ip-action { margin-top: 4px; display: flex; gap: 6px; align-items: center; }
 .ar-view-tabs { display: inline-flex; gap: 4px; padding: 3px;
   background: var(--panel-2); border: 1px solid var(--border);
   border-radius: 999px; }

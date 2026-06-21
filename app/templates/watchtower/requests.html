@@ -88,7 +88,7 @@
   <table class="tbl">
     <thead>
       <tr>
-        <th>Status</th><th>Name</th><th>Contact</th><th>Roles</th><th>Meeting</th><th>Submitted</th>
+        <th>Status</th><th>Name</th><th>Contact</th><th>Roles</th><th>Meeting</th><th>Submitted</th><th>IP</th>
         {% if view == 'archived' %}<th>Archived</th>{% endif %}<th></th>
       </tr>
     </thead>
@@ -101,6 +101,35 @@
         <td>{% for role in r.roles %}<span class="chip">{{ role }}</span>{% endfor %}</td>
         <td class="muted">{{ r.meeting_name or '—' }}</td>
         <td class="muted small">{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="muted small nowrap">
+          {% if r.ip_address %}
+            {% set blk = blocked_ips.get(r.ip_address) %}
+            <div class="mono">{{ r.ip_address }}</div>
+            {% if blk %}
+            <div class="ar-ip-action">
+              <span class="badge badge-danger">blocked</span>
+              <form method="post" action="{{ url_for('main.watchtower_unban_ip', bid=blk.id) }}" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="return_url" value="{{ url_for('main.watchtower_requests', view=view) }}">
+                <button class="btn btn-sm btn-secondary" title="Remove this IP from the blocklist">Unblock</button>
+              </form>
+            </div>
+            {% else %}
+            <div class="ar-ip-action">
+              <form method="post" action="{{ url_for('main.watchtower_ban_ip') }}"
+                    onsubmit="return confirm('Block {{ r.ip_address }}? Visitors from this IP will get a 403 across the whole site.');" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="ip" value="{{ r.ip_address }}">
+                <input type="hidden" name="reason" value="Access request from {{ r.name }}">
+                <input type="hidden" name="ttl_hours" value="0">
+                <input type="hidden" name="protect_known_users" value="1">
+                <input type="hidden" name="return_url" value="{{ url_for('main.watchtower_requests', view=view) }}">
+                <button class="btn btn-sm btn-danger" title="Add this IP to the blocklist (permanent)">Block IP</button>
+              </form>
+            </div>
+            {% endif %}
+          {% else %}—{% endif %}
+        </td>
         {% if view == 'archived' %}<td class="muted small">{% if r.archived_at %}{{ r.archived_at.strftime('%Y-%m-%d %H:%M') }}{% else %}—{% endif %}</td>{% endif %}
         <td class="nowrap">
           {% if view == 'active' %}

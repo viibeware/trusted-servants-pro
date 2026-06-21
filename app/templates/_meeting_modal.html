@@ -350,39 +350,104 @@
         </fieldset>
         {% endif %}
 
-        <fieldset class="fieldset zoom-only">
+        {# ── Video conferencing — one fieldset per platform. Each has an
+           enable toggle; when off, the fields collapse to just the toggle
+           row (data-conf-fields hidden) and the platform renders nowhere
+           on the public site. The whole group is zoom-only so it hides for
+           in-person meetings. #}
+        <fieldset class="fieldset zoom-only conf-fieldset">
           <legend>Zoom</legend>
-          <label>Zoom Account
-            <select name="zoom_account_id">
-              <option value="">— None —</option>
-              {% for a in zoom_accounts %}
-              <option value="{{ a.id }}"
-                      {% if meeting and meeting.zoom_account_id == a.id %}selected{% endif %}>
-                {{ a.name }}
-              </option>
-              {% endfor %}
-            </select>
+          {% set _zoom_on = meeting.zoom_enabled if meeting else True %}
+          <label class="mode-toggle conf-enable-toggle">
+            <input type="checkbox" name="zoom_enabled" value="1" data-conf-toggle {% if _zoom_on %}checked{% endif %}>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+            <span>Enable Zoom for this meeting</span>
           </label>
-          <div class="row">
-            <label>Meeting ID
-              <input name="zoom_meeting_id"
-                     value="{{ meeting.zoom_meeting_id if meeting else '' }}">
+          <div class="conf-fields" data-conf-fields>
+            <label>Zoom Account
+              <select name="zoom_account_id">
+                <option value="">— None —</option>
+                {% for a in zoom_accounts %}
+                <option value="{{ a.id }}"
+                        {% if meeting and meeting.zoom_account_id == a.id %}selected{% endif %}>
+                  {{ a.name }}
+                </option>
+                {% endfor %}
+              </select>
             </label>
-            <label>Passcode
-              <input name="zoom_passcode"
-                     value="{{ meeting.zoom_passcode if meeting else '' }}">
+            <div class="row">
+              <label>Meeting ID
+                <input name="zoom_meeting_id"
+                       value="{{ meeting.zoom_meeting_id if meeting else '' }}">
+              </label>
+              <label>Passcode
+                <input name="zoom_passcode"
+                       value="{{ meeting.zoom_passcode if meeting else '' }}">
+              </label>
+            </div>
+            <label>Meeting Link URL
+              <input name="zoom_link" type="url" placeholder="https://zoom.us/j/..."
+                     value="{{ meeting.zoom_link if meeting and meeting.zoom_link else '' }}">
+            </label>
+            {% set _show_otp = meeting.show_otp if meeting else True %}
+            <label class="mode-toggle otp-toggle">
+              <input type="checkbox" name="show_otp" value="1" {% if _show_otp %}checked{% endif %}>
+              <span class="mode-track"><span class="mode-thumb"></span></span>
+              <span>Show OTP Codes section on meeting page</span>
             </label>
           </div>
-          <label>Meeting Link URL
-            <input name="zoom_link" type="url" placeholder="https://zoom.us/j/..."
-                   value="{{ meeting.zoom_link if meeting and meeting.zoom_link else '' }}">
-          </label>
-          {% set _show_otp = meeting.show_otp if meeting else True %}
-          <label class="mode-toggle otp-toggle">
-            <input type="checkbox" name="show_otp" value="1" {% if _show_otp %}checked{% endif %}>
+        </fieldset>
+
+        <fieldset class="fieldset zoom-only conf-fieldset">
+          <legend>Google Meet</legend>
+          {% set _gmeet_on = meeting.gmeet_enabled if meeting else False %}
+          <label class="mode-toggle conf-enable-toggle">
+            <input type="checkbox" name="gmeet_enabled" value="1" data-conf-toggle {% if _gmeet_on %}checked{% endif %}>
             <span class="mode-track"><span class="mode-thumb"></span></span>
-            <span>Show OTP Codes section on meeting page</span>
+            <span>Enable Google Meet for this meeting</span>
           </label>
+          <div class="conf-fields" data-conf-fields>
+            <div class="row">
+              <label>Meeting ID
+                <input name="gmeet_meeting_id"
+                       value="{{ meeting.gmeet_meeting_id if meeting else '' }}">
+              </label>
+              <label>Passcode
+                <input name="gmeet_passcode"
+                       value="{{ meeting.gmeet_passcode if meeting else '' }}">
+              </label>
+            </div>
+            <label>Meeting Link URL
+              <input name="gmeet_link" type="url" placeholder="https://meet.google.com/..."
+                     value="{{ meeting.gmeet_link if meeting and meeting.gmeet_link else '' }}">
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="fieldset zoom-only conf-fieldset">
+          <legend>Microsoft Teams</legend>
+          {% set _teams_on = meeting.teams_enabled if meeting else False %}
+          <label class="mode-toggle conf-enable-toggle">
+            <input type="checkbox" name="teams_enabled" value="1" data-conf-toggle {% if _teams_on %}checked{% endif %}>
+            <span class="mode-track"><span class="mode-thumb"></span></span>
+            <span>Enable Microsoft Teams for this meeting</span>
+          </label>
+          <div class="conf-fields" data-conf-fields>
+            <div class="row">
+              <label>Meeting ID
+                <input name="teams_meeting_id"
+                       value="{{ meeting.teams_meeting_id if meeting else '' }}">
+              </label>
+              <label>Passcode
+                <input name="teams_passcode"
+                       value="{{ meeting.teams_passcode if meeting else '' }}">
+              </label>
+            </div>
+            <label>Meeting Link URL
+              <input name="teams_link" type="url" placeholder="https://teams.microsoft.com/l/..."
+                     value="{{ meeting.teams_link if meeting and meeting.teams_link else '' }}">
+            </label>
+          </div>
         </fieldset>
 
         {% if all_libraries is defined %}
@@ -843,6 +908,23 @@
     function sync() {
       editor.style.display = toggle.checked ? '' : 'none';
       editor.setAttribute('aria-hidden', toggle.checked ? 'false' : 'true');
+    }
+    toggle.addEventListener('change', sync);
+    sync();
+  });
+
+  // Video-conferencing platform toggles — when off, collapse the fields so
+  // the fieldset shrinks to just its toggle row. Inputs stay in the DOM so
+  // their values are still submitted (disabling keeps the details for an
+  // easy re-enable; display is gated server-side by the *_enabled flags).
+  document.querySelectorAll('[data-conf-toggle]').forEach(function (toggle) {
+    var fieldset = toggle.closest('fieldset');
+    var fields = fieldset && fieldset.querySelector('[data-conf-fields]');
+    if (!fields) return;
+    function sync() {
+      fields.style.display = toggle.checked ? '' : 'none';
+      fields.setAttribute('aria-hidden', toggle.checked ? 'false' : 'true');
+      fieldset.classList.toggle('conf-off', !toggle.checked);
     }
     toggle.addEventListener('change', sync);
     sync();

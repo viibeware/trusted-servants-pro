@@ -1413,7 +1413,16 @@ def _migrate_sqlite(app):
                          ("show_otp", "BOOLEAN NOT NULL DEFAULT 1"),
                          ("location_notes", "TEXT"),
                          ("extended_content_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
-                         ("extended_blocks_json", "TEXT")):
+                         ("extended_blocks_json", "TEXT"),
+                         ("zoom_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
+                         ("gmeet_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("gmeet_link", "VARCHAR(1000)"),
+                         ("gmeet_meeting_id", "VARCHAR(64)"),
+                         ("gmeet_passcode", "VARCHAR(128)"),
+                         ("teams_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+                         ("teams_link", "VARCHAR(1000)"),
+                         ("teams_meeting_id", "VARCHAR(64)"),
+                         ("teams_passcode", "VARCHAR(128)")):
             add("meeting", col, ddl)
         for col, ddl in (("alert_message", "TEXT"),
                          ("is_intergroup", "BOOLEAN NOT NULL DEFAULT 0"),
@@ -1916,7 +1925,8 @@ def _migrate_sqlite(app):
         for col, ddl in (("body_blocks_json", "TEXT"),):
             add("blog_post", col, ddl)
         for col, ddl in (("is_archived", "BOOLEAN NOT NULL DEFAULT 0"),
-                         ("archived_at", "DATETIME")):
+                         ("archived_at", "DATETIME"),
+                         ("ip_address", "VARCHAR(64)")):
             add("access_request", col, ddl)
         for col, ddl in (("is_archived", "BOOLEAN NOT NULL DEFAULT 0"),
                          ("archived_at", "DATETIME"),
