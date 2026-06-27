@@ -896,6 +896,34 @@ def users_unlock(uid):
     return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
 
 
+def _close_access_request(raw_rid, user):
+    """Mark an access request handled + archived after its account is
+    created. ``raw_rid`` is the form-supplied id (may be blank/garbage);
+    a missing or already-archived row is a silent no-op so manual user
+    creation is unaffected. Returns the archived request id on success
+    (so the caller can tell the Access Requests page to drop the row),
+    else ``None``."""
+    try:
+        rid = int(raw_rid)
+    except (TypeError, ValueError):
+        return None
+    from .models import AccessRequest
+    r = db.session.get(AccessRequest, rid)
+    if not r or r.is_archived:
+        return None
+    r.status = "handled"
+    r.handled_at = datetime.utcnow()
+    r.is_archived = True
+    r.archived_at = datetime.utcnow()
+    db.session.commit()
+    from . import activity
+    activity.log("access_request.archive", entity_type="access_request",
+                 entity_id=r.id,
+                 summary=f"Archived request from {r.name} <{r.email}> "
+                         f"(created user {user.username})")
+    return r.id
+
+
 @bp.route("/users/create", methods=["POST"])
 @login_required
 def users_create():
@@ -928,6 +956,13 @@ def users_create():
                  summary=f"Created user {username} ({role})")
     flash(f"User {username} created", "success")
 
+    # When this account was created straight from an Access Request (the
+    # Create User button forwards the row id as ``access_request_id``),
+    # close that request out automatically: mark it handled and archive
+    # it so it drops off the active list — the admin shouldn't have to
+    # tidy up the request they just acted on.
+    archived_rid = _close_access_request(request.form.get("access_request_id"), u)
+
     # Optional welcome email. Defaults to opt-in via the form checkbox;
     # falls back to the success path silently when SMTP isn't configured
     # or sending fails — the admin keeps the credentials they typed in
@@ -939,7 +974,15 @@ def users_create():
         else:
             flash(f"User created but welcome email failed: {err}", "warning")
 
-    return redirect(url_for("auth.users", embed=1) if request.form.get("embed") == "1" else url_for("auth.users"))
+    if request.form.get("embed") == "1":
+        # Carry the archived request id back to the reloaded iframe so it
+        # can ping the parent Access Requests page to drop that row live
+        # (see the postMessage in users.html).
+        kwargs = {"embed": 1}
+        if archived_rid:
+            kwargs["archived_request"] = archived_rid
+        return redirect(url_for("auth.users", **kwargs))
+    return redirect(url_for("auth.users"))
 
 
 @bp.route("/users/<int:uid>/update", methods=["POST"])

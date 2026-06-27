@@ -7,7 +7,14 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.16.1 — 2026-06-21 (latest) — Save bar fits the "Saving…" label
+## 2.16.2 — 2026-06-27 (latest) — Turn an access request into a user in one go
+
+- **Create a user from an access request and the request tidies itself away.** When you click **Create User** on an access request, the new-user form arrives pre-filled — and once you create the account, that request is automatically marked handled and moved to the archive. No more going back to clean up the request you just acted on.
+- **The Requests list updates on the spot.** The request disappears from the Active list and the tab counts adjust the moment the account is created — no need to refresh the page.
+- **Edit and Delete buttons stay reachable on the Users tab.** On smaller laptop screens the users table could run wide enough to push the Edit/Delete buttons off the right edge of the Settings window. They now stack neatly and the table scrolls if it ever needs to, so the buttons are always within reach — on phones too.
+- **The Settings window is a little wider on desktop**, giving the Users table and other busy panels more breathing room.
+
+## 2.16.1 — 2026-06-21 — Save bar fits the "Saving…" label
 
 - **Fixed a yellow save bar that could spill its button outside the bar.** When you clicked Save and the button briefly changed to "Saving…", the longer text could push past the edge of the rounded bar. The bar now reserves room for the label up front, so it stays tidy with no overflow or jiggle.
 

@@ -71,12 +71,12 @@
       <a href="{{ url_for('main.watchtower_requests', view='active') }}"
          class="ar-view-tab {% if view == 'active' %}is-active{% endif %}"
          role="tab" aria-selected="{{ 'true' if view == 'active' else 'false' }}">
-        Active{% if active_count %}<span class="ar-view-count">{{ active_count }}</span>{% endif %}
+        Active<span class="ar-view-count" data-active-count{% if not active_count %} hidden{% endif %}>{{ active_count }}</span>
       </a>
       <a href="{{ url_for('main.watchtower_requests', view='archived') }}"
          class="ar-view-tab {% if view == 'archived' %}is-active{% endif %}"
          role="tab" aria-selected="{{ 'true' if view == 'archived' else 'false' }}">
-        Archived{% if archived_count %}<span class="ar-view-count">{{ archived_count }}</span>{% endif %}
+        Archived<span class="ar-view-count" data-archived-count{% if not archived_count %} hidden{% endif %}>{{ archived_count }}</span>
       </a>
     </div>
   </div>
@@ -85,7 +85,7 @@
     {% if view == 'archived' %}No archived requests yet. Click <i>Archive</i> on a handled request to move it here.{% else %}No access requests yet.{% endif %}
   </p>
   {% else %}
-  <table class="tbl">
+  <table class="tbl" data-requests-table>
     <thead>
       <tr>
         <th>Status</th><th>Name</th><th>Contact</th><th>Roles</th><th>Meeting</th><th>Submitted</th><th>IP</th>
@@ -94,7 +94,7 @@
     </thead>
     <tbody>
       {% for r in items %}
-      <tr>
+      <tr data-request-row="{{ r.id }}">
         <td><span class="badge {% if r.status == 'pending' %}badge-warning{% else %}badge-muted{% endif %}">{{ r.status }}</span></td>
         <td>{{ r.name }}</td>
         <td class="muted small"><div><a href="mailto:{{ r.email }}">{{ r.email }}</a></div><div>{{ r.phone }}</div></td>
@@ -135,7 +135,8 @@
           {% if view == 'active' %}
           <button type="button" class="btn btn-sm btn-primary"
                   data-create-user-from-request data-email="{{ r.email }}"
-                  data-name="{{ r.name }}" data-phone="{{ r.phone or '' }}">Create User</button>
+                  data-name="{{ r.name }}" data-phone="{{ r.phone or '' }}"
+                  data-rid="{{ r.id }}">Create User</button>
           <form method="post" action="{{ url_for('main.watchtower_request_handled', rid=r.id) }}" style="display:inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="view" value="{{ view }}">
@@ -179,4 +180,51 @@
 {% with return_url = url_for('main.watchtower_requests', view=view) %}
   {% include "_pwreset_modal.html" %}
 {% endwith %}
+
+<script>
+(function(){
+  // Live-update bridge for "Create User" from an access request. The
+  // Settings → Users iframe archives the request server-side and posts
+  // a message up here; we drop the row and adjust the tab counts so the
+  // admin sees it leave the Active list without refreshing the page.
+  window.addEventListener('message', function(ev){
+    if (ev.origin !== window.location.origin) return;
+    var d = ev.data || {};
+    if (!d || d.type !== 'tsp:access-request-archived') return;
+    var rid = String(d.rid || '');
+    if (!rid) return;
+    var row = document.querySelector('[data-request-row="' + rid + '"]');
+    if (!row) return;
+    row.remove();
+    // On the Active view the row moves to Archived; mirror that in the
+    // tab counts. (On the Archived view there's no Create User button,
+    // so this only ever fires for active rows.)
+    bumpCount('[data-active-count]', -1);
+    bumpCount('[data-archived-count]', +1);
+    showEmptyIfNeeded();
+  });
+
+  function bumpCount(sel, delta){
+    var el = document.querySelector(sel);
+    if (!el) return;
+    var n = Math.max(0, (parseInt(el.textContent, 10) || 0) + delta);
+    el.textContent = n;
+    el.hidden = (n === 0);
+  }
+
+  function showEmptyIfNeeded(){
+    var table = document.querySelector('[data-requests-table]');
+    if (!table) return;
+    if (table.querySelector('[data-request-row]')) return;
+    var section = table.closest('section.card');
+    table.remove();
+    if (section && !section.querySelector('.ar-empty-note')) {
+      var p = document.createElement('p');
+      p.className = 'muted ar-empty-note';
+      p.textContent = 'No access requests yet.';
+      section.appendChild(p);
+    }
+  }
+})();
+</script>
 {% endblock %}

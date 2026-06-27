@@ -3587,12 +3587,29 @@ button.chip { font-family: inherit; }
    Flex layout lives on an inner wrapper so the <td> itself stays a
    normal table-cell; making the td a flex container breaks the
    table's row-height contract and causes its bottom border to land
-   above the sibling cells'. */
-.tbl td.users-actions { vertical-align: middle; }
+   above the sibling cells'.
+
+   The buttons stack vertically and the cell hugs its content
+   (width: 1%) so this right-most column stays narrow — with all the
+   other columns (username/name/email/phone/role/password) the table
+   can get wide enough to overflow the settings modal, which would
+   otherwise push Edit/Delete off the right edge where they can't be
+   reached. */
+.tbl td.users-actions { vertical-align: middle; width: 1%; white-space: nowrap; }
 .tbl td.users-actions .users-actions-row {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px;
 }
-.tbl td.users-actions form { display: inline-flex; margin: 0; }
+.tbl td.users-actions form { display: flex; margin: 0; }
+.tbl td.users-actions .users-actions-row > .btn,
+.tbl td.users-actions .users-actions-row > form .btn { width: 100%; }
+
+/* Safety net for the users table: with every column present it can be
+   wider than the settings modal on smaller laptops. Let it scroll
+   horizontally inside its card rather than spill past the modal edge
+   (which clips the right-most Edit/Delete column out of reach). On
+   mobile the table collapses to a block stack, so the scroll is moot
+   there. */
+.users-tbl-scroll { max-width: 100%; overflow-x: auto; }
 
 /* Users list: filter + bulk toolbar, sortable headers, checkbox column. */
 .users-toolbar {
@@ -5014,7 +5031,7 @@ form.hide-zoom .zoom-only, form.hide-zoom .zoom-only-field { display: none; }
 
 /* Settings modal */
 .modal-lg .modal-panel { max-width: 1180px; }
-#settings-modal .modal-panel { height: calc(100vh - 10vh); max-width: 1180px; }
+#settings-modal .modal-panel { height: calc(100vh - 10vh); max-width: 1280px; }
 
 /* WordPress importer modal — same full-height treatment as the
    settings modal so the iframe has a tall canvas to render the
@@ -7127,8 +7144,11 @@ body.fe-admin-autohide .menu-btn { display: grid; place-items: center; }
   /* Keep the row checkbox a checkbox (not a full-width bar) in card mode. */
   .users-tbl td.users-td-check { padding: 2px 0 6px; }
   .users-tbl td.users-td-check input { width: 16px; height: 16px; }
-  .users-tbl td.users-actions { padding-top: 10px; }
-  .users-tbl td.users-actions .users-actions-row { display: flex; gap: 8px; }
+  /* In card mode the actions cell is full-width, so restore the
+     side-by-side Edit | Delete row (the desktop base stacks them in a
+     narrow column) and undo the desktop width:1%/nowrap clamp. */
+  .users-tbl td.users-actions { padding-top: 10px; width: auto; white-space: normal; }
+  .users-tbl td.users-actions .users-actions-row { display: flex; flex-direction: row; gap: 8px; }
   .users-tbl td.users-actions .users-actions-row > .btn,
   .users-tbl td.users-actions .users-actions-row > form { flex: 1 1 0; }
   .users-tbl td.users-actions .users-actions-row > form .btn { width: 100%; }

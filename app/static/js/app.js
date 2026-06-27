@@ -559,6 +559,7 @@
       const email = btn.dataset.email || "";
       const name = btn.dataset.name || "";
       const phone = btn.dataset.phone || "";
+      const rid = btn.dataset.rid || "";
       const modal = document.getElementById("settings-modal");
       if (!modal) return;
       openModal("settings-modal");
@@ -572,6 +573,9 @@
         if (email) params.set("prefill", email);
         if (name)  params.set("prefill_name", name);
         if (phone) params.set("prefill_phone", phone);
+        // Carry the originating access-request id so creating the user
+        // auto-marks that request handled + archived (see auth.users_create).
+        if (rid)   params.set("prefill_rid", rid);
         params.set("_", Date.now().toString());
         const sep = base.includes("?") ? "&" : "?";
         iframe.src = base + sep + params.toString();

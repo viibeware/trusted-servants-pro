@@ -6,6 +6,37 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.16.2] — 2026-06-27
+
+### Added
+
+- **Creating a user straight from an access request now closes the request out
+  automatically.** The Create User button on Watchtower → Requests forwards the
+  request id (`access_request_id`) through the prefilled Settings → Users form; on
+  successful creation `users_create` marks that request handled and archived (logging
+  `access_request.archive`). It's a silent no-op for ordinary user creation and for
+  missing/already-archived rows.
+- **The Requests page drops the row live, no refresh.** After the create, the reloaded
+  Users iframe `postMessage`s the parent (`tsp:access-request-archived`); the Requests
+  page removes the matching row, adjusts the Active/Archived tab counts, and swaps in
+  the empty state if the list runs out. Tab counts are now always-rendered spans so JS
+  can update them.
+
+### Fixed
+
+- **The Users tab no longer hides the Edit/Delete buttons behind a horizontal
+  overflow.** With every column present the users table can be wider than the Settings
+  modal on smaller laptops, pushing the right-most actions column off the edge where it
+  got clipped. The Edit/Delete buttons now stack in a narrow hugging column on desktop,
+  and the table sits in a horizontal-scroll wrapper so nothing is ever clipped out of
+  reach. On mobile the actions stay side-by-side in the card layout.
+
+### Changed
+
+- **The Settings modal is a touch wider on desktop (1180px → 1280px)** so dense panes
+  like the Users table fit without horizontal scrolling. It still shrinks to fit
+  narrower viewports.
+
 ## [2.16.1] — 2026-06-21
 
 ### Fixed
