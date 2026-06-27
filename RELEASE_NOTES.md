@@ -7,7 +7,12 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.16.3 — 2026-06-27 (latest) — Email logos show up in Thunderbird
+## 2.16.4 — 2026-06-27 (latest) — Password-reset emails make sense now
+
+- **Resetting a user's password sends a proper "password reset" email** instead of a "welcome to your new account" one. Same login details as before, just with a clear heading, subject line, and a note that an administrator reset the password — so the recipient isn't confused into thinking a brand-new account was created.
+- **The confirmation after a reset shows as two tidy toasts** ("Password reset for …" and "Password reset email sent to …") instead of one run-together message.
+
+## 2.16.3 — 2026-06-27 — Email logos show up in Thunderbird
 
 - **Logos in notification emails now display in Thunderbird** (and similar mail apps). A privacy header on the server was telling these apps to refuse the logo images, so they showed up blank even when you'd allowed remote images. The header is now relaxed just for public images like logos, so they load — while the rest of the site keeps its stricter protection.
 - **Email logos always point at your real site address.** They now use your configured site URL, so they resolve correctly no matter where the email was sent from.

@@ -6,6 +6,27 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.16.4] — 2026-06-27
+
+### Fixed
+
+- **Admin password resets now send a password-reset email, not a new-account welcome.**
+  The reset action reused `_send_welcome_email`, so the recipient got an "An account has
+  been created for you / Welcome aboard" message that read as a brand-new account. The
+  helper now takes a `reason` (`created` vs `reset`); the reset path frames the email as
+  a password reset — subject `Your … password has been reset`, header `Password reset`,
+  and an intro noting an administrator reset the password — while the credential/role
+  content stays identical.
+- **The reset confirmation shows as two separate toasts.** The "Reset & send email"
+  success previously bundled both notices into one flash; it now emits two separate
+  flashes (`Password reset for X.` and `Password reset email sent to Y.`) so they render
+  as distinct toasts.
+
+### Changed
+
+- **Admin reset-password modal copy** now says "a password reset email will be sent"
+  (was "the welcome email will be re-sent"), matching the email the recipient receives.
+
 ## [2.16.3] — 2026-06-27
 
 ### Fixed

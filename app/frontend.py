@@ -5384,21 +5384,34 @@ def _email_tspro_logo_url(site):
     return _email_asset_url(site, "static", filename="img/logo_email.png")
 
 
-def _email_site_logo_url(site):
-    """Absolute URL to a RASTER site logo for emails, or None. Uses the
-    uploaded footer logo when it's already a raster, or a same-stem .png
-    sibling when it's an SVG (email clients can't render SVG)."""
+def _email_logo_png_on_disk(site, filename):
+    """True when a RASTER version of ``filename`` is available — the file
+    itself when it's already a raster, else its same-stem ``.png`` twin
+    (auto-generated for SVG uploads). Email clients can't render SVG, so
+    this gates whether an email can show a logo image vs. text."""
     import os as _os
-    fn = getattr(site, "footer_logo_filename", None)
-    if not fn:
-        return None
+    if not filename:
+        return False
     folder = current_app.config["UPLOAD_FOLDER"]
-    ext = fn.rsplit(".", 1)[-1].lower() if "." in fn else ""
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     if ext in ("png", "jpg", "jpeg", "gif", "webp"):
-        target = fn
+        target = filename
     else:
-        target = (fn.rsplit(".", 1)[0] if "." in fn else fn) + ".png"
-    if _os.path.isfile(_os.path.join(folder, target)):
+        target = (filename.rsplit(".", 1)[0] if "." in filename else filename) + ".png"
+    return _os.path.isfile(_os.path.join(folder, target))
+
+
+def _email_site_logo_url(site):
+    """Absolute URL to a RASTER site logo for emails, or None (which makes
+    the email fall back to the site name as text).
+
+    Prefers a PNG version of the **header** logo (Web Frontend → Header),
+    falling back to the footer logo. Email clients can't render SVG, so an
+    SVG logo resolves to the same-stem ``.png`` twin made on upload (and
+    rasterized on demand by the ``*_logo.png`` routes if it's missing)."""
+    if _email_logo_png_on_disk(site, getattr(site, "frontend_logo_filename", None)):
+        return _email_asset_url(site, "public.site_frontend_logo_png")
+    if _email_logo_png_on_disk(site, getattr(site, "footer_logo_filename", None)):
         return _email_asset_url(site, "public.site_footer_logo_png")
     return None
 

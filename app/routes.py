@@ -14757,6 +14757,34 @@ def site_frontend_logo():
     return send_from_directory(current_app.config["UPLOAD_FOLDER"], s.frontend_logo_filename)
 
 
+@public_bp.route("/site-branding/frontend-logo.png")
+def site_frontend_logo_png():
+    """Raster (PNG) version of the header logo (Web Frontend → Header) for
+    HTML emails — email clients don't render SVG. Serves the original when
+    it's already a raster, otherwise a same-stem ``.png`` twin. The twin is
+    auto-generated on upload (see ``_save_upload``); we also rasterize it
+    on demand here so logos uploaded before that twin existed still work."""
+    s = SiteSetting.query.first()
+    fn = s.frontend_logo_filename if s else None
+    if not fn:
+        abort(404)
+    folder = current_app.config["UPLOAD_FOLDER"]
+    ext = fn.rsplit(".", 1)[-1].lower() if "." in fn else ""
+    if ext in ("png", "jpg", "jpeg", "gif", "webp"):
+        return send_from_directory(folder, fn)
+    stem = fn.rsplit(".", 1)[0] if "." in fn else fn
+    png = stem + ".png"
+    png_path = os.path.join(folder, png)
+    if not os.path.isfile(png_path) and ext == "svg":
+        # Best-effort one-time rasterization for older SVG uploads with no
+        # twin on disk; a missing rasterizer just leaves no PNG → 404.
+        from .svg_raster import svg_file_to_png
+        svg_file_to_png(os.path.join(folder, fn), png_path, output_width=640)
+    if os.path.isfile(png_path):
+        return send_from_directory(folder, png)
+    abort(404)
+
+
 @public_bp.route("/site-branding/frontend-brand-logo")
 def site_frontend_brand_logo():
     """Custom logo for the public footer's Brand block. Distinct from

@@ -138,12 +138,15 @@ def _generate_password(length=16):
     return "".join(chars)
 
 
-def _send_welcome_email(user, plaintext_password):
-    """Send a freshly-created user their login credentials + a plain-
-    English breakdown of what their role can do. Returns ``(ok, err)``
-    matching the ``mail.send_mail`` contract; silently no-ops (with an
-    informative reason) when SMTP isn't configured or the user has no
-    email on file."""
+def _send_welcome_email(user, plaintext_password, *, reason="created"):
+    """Send a user their login credentials + a plain-English breakdown of
+    what their role can do. ``reason`` frames *why* they're getting the
+    email — ``"created"`` (new account) or ``"reset"`` (an admin reset
+    their password). The credential/role content is identical either way;
+    only the subject, header, and intro line change so a password reset
+    doesn't read as a brand-new welcome. Returns ``(ok, err)`` matching
+    the ``mail.send_mail`` contract; silently no-ops (with an informative
+    reason) when SMTP isn't configured or the user has no email on file."""
     from .mail import send_mail
     site = SiteSetting.query.first()
     if not site or not site.smtp_host or not site.smtp_from_email:
@@ -154,6 +157,24 @@ def _send_welcome_email(user, plaintext_password):
     role_label = ROLE_LABELS.get(user.role, user.role)
     perms = ROLE_PERMISSIONS.get(user.role, [])
     portal_name = (site.smtp_from_name or "Trusted Servants Pro").strip() or "Trusted Servants Pro"
+    is_reset = (reason == "reset")
+    # Subject + framing differ by reason; the credential block below is
+    # shared so the recipient sees the same details regardless.
+    if is_reset:
+        subject = f"Your {portal_name} password has been reset"
+        text_intro = (f"An administrator has reset your password on {portal_name}. "
+                      f"Use the updated sign-in details below.")
+        html_eyebrow = "Password reset"
+        html_title = f"Your {portal_name} password was reset"
+        html_intro = (f"Hello {user.username}, an administrator has reset your password "
+                      f"on {portal_name}. Use the updated details below to sign in.")
+    else:
+        subject = f"Your {portal_name} account"
+        text_intro = f"An account has been created for you on {portal_name}."
+        html_eyebrow = "Welcome aboard"
+        html_title = f"Your {portal_name} account"
+        html_intro = (f"Hello {user.username}, an account has been created for you on "
+                      f"{portal_name}. Use the details below to sign in.")
     # Prefer the admin-configured canonical URL so the email body never
     # surfaces a Docker bridge IP / internal hostname. Falls back to the
     # request-context URL builder when no override is set.
@@ -163,7 +184,7 @@ def _send_welcome_email(user, plaintext_password):
     lines = [
         f"Hello {user.username},",
         "",
-        f"An account has been created for you on {portal_name}.",
+        text_intro,
         "",
         "Your sign-in details:",
         f"  Username: {user.username}",
@@ -186,9 +207,8 @@ def _send_welcome_email(user, plaintext_password):
     body = "\n".join(lines)
     from .frontend import _render_branded_email, _branded_field
     body_html = _render_branded_email(
-        site, eyebrow="Welcome aboard", title=f"Your {portal_name} account",
-        intro=(f"Hello {user.username}, an account has been created for you on "
-               f"{portal_name}. Use the details below to sign in."),
+        site, eyebrow=html_eyebrow, title=html_title,
+        intro=html_intro,
         fields=[
             _branded_field("Username", user.username),
             _branded_field("Email", user.email, "email"),
@@ -200,8 +220,7 @@ def _send_welcome_email(user, plaintext_password):
         cta_url=login_url, cta_label="Sign in",
         meta_text="If you did not expect this email, please ignore it or let an administrator know.",
     )
-    return send_mail(site, user.email,
-                     f"Your {portal_name} account",
+    return send_mail(site, user.email, subject,
                      body, body_html=body_html)
 
 TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
@@ -1133,9 +1152,9 @@ def users_reset_password(uid):
         # Send first; only persist on success so an SMTP failure doesn't
         # silently invalidate the user's existing password and lock them
         # out of an account they were otherwise still using.
-        ok, err = _send_welcome_email(u, new_pw)
+        ok, err = _send_welcome_email(u, new_pw, reason="reset")
         if not ok:
-            flash(f"Could not send welcome email: {err} — password was not changed.", "danger")
+            flash(f"Could not send password reset email: {err} — password was not changed.", "danger")
             return _bounce()
 
     u.password_hash = generate_password_hash(new_pw)
@@ -1158,7 +1177,11 @@ def users_reset_password(uid):
                  summary=(f"Admin reset password for {u.username} "
                           f"(mode={mode}, email_sent={'yes' if send_email else 'no'})"))
     if send_email:
-        flash(f"Password reset for {u.username}; welcome email sent to {u.email}.", "success")
+        # Two separate flashes → two separate toasts (rather than one
+        # combined notice) so the outcome and the email confirmation read
+        # as distinct messages.
+        flash(f"Password reset for {u.username}.", "success")
+        flash(f"Password reset email sent to {u.email}.", "success")
     elif mode == "custom":
         flash(f"Password reset for {u.username}. No email was sent — share the new password with them through another channel.", "success")
     else:
