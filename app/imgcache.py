@@ -209,6 +209,16 @@ def apply_cache_headers(response):
     if not (is_static or is_image or is_filehash):
         return False
 
+    # Public assets are meant to be embeddable from other origins — most
+    # importantly logos in HTML emails, which a mail client (Thunderbird /
+    # any Gecko-based renderer) loads in a NON-same-origin document context.
+    # The app-wide ``Cross-Origin-Resource-Policy: same-origin`` default
+    # (set in _security_headers) makes Gecko block those cross-origin loads,
+    # so remote email logos silently fail to render even when remote content
+    # is allowed. Relax CORP to ``cross-origin`` for these asset responses
+    # only; every non-asset response keeps the strict same-origin default.
+    response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+
     pol = _load_policy()
     # 200/206 (full/partial file) and 304 (conditional hit) are the only
     # statuses worth a positive cache directive; errors fall through.

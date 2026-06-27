@@ -7,7 +7,12 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.16.2 — 2026-06-27 (latest) — Turn an access request into a user in one go
+## 2.16.3 — 2026-06-27 (latest) — Email logos show up in Thunderbird
+
+- **Logos in notification emails now display in Thunderbird** (and similar mail apps). A privacy header on the server was telling these apps to refuse the logo images, so they showed up blank even when you'd allowed remote images. The header is now relaxed just for public images like logos, so they load — while the rest of the site keeps its stricter protection.
+- **Email logos always point at your real site address.** They now use your configured site URL, so they resolve correctly no matter where the email was sent from.
+
+## 2.16.2 — 2026-06-27 — Turn an access request into a user in one go
 
 - **Create a user from an access request and the request tidies itself away.** When you click **Create User** on an access request, the new-user form arrives pre-filled — and once you create the account, that request is automatically marked handled and moved to the archive. No more going back to clean up the request you just acted on.
 - **The Requests list updates on the spot.** The request disappears from the Active list and the tab counts adjust the moment the account is created — no need to refresh the page.

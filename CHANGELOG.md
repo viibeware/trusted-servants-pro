@@ -6,6 +6,28 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.16.3] — 2026-06-27
+
+### Fixed
+
+- **Logos in HTML emails now render in Thunderbird (and other CORP-respecting
+  clients).** Every response carried `Cross-Origin-Resource-Policy: same-origin`,
+  which Gecko-based mail clients honor — so the logo images were blocked when loaded
+  into the non-same-origin context of a rendered email, even with remote content
+  allowed and the images returning a clean `200 image/png`. The public asset responses
+  that `imgcache` already owns (static + image endpoints) now send
+  `Cross-Origin-Resource-Policy: cross-origin` so they're embeddable in email; every
+  non-asset response keeps the strict `same-origin` default, so page security is
+  unchanged. (The `?v=` cache-bust token was never the cause.)
+
+### Changed
+
+- **Email logo URLs build from the canonical `site_url` instead of the request host.**
+  `_email_asset_url`/`_email_tspro_logo_url` route both the bundled TSP logo and the
+  uploaded site logo through the admin-configured `site_url`, so they resolve to the
+  public domain even for admin-triggered or background sends whose request host could
+  be an internal/Docker hostname a mail client can't reach.
+
 ## [2.16.2] — 2026-06-27
 
 ### Added

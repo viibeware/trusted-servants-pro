@@ -5219,7 +5219,7 @@ def custom_form_submit(slug):
                     "email/form_submission.html",
                     site_name=(site.frontend_title if site else None) or "Submission",
                     site_logo_url=_email_site_logo_url(site),
-                    tspro_logo_url=url_for("static", filename="img/logo_email.png", _external=True),
+                    tspro_logo_url=_email_tspro_logo_url(site),
                     form_title=cf.title,
                     submitted=_email_submission_local(site, sub.created_at),
                     ip=sub.ip,
@@ -5340,7 +5340,7 @@ def _render_branded_email(site, *, eyebrow, title, submitted=None, intro=None,
             "email/branded.html",
             site_name=(getattr(site, "frontend_title", None) if site else None) or "Notification",
             site_logo_url=_email_site_logo_url(site),
-            tspro_logo_url=url_for("static", filename="img/logo_email.png", _external=True),
+            tspro_logo_url=_email_tspro_logo_url(site),
             eyebrow=eyebrow, title=title, submitted=submitted, intro=intro,
             sections=sections, files=files or [], buttons=buttons or [],
             cta_url=cta_url, cta_label=cta_label,
@@ -5364,6 +5364,26 @@ def _email_submission_local(site, dt):
         return dt.strftime("%b %d, %Y · %H:%M UTC")
 
 
+def _email_asset_url(site, endpoint, **values):
+    """Absolute URL for an image referenced in an HTML email.
+
+    Prefers the admin-configured canonical ``site_url`` over the request
+    host so logos always resolve to the public domain — even for
+    background or admin-triggered sends whose request host may be an
+    internal/Docker hostname a recipient's mail client can't reach.
+    Falls back to Flask's request-context external URL when ``site_url``
+    isn't set. The cache-bust ``?v=`` token (if any) is preserved."""
+    base = (getattr(site, "site_url", None) or "").strip().rstrip("/")
+    if base:
+        return base + url_for(endpoint, **values)
+    return url_for(endpoint, _external=True, **values)
+
+
+def _email_tspro_logo_url(site):
+    """Absolute URL to the bundled Trusted Servants Pro email logo."""
+    return _email_asset_url(site, "static", filename="img/logo_email.png")
+
+
 def _email_site_logo_url(site):
     """Absolute URL to a RASTER site logo for emails, or None. Uses the
     uploaded footer logo when it's already a raster, or a same-stem .png
@@ -5379,7 +5399,7 @@ def _email_site_logo_url(site):
     else:
         target = (fn.rsplit(".", 1)[0] if "." in fn else fn) + ".png"
     if _os.path.isfile(_os.path.join(folder, target)):
-        return url_for("public.site_footer_logo_png", _external=True)
+        return _email_asset_url(site, "public.site_footer_logo_png")
     return None
 
 
