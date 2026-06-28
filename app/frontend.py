@@ -5384,21 +5384,35 @@ def _email_tspro_logo_url(site):
     return _email_asset_url(site, "static", filename="img/logo_email.png")
 
 
-def _email_logo_png_on_disk(site, filename):
-    """True when a RASTER version of ``filename`` is available — the file
-    itself when it's already a raster, else its same-stem ``.png`` twin
-    (auto-generated for SVG uploads). Email clients can't render SVG, so
-    this gates whether an email can show a logo image vs. text."""
+def _email_logo_png_ready(site, filename):
+    """True when a RASTER version of ``filename`` is available to serve in
+    an email — the file itself when it's already a raster, else its
+    same-stem ``.png`` twin. Email clients can't render SVG, so an SVG
+    logo needs the twin; if it's missing we rasterize it on the spot
+    (older uploads predate the auto-twin on upload, and the per-route
+    on-demand generator never runs unless its URL is actually emitted —
+    which is exactly the decision this gate makes). Returns False (→ the
+    email falls back to text) only when there's no raster and none can be
+    produced."""
     import os as _os
     if not filename:
         return False
     folder = current_app.config["UPLOAD_FOLDER"]
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     if ext in ("png", "jpg", "jpeg", "gif", "webp"):
-        target = filename
-    else:
-        target = (filename.rsplit(".", 1)[0] if "." in filename else filename) + ".png"
-    return _os.path.isfile(_os.path.join(folder, target))
+        return _os.path.isfile(_os.path.join(folder, filename))
+    if ext != "svg":
+        return False
+    stem = filename.rsplit(".", 1)[0] if "." in filename else filename
+    png_path = _os.path.join(folder, stem + ".png")
+    if _os.path.isfile(png_path):
+        return True
+    svg_path = _os.path.join(folder, filename)
+    if not _os.path.isfile(svg_path):
+        return False
+    from .svg_raster import svg_file_to_png
+    svg_file_to_png(svg_path, png_path, output_width=640)
+    return _os.path.isfile(png_path)
 
 
 def _email_site_logo_url(site):
@@ -5409,9 +5423,9 @@ def _email_site_logo_url(site):
     falling back to the footer logo. Email clients can't render SVG, so an
     SVG logo resolves to the same-stem ``.png`` twin made on upload (and
     rasterized on demand by the ``*_logo.png`` routes if it's missing)."""
-    if _email_logo_png_on_disk(site, getattr(site, "frontend_logo_filename", None)):
+    if _email_logo_png_ready(site, getattr(site, "frontend_logo_filename", None)):
         return _email_asset_url(site, "public.site_frontend_logo_png")
-    if _email_logo_png_on_disk(site, getattr(site, "footer_logo_filename", None)):
+    if _email_logo_png_ready(site, getattr(site, "footer_logo_filename", None)):
         return _email_asset_url(site, "public.site_footer_logo_png")
     return None
 

@@ -6,6 +6,19 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+## [2.16.5] — 2026-06-28
+
+### Fixed
+
+- **The header logo now actually appears at the top of emails (was falling back to text).**
+  The header logo is an SVG, which email clients can't render, so it needs a `.png` twin.
+  The gate that decided whether to show the logo only emitted its URL when the twin
+  *already existed on disk*, and the on-demand rasterizer lived in the image route — which
+  never runs unless that URL is emitted. Result: on any install whose logo predated the
+  auto-twin-on-upload (i.e. no twin on disk), every email showed the site name as text.
+  `_email_logo_png_ready` now rasterizes the SVG→PNG twin on the spot when it's missing,
+  then emits the logo URL, falling back to text only when no raster can be produced.
+
 ## [2.16.4] — 2026-06-27
 
 ### Fixed

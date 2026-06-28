@@ -7,7 +7,11 @@ bump. The deeper, version-by-version implementation log lives in
 The same content appears in-app under **Settings → About** with the
 release notes expanded by default and the changelog collapsed.
 
-## 2.16.4 — 2026-06-27 (latest) — Password-reset emails make sense now
+## 2.16.5 — 2026-06-28 (latest) — Your logo really shows in emails now
+
+- **The header logo now appears at the top of notification emails** instead of falling back to your site's name in text. If your logo is an SVG (which email apps can't display), the system now creates a PNG version automatically the first time it's needed — so the logo shows up even on sites whose logo was uploaded a while ago.
+
+## 2.16.4 — 2026-06-27 — Password-reset emails make sense now
 
 - **Resetting a user's password sends a proper "password reset" email** instead of a "welcome to your new account" one. Same login details as before, just with a clear heading, subject line, and a note that an administrator reset the password — so the recipient isn't confused into thinking a brand-new account was created.
 - **The confirmation after a reset shows as two tidy toasts** ("Password reset for …" and "Password reset email sent to …") instead of one run-together message.
